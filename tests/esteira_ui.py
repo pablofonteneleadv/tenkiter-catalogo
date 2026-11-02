@@ -12,15 +12,18 @@ def chk(nome, cond, det=None):
     if cond: ok += 1; print('  ✔ ' + nome)
     else: falhas.append(nome); print('  ✘ ' + nome + ('' if det is None else ' — ' + str(det)[:300]))
 
+# v7.48.0: fotos de verdade (servidas pelo teste) para provar que tocar na foto abre a galeria inteira
+FOTO_1001 = ["https://midia.fake/m/1001-capa.jpg", "https://midia.fake/m/1001-costas.jpg", "https://midia.fake/m/1001-detalhe.jpg"]
 PRODUTOS = [
-    {"ID": "1001", "Nome": "Vestido Midi Linho", "Codigo": "TK-1001", "Categoria": "Vestidos", "Genero": "Feminino Adulto", "Preco": "129.9", "Estoque": "4", "Tamanhos": "P, M, G", "Cores": "Preto, Areia", "Descricao": "Linho leve", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-08-18T12:00:00Z"},
-    {"ID": "1002", "Nome": "Vestido Longo Floral", "Codigo": "TK-1002", "Categoria": "Vestidos", "Genero": "Feminino Adulto", "Preco": "149.9", "Estoque": "2", "Tamanhos": "M, G", "Cores": "Azul", "Descricao": "", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-07-01T12:00:00Z"},
+    {"ID": "1001", "Nome": "Vestido Midi Linho", "Codigo": "TK-1001", "Categoria": "Vestidos", "Genero": "Feminino Adulto", "Preco": "129.9", "Estoque": "4", "Tamanhos": "P, M, G", "Cores": "Preto, Areia", "Descricao": "Linho leve", "Novidade": "", "Foto_URL": FOTO_1001[0], "Fotos_Galeria": ", ".join(FOTO_1001[1:]), "Status": "Ativo", "Data_Cadastro": "2026-08-18T12:00:00Z"},
+    {"ID": "1002", "Nome": "Vestido Longo Floral", "Codigo": "TK-1002", "Categoria": "Vestidos", "Genero": "Feminino Adulto", "Preco": "149.9", "Estoque": "2", "Tamanhos": "M, G", "Cores": "Azul", "Descricao": "", "Novidade": "", "Foto_URL": "https://midia.fake/m/1002-capa.jpg", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-07-01T12:00:00Z"},
     {"ID": "1003", "Nome": "Saia Plissada Midi", "Codigo": "TK-1003", "Categoria": "Saias", "Genero": "Feminino Adulto", "Preco": "89.9", "Estoque": "6", "Tamanhos": "P, M", "Cores": "Verde", "Descricao": "", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-09-10T12:00:00Z"},
 ]
 # v7.44.0: família de tamanhos (cada tamanho é um produto; no Hoje vira um cartão só)
 FAMILIA = [{"ID": str(3001 + k), "Nome": "Sunga infantil masculino " + t, "Codigo": "SU-" + t, "Categoria": "Moda praia", "Genero": "Masculino Infantil", "Preco": "49.9", "Estoque": "3", "Tamanhos": t, "Cores": "Azul, Verde", "Descricao": "", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-06-01T12:00:00Z", "_rot": t} for k, t in enumerate(["P", "M", "G"])]
 # v7.42.0: peça arquivada (fora do site) que está em preparação
 ARQUIVADA = {"ID": "2001", "Nome": "Blusa Nova Tricô", "Codigo": "TK-2001", "Categoria": "Blusas", "Genero": "Feminino Adulto", "Preco": "99.9", "Estoque": "5", "Tamanhos": "P, M", "Cores": "Creme", "Descricao": "Tricô macio", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Inativo", "Data_Cadastro": "2026-10-30T12:00:00Z"}
+ARQUIVADA2 = {"ID": "2009", "Nome": "Bata Antiga Bordada", "Codigo": "TK-2009", "Categoria": "Blusas", "Genero": "Feminino Adulto", "Preco": "79.9", "Estoque": "0", "Tamanhos": "M", "Cores": "Branco", "Descricao": "", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Inativo", "Data_Cadastro": "2026-01-10T12:00:00Z"}   # v7.48.0: para o filtro de situação
 URL_FOTO = "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/abcdef0123456789abcd.jpg"
 def _png(w=40, h=50):                                  # foto PNG válida gerada aqui (nada de arquivo real)
     import struct, zlib
@@ -28,12 +31,20 @@ def _png(w=40, h=50):                                  # foto PNG válida gerada
     linhas = b"".join(b"\x00" + bytes([230, 126, 34]) * w for _ in range(h))
     return b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + bloco(b"IDAT", zlib.compress(linhas)) + bloco(b"IEND", b"")
 PNG = _png()
+def _png_cor(cor, w=60, h=75):                          # v7.48.0: fotos de cores diferentes para a evidência visual
+    import struct, zlib
+    bloco = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    linhas = b"".join(b"\x00" + bytes(cor) * w for _ in range(h))
+    return b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + bloco(b"IDAT", zlib.compress(linhas)) + bloco(b"IEND", b"")
+CORES_FOTO = [(196, 160, 120), (120, 140, 170), (170, 110, 90), (110, 150, 120), (200, 180, 150)]
+LISTAS = {"categorias": ["Blusas", "Conjuntos", "Moda praia", "Saias", "Vestidos"], "generos": ["Feminino Adulto", "Masculino Infantil", "Infantil Menina"], "tamanhos": ["PP", "P", "M", "G", "GG"], "cores": ["Areia", "Azul", "Preto", "Verde"], "tecidos": ["Linho", "Malha"]}
 
 def instalar(ctx, admin=True, familia=False):
     st = {"updates": [], "conferidas": [], "equipe": [{"whats": "88999999999", "nome": "Iara", "confere": 1, "rodizio": 1, "atendente": 1, "aceitar": 0, "ativo": 1}], "logou": False,
           "uploads": 0, "bulks": [], "bulk_falha": False, "pedidos": {}, "seq_ped": 0, "seq_item": 0, "salvos": [], "ped_corpos": [], "creates": [], "ops": {}, "estoques": {}, "arquivar_falha": False, "aceitos": [], "preparados": [], "feitas": [], "cfgs": [],
           "prep": {"2001": [dict(id=11, tipo="cadastro", titulo="Cadastro conferido", funcao="Fotos"), dict(id=12, tipo="foto", titulo="1ª foto", funcao="Fotos"), dict(id=13, tipo="foto", titulo="Fotos de detalhe", funcao="Fotos"), dict(id=14, tipo="foto", titulo="Foto no manequim", funcao="Fotos"), dict(id=15, tipo="cores_tamanhos", titulo="Conferir cores e tamanhos", funcao="Fotos"), dict(id=16, tipo="outro", titulo="Passar etiqueta", funcao="Caixa")]},
-          "outras": [dict(id=21, produto="1002", tipo="foto", titulo="Foto nova", funcao="Fotos", origem="conferencia", instrucao="Pedida na conferência por Iara.", produtoNome="Vestido Longo Floral", produtoCodigo="TK-1002", produtoFoto="")]}
+          "outras": [dict(id=21, produto="1002", tipo="foto", titulo="Foto nova", funcao="Fotos", origem="conferencia", instrucao="Pedida na conferência por Iara: a foto está escura.", produtoNome="Vestido Longo Floral", produtoCodigo="TK-1002", produtoFoto="https://midia.fake/m/1002-capa.jpg")],
+          "fornecedores": [], "seq_forn": 0, "forn_corpos": []}
     # ---- v7.45.0: listas por pessoa (o gestor altera), paradas e sugestões ----
     def gerar(cat, n, base, feitos=0):
         return [{"id": str(base + k), "nome": f"{cat[:-1]} {k + 1}", "codigo": f"TK-{base + k}", "foto": "", "categoria": cat, "grupo": cat + " · Feminino Adulto", "familia": "", "familiaNome": "", "rotulo": "", "feito": k < feitos, "sumiu": False} for k in range(n)]
@@ -78,7 +89,7 @@ def instalar(ctx, admin=True, familia=False):
             st["seq5"] += 100; its[:] = feitos + gerar(cat, 20 - len(feitos), st["seq5"]); st["focos"][w] = cat
             return J({"ok": True, "categoria": cat, "mantidas": len(feitos), "novas": 20 - len(feitos)})
         return J({"ok": False, "erro": "Ação não simulada."}, 404)
-    todos = PRODUTOS + [dict(ARQUIVADA)] + ([{k: v for k, v in x.items() if k != "_rot"} for x in FAMILIA] if familia else [])
+    todos = PRODUTOS + [dict(ARQUIVADA), dict(ARQUIVADA2)] + ([{k: v for k, v in x.items() if k != "_rot"} for x in FAMILIA] if familia else [])
     def tarefa(t, pid):
         feita = t["id"] in st["feitas"]
         return dict({"produto": pid, "instrucao": "", "origem": "preparacao", "obs": "", "feita_em": "2026-11-01T12:00:00Z" if feita else "", "feita_por": "Iara" if feita else "", "quem": "Iara" if t["funcao"] == "Fotos" else ""}, **t, status="feita" if feita else "pendente", posso=admin or t["funcao"] == "Fotos")
@@ -96,7 +107,7 @@ def instalar(ctx, admin=True, familia=False):
             out += [dict(tarefa(t, pid), produtoNome=x["Nome"], produtoCodigo=x["Codigo"], produtoFoto="", posso=True) for t in ts if t["funcao"] == "Fotos" and t["id"] not in st["feitas"]]
         return out + [dict(tarefa(t, t["produto"]), posso=True) for t in st["outras"] if t["id"] not in st["feitas"]]
     def item(p, feito=False):
-        return {"id": p["ID"], "nome": p["Nome"], "codigo": p["Codigo"], "categoria": p["Categoria"], "genero": p["Genero"], "estoque": p["Estoque"], "tamanhos": p["Tamanhos"], "cores": p["Cores"], "foto": "", "cadastro": p["Data_Cadastro"], "grupo": p["Categoria"] + " · " + p["Genero"], "feito": feito, "atualizado_em": "", "conferido_em": "" if p["ID"] != "1003" else "2026-09-20T12:00:00Z"}
+        return {"id": p["ID"], "nome": p["Nome"], "codigo": p["Codigo"], "categoria": p["Categoria"], "genero": p["Genero"], "estoque": p["Estoque"], "tamanhos": p["Tamanhos"], "cores": p["Cores"], "foto": p.get("Foto_URL", ""), "cadastro": p["Data_Cadastro"], "grupo": p["Categoria"] + " · " + p["Genero"], "feito": feito, "atualizado_em": "", "conferido_em": "" if p["ID"] != "1003" else "2026-09-20T12:00:00Z"}
     # ---- v7.43.0: servidor de pedidos SIMULADO (mesmas regras do worker: a equipe nunca recebe custo nem quantidade pedida) ----
     def situacao(it):
         if it["tipo"] == "extra": return "extra"
@@ -143,7 +154,11 @@ def instalar(ctx, admin=True, familia=False):
             p["status"] = "conferido"; p["conferido_por"] = "Iara"; p["conferido_em"] = "2026-11-01T15:00:00Z"; return J({"ok": True, "status": "conferido"})
         if not admin: return J({"ok": False, "erro": "Só o administrador total cuida do pedido, dos custos e da aprovação."}, 403)
         if path == "/esteira/pedidos/salvar":
-            if not str(b.get("fornecedor", "")).strip(): return J({"ok": False, "erro": "Informe o fornecedor."}, 400)
+            if b.get("fornecedorId"):                   # v7.48.0: fornecedor do cadastro (o nome vem de lá)
+                fx = next((f for f in st["fornecedores"] if f["id"] == b["fornecedorId"]), None)
+                if not fx: return J({"ok": False, "erro": "Este fornecedor não está mais no cadastro."}, 400)
+                b["fornecedor"] = fx["nome"]
+            if not str(b.get("fornecedor", "")).strip(): return J({"ok": False, "erro": "Escolha o fornecedor."}, 400)
             if not p:
                 st["seq_ped"] += 1; p = {"id": st["seq_ped"], "status": "rascunho", "itens": [], "criado_em": "2026-11-01T12:00:00Z", "conferido_por": "", "conferido_em": "", "aprovado_em": ""}; st["pedidos"][p["id"]] = p
             antigos = {it["id"]: it for it in p["itens"]}; novos = []
@@ -151,15 +166,15 @@ def instalar(ctx, admin=True, familia=False):
                 if not x.get("id"): st["seq_item"] += 1
                 iid = x.get("id") or st["seq_item"]; base = antigos.get(iid, {"qtd_contada": None, "contagens": 0, "nao_veio": False, "decisao": "", "qtd_aceita": None, "produto_criado": "", "aplicado_em": ""})
                 c = str(x.get("custo") or "").replace(",", ".")
-                novos.append(dict(base, id=iid, tipo=x["tipo"], produto=x.get("produto", ""), nome=x["nome"], categoria=x.get("categoria", ""), genero=x.get("genero", ""), preco=str(x.get("preco") or "").replace(",", "."), tamanhos=x.get("tamanhos", ""), cores=x.get("cores", ""), fotos=x.get("fotos", []), qtd_pedida=int(x.get("qtd_pedida") or 0), custo=float(c) if c else None))
-            p.update(fornecedor=b["fornecedor"].strip(), previsao=b.get("previsao", ""), obs=b.get("obs", ""), fotos=b.get("fotos", []), itens=novos + [it for it in p["itens"] if it["tipo"] == "extra"])
+                novos.append(dict(base, id=iid, tipo=x["tipo"], produto=x.get("produto", ""), nome=x["nome"], categoria=x.get("categoria", ""), genero=x.get("genero", ""), preco=str(x.get("preco") or "").replace(",", "."), tamanhos=x.get("tamanhos", ""), cores=x.get("cores", ""), tecido=x.get("tecido", ""), fotos=x.get("fotos", []), qtd_pedida=int(x.get("qtd_pedida") or 0), custo=float(c) if c else None))
+            p.update(fornecedor=b["fornecedor"].strip(), fornecedorId=b.get("fornecedorId") or 0, previsao=b.get("previsao", ""), obs=b.get("obs", ""), fotos=b.get("fotos", []), itens=novos + [it for it in p["itens"] if it["tipo"] == "extra"])
             st["salvos"].append(b); return J({"ok": True, "pedido": ped_admin(p)})
         if path == "/esteira/pedidos/enviar": p["status"] = "a_caminho"; return J({"ok": True, "status": "a_caminho"})
         if path == "/esteira/pedidos/cancelar": p["status"] = "cancelado"; return J({"ok": True, "status": "cancelado"})
         if path == "/esteira/pedidos/decidir":
             it = acha(); it["decisao"] = b["decisao"]
-            for k in ["nome", "categoria", "genero", "tamanhos", "cores"]:
-                if b.get(k) is not None: it[k] = b[k].strip() or it[k]
+            for k in ["nome", "categoria", "genero", "tamanhos", "cores", "tecido"]:
+                if b.get(k) is not None: it[k] = b[k].strip() or it.get(k, "")
             if b.get("preco") is not None: it["preco"] = b["preco"].replace(",", ".")
             if b.get("custo") is not None: it["custo"] = float(str(b["custo"]).replace(",", "."))
             return J({"ok": True, "item": dict(it, situacao=situacao(it))})
@@ -185,6 +200,8 @@ def instalar(ctx, admin=True, familia=False):
         return J({"ok": False, "erro": "Ação de pedido não simulada."}, 404)
     def hd(route):
         req = route.request; u = req.url
+        if req.resource_type == "image" and not u.startswith(BASE.rstrip("/")):   # v7.48.0: fotos do teste (cor fixa por endereço)
+            return route.fulfill(body=_png_cor(CORES_FOTO[sum(map(ord, u)) % len(CORES_FOTO)]), content_type="image/png")
         if "script.google.com" in u:
             if req.method == "GET" and "action=list" in u: return route.fulfill(json={"ok": True, "produtos": [dict(x, Estoque=st["estoques"].get(x["ID"], x.get("Estoque", ""))) for x in todos]})
             b = json.loads(req.post_data or "{}")
@@ -219,6 +236,26 @@ def instalar(ctx, admin=True, familia=False):
         if "tenkiter-ig" in u:
             path = re.sub(r"^https://[^/]+", "", u).split("?")[0]
             if path.startswith("/esteira/pedidos"): return pedidos_rota(route, req, path)
+            if path == "/esteira/listas": st["listas_lidas"] = st.get("listas_lidas", 0) + 1; return route.fulfill(json=dict({"ok": True}, **LISTAS))
+            if path == "/catalogo/tecidos": return route.fulfill(json={"ok": True, "versao": 1, "itens": [{"nome": "Linho", "apelidos": []}]})
+            if path.startswith("/esteira/fornecedores"):
+                if not admin: return route.fulfill(status=403, json={"ok": False, "erro": "Só o administrador total cuida do cadastro de fornecedores."})
+                if req.method == "GET": return route.fulfill(json={"ok": True, "fornecedores": sorted(st["fornecedores"], key=lambda f: f["nome"].lower())})
+                b = json.loads(req.post_data or "{}"); st["forn_corpos"].append(b)
+                nome = " ".join(str(b.get("nome", "")).split())
+                if not nome: return route.fulfill(status=400, json={"ok": False, "erro": "Informe o nome do fornecedor."})
+                fones = {}
+                for n in (1, 2, 3):
+                    d = re.sub(r"\D", "", str(b.get("fone%d" % n, "")))
+                    if b.get("fone%d" % n) and len(d) not in (10, 11): return route.fulfill(status=400, json={"ok": False, "erro": "Telefone %d: use o DDD e o número, com 10 ou 11 dígitos (ex.: (88) 99999-0000)." % n})
+                    fones["fone%d" % n] = d
+                igual = next((f for f in st["fornecedores"] if f["nome"].lower() == nome.lower() and f["id"] != b.get("id")), None)
+                if igual: return route.fulfill(status=400, json={"ok": False, "erro": "Já existe um fornecedor com o nome “%s”. Escolha ele na lista ou use outro nome." % igual["nome"], "existente": igual["id"]})
+                if b.get("id"):
+                    f = next(f for f in st["fornecedores"] if f["id"] == b["id"]); f.update(nome=nome, endereco=b.get("endereco", ""), **fones)
+                else:
+                    st["seq_forn"] += 1; f = dict({"id": st["seq_forn"], "nome": nome, "endereco": b.get("endereco", ""), "ativo": True, "pedidos": 0}, **fones); st["fornecedores"].append(f)
+                return route.fulfill(json={"ok": True, "fornecedor": f})
             if path == "/esteira/hoje":
                 lista = [item(p, p["ID"] in st["conferidas"]) for p in PRODUTOS]
                 if familia: lista = lista[:1] + [dict(item(x, x["ID"] in st["conferidas"]), familia="fsunga", familiaNome="Sunga infantil masculino", rotulo=x["_rot"]) for x in FAMILIA]
@@ -287,8 +324,16 @@ with sync_playwright() as p:
         pg.screenshot(path=str(OUT / f"esteira_hoje_{w}.png"), full_page=True)
         pg.locator(".peca").first.click(); pg.wait_for_selector(".folha", timeout=4000)
         chk(f"{w}: conferência mostra cadastro, última atualização e conferência", all(x in pg.inner_text(".folha") for x in ["Cadastro", "Última atualização", "Última conferência", "18/08/26"]))
-        pg.click("text=Salvar conferência")
-        chk(f"{w}: sem contagem pede o número em português", "Digite quantas peças" in pg.inner_text(".folha") and not st["conferidas"])
+        chk(f"{w}: 7.48 a quantidade contada é opcional (rótulo e dica)", "(opcional)" in pg.inner_text(".folha") and "fica como está" in (pg.get_attribute("#conf-estoque", "placeholder") or "") and "No site: 4 peças" in pg.inner_text(".folha"))
+        ed = pg.locator(".folha a.editar-cadastro"); vs = pg.locator(".folha a.ver-site")
+        chk(f"{w}: 7.48 conferência tem 'Editar no cadastro' (Gestão) e 'Ver no site' em outra aba", ed.get_attribute("href") == "admin.html?editar=1001" and ed.get_attribute("target") == "_blank" and "p/TK-1001" in (vs.get_attribute("href") or "") and "Não deu para fazer tudo aqui? Edite pelo cadastro." in pg.inner_text(".folha"))
+        pg.locator(".folha .foto-bt").first.click(); pg.wait_for_selector("#tkfg.aberto", timeout=6000)
+        chk(f"{w}: 7.48 tocar na foto da conferência abre todas as fotos em tela cheia com 'Ver no site'", "Foto 1 de 3" in pg.inner_text("#tkfg-cont") and pg.is_visible("#tkfg-link") and "p/TK-1001" in (pg.get_attribute("#tkfg-link", "href") or "") and pg.get_attribute("#tkfg-link", "target") == "_blank", pg.inner_text("#tkfg-cont"))
+        pg.click("#tkfg-prox"); pg.wait_for_timeout(150)
+        chk(f"{w}: 7.48 a galeria passa para a próxima foto", "Foto 2 de 3" in pg.inner_text("#tkfg-cont"))
+        pg.screenshot(path=str(OUT / f"esteira_conferir_fotos_{w}.png"))
+        pg.keyboard.press("Escape"); pg.wait_for_selector("#tkfg.aberto", state="hidden", timeout=4000)
+        chk(f"{w}: 7.48 Esc fecha só as fotos; a conferência continua aberta", pg.locator(".folha").count() == 1 and not pg.evaluate("TKCamadas.aberta('tkfg')") and pg.evaluate("TKCamadas.aberta('esteira-conferir')"))
         pg.fill("#conf-estoque", "2")
         chk(f"{w}: avisa que difere do site antes de salvar", "O site diz 4" in pg.inner_text(".folha"))
         pg.locator(".chips button", has_text="G").first.click()
@@ -299,12 +344,20 @@ with sync_playwright() as p:
         chk(f"{w}: registra a conferência no servidor e atualiza o progresso", st["conferidas"] == ["1001"] and "1/3" in pg.inner_text("main"))
         pg.locator(".peca").nth(1).click(); pg.wait_for_selector(".folha"); pg.click("text=Não achei"); pg.click("text=Salvar conferência"); pg.wait_for_selector(".folha", state="detached", timeout=6000)
         chk(f"{w}: 'não achei' registra sem mexer no catálogo", len(st["updates"]) == 1 and st["conf_corpos"][-1]["achou"] is False)
+        pg.locator(".peca").nth(2).click(); pg.wait_for_selector(".folha"); pg.click("text=Salvar conferência"); pg.wait_for_selector(".folha", state="detached", timeout=6000)
+        chk(f"{w}: 7.48 salvar sem quantidade registra a conferência e não muda o estoque", len(st["updates"]) == 1 and st["conf_corpos"][-1]["id"] == "1003" and st["conf_corpos"][-1]["estoqueDepois"] == "" and st["conf_corpos"][-1]["achou"] is True and "3/3" in pg.inner_text("main"), st["conf_corpos"][-1])
+        pg.locator('.peca-linha:has([data-produto="1001"]) .foto-bt').click(); pg.wait_for_selector("#tkfg.aberto", timeout=6000)
+        chk(f"{w}: 7.48 tocar na foto da lista do Hoje abre a galeria (sem abrir a conferência)", "de 3" in pg.inner_text("#tkfg-cont") and pg.locator(".folha").count() == 0)
+        pg.keyboard.press("Escape"); pg.wait_for_selector("#tkfg.aberto", state="hidden", timeout=4000)
         chk(f"{w}: sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
         alvos = pg.evaluate("[...document.querySelectorAll('main button, nav button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")
         chk(f"{w}: botões com pelo menos 44 px", all(x >= 43.5 for x in alvos), alvos)
         # ---- v7.42.0: tarefas da função na aba Hoje ----
         th = pg.locator("#tarefas-hoje")
         chk(f"{w}: Hoje mostra 'Tarefas da sua função' com as 6 tarefas de Fotos", th.is_visible() and th.locator(".tarefa").count() == 6 and "Blusa Nova Tricô" in th.inner_text() and "Foto nova" in th.inner_text(), th.inner_text()[:300] if th.count() else "")
+        pg.wait_for_selector('#tarefas-hoje .peca-tarefas[data-produto="1002"] >> text=Cores: Azul', timeout=6000)
+        g2 = th.locator('.peca-tarefas[data-produto="1002"]')
+        chk(f"{w}: 7.48 tarefas agrupadas por peça (a peça aparece 1 vez, com dados e 'Editar no cadastro')", th.locator(".peca-tarefas").count() == 2 and th.locator('.peca-tarefas[data-produto="2001"] .tarefa').count() == 5 and "Vestidos" in g2.inner_text() and "Estoque: 2 peças" in g2.inner_text() and g2.locator("a.editar-cadastro").get_attribute("href") == "admin.html?editar=1002", th.inner_text()[:400])
         th.locator('.tarefa[data-tarefa="11"] button', has_text="Feito").click()
         pg.wait_for_function("document.querySelectorAll('#tarefas-hoje .tarefa').length === 5", timeout=6000)
         chk(f"{w}: Feito no Hoje grava e tira a tarefa da lista", st["feitas"] == [11] and st["tarefa_corpos"][-1]["feita"] is True)
@@ -313,6 +366,19 @@ with sync_playwright() as p:
         card = pg.locator('[data-produto="2001"]')
         chk(f"{w}: Preparação mostra a peça, progresso 1/6 e que está fora do site", "1/6" in card.inner_text() and "fora do site até ser aceita" in card.inner_text() and "Cadastro conferido — feita" in card.inner_text(), card.inner_text()[:300])
         chk(f"{w}: Preparação lista 'Outras tarefas' (foto nova da conferência)", "Outras tarefas" in pg.inner_text("main") and "Vestido Longo Floral" in pg.inner_text("main"))
+        chk(f"{w}: 7.48 Preparação explica o fluxo em passos", pg.locator("ol.passos li").count() == 3 and "Aceitar para o site" in pg.inner_text("ol.passos"))
+        pg.wait_for_selector('[data-produto="2001"] details.dados >> text=Tricô macio', timeout=6000)
+        dd = card.locator("details.dados")
+        chk(f"{w}: 7.48 'Dados do cadastro' aberto no cartão (cores e tamanhos ainda por conferir) com nome, código, preço, categoria, público, tamanhos, cores, estoque e descrição", dd.evaluate("e=>e.open") and all(x in dd.inner_text() for x in ["Blusa Nova Tricô", "TK-2001", "R$ 99,90", "Blusas", "Feminino Adulto", "P, M", "Creme", "5 peças", "Tricô macio", "não (arquivada)"]), dd.inner_text()[:400])
+        chk(f"{w}: 7.48 peça fora do site: 'Editar no cadastro' sem 'Ver no site'", dd.locator("a.editar-cadastro").get_attribute("href") == "admin.html?editar=2001" and dd.locator("a.ver-site").count() == 0)
+        chk(f"{w}: 7.48 a tarefa de conferir cadastro aponta para os dados e para o cadastro", "Dados do cadastro" in card.locator('.tarefa[data-tarefa="15"]').inner_text())
+        ot = pg.locator("#outras-tarefas")
+        chk(f"{w}: 7.48 'Outras tarefas' mostra a peça para quem vai fotografar (foto, código, categoria, cores, tamanhos, estoque, quem pediu e editar)", all(x in ot.inner_text() for x in ["Vestido Longo Floral", "TK-1002", "Vestidos", "Cores: Azul", "Tamanhos: M, G", "Estoque: 2 peças", "Pedida por Iara na conferência", "a foto está escura"]) and ot.locator("a.editar-cadastro").count() == 1 and ot.locator(".foto-bt").count() == 1, ot.inner_text()[:400])
+        ot.locator(".foto-bt").click(); pg.wait_for_selector("#tkfg.aberto", timeout=6000)
+        chk(f"{w}: 7.48 a foto de 'Outras tarefas' abre em tela cheia com 'Ver no site'", "Foto 1 de 1" in pg.inner_text("#tkfg-cont") and "p/TK-1002" in (pg.get_attribute("#tkfg-link", "href") or ""))
+        pg.screenshot(path=str(OUT / f"esteira_outras_fotos_{w}.png"))
+        pg.keyboard.press("Escape"); pg.wait_for_selector("#tkfg.aberto", state="hidden", timeout=4000)
+        ot.scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"esteira_outras_{w}.png"))
         # foto dentro da tarefa: mesmo caminho do painel (servidor de fotos) e pacote completo do update
         card.locator('.tarefa[data-tarefa="12"] input.arq-foto').set_input_files({"name": "foto.png", "mimeType": "image/png", "buffer": PNG})
         pg.wait_for_selector("text=1 foto adicionada ao produto", timeout=8000)
@@ -334,7 +400,9 @@ with sync_playwright() as p:
         bk = st["bulks"][-1]
         chk(f"{w}: aceitar reativa no catálogo (bulkUpdate reativar) antes de registrar", bk.get("tipoAcao") == "reativar" and bk.get("ids") == ["2001"] and bk.get("sessao") == "tk3.teste.sessao" and bk.get("whatsapp") == "88999999999" and st["aceitos"] == ["2001"], bk)
         # colocar peça em preparação (busca no catálogo)
-        pg.click("text=Colocar peça em preparação"); pg.fill("#prep-busca", "saia")
+        pg.click("text=Colocar peça em preparação")
+        chk(f"{w}: 7.48 colocar em preparação explica o que acontece e busca em todas as situações", "tarefas do modelo" in pg.inner_text("main") and pg.input_value(".busca-cat .f-situacao") == "todas")
+        pg.fill("#prep-busca", "saia")
         pg.wait_for_selector(".busca-res >> text=Saia Plissada Midi", timeout=6000)
         pg.click(".busca-res >> text=Saia Plissada Midi"); pg.wait_for_selector('[data-produto="1003"]', timeout=6000)
         chk(f"{w}: colocar em preparação cria a peça com tarefas", st["preparados"] == ["1003"] and "0/2" in pg.locator('[data-produto="1003"]').inner_text())
@@ -365,17 +433,47 @@ with sync_playwright() as p:
         pg.click("nav.abas button[data-aba=pedidos]"); pg.wait_for_selector("text=Pedidos ao fornecedor", timeout=6000)
         chk(f"{w}: aba Pedidos do Admin explica que custo é só dela", "Custo e quantidade pedida aparecem só para você" in pg.inner_text("main") and "Nenhum pedido ainda" in pg.inner_text("main"))
         pg.click("text=Novo pedido"); pg.wait_for_selector("#ped-fornecedor")
-        pg.fill("#ped-fornecedor", "Confecção Aurora"); pg.fill("#ped-previsao", "2026-11-05")
+        chk(f"{w}: 7.48 fornecedor é escolhido de uma lista (sem campo de texto)", pg.evaluate("document.getElementById('ped-fornecedor').tagName") == "SELECT" and "Nenhum fornecedor cadastrado" in pg.inner_text("#ped-fornecedor"))
+        pg.click("#ped-salvar")
+        chk(f"{w}: 7.48 salvar sem fornecedor: aviso em português", "Escolha o fornecedor" in pg.inner_text("main") and not st["salvos"])
+        pg.click("#ped-forn-novo"); pg.wait_for_selector("#forn-nome")
+        pg.fill("#forn-nome", "Confecção Aurora"); pg.fill("#forn-endereco", "Rua das Flores, 120, Centro"); pg.fill("#forn-fone1", "88999990001"); pg.fill("#forn-fone2", "1234")
+        pg.click("text=Cadastrar e escolher")
+        chk(f"{w}: 7.48 telefone curto: aviso dizendo qual telefone, nada enviado", "Telefone 2" in pg.inner_text(".folha") and not st["forn_corpos"])
+        pg.fill("#forn-fone2", ""); pg.locator("#forn-fone1").focus(); pg.locator("#forn-fone3").focus()
+        chk(f"{w}: 7.48 telefone ganha formatação ao sair do campo", pg.input_value("#forn-fone1") == "(88) 99999-0001")
+        pg.screenshot(path=str(OUT / f"esteira_fornecedor_{w}.png"))
+        pg.click("text=Cadastrar e escolher"); pg.wait_for_selector("#forn-nome", state="detached", timeout=6000)
+        chk(f"{w}: 7.48 fornecedor cadastrado já fica escolhido no pedido, com endereço e telefone", pg.input_value("#ped-fornecedor") == "1" and "(88) 99999-0001" in pg.inner_text("#ped-editor") and "Rua das Flores" in pg.inner_text("#ped-editor") and st["forn_corpos"][-1]["nome"] == "Confecção Aurora")
+        pg.fill("#ped-previsao", "2026-11-05")
         pg.locator("#ped-editor input.arq-foto").set_input_files({"name": "nota.png", "mimeType": "image/png", "buffer": PNG}); pg.wait_for_selector("#ped-editor >> text=Foto enviada.", timeout=6000)
-        pg.click("text=+ Peça do catálogo"); pg.wait_for_selector("#ped-busca"); pg.fill("#ped-busca", "saia")
+        pg.click("text=+ Peça do catálogo"); pg.wait_for_selector("#ped-busca")
+        chk(f"{w}: 7.48 busca de reposição com filtros discretos (situação começa em ativas, categoria e público)", pg.input_value(".folha .f-situacao") == "ativas" and pg.locator(".folha .f-categoria").count() == 1 and pg.locator(".folha .f-genero").count() == 1)
+        pg.fill("#ped-busca", "bordada"); pg.wait_for_selector(".folha >> text=1 peça combina, mas está em outra situação", timeout=6000)
+        chk(f"{w}: 7.48 peça arquivada não aparece em 'Ativas' e o aviso diz para trocar o filtro", pg.locator(".folha .busca-res .peca").count() == 0)
+        pg.select_option(".folha .f-situacao", "arquivadas"); pg.wait_for_selector(".folha .busca-res >> text=Bata Antiga Bordada", timeout=6000)
+        chk(f"{w}: 7.48 filtro 'Arquivadas' mostra a peça arquivada", "arquivada" in pg.inner_text(".folha .busca-res"))
+        pg.select_option(".folha .f-situacao", "ativas"); pg.fill("#ped-busca", ""); pg.select_option(".folha .f-categoria", "Vestidos"); pg.wait_for_selector(".folha .busca-res >> text=Vestido Longo Floral", timeout=6000)
+        chk(f"{w}: 7.48 escolher a categoria lista as peças dela sem digitar", pg.locator(".folha .busca-res .peca").count() == 2 and "Saia" not in pg.inner_text(".folha .busca-res"))
+        pg.screenshot(path=str(OUT / f"esteira_busca_filtros_{w}.png"))
+        pg.select_option(".folha .f-categoria", ""); pg.fill("#ped-busca", "saia")
         pg.wait_for_selector(".folha .busca-res >> text=Saia Plissada Midi", timeout=6000); pg.click(".folha .busca-res >> text=Saia Plissada Midi"); pg.wait_for_selector(".folha", state="detached")
         pg.locator("input.qtd-ped").nth(0).fill("5"); pg.locator("input.custo-ped").nth(0).fill("45,90")
         pg.click("text=+ Peça do catálogo"); pg.fill("#ped-busca", "longo"); pg.click(".folha .busca-res >> text=Vestido Longo Floral"); pg.wait_for_selector(".folha", state="detached")
         pg.locator("input.qtd-ped").nth(1).fill("4"); pg.locator("input.custo-ped").nth(1).fill("60")
         pg.click("text=+ Produto novo"); pg.wait_for_selector("#novo-nome"); pg.fill("#novo-nome", "Vestido Chemise Verde")
+        chk(f"{w}: 7.48 produto novo: categoria, público e tecido são seleções com TODAS as opções da Gestão; nada de texto livre", pg.evaluate("['novo-categoria','novo-genero','novo-tecido'].every(i=>document.getElementById(i).tagName==='SELECT')") and pg.evaluate("[...document.querySelectorAll('#novo-categoria option')].map(o=>o.value).filter(Boolean)") == LISTAS["categorias"] and pg.locator(".folha input#novo-tamanhos, .folha input#novo-cores, .folha input[list]").count() == 0 and pg.evaluate("[...document.querySelectorAll('#novo-genero option')].map(o=>o.value).filter(Boolean)") == LISTAS["generos"])
         pg.click("text=Incluir no pedido")
-        chk(f"{w}: produto novo sem categoria/público: aviso em português", "Informe a categoria e o público" in pg.inner_text(".folha"))
-        pg.fill("#novo-categoria", "Vestidos"); pg.fill("#novo-genero", "Feminino Adulto"); pg.fill("#novo-preco", "159,90"); pg.fill("#novo-tamanhos", "P, M, G"); pg.fill("#novo-cores", "Verde")
+        chk(f"{w}: produto novo sem categoria/público: aviso em português", "Escolha a categoria e o público" in pg.inner_text(".folha"))
+        pg.select_option("#novo-categoria", "Vestidos"); pg.select_option("#novo-genero", "Feminino Adulto"); pg.fill("#novo-preco", "159,90")
+        pg.click("#novo-tamanhos .abrir")
+        chk(f"{w}: 7.48 tamanhos abrem como chips com a lista da Gestão", pg.locator("#novo-tamanhos .chips button").all_inner_texts() == LISTAS["tamanhos"] and pg.get_attribute("#novo-tamanhos .abrir", "aria-expanded") == "true")
+        for t in ["P", "M", "G"]: pg.click(f'#novo-tamanhos .chips button[data-valor="{t}"]')
+        pg.screenshot(path=str(OUT / f"esteira_produto_novo_escolhas_{w}.png"))
+        pg.click("#novo-tamanhos .painel >> text=Pronto")
+        pg.click("#novo-cores .abrir"); pg.click('#novo-cores .chips button[data-valor="Verde"]'); pg.click("#novo-cores .painel >> text=Pronto")
+        pg.select_option("#novo-tecido", "Linho")
+        chk(f"{w}: 7.48 o resumo mostra o que foi escolhido", "P, M, G" in pg.inner_text("#novo-tamanhos .abrir") and "Verde" in pg.inner_text("#novo-cores .abrir"))
         pg.locator(".folha input.arq-foto").set_input_files({"name": "forn.png", "mimeType": "image/png", "buffer": PNG}); pg.wait_for_selector(".folha >> text=Foto enviada.", timeout=6000)
         pg.screenshot(path=str(OUT / f"esteira_pedido_novo_produto_{w}.png"))
         pg.click("text=Incluir no pedido"); pg.wait_for_selector(".folha", state="detached")
@@ -385,6 +483,7 @@ with sync_playwright() as p:
         chk(f"{w}: editor sem rolagem horizontal e botões ≥ 44 px", pg.evaluate("document.documentElement.scrollWidth <= innerWidth") and all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('main button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
         pg.click("#ped-enviar"); pg.wait_for_selector("text=A caminho", timeout=6000)
         sv = st["salvos"][-1]
+        chk(f"{w}: 7.48 pedido guarda o id do fornecedor e o produto novo vai com tamanhos, cores e tecido escolhidos", sv.get("fornecedorId") == 1 and sv["itens"][2]["tamanhos"] == "P, M, G" and sv["itens"][2]["cores"] == "Verde" and sv["itens"][2]["tecido"] == "Linho", sv)
         chk(f"{w}: pedido salvo com fornecedor, previsão, fotos e itens (reposição + novo com custo)", sv["fornecedor"] == "Confecção Aurora" and sv["previsao"] == "2026-11-05" and sv["fotos"] == [URL_FOTO] and [i["tipo"] for i in sv["itens"]] == ["reposicao", "reposicao", "novo"] and sv["itens"][0]["produto"] == "1003" and sv["itens"][0]["custo"] == "45,90" and sv["itens"][2]["fotos"] == [URL_FOTO] and sv["itens"][2]["categoria"] == "Vestidos" and st["pedidos"][1]["status"] == "a_caminho", sv)
         # chegada: o Admin também pode contar pela tela da equipe (contagem cega)
         pg.click('.peca.pedido[data-pedido="1"]'); pg.wait_for_selector("text=Conferir chegada (contagem cega)"); pg.click("text=Conferir chegada (contagem cega)")
@@ -434,7 +533,8 @@ with sync_playwright() as p:
         dif("Blusa listrada").locator('button[data-decisao="incluir"]').click(); pg.wait_for_selector(".custo-extra")
         dif("Blusa listrada").locator("button", has_text="Incluir com estes dados").click()
         chk(f"{w}: incluir o que veio a mais pede o custo", "Informe o custo unitário" in dif("Blusa listrada").inner_text())
-        dif("Blusa listrada").locator(".custo-extra").fill("25,50"); dif("Blusa listrada").locator(".cat-extra").fill("Blusas"); dif("Blusa listrada").locator(".gen-extra").fill("Feminino Adulto")
+        chk(f"{w}: 7.48 incluir o que veio a mais usa seleções da Gestão (sem texto livre para categoria, público, tamanhos e cores)", dif("Blusa listrada").locator("select.cat-extra").count() == 1 and dif("Blusa listrada").locator("select.gen-extra").count() == 1 and dif("Blusa listrada").locator(".escolha").count() == 2 and dif("Blusa listrada").locator("input[list]").count() == 0)
+        dif("Blusa listrada").locator(".custo-extra").fill("25,50"); dif("Blusa listrada").locator(".cat-extra").select_option("Blusas"); dif("Blusa listrada").locator(".gen-extra").select_option("Feminino Adulto")
         dif("Blusa listrada").locator("button", has_text="Incluir com estes dados").click(); pg.wait_for_selector('.card.dif:has-text("Blusa listrada") button[data-decisao="incluir"][aria-pressed="true"]', timeout=6000)
         chk(f"{w}: decisões gravadas (cobrar, devolver sobra, incluir com custo)", [x.get("decisao") for x in st["pedidos"][1]["itens"]] == ["", "cobrar", "devolver", "incluir"] and st["pedidos"][1]["itens"][3]["custo"] == 25.5, [x.get("decisao") for x in st["pedidos"][1]["itens"]])
         pg.screenshot(path=str(OUT / f"esteira_aprovacao_{w}.png"), full_page=True)
@@ -446,6 +546,7 @@ with sync_playwright() as p:
         u3 = next((u for u in ups if u["id"] == "1003"), {}); u2 = next((u for u in ups if u["id"] == "1002"), {})
         chk(f"{w}: reposição soma ao estoque pelo update completo (6+5=11, 2+3=5)", u3.get("estoque") == "11" and u3.get("nome") == "Saia Plissada Midi" and u2.get("estoque") == "5" and u2.get("tamanhos") == "M, G" and u3.get("sessao") == "tk3.teste.sessao", [u3, u2])
         c1 = crs[0] if crs else {}
+        chk(f"{w}: 7.48 produto novo criado com tamanhos, cores e o tecido na descrição (como a Gestão grava)", c1.get("tamanhos") == "P, M, G" and c1.get("cores") == "Verde" and c1.get("descricao") == "Tecido: Linho", c1)
         chk(f"{w}: produto novo criado com a ação create do painel (foto do fornecedor vira capa, 6 aceitas, preço, opId por item)", len(crs) == 2 and c1.get("nome") == "Vestido Chemise Verde" and c1.get("estoque") == "6" and c1.get("preco") == "159.90" and c1.get("fotoUrlExistente") == URL_FOTO and c1.get("categoria") == "Vestidos" and c1.get("genero") == "Feminino Adulto" and c1.get("novidade") is False and c1.get("opId") == "est1x3" and c1.get("sessao") == "tk3.teste.sessao", crs)
         chk(f"{w}: custo nunca vai para o catálogo (create/update/bulk)", all("custo" not in json.dumps(x) for x in st["creates"] + st["updates"] + st["bulks"]))
         chk(f"{w}: arquivar falhou: aviso legível dizendo o que foi feito e o que falta", "foi criado (ID 7001) e pode estar aparecendo no site" in pg.locator('.card.aplicar:has-text("Vestido Chemise Verde")').inner_text() and pg.locator('.card.aplicar:has-text("Vestido Chemise Verde") button', has_text="Tentar de novo").count() == 1)
@@ -560,6 +661,7 @@ with sync_playwright() as p:
         chk(f"{w} 7.45: mover sem escolher a pessoa: aviso em português", "Escolha para quem a peça vai." in folha.inner_text())
         p18.locator("select").select_option("88999990003"); p18.locator("button", has_text="Mover").click(); pg.wait_for_selector(".folha >> text=Movida para Clarice.", timeout=6000)
         chk(f"{w} 7.45: mover leva o item para a outra pessoa", any(x["id"] == "5018" for x in st["listas5"]["88999990003"]) and folha.locator('.item-g[data-produto="5018"]').count() == 0)
+        chk(f"{w} 7.48: busca do Painel com filtros só de peças do site (ativas/esgotadas), categoria e público", pg.evaluate("[...document.querySelectorAll('.folha .f-situacao option')].map(o=>o.value)") == ["ativas", "esgotadas"] and pg.locator(".folha .f-categoria").count() == 1)
         pg.fill("#lista-busca", "Saia"); pg.wait_for_selector(".folha .busca-res >> text=Saia Plissada Midi", timeout=6000)
         chk(f"{w} 7.45: busca para colocar mostra só peças do site (arquivada fora)", pg.locator(".folha .busca-res >> text=Blusa Nova Tricô").count() == 0)
         pg.click(".folha .busca-res >> text=Saia Plissada Midi"); pg.wait_for_selector(".folha >> text=Peça colocada no fim da lista.", timeout=6000)
@@ -595,6 +697,50 @@ with sync_playwright() as p:
         chk(f"{w} 7.45: configurações sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
         cf.scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"esteira_config_foco_{w}.png"))
         chk(f"{w} 7.45: sem erro de JavaScript", not erros, erros)
+        ctx.close()
+    # ---- v7.48.0: pedido antigo com fornecedor em texto livre, lista grande de fornecedores (com busca) e editar fornecedor ----
+    for w, h in [(390, 844), (1440, 900)]:
+        ctx = b.new_context(viewport={"width": w, "height": h}, is_mobile=w < 600, has_touch=w < 600)
+        st = instalar(ctx); ctx.add_init_script("localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999999999',sessao:'tk3.teste.sessao'}));")
+        st["fornecedores"] = [{"id": k + 1, "nome": n, "endereco": "", "fone1": "", "fone2": "", "fone3": "", "ativo": True, "pedidos": 0} for k, n in enumerate(["Ateliê Aurora", "Bordados Sol", "Confecção Lua", "Docas Malhas", "Estilo Norte", "Fios do Sertão", "Gênesis Moda", "Hera Tecidos", "Íris Jeans", "Jade Praia"])]
+        st["seq_forn"] = 10; st["seq_ped"] = 9
+        st["pedidos"][9] = {"id": 9, "fornecedor": "Fornecedor Antigo Ltda", "previsao": "", "status": "rascunho", "obs": "", "fotos": [], "criado_em": "2026-10-20T12:00:00Z", "conferido_por": "", "conferido_em": "", "aprovado_em": "", "itens": [
+            {"id": 31, "tipo": "novo", "produto": "", "nome": "Short antigo", "categoria": "Shorts velhos", "genero": "Feminino Adulto", "preco": "", "tamanhos": "P, XGG", "cores": "Preto", "fotos": [], "qtd_pedida": 2, "custo": 30.0, "qtd_contada": None, "contagens": 0, "nao_veio": False, "decisao": "", "qtd_aceita": None, "produto_criado": "", "aplicado_em": ""}]}
+        pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
+        pg.goto(BASE + "esteira.html"); pg.wait_for_selector(".peca", timeout=8000)
+        pg.click("nav.abas button[data-aba=pedidos]"); pg.wait_for_selector('.peca.pedido[data-pedido="9"]', timeout=6000)
+        chk(f"{w} 7.48: pedido antigo com fornecedor em texto continua aparecendo", "Fornecedor Antigo Ltda" in pg.inner_text('.peca.pedido[data-pedido="9"]'))
+        pg.click('.peca.pedido[data-pedido="9"]'); pg.wait_for_selector("#ped-fornecedor", timeout=6000)
+        chk(f"{w} 7.48: no editor o nome antigo fica escolhido, marcado como sem cadastro", pg.input_value("#ped-fornecedor") == "texto" and "(sem cadastro)" in pg.inner_text("#ped-fornecedor"))
+        chk(f"{w} 7.48: lista grande de fornecedores ganha busca", pg.locator("#ped-forn-busca").count() == 1)
+        pg.fill("#ped-forn-busca", "sert"); pg.wait_for_timeout(150)
+        chk(f"{w} 7.48: a busca filtra os fornecedores da seleção", pg.evaluate("[...document.querySelectorAll('#ped-fornecedor option')].map(o=>o.textContent).filter(t=>!/Escolha|sem cadastro/.test(t))") == ["Fios do Sertão"])
+        pg.fill("#ped-forn-busca", "")
+        pg.click("#ped-salvar"); pg.wait_for_selector("main >> text=Salvo.", timeout=6000)
+        sv = st["salvos"][-1]
+        chk(f"{w} 7.48: salvar o pedido antigo mantém o nome digitado (sem id de fornecedor)", sv["fornecedor"] == "Fornecedor Antigo Ltda" and not sv.get("fornecedorId"), sv)
+        pg.locator('.item-ped[data-item="31"] button', has_text="Editar produto").click(); pg.wait_for_selector("#novo-nome", timeout=6000)
+        chk(f"{w} 7.48: valor antigo fora da lista aparece marcado e precisa ser trocado", "fora da lista" in pg.inner_text("#novo-categoria") and pg.locator('#novo-tamanhos .abrir').count() == 1)
+        pg.click("text=Salvar produto")
+        chk(f"{w} 7.48: não salva com opção fora da lista (aviso em português)", "não pode ser salvo" in pg.inner_text(".folha") and "Escolha a categoria, os tamanhos" in pg.inner_text(".folha"), pg.inner_text(".folha")[-300:])
+        pg.select_option("#novo-categoria", "Saias"); pg.click("#novo-tamanhos .abrir"); pg.click('#novo-tamanhos .chips button[data-valor="XGG"]'); pg.click("text=Salvar produto"); pg.wait_for_selector("#novo-nome", state="detached", timeout=6000)
+        chk(f"{w} 7.48: trocada a categoria e tirado o tamanho fora da lista, o produto salva", "Saias" in pg.inner_text('.item-ped[data-item="31"]') and "XGG" not in pg.inner_text('.item-ped[data-item="31"]'))
+        pg.select_option("#ped-fornecedor", "3"); pg.wait_for_timeout(150)
+        pg.click("#ped-forn-editar"); pg.wait_for_selector("#forn-nome", timeout=6000)
+        chk(f"{w} 7.48: 'Editar dados' abre o fornecedor escolhido", pg.input_value("#forn-nome") == "Confecção Lua")
+        pg.fill("#forn-nome", "Ateliê Aurora"); pg.click("text=Salvar fornecedor"); pg.wait_for_selector(".folha >> text=Já existe um fornecedor", timeout=6000)
+        chk(f"{w} 7.48: nome repetido: aviso legível", "Já existe um fornecedor" in pg.inner_text(".folha"))
+        pg.fill("#forn-nome", "Confecção Lua Cheia"); pg.fill("#forn-fone3", "(85) 3222-1000"); pg.click("text=Salvar fornecedor"); pg.wait_for_selector("#forn-nome", state="detached", timeout=6000)
+        chk(f"{w} 7.48: fornecedor editado continua escolhido com o nome novo e o telefone", pg.input_value("#ped-fornecedor") == "3" and "Confecção Lua Cheia" in pg.inner_text("#ped-fornecedor") and "(85) 3222-1000" in pg.inner_text("#ped-editor"))
+        pg.screenshot(path=str(OUT / f"esteira_pedido_fornecedor_{w}.png"), full_page=True)
+        chk(f"{w} 7.48: editor sem rolagem horizontal e botões ≥ 44 px", pg.evaluate("document.documentElement.scrollWidth <= innerWidth") and all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('main button, main select, main a.bt')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
+        pg.click("nav.abas button[data-aba=prep]"); pg.wait_for_selector('[data-produto="2001"] details.dados >> text=Tricô macio', timeout=8000)
+        pg.evaluate("window.scrollTo(0, document.querySelector('[data-produto=\"2001\"]').getBoundingClientRect().top + scrollY - 120)"); pg.wait_for_timeout(150); pg.screenshot(path=str(OUT / f"esteira_prep_dados_{w}.png"))
+        pg.set_viewport_size({"width": 320, "height": 700}); pg.wait_for_timeout(200)
+        chk(f"{w} 7.48: Preparação com dados a 320 px sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+        pg.set_viewport_size({"width": w, "height": h}); pg.wait_for_timeout(200)
+        chk(f"{w} 7.48: Preparação com botões e links ≥ 44 px", all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('main button, main a.bt, main summary')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
+        chk(f"{w} 7.48: sem erro de JavaScript", not erros, erros)
         ctx.close()
     b.close()
 print(f"OK={ok} FALHAS={len(falhas)} {falhas}")

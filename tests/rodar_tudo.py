@@ -78,6 +78,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("admin_busca_status.py", lambda o: "FALHAS=0" in o), # v4.21: busca do admin respeita o filtro de status + emojis dos botões
     ("postagens_toque.py", lambda o: "FALHAS=0" in o),     # v4.22: Postagens: foto travada/girar, textos escolhidos por toque (2 dedos)
     ("admin_lista_v424.py", lambda o: "FALHAS=0" in o),    # v4.24: barra de lote responsiva + busca como menu expansível (filtro de cor)
+    ("admin_editar_link.py", lambda o: "FALHAS=0" in o),   # v7.48.0: link "Editar no cadastro" da Esteira (admin.html?editar=ID)
     ("convite_app.py", lambda o: "FALHAS=0" in o),        # plaquinha flutuante de convite para instalar o app (só no site em celular)
     ("contas_cpf.py", lambda o: "FALHAS=0" in o),         # telas: login múltiplo, Esqueci a senha, conta já existe, faixa vermelha de CPF, CPF obrigatório no currículo
     ("backend_func.js", lambda o: "FALHAS=0" in o),      # backend de Funcionários/Acessos: vários perfis por pessoa + travas de Admin

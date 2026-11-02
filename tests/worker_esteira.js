@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_esteira.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js')) + '\nexport {estMontarListas_, estRetratoCron_, estParadas_};');
+fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js')) + '\nexport {estMontarListas_, estRetratoCron_, estParadas_, estValidarCampos_, estFornecedorLimpo_};');
 let ok = 0; const falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 function d1() {
@@ -22,9 +22,16 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   for (let i = 0; i < 70; i++) produtos.push({ ID: String(1000 + i), Nome: 'Peça ' + i, Codigo: 'TK-' + i, Categoria: i % 3 === 0 ? 'Vestidos' : i % 3 === 1 ? 'Saias' : 'Blusas', Genero: 'Feminino Adulto', Estoque: String(i % 5), Tamanhos: 'P, M, G', Cores: 'Preto', Foto_URL: '', Status: 'Ativo', Data_Cadastro: dia(10 + i) });
   produtos.push({ ID: '9999', Nome: 'Inativa', Status: 'Inativo', Data_Cadastro: dia(400) });
   const usuarios = { '88999990001': { nome: 'Pablo', permissoes: ['gerir_acessos', 'catalogo_admin'] }, '88999990002': { nome: 'Iara', permissoes: ['catalogo_cadastrar'] }, '88999990003': { nome: 'Clarice', permissoes: ['catalogo_cadastrar'] }, '88999990004': { nome: 'Visitante', permissoes: [] } };
-  let listas = 0;
+  let listas = 0, LISTAS_ON = false, listasPedidas = 0;   // v7.48.0: listas da Gestão (categorias, públicos, tamanhos e cores) ligadas só nos testes novos
   globalThis.fetch = async (u, init) => {
     u = String(u);
+    if (u.startsWith('https://api.fake/') && /action=(categorias|generos|opcoes)/.test(u)) {
+      listasPedidas++;
+      if (!LISTAS_ON) return new Response('{"ok":false}', { status: 500 });
+      if (u.includes('action=categorias')) return new Response(JSON.stringify({ categorias: ['Vestidos', 'Saias', 'Blusas', 'Moda praia'] }));
+      if (u.includes('action=generos')) return new Response(JSON.stringify({ generos: ['Feminino Adulto', 'Masculino Infantil'] }));
+      return new Response(JSON.stringify({ ok: true, tamanhos: ['PP', 'P', 'M', 'G', 'GG'], cores: ['Preto', 'Azul', 'Verde', 'Off-white'] }));
+    }
     if (u.startsWith('https://api.fake/')) {
       if (init && init.method === 'POST') { const b = JSON.parse(init.body); if (b.action === 'sessao') { const x = usuarios[b.whatsapp]; return new Response(JSON.stringify(x ? { ok: true, usuario: { ...x, perfis: [] } } : { ok: false })); } }
       if (u.includes('action=list')) { listas++; return new Response(JSON.stringify({ ok: true, produtos })); }
@@ -481,6 +488,80 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   // foco desligado: volta à lista misturada de sempre
   const cfOff = await A(PABLO, 'POST', '/esteira/config', { config: { focoCategoria: false } });
   chk('foco por categoria pode ser desligado (e o resto fica)', cfOff.j.config.focoCategoria === false && cfOff.j.config.reativacao.join() === '10,20,30' && cfOff.j.config.retratoHora === 7, cfOff.j.config);
+  // ---- v7.48.0: conferência sem quantidade, listas da Gestão (sem texto livre), fornecedores ----
+  const ultConf = async () => env.DB.prepare('SELECT * FROM est_conf ORDER BY id DESC LIMIT 1').first();
+  const alvo2 = (await A(IARA, 'GET', '/esteira/hoje')).j.lista.find((x) => !x.feito);
+  const sq = await A(IARA, 'POST', '/esteira/conferir', { id: alvo2.id, achou: true, estoqueAntes: alvo2.estoque, estoqueDepois: '' });
+  const cq = await ultConf();
+  chk('7.48: conferir sem quantidade funciona e não muda o estoque registrado', sq.j.ok && sq.j.contou === false && cq.estoque_depois === '' && cq.divergiu === 0 && cq.achou === 1, [sq.j, cq]);
+  chk('7.48: a peça conferida sem quantidade conta como feita', (await A(IARA, 'GET', '/esteira/hoje')).j.lista.find((x) => x.id === alvo2.id).feito === true);
+  const sqT = await A(IARA, 'POST', '/esteira/conferir', { id: alvo2.id, achou: true, estoqueAntes: '3', estoqueDepois: '3', mudouTamanhos: true });
+  chk('7.48: sem quantidade, tirar tamanho ainda marca diferença; com quantidade igual não', sqT.j.ok && sqT.j.contou === true && sqT.j.divergiu === true);
+  const sqE = await A(IARA, 'POST', '/esteira/conferir', { id: alvo2.id, achou: true, estoqueAntes: '3', estoqueDepois: 'três' });
+  chk('7.48: quantidade que não é número: erro em português, sem JSON cru', sqE.r.status === 400 && /número inteiro/.test(sqE.j.erro) && !/[{}]/.test(sqE.j.erro), sqE.j);
+  await A(IARA, 'POST', '/esteira/conferir', { id: alvo2.id, achou: false, estoqueAntes: '3', estoqueDepois: '5' });
+  chk('7.48: "não achei" ignora a quantidade enviada', (await ultConf()).estoque_depois === '' && (await ultConf()).divergiu === 1);
+  // listas da Gestão
+  const lsOff = await A(PABLO, 'GET', '/esteira/listas');
+  chk('7.48: listas indisponíveis voltam vazias (null) sem erro', lsOff.j.ok && lsOff.j.categorias === null && lsOff.j.cores === null && Array.isArray(lsOff.j.tecidos), lsOff.j);
+  LISTAS_ON = true; kv.delete('est:listas:v1');
+  const lsOn = await A(IARA, 'GET', '/esteira/listas');
+  chk('7.48: /esteira/listas devolve categorias, públicos, tamanhos e cores da Gestão (toda a equipe lê)', lsOn.j.ok && lsOn.j.categorias.join() === 'Vestidos,Saias,Blusas,Moda praia' && lsOn.j.generos.length === 2 && lsOn.j.tamanhos.includes('GG') && lsOn.j.cores.includes('Off-white'), lsOn.j);
+  const nPed = listasPedidas; await A(IARA, 'GET', '/esteira/listas');
+  chk('7.48: listas ficam no cache (sem pedir de novo ao catálogo)', listasPedidas === nPed);
+  const V = W.estValidarCampos_;
+  const vOk = V(lsOn.j, { categoria: 'vestidos', genero: 'feminino adulto', tamanhos: 'p, M, m', cores: 'off-white' });
+  chk('7.48: validação aceita sem acento/maiúscula e devolve o nome da lista (sem repetir)', vOk.valores && vOk.valores.categoria === 'Vestidos' && vOk.valores.genero === 'Feminino Adulto' && vOk.valores.tamanhos === 'P, M' && vOk.valores.cores === 'Off-white', vOk);
+  chk('7.48: validação recusa nome que não existe, em português', /A cor “Roxo” não está cadastrada na Gestão/.test(V(lsOn.j, { cores: 'Preto, Roxo' }).erro || '') && /categoria/.test(V(lsOn.j, { categoria: 'Vestido Inventado' }).erro || ''));
+  chk('7.48: lista indisponível não bloqueia', V({ categorias: null }, { categoria: 'Qualquer' }).valores.categoria === 'Qualquer');
+  const novoBom = { tipo: 'novo', nome: 'Macacão Linho', categoria: 'vestidos', genero: 'Feminino Adulto', tamanhos: 'P, G', cores: 'Preto', tecido: 'Linho', qtd_pedida: 2, custo: 50 };
+  const svInv = await P(PABLO, 'salvar', { fornecedor: 'Ateliê X', itens: [Object.assign({}, novoBom, { categoria: 'Macacões Novos' })] });
+  chk('7.48: pedido com categoria digitada fora da lista é recusado (nada criado)', svInv.r.status === 400 && /Item 1 \(Macacão Linho\): A categoria “Macacões Novos” não está cadastrada/.test(svInv.j.erro), svInv.j);
+  chk('7.48: tamanho fora da lista é recusado', /O tamanho “XGG”/.test((await P(PABLO, 'salvar', { fornecedor: 'Ateliê X', itens: [Object.assign({}, novoBom, { tamanhos: 'P, XGG' })] })).j.erro || ''));
+  const svBom = await P(PABLO, 'salvar', { fornecedor: 'Ateliê X', itens: [novoBom] });
+  chk('7.48: produto novo com opções da lista é salvo com os nomes da Gestão e o tecido', svBom.j.ok && svBom.j.pedido.itens[0].categoria === 'Vestidos' && svBom.j.pedido.itens[0].tecido === 'Linho' && svBom.j.pedido.fornecedorId === 0, svBom.j);
+  // fornecedores
+  const fI = await A(IARA, 'GET', '/esteira/fornecedores');
+  chk('7.48: funcionária não vê o cadastro de fornecedores (aviso em português)', fI.r.status === 403 && /fornecedores/.test(fI.j.erro));
+  chk('7.48: funcionária não cadastra fornecedor', (await A(IARA, 'POST', '/esteira/fornecedores/salvar', { nome: 'X' })).r.status === 403);
+  chk('7.48: fornecedor sem nome é recusado', /nome do fornecedor/.test((await A(PABLO, 'POST', '/esteira/fornecedores/salvar', { nome: '  ' })).j.erro || ''));
+  const fBad = await A(PABLO, 'POST', '/esteira/fornecedores/salvar', { nome: 'Malhas Ceará', fone1: '(88) 99999-0001', fone2: '1234' });
+  chk('7.48: telefone curto é recusado dizendo qual (Telefone 2)', fBad.r.status === 400 && /Telefone 2/.test(fBad.j.erro), fBad.j);
+  const fOk = await A(PABLO, 'POST', '/esteira/fornecedores/salvar', { nome: '  Malhas   Ceará ', endereco: 'Rua A, 10\nCentro', fone1: '(88) 99999-0001', fone2: '+55 88 3333-4444', fone3: '' });
+  const F1 = fOk.j.fornecedor || {};
+  chk('7.48: fornecedor criado (nome limpo, telefones só com dígitos, 55 do país tirado)', fOk.j.ok && F1.id > 0 && F1.nome === 'Malhas Ceará' && F1.endereco === 'Rua A, 10 Centro' && F1.fone1 === '88999990001' && F1.fone2 === '8833334444' && F1.fone3 === '', fOk.j);
+  const fDup = await A(PABLO, 'POST', '/esteira/fornecedores/salvar', { nome: 'malhas ceara' });
+  chk('7.48: nome repetido (sem acento/maiúscula) é recusado', fDup.r.status === 400 && /Já existe um fornecedor/.test(fDup.j.erro) && fDup.j.existente === F1.id, fDup.j);
+  const F2 = (await A(PABLO, 'POST', '/esteira/fornecedores/salvar', { nome: 'Ateliê Aurora' })).j.fornecedor;
+  const fl = await A(PABLO, 'GET', '/esteira/fornecedores');
+  chk('7.48: lista de fornecedores em ordem alfabética', fl.j.ok && fl.j.fornecedores.map((x) => x.nome).join() === 'Ateliê Aurora,Malhas Ceará', fl.j);
+  chk('7.48: pedido com fornecedor que não existe é recusado', /não está mais no cadastro/.test((await P(PABLO, 'salvar', { fornecedorId: 9999, fornecedor: 'X', itens: [] })).j.erro || ''));
+  const pF = await P(PABLO, 'salvar', { fornecedorId: F1.id, fornecedor: 'qualquer coisa', itens: [{ tipo: 'reposicao', produto: '1003', nome: 'Peça 3', qtd_pedida: 1 }] });
+  chk('7.48: pedido guarda o id do fornecedor e o nome do cadastro', pF.j.ok && pF.j.pedido.fornecedorId === F1.id && pF.j.pedido.fornecedor === 'Malhas Ceará', pF.j);
+  const pF2 = await P(PABLO, 'salvar', { id: pF.j.pedido.id, fornecedor: 'Malhas Ceará', itens: pF.j.pedido.itens });
+  chk('7.48: salvar de novo sem mandar o id mantém o fornecedor ligado', pF2.j.ok && pF2.j.pedido.fornecedorId === F1.id, pF2.j);
+  const fRen = await A(PABLO, 'POST', '/esteira/fornecedores/salvar', { id: F1.id, nome: 'Malhas Ceará Ltda', fone1: '88999990001' });
+  const abF = await A(PABLO, 'GET', '/esteira/pedidos/abrir?id=' + pF.j.pedido.id);
+  chk('7.48: editar o fornecedor muda o nome nos pedidos ligados a ele', fRen.j.ok && abF.j.pedido.fornecedor === 'Malhas Ceará Ltda' && abF.j.pedido.fornecedorId === F1.id && (await A(PABLO, 'GET', '/esteira/fornecedores')).j.fornecedores.find((x) => x.id === F1.id).pedidos === 1, abF.j.pedido);
+  chk('7.48: editar fornecedor que não existe: aviso', (await A(PABLO, 'POST', '/esteira/fornecedores/salvar', { id: 777, nome: 'Z' })).r.status === 404);
+  const pLeg = await P(PABLO, 'salvar', { fornecedor: 'Fornecedor antigo em texto', itens: [] });
+  const lsLeg = await A(PABLO, 'GET', '/esteira/pedidos');
+  chk('7.48: pedido antigo com fornecedor em texto livre continua salvando e aparecendo', pLeg.j.ok && pLeg.j.pedido.fornecedorId === 0 && lsLeg.j.pedidos.some((x) => x.fornecedor === 'Fornecedor antigo em texto') && lsLeg.j.pedidos.some((x) => x.fornecedor === 'Confecção Aurora Ltda'), pLeg.j);
+  const FL = W.estFornecedorLimpo_;
+  chk('7.48: telefone com 11 dígitos aceito; com letras e poucos números recusado', FL({ nome: 'A', fone3: '88 9 9999-0000' }).fornecedor.fone3 === '88999990000' && /Telefone 1/.test(FL({ nome: 'A', fone1: 'abc12' }).erro || ''));
+  // decisão de "veio a mais" e extra da equipe também só com nomes da lista
+  const pD = await P(PABLO, 'salvar', { fornecedorId: F2.id, itens: [{ tipo: 'reposicao', produto: '1004', nome: 'Peça 4', qtd_pedida: 1, custo: 10 }] });
+  const PD = pD.j.pedido.id; await P(PABLO, 'enviar', { id: PD });
+  await P(IARA, 'contar', { id: PD, item: pD.j.pedido.itens[0].id, qtd: 1 });
+  const exBad = await P(IARA, 'extra', { id: PD, nome: 'Top', qtd: 1, cores: 'Roxo' });
+  chk('7.48: "veio a mais" com cor fora da lista é recusado', exBad.r.status === 400 && /Roxo/.test(exBad.j.erro), exBad.j);
+  const exT = await P(IARA, 'extra', { id: PD, nome: 'Top listrado', qtd: 1 });
+  await P(IARA, 'concluir', { id: PD });
+  const dBad = await P(PABLO, 'decidir', { id: PD, item: exT.j.item, decisao: 'incluir', custo: '20', categoria: 'Tops Novos', genero: 'Feminino Adulto' });
+  chk('7.48: incluir o que veio a mais com categoria inventada é recusado', dBad.r.status === 400 && /Tops Novos/.test(dBad.j.erro), dBad.j);
+  const dOk = await P(PABLO, 'decidir', { id: PD, item: exT.j.item, decisao: 'incluir', custo: '20', categoria: 'blusas', genero: 'Feminino Adulto', tamanhos: 'm', cores: 'azul', tecido: 'Malha' });
+  chk('7.48: incluir com opções da lista grava os nomes da Gestão e o tecido', dOk.j.ok && dOk.j.item.categoria === 'Blusas' && dOk.j.item.tamanhos === 'M' && dOk.j.item.cores === 'Azul' && dOk.j.item.tecido === 'Malha', dOk.j);
+  LISTAS_ON = false; kv.delete('est:listas:v1');
   const vaz = respostasEquipe.find((x) => vazouChave(x.j, ['custo', 'qtd_pedida']));
   chk('nenhuma resposta para quem não é Admin total contém custo ou qtd_pedida (' + respostasEquipe.length + ' respostas)', !vaz && respostasEquipe.some((x) => x.rota.includes('/pedidos')), vaz);
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);

@@ -6296,19 +6296,28 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     });
   }
   setInterval(espelha,1500); espelha();
-  // vindo do catálogo (botão "✎ Editar produto" do modal da peça): abre o MESMO formulário de edição daqui, assim que a lista carregar
+  // vindo do catálogo (botão "✎ Editar produto" do modal da peça) ou da Esteira ("Editar no cadastro", v7.48.0): abre o MESMO formulário de edição daqui.
+  // Espera a pessoa entrar (sem prazo enquanto a tela de login está aberta) e a lista carregar; sem permissão ou peça inexistente: aviso legível.
   try {
     var mEd = /[?&]editar=([^&]+)/.exec(location.search);
     if (mEd) {
-      var idEd = decodeURIComponent(mEd[1]), tentEd = 0;
+      var idEd = '', tentEd = 0, pediuLoginEd = false;
+      try { idEd = decodeURIComponent(mEd[1]).trim(); } catch (e) { idEd = ''; }
+      var avisoEd = function(t){ if (typeof window.tkAvisoRapido === 'function') window.tkAvisoRapido(t, 'aviso'); };
+      var fimEd = function(t){ clearInterval(tmEd); if (t) avisoEd(t); try{ history.replaceState(history.state,'',location.pathname); }catch(e){} };
       var tmEd = setInterval(function(){
         tentEd++;
-        var achou = (typeof produtos !== 'undefined') && produtos && produtos.some(function(x){ return String(x.ID) === String(idEd); });
-        if (achou || tentEd > 60){
-          clearInterval(tmEd);
-          if (achou){ try{ editarProduto(idEd); }catch(e){} }
-          try{ history.replaceState(history.state,'',location.pathname); }catch(e){}
-        }
+        if (!/^[A-Za-z0-9_-]{1,90}$/.test(idEd)) return fimEd('O link de edição está incompleto. Abra a peça de novo pela Esteira ou pela lista.');
+        var lo = $('login-overlay');
+        if (lo && lo.classList.contains('visivel')) { if (!pediuLoginEd) { pediuLoginEd = true; avisoEd('Entre na sua conta para abrir a edição da peça.'); } tentEd = 0; return; }
+        var lista = (typeof produtos !== 'undefined') && produtos && produtos.length ? produtos : null;
+        var u = (typeof usuarioAdmin !== 'undefined') ? usuarioAdmin : null, contas = (typeof modoLogin !== 'undefined') && modoLogin;
+        if (!lista || (contas && !u && tentEd < 40)) { if (tentEd > 120) fimEd('Não consegui carregar a lista de peças para abrir a edição. Atualize a página e tente de novo.'); return; }
+        if (u && !temPermissao(u, 'catalogo_cadastrar')) return fimEd('Seu acesso não permite editar peças. Peça ao administrador a permissão de cadastrar peças.');
+        var achou = lista.some(function(x){ return String(x.ID) === idEd; });
+        if (!achou) return fimEd('Não encontrei essa peça no catálogo (ela pode ter sido excluída). Procure pelo nome na lista.');
+        fimEd('');
+        try { editarProduto(idEd); } catch (e) { avisoEd('Não consegui abrir a edição desta peça. Procure pelo nome na lista.'); }
       }, 500);
     }
   } catch(e) {}

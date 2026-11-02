@@ -6,6 +6,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.48.0 — 02/11/2026
+- **Esteira — conferência sem quantidade obrigatória:** "Quantas peças você contou?" virou opcional. Em branco, a conferência é registrada e o estoque do site fica como está. O servidor recusa quantidade que não seja número inteiro, com aviso em português.
+- **Fotos em tela cheia:** tocar na foto da peça (conferência, Hoje, cartão de família, Preparação, Outras tarefas, Painel e itens de pedido) abre todas as fotos e o vídeo da peça no visualizador do site, com **"Ver no site"** (peça ativa, outra aba). A galeria vem do catálogo público que a Esteira já lê.
+- **"Editar no cadastro":** conferência, Preparação e Outras tarefas levam à edição normal da peça na Gestão (`admin.html?editar=<ID>`). O link espera a pessoa entrar e a lista carregar; sem permissão de cadastrar, peça inexistente ou link quebrado, mostra aviso legível.
+- **Preparação mais clara:** passos do fluxo no topo; cada peça tem o quadro **"Dados do cadastro"** (fotos, nome, código, preço, categoria, público, tamanhos, cores, tecido, estoque, descrição), aberto enquanto falta conferir cadastro/cores e tamanhos. Tarefas do Hoje e Outras tarefas ficam agrupadas por peça, com foto, código, categoria, cores, tamanhos, estoque e quem pediu.
+- **Fornecedores:** cadastro com nome (obrigatório), endereço e até 3 telefones (DDD + número). No "Novo pedido", o fornecedor é escolhido da lista (com busca quando a lista é grande), com "Cadastrar fornecedor" (já escolhe o novo) e "Editar dados". O pedido guarda o id do fornecedor e o nome; pedidos antigos com nome digitado continuam iguais. Só o Admin total (mesma permissão dos pedidos).
+- **Busca no catálogo com filtros discretos** (Pedidos → Peça do catálogo, Preparação e Painel → colocar na lista): situação (ativas, esgotadas, arquivadas, todas), categoria e público. Escolher a categoria lista sem digitar; quando a peça está em outra situação, o aviso diz para trocar o filtro.
+- **Nada de texto livre para categoria, público, tamanhos, cores e tecido na Esteira:** produto novo do pedido e "veio a mais" usam seleções com todas as opções da Gestão (categorias, públicos, tamanhos e cores do catálogo; tecidos do cadastro de tecidos). Valor antigo fora da lista aparece marcado e precisa ser trocado. O Worker confere de novo (`/esteira/listas`) e recusa nome que não existe; se as listas não responderem, não bloqueia.
+- Worker: tabela `est_fornecedor`, colunas `est_pedido.fornecedor_id` e `est_pedido_item.tecido` (criadas sem mexer nos dados existentes).
+
 ## 7.47.1 — 02/11/2026
 - **Família na edição:** tocar na foto de outra peça da família abre a edição daquela peça.
 - **Lista da Gestão:** cards de peças com família mostram o selo "Família · N peças".
