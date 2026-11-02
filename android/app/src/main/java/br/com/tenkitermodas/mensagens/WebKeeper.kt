@@ -42,6 +42,8 @@ object WebKeeper {
         @JavascriptInterface fun salvarVisualLista(conta:String,visual:String){if(visual !in listOf("dividida","continua"))return;val c=context?.applicationContext?:return;runCatching{if(ReceivedFiles.trusted(web?.url)&&NativeRepository.get(c).store.auth()?.owner==conta)c.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+conta,visual).apply()}}
         @JavascriptInterface fun telaMensagensVisivel()=attached&&remoteVisible
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
+        /** Clipe do Mensageiro: o próximo seletor de fotos/vídeos (em até 5 s) abre a gaveta nativa estilo WhatsApp. */
+        @JavascriptInterface fun gavetaAnexo(opcoes:String?):Boolean{AttachRequest.set(android.os.SystemClock.elapsedRealtime(),(opcoes?:"{}").take(1000));return true}
     }
     fun configure(w:WebView){
         w.addJavascriptInterface(bridge,"TKAndroid")

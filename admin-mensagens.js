@@ -2793,7 +2793,10 @@
     const tipo = /^image\//.test(f.type) ? 'imagem' : /^video\//.test(f.type) ? 'vídeo' : /^audio\//.test(f.type) ? 'áudio' : '';
     if (!tipo) { aviso_('Escolha uma foto, um vídeo ou um áudio.'); return; }
     let blob = f;
-    if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outra.'); return; } }
+    // Foto da câmera do app (2.4.22+): já sai em pé, na maior resolução que cabe em 5 MB (limite de imagem da Wafly/WhatsApp); não reduz de novo.
+    const fotoApp = tipo === 'imagem' && f.type === 'image/jpeg' && /^TENKiTER-foto-/.test(f.name || '') && f.size > 0 && f.size <= 5000000;
+    if (fotoApp) blob = f;
+    else if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outra.'); return; } }
     else if (tipo!=='vídeo' && blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MiB).'); return; }
     if (tipo === 'vídeo') {
       const sessao=getSessao(),id=aberta?.id,epoca=epocaConta_;
@@ -3744,7 +3747,14 @@
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
     else if (a === 'gravar-video') { if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de gravar.');return;} if(window.TKAndroid?.versao){const v=String(TKAndroid.versao()).split('.').map(x=>parseInt(x,10)||0);if(v[0]<2||(v[0]===2&&(v[1]<4||(v[1]===4&&v[2]<14)))){aviso_('Atualize o aplicativo para gravar com tamanho ajustado para envio.');TKAndroid.atualizar?.();return;}} $('ms-camera-video')?.click(); }
-    else if (a === 'anexar') { abrirMenu(b, [['Gravar vídeo', 'gravar-video'], ['Escolher fotos ou vídeos da galeria', 'anexar-galeria'], ['Enviar áudio de arquivo', 'anexar-audio']]); }
+    else if (a === 'anexar') {
+      // App 2.4.22+: o clipe abre direto a gaveta nativa estilo WhatsApp (câmera, recentes com seleção múltipla, galeria e áudio).
+      // A gaveta responde ao mesmo seletor #ms-arquivo, então prévia, legenda, preparo de vídeo e envio continuam os do site.
+      // Sem a ponte (navegador/computador ou app antigo), mantém o menu de 3 opções.
+      const arq=$('ms-arquivo'),bloq=!!(espiando||cacheConversa);let gaveta=false;
+      if(arq&&window.TKAndroid&&typeof TKAndroid.gavetaAnexo==='function'){try{gaveta=TKAndroid.gavetaAnexo(JSON.stringify({camera:!bloq,audio:!bloq,aviso:'Toque em Atender e aguarde a conversa atualizar antes de gravar ou anexar áudio.'}))!==false;}catch(_){gaveta=false;}}
+      if(gaveta)arq.click();else abrirMenu(b, [['Gravar vídeo', 'gravar-video'], ['Escolher fotos ou vídeos da galeria', 'anexar-galeria'], ['Enviar áudio de arquivo', 'anexar-audio']]);
+    }
     else if(a==='anexar-galeria') { const i=$('ms-arquivo');if(i)i.click(); }
     else if (a === 'anexo-tirar') limparAnexo_(true);
     else if (a === 'anexar-audio') {if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de anexar.');return;}const i=$('ms-arquivo-audio');if(i)i.click();}
