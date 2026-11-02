@@ -221,6 +221,7 @@
   .semfoto[class*="ph-"] { flex:none; background:var(--linha); border-radius:8px; }
   @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } .acoes-t { justify-content:flex-end; } .acoes-t .bt:not(.discreto) { flex:0 0 200px; } .tarefa .acoes-t:has(.discreto) { justify-content:flex-start; } }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+  #tkfg a.tkfg-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:10px;background:#fff;color:#0d0d0d;font-weight:700;text-decoration:none}#tkfg a.tkfg-link[hidden]{display:none}#tkfg a.tkfg-link:focus-visible{outline:3px solid #E67E22;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -278,7 +279,16 @@
   const linkSite = (x) => (typeof linkProduto === 'function' ? linkProduto(x) : SITE_URL + '?id=' + encodeURIComponent(x.ID != null ? x.ID : x.id));
   const linkCadastro = (id) => 'admin.html?editar=' + encodeURIComponent(String(id));
   const verNoSite = (x) => (x && !ehInativo(x) ? { url: linkSite(x), rotulo: 'Ver no site' } : null);
-  function abrirGaleria(itens, indice, link) { if (window.TKFotoGrande && itens.length) TKFotoGrande.abrir({ itens, indice: indice || 0, link: link || null }); }
+  /* "Ver no site" fica aqui (e não no common.js) para não exigir um APK novo: o app embute o common.js. */
+  function abrirGaleria(itens, indice, link) {
+    if (!window.TKFotoGrande || !itens.length) return;
+    TKFotoGrande.abrir({ itens, indice: indice || 0 });
+    const base = document.querySelector('#tkfg .tkfg-base'); if (!base) return;
+    let a = document.getElementById('tkfg-link');
+    if (!a) { a = document.createElement('a'); a.id = 'tkfg-link'; a.className = 'tkfg-link'; a.target = '_blank'; a.rel = 'noopener'; base.insertBefore(a, document.getElementById('tkfg-prox') || null); }
+    const ok = link && /^https?:\/\//.test(String(link.url || ''));
+    a.hidden = !ok; if (ok) { a.href = link.url; a.textContent = link.rotulo || 'Ver no site'; } else a.removeAttribute('href');
+  }
   /** Abre todas as fotos da peça. Sem catálogo em 4 s, abre ao menos a foto que a tela já tem. */
   async function abrirFotos(id, reserva, noSite) {
     let x = CATALOGO && CATALOGO.get(String(id));
