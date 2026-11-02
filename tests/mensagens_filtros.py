@@ -13,3 +13,13 @@ def valor(pg,nome):
     pg.keyboard.press('Escape')
     pg.wait_for_selector('#ms-gaveta',state='detached')
     return resultado
+
+def tipos(pg,msg,grp):
+    assert msg or grp
+    assert pg.locator('#ms-tipos').is_visible()
+    for k,querido in [('msg',msg),('grp',grp)]:
+        alvo=pg.locator('#ms-tipos [data-tipo='+k+']')
+        if querido and alvo.get_attribute('aria-pressed')!='true':alvo.click()
+    for k,querido in [('msg',msg),('grp',grp)]:
+        alvo=pg.locator('#ms-tipos [data-tipo='+k+']')
+        if not querido and alvo.get_attribute('aria-pressed')=='true':alvo.click()

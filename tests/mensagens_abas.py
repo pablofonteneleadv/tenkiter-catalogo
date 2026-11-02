@@ -225,7 +225,8 @@ with sync_playwright() as p:
         pg.click('#ms-btn-filtros')
     pg.wait_for_timeout(600)
     painel_txt = pg.inner_text('body')
-    for nome in ['Grupos', 'Com notas', 'Não lidas', 'Retomar']:
+    chk('Grupos disponível no seletor fixo',pg.locator('#ms-tipos [data-tipo=grp]').count()==1)
+    for nome in ['Com notas', 'Não lidas', 'Retomar']:
         chk('filtro antigo presente: ' + nome, nome.lower() in painel_txt.lower())
     pg.keyboard.press('Escape')
     pg.wait_for_timeout(300)
