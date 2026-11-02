@@ -35,7 +35,8 @@ with sync_playwright() as p:
    assert not pg.evaluate("async()=> (await axe.run(document.querySelector('.ms-gaveta-painel'))).violations.filter(x=>['serious','critical'].includes(x.impact)).map(x=>x.id)")
    pg.screenshot(path=str(OUT/f'detalhe-{w}-{zoom}.png'))
   pg.get_by_text('Como a nota foi calculada',exact=True).click();assert '15 ocorrência(s)' in pg.inner_text('#ms-gaveta');assert '5 conta(m)' in pg.inner_text('#ms-gaveta')
-  pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached');assert pg.locator('.ms-relacionamento-abrir').evaluate('e=>e===document.activeElement');assert s['lidas']==lidas;assert not s['envios']
+  pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached');pg.wait_for_function("document.activeElement&&document.activeElement.matches('.ms-relacionamento-abrir')",timeout=3000);   # foco volta depois do popstate (assíncrono)
+  assert s['lidas']==lidas;assert not s['envios']
   if w==390:
    resumo[0]={**H,'pontos':36,'base':51};s['convs'][0]['relacionamento']=resumo[0];s['convs'][0]['atualizada_em']=mock_msg.iso(-1);pg.wait_for_function("document.querySelector('.ms-relacionamento-abrir').textContent==='Hist. 36'",timeout=10000);assert s['lidas']==lidas
   # Falha e vazio continuam distinguíveis da nota e oferecem saída/retry.

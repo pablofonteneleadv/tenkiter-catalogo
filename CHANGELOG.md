@@ -70,6 +70,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Aba **Hoje** ganha "Tarefas da sua função". "Pedir foto nova" na conferência cria a tarefa "Foto nova" para quem está em Fotos.
 - Servidor: tabela `est_tarefa`, colunas novas em `est_produto` (`etapa`, `aceito_em`, `aceito_por` e referência do nome/foto) por ALTER seguro; rotas `/esteira/preparacao`, `/preparar`, `/tarefa`, `/tarefa-nova`, `/aceitar`; Configurações aceitam salvamento parcial (`modelosPreparacao`).
 
+
+
+
+
+## [7.41.1] - 2026-11-01
+
+- Individuais/Grupos fixos em Em atendimento e Todos; grupos internos entram direto em atendimento e não são encerrados nem contam nas regras de clientes.
+- Pendentes destacados por quantidade e espera, usando a meta do canal e animação breve com movimento reduzido respeitado.
+- Busca geral inclui encerrados, ignora os filtros da lista e agrupa todos os canais pela identidade, preservando homônimos separados e situação por conversa. Resultados adicionais têm paginação explícita.
+
 ## 7.41.0 — Esteira de Produtos (entrega 1) — 01/11/2026
 - Nova página independente **esteira.html** (mesmo login do site e do Mensageiro): tela **Hoje** com 20 peças por funcionária para conferir ao longo do dia, função do rodízio com instruções e escala do dia.
 - Escolha das peças por pontuação (nunca conferida, dias sem conferência, antiguidade, dias sem atualização, estoque baixo, diferença anterior), agrupando categoria/público para facilitar achar na arara; peça conferida ou atualizada à mão nos últimos 21 dias fica de fora; listas não se repetem entre as funcionárias.

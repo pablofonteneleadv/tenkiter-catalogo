@@ -1,3 +1,4 @@
+from mensagens_filtros import tipos as selecionar_tipos
 """Mensagens v7.24 (atendimento): filtros "Mensagens"/"Grupos" combináveis, sem "Lidas"; seleção com Marcar lidas / Não lidas;
 "Nos 2 WhatsApp" sai quando uma das conversas é encerrada; gaveta de Produtos (catálogo carregado) e Respostas rápidas;
 *negrito* do WhatsApp nas bolhas. Serviços simulados (mock.py + mock_msg.py)."""
@@ -50,10 +51,7 @@ with sync_playwright() as p:
         pg.locator("#ms-so-nao-respondidos").count() == 0)
     chk("começa com individuais, sem grupos",3 not in pg.evaluate(IDS) and len(pg.evaluate(IDS))==6)
     def tipos(msg,grp):
-        pg.click('[data-ms=filtros-abrir]')
-        pg.locator('[name=ms-ft-tipo][value=msg]').set_checked(msg)
-        pg.locator('[name=ms-ft-tipo][value=grp]').set_checked(grp)
-        pg.click('[data-ms=filtros-aplicar]');pg.wait_for_timeout(500)
+        selecionar_tipos(pg,msg,grp);pg.wait_for_timeout(500)
     tipos(False,True)
     chk("filtro de grupos",pg.evaluate(IDS)==[3] and S["consultas"][-1]["tipo"]=="grupo")
     tipos(True,True)

@@ -55,6 +55,7 @@ with sync_playwright() as p:
             assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth'), 'scroll horizontal'
             # toda aba é alvo de toque de 44px
             for aba in ['atendimento', 'pendentes', 'todos', 'encerrados']:
+                pg.wait_for_function('(aba)=>{const e=document.querySelector("#ms-abas [data-aba="+aba+"]");return e&&e.getBoundingClientRect().height>=44}',arg=aba)
                 r = pg.locator('#ms-abas .ms-aba[data-aba="%s"]' % aba).bounding_box()
                 assert r and r['height'] >= 44, ('aba curta', aba, r)
             pg.screenshot(path=str(OUT / f'atendimento-{w}-{h}-{scale}.png'))
