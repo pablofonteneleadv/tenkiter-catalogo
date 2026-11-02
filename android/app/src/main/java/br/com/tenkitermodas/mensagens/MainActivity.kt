@@ -198,7 +198,7 @@ class MainActivity:Activity(),InboxView.Events {
         CookieManager.getInstance().setAcceptThirdPartyCookies(w,false)
         w.webViewClient=object:WebViewClient(){
             override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{if(!r.isForMainFrame)return false;val u=r.url.toString();if(trusted(u))return false;if(r.hasGesture())external(u);return true}
-            override fun onPageStarted(v:WebView,url:String,icon:android.graphics.Bitmap?){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null}
+            override fun onPageStarted(v:WebView,url:String,icon:android.graphics.Bitmap?){webAudio.cancel();AttachRequest.clear();chooser?.onReceiveValue(null);chooser=null}
             override fun onPageFinished(v:WebView,url:String){if(trusted(url))deliverWeb()}
             override fun onReceivedError(v:WebView,r:WebResourceRequest,e:WebResourceError){if(r.isForMainFrame){Toast.makeText(this@MainActivity,"Sem conexão. Tentando abrir as mensagens de novo…",Toast.LENGTH_LONG).show();handler.postDelayed({web?.reload()},6000)}}
         }
@@ -207,6 +207,10 @@ class MainActivity:Activity(),InboxView.Events {
                 if(!trusted(v.url)){cb.onReceiveValue(null);return true}
                 webAudio.cancel();chooser?.onReceiveValue(null);chooser=cb
                 val cancel={if(chooser===cb){cb.onReceiveValue(null);chooser=null};Unit}
+                // Clipe do Mensageiro (site chamou TKAndroid.gavetaAnexo): gaveta nativa no lugar do seletor do sistema.
+                // O resultado volta pelo mesmo requestCode 100, na ordem escolhida, para a prévia/legenda/preparo do site.
+                val gaveta=AttachRequest.take(SystemClock.elapsedRealtime())
+                if(gaveta!=null&&VisualMediaPicker.visual(p.acceptTypes)&&!p.isCaptureEnabled){try{startActivityForResult(AttachDrawerActivity.intent(this@MainActivity,gaveta),100);return true}catch(_:Exception){}}
                 if(VisualMediaPicker.recording(p.acceptTypes,p.isCaptureEnabled)){webAudio.begin{uri->if(chooser===cb){cb.onReceiveValue(uri?.let{arrayOf(it)});chooser=null}};return true}
                 if(VisualMediaPicker.visual(p.acceptTypes) || p.acceptTypes.isEmpty() || p.acceptTypes.all { it.isBlank() || it == "*/*" }){VisualMediaPicker.open(this@MainActivity,p,100,cancel);return true}
                 return try{startActivityForResult(p.createIntent().apply{addCategory(Intent.CATEGORY_OPENABLE)},100);true}catch(_:Exception){cancel();false}

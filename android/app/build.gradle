@@ -2,7 +2,7 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'br.com.tenkitermodas.mensagens'
     compileSdk 35
-    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 28; versionName '2.4.21' }
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 29; versionName '2.4.22' }
     buildFeatures { buildConfig true }
     def shared = new File(rootDir.parentFile, 'common.js').text
     def loginApi = (shared =~ /API_URL_PADRAO="([^"]+)"/)[0][1]
@@ -43,6 +43,13 @@ dependencies {
     implementation 'com.onesignal:OneSignal:5.10.2'
     implementation 'androidx.work:work-runtime-ktx:2.10.0'
     implementation 'androidx.core:core-ktx:1.15.0'
+    // Câmera do anexo estilo WhatsApp (versões estáveis fixas).
+    def camerax = '1.4.1'
+    implementation "androidx.camera:camera-core:$camerax"
+    implementation "androidx.camera:camera-camera2:$camerax"
+    implementation "androidx.camera:camera-lifecycle:$camerax"
+    implementation "androidx.camera:camera-video:$camerax"
+    implementation "androidx.camera:camera-view:$camerax"
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.14.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'

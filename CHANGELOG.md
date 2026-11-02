@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.46.0 — Mensageiro: clipe do app abre a gaveta de anexos estilo WhatsApp (Android 2.4.22) — 02/11/2026
+- **No app (2.4.22 / code 29)**, tocar no clipe abre direto uma gaveta nativa, sem o menu intermediário de 3 opções:
+  - primeiro quadrado "Câmera" + grade das fotos e vídeos recentes do aparelho, com seleção múltipla numerada na ordem do toque (até 30), duração nos vídeos e botão "Enviar (N)";
+  - atalhos "Galeria completa" (seletor do sistema, vários arquivos) e "Áudio de arquivo" (mesma função de antes);
+  - câmera dentro do app (CameraX 1.4.1): toque tira foto, segurar grava vídeo (ou alterna Foto/Vídeo), troca frontal/traseira, flash/luz, prévia com Refazer/Enviar.
+- **Qualidade dentro dos limites atuais**: vídeo MP4 H.264 Full HD 1080p/30 a 2,8 Mbps (HD 720p se o aparelho não tiver 1080p) com contador e parada automática antes de 15 MB (~40 s); opção "HD · até 1:35" para vídeos longos. Foto na maior resolução do sensor, JPEG 95, girada e só reduzida se passar de 5 MB (limite de imagem da Wafly/WhatsApp); o site não a reduz de novo.
+- Tudo entra no mesmo seletor `#ms-arquivo`: prévia, legenda, fila de vários anexos, preparo de vídeo e envio continuam os do site. Nada é enviado pela gaveta.
+- Permissões pedidas na hora do uso, com acesso parcial do Android 14 ("Liberar mais fotos"); se negar, abre o seletor do sistema. Enquanto espia (sem atender), câmera e áudio ficam bloqueados com aviso.
+- Site no navegador/computador e apps antigos (sem `TKAndroid.gavetaAnexo`) mantêm o menu de 3 opções.
+- Validação em aparelho físico pendente.
+
 ## 7.45.0 — Esteira: lista focada por categoria, gestor altera as listas, reativação de peça parada e painel completo (entrega 5) — 02/11/2026
 - **Lista focada por categoria** (`estMontarListas_`, padrão ligado): cada funcionária recebe os 20 itens concentrados numa categoria principal do dia.
   - Categorias ranqueadas pela soma das pontuações dos 20 itens mais urgentes de cada uma (família = 1 item; exclusões de sempre).

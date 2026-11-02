@@ -1,4 +1,5 @@
-"""Clipe: escolha explícita da câmera/galeria, sem envio; aparelhos antigos pedem atualização."""
+"""Clipe: escolha explícita da câmera/galeria, sem envio; aparelhos antigos pedem atualização.
+App 2.4.22+ (ponte TKAndroid.gavetaAnexo): o clipe chama a gaveta nativa direto, sem o menu de 3."""
 import os
 from pathlib import Path
 from mock import install,SESSION,PERMS_ALL
@@ -23,5 +24,15 @@ with sync_playwright() as p:
   with pg.expect_file_chooser() as selected:pg.get_by_role('menuitem',name='Escolher fotos ou vídeos da galeria',exact=True).click()
   assert selected.value.is_multiple()
   pg.evaluate("window.TKAndroid={versao:()=> '2.4.13',atualizar:()=>window.__update=true}");pg.click('#ms-anexar');pg.get_by_role('menuitem',name='Gravar vídeo',exact=True).click();assert pg.evaluate('window.__update===true')
-  assert not st['ig']['msg']['envios'],'Abrir o clipe/câmera não envia';assert not errors,errors;ctx.close();print('OK',width,'clipe, câmera, galeria múltipla, atualização e nenhum envio')
+  pg.keyboard.press('Escape');pg.wait_for_timeout(100)
+  # App novo: a ponte existe -> sem menu, o seletor múltiplo do site (#ms-arquivo) recebe a gaveta nativa.
+  pg.evaluate("window.TKAndroid={versao:()=> '2.4.22',atualizar:()=>{},gavetaAnexo:(o)=>{window.__gaveta=(window.__gaveta||[]).concat([JSON.parse(o)]);return true}}")
+  with pg.expect_file_chooser() as selected:pg.click('#ms-anexar')
+  assert selected.value.is_multiple() and selected.value.element.get_attribute('id')=='ms-arquivo'
+  assert not pg.locator('.ms-menu').count(),'App com gaveta nativa não mostra o menu de 3'
+  g=pg.evaluate('window.__gaveta');assert len(g)==1 and g[0]['camera'] is True and g[0]['audio'] is True and g[0]['aviso'],g
+  # Ponte que recusa (ou falha) volta ao menu atual.
+  pg.evaluate("()=>{window.TKAndroid.gavetaAnexo=()=>{throw new Error('x')}}");pg.click('#ms-anexar');pg.get_by_role('menuitem',name='Escolher fotos ou vídeos da galeria',exact=True).wait_for();pg.keyboard.press('Escape')
+  pg.evaluate("()=>{delete window.TKAndroid}");pg.click('#ms-anexar');pg.get_by_role('menuitem',name='Enviar áudio de arquivo',exact=True).wait_for();pg.keyboard.press('Escape')
+  assert not st['ig']['msg']['envios'],'Abrir o clipe/câmera não envia';assert not errors,errors;ctx.close();print('OK',width,'clipe, câmera, galeria múltipla, atualização, gaveta nativa no app e nenhum envio')
  b.close()
