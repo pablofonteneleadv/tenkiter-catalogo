@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.47.0 — 02/11/2026
+- **Família de produtos reformulada:** família = o mesmo produto cadastrado em várias peças, que podem mudar por **estampa** ou por tamanho (não só tamanho).
+- **Ligar como família só reconhece as peças:** a janela não pede nada (sem nome da família, sem "Tamanho/idade" digitado) e não muda nada nas peças. Mostra foto, nome, código e estoque de cada uma e um botão "Ligar N peças como família". O nome da família vem do nome das peças.
+- **Nada é digitado à parte:** tamanho, idade e cor nunca são escritos pela pessoa para a família. Quando o nome já termina em tamanho/idade (ex.: "... P", "... 4 anos"), esse rótulo é aproveitado automaticamente; nas estampas o rótulo fica vazio e a foto identifica cada peça.
+- **"+ Nova variação desta família"** (antes "+ Novo tamanho"): o cadastro vem igual à peça original, inclusive o nome; fotos, tamanhos, cores e quantidade vêm vazios. Sem campo extra obrigatório.
+- **Sugestões de famílias** também juntam peças com o nome igual (estampas), além das que só mudam o tamanho no fim do nome.
+- **Vitrine:** "Outros tamanhos" virou **"Outras opções"**, com a foto de cada peça (e o tamanho embaixo quando o nome traz); esgotada fica apagada.
+- **Gestão (edição):** a caixa Família mostra a foto de cada peça, com a atual marcada.
+- **Esteira:** o cartão da família mostra a foto de cada peça (e o tamanho, se houver) e conta "N peças".
+- Famílias já ligadas continuam como estão (nenhuma migração ou exclusão).
+
 ## 7.46.1 — 02/11/2026
 - Esteira: Limpeza, Caixa, Fotos e Atendimento online já vêm com instruções iniciais (editáveis em Configurações; campo vazio volta ao texto inicial).
 - Testes atualizados ao comportamento atual: agendamento (aviso dentro da gaveta, assinatura no texto, anexos antes dos atalhos) e retomada do app (clipe abre a gaveta nativa 2.4.22).

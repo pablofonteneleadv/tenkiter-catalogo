@@ -1,5 +1,7 @@
 # Família de produtos (7.44.0, Esteira entrega 4)
 
+> **Atualizado na 7.47.0:** a família passou a ser "o mesmo produto", que pode mudar por estampa ou por tamanho. Ligar não pede nem muda nada, e ninguém digita tamanho/idade. O que mudou está em [familia-variacoes-20261102.md](familia-variacoes-20261102.md). Este texto continua valendo para a estrutura (D1, rotas, vitrine sem esperar `/familias`).
+
 A loja cadastra o mesmo modelo várias vezes, uma peça por tamanho ou idade ("Sunga infantil masculino P", "... M", "... G"). Cada uma tem as fotos das estampas daquele tamanho, estoque e link próprios.
 
 Decisão do Pablo: criar a **família de produtos**. Cada tamanho continua um produto separado (tamanho e estampas aparecem por peça), mas os tamanhos ficam ligados.
