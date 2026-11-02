@@ -444,6 +444,43 @@
   .cad-falta { margin-top: 16px; font-size: 0.8rem; font-weight: 600; text-align: center; padding: 8px; border-radius: 10px; background: #fff3e0; color: #7a4a00; }
   .cad-falta.pronto { background: #edf7ee; color: #1a6b2c; }
 
+  /* v7.44.0: família de tamanhos (admin-familias.js) */
+  .fam-form { border: 1px solid #e6dccb; border-left: 4px solid var(--laranja); border-radius: 12px; background: #fff; padding: 12px; margin: 8px 0 12px; display: grid; gap: 8px; }
+  .fam-form .fam-tit { font-size: .95rem; }
+  .fam-sub { margin: 0; font-size: .85rem; color: #5c5650; }
+  .fam-tams { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fam-tam { min-width: 40px; padding: 4px 10px; border-radius: 999px; border: 1px solid #d8d1c4; background: var(--cinza); font-weight: 700; font-size: .85rem; text-align: center; }
+  .fam-tam.atual { background: var(--preto); color: #fff; border-color: var(--preto); }
+  .fam-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fam-acoes button, .fam-pe button, .fam-sugs > button { width: auto; min-height: 44px; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
+  .fam-novo, .fam-prim { background: var(--laranja); color: #141414; border: 0; }
+  .fam-tirar, .fam-sec { background: #fff; color: #141414; border: 1px solid #cfc6b6; }
+  .fam-st { margin: 0; font-size: .85rem; color: #5c5650; } .fam-st:empty { display: none; }
+  .fam-st.erro, .fam-prev.erro { color: var(--vermelho); }
+  .fam-alerta { margin: 0; padding: 8px 10px; border-radius: 10px; background: #fdf0dc; color: #8a4b00; font-size: .85rem; }
+  .fam-rotulo-box { display: grid; gap: 6px; margin-top: 10px; padding: 10px; border-radius: 10px; background: #fff9f2; border: 1px solid #f1d2ad; }
+  .fam-rot-l { font-weight: 700; font-size: .88rem; }
+  .fam-rotulo-box input { min-height: 46px; font-size: 1rem; width: 100%; max-width: 320px; }
+  .fam-prev { margin: 0; font-size: .85rem; color: #5c5650; }
+  .fam-sheet { gap: 8px; }
+  .fam-h2 { margin: 0; font-size: 1.05rem; }
+  .fam-corpo { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 10px; align-content: start; padding-bottom: 8px; }
+  .fam-pe { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid #eee; } .fam-pe:empty { display: none; }
+  .fam-pe .fam-prim { width: 100%; }
+  .fam-campo { display: grid; gap: 4px; font-weight: 700; font-size: .88rem; } .fam-campo input { min-height: 46px; font-size: 1rem; }
+  .fam-membro { display: flex; gap: 10px; align-items: center; border: 1px solid #eee; border-radius: 12px; padding: 8px; }
+  .fam-membro img, .fam-membro .fam-semfoto { width: 52px; height: 64px; border-radius: 8px; object-fit: cover; flex: none; background: #eee; }
+  .fam-mt { flex: 1; min-width: 0; display: grid; gap: 4px; } .fam-mt b { overflow-wrap: anywhere; font-size: .9rem; }
+  .fam-ml { display: grid; gap: 2px; font-size: .78rem; color: #5c5650; } .fam-ml input { min-height: 44px; font-size: 1rem; max-width: 160px; }
+  .fam-sugs { display: grid; gap: 10px; }
+  .fam-sug { border: 1px solid #e6dccb; border-radius: 12px; padding: 10px; display: grid; gap: 8px; background: #fff; }
+  .fam-fotos { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .fam-fig { margin: 0; flex: none; width: 76px; display: grid; gap: 2px; text-align: center; font-weight: 700; font-size: .85rem; }
+  .fam-fig img, .fam-fig .fam-semfoto { width: 76px; height: 92px; border-radius: 8px; object-fit: cover; background: #eee; display: block; }
+  .fam-vazio { margin: 0; padding: 16px; text-align: center; color: #5c5650; }
+  .lista-topo { flex-wrap: wrap; gap: 8px; }
+  .btn-fam-sug { width: auto; padding: 4px 10px; font-size: 0.78rem; min-height: 44px; background: #fff; color: #141414; border: 1px solid #cfc6b6; border-radius: 999px; font-weight: 700; }
+  .sem-cadastrar #btn-bulk-familia, .sem-cadastrar #btn-fam-sugestoes, .sem-cadastrar #fam-form .fam-acoes { display: none !important; }
   .overlay-sheet { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
   .overlay-sheet.aberto { display: flex; }
   .tam-linha { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 2px; font-size: .74rem; color: #555; align-items: center; }
@@ -3314,6 +3351,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
 
     abrirCadastro_();
+    if (window.tkFamiliaForm) window.tkFamiliaForm(p);   // v7.44.0: família de tamanhos da peça (admin-familias.js)
   }
 
   document.getElementById('form-produto').addEventListener('reset', () => { const ac = document.getElementById('aviso-copiado'); if (ac) ac.hidden = true; });
@@ -3336,6 +3374,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     document.querySelectorAll('#form-produto .passo.erro').forEach(x => x.classList.remove('erro'));
     aplicarPadroesNovo_();
     atualizarFaltas_();
+    if (window.tkFamiliaForm) window.tkFamiliaForm(null);
   }
 
   document.getElementById('btn-cancelar-duplicar').addEventListener('click', cancelarDuplicacao);
@@ -3486,7 +3525,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       await new Promise((res, rej) => {
         const tx = db.transaction('e', 'readwrite');
         tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: null, videoArquivos: arquivosDeVideo_(it), videosSalvos: it.videosSalvos || [], videosRemover: it.videosRemover || [], capaNovaB64: it.capaNovaB64 || null,
-          galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '',
+          galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, familia: it.familia || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '',
           subiu: it.subiu || null, v: 2, ka: !!it.ka, pacote: pacoteLeve_(it) });   // v4.25: pacote final leve (sem credencial) para qualquer tela terminar; v4.20: o que já subiu (endereços) fica guardado; v:2 = o servidor sabe reconhecer reenvio (opId)
         tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
       });
@@ -3518,7 +3557,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     lista.forEach((r) => {
       if (envios.some(x => x.k === r.k)) return;
       const it = { chave: ++seqEnvios, k: r.k, titulo: r.titulo, ehEdicao: !!r.ehEdicao, temVideo: !!r.temVideo, videoArquivo: null, videoArquivos: (r.videoArquivos && r.videoArquivos.length) ? r.videoArquivos : (r.videoArquivo ? [r.videoArquivo] : []), videosSalvos: r.videosSalvos || [], videosRemover: r.videosRemover || [], capaNovaB64: r.capaNovaB64 || null,
-        galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, estado: 'fila', msg: '', etapa: 'fila', subiu: r.subiu || undefined };
+        galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, familia: r.familia || null, estado: 'fila', msg: '', etapa: 'fila', subiu: r.subiu || undefined };
       // v4.20: com o servidor novo (opId) reenviar é seguro: se a peça já tinha sido salva, ele devolve a original em vez de duplicar. Sem isso, pergunta como antes.
       if (r.etapa === 'salvando' && !(opOk && r.v >= 2) && !r.ehEdicao) { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se esta peça chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
       else if (r.msg) { it.estado = 'erro'; it.msg = r.msg; }
@@ -4058,6 +4097,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
       it.estado = 'ok'; it.respSalvo = resultado.resp; if (!it.arquivadaDepois) conferir_.push(it);
       if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id);
+      if (it.familia && !it.ehEdicao && window.tkFamiliaDepoisDeSalvar) window.tkFamiliaDepoisDeSalvar(it, resultado.resp.id);   // v7.44.0: liga o tamanho novo à família
       if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
       window.logDebug_('════ "' + it.titulo + '": salvo ════');
     } else if (!resultado.ok && resultado.enfileirado) {
@@ -4183,6 +4223,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     e.preventDefault();
     const faltas = faltasDoForm_();
     if (faltas.length) { mostrarFaltas_(faltas); return; } // sem foto/nome/preço/gênero/categoria a peça não é salva
+    const famNova = modoFormulario === 'duplicando' && window.tkFamiliaAoSalvar ? window.tkFamiliaAoSalvar() : null;   // v7.44.0: "+ Novo tamanho desta família"
+    if (famNova === false) return;
     const idParaEditar = document.getElementById('produto-id').value;
     const ehEdicao = modoFormulario === 'editando' && idParaEditar;
     const arquivarDepois = !ehEdicao && document.getElementById('arquivar-depois').checked;
@@ -4244,6 +4286,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (ehEdicao && !videosMulti_ && !videosNovos.length && videosRemovidos.length && !videosSalvos.length) dados.removerVideo = true;   // backend antigo: 1 vídeo só
     if (!ehEdicao && !videosNovos.length && videosSalvos.length) { dados.videoUrlExistente = videosSalvos[0]; if (videosSalvos.length > 1 && videosMulti_) dados.videos = videosSalvos.slice(1); }   // v3.6: peça aceita do Instagram já traz o vídeo (R2)
     if (ehEdicao) dados.id = idParaEditar;
+    if (famNova && !ehEdicao) dados.nome = famNova.nomeFinal;   // nome base + tamanho/idade
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
     const capaNovaB64 = capaItem && capaItem.b64 ? capaItem.b64 : null;
@@ -4261,7 +4304,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, arquivarDepois: arquivarDepois,
       temVideo: videosNovos.length > 0, videoArquivo: null, videoArquivos: videosNovos.map(v => v.file), videosSalvos: ehEdicao ? videosSalvos : [], videosRemover: ehEdicao ? videosRemovidos.slice() : [],
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
-      dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null, k: novoKEnvio_(), etapa: 'fila'
+      dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null, k: novoKEnvio_(), etapa: 'fila', familia: famNova && !ehEdicao ? famNova : null
     });
     guardarEnvio_(envios[envios.length - 1]);
     if (!ehEdicao && Array.isArray(window.__loteSeparado) && window.__loteSeparado.length && window.__rascunhoAtual && window.__rascunhoAtual === window.__loteBase) {
@@ -4546,6 +4589,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       bar.classList.remove('ativa');
       const bs2 = document.getElementById('btn-bulk-separar'); if (bs2) bs2.hidden = true;
     }
+    if (window.tkFamiliaBarraLote) window.tkFamiliaBarraLote(selecionadosBulk.size);   // v7.44.0: "Ligar como família" com 2+ peças
   }
 
   /** Manda as peças (1 ou várias) para a lista da aba Postagens; lá cada uma vira uma postagem, uma depois da outra. */
@@ -6171,6 +6215,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.40.28">
 <script src="admin-disponibilidade.js?v=7.41.0"></script>
+<script src="admin-familias.js?v=7.44.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.40.45">
 <script src="mensagens-presenca.js?v=7.40.43"></script>

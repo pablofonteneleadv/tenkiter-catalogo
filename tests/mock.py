@@ -468,6 +468,51 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if st["ia"]: return {"ok":True,"titulo":"Título IA","descricao":"Descrição IA"}
             return {"ok":True,"local":True,"aviso":"Chave do Gemini não configurada.","titulo":(b.get("nome","")+" | TENKiTER Modas")[:60],"descricao":b.get("nome","")+" na TENKiTER Modas, em Crateús-CE. 10% de desconto à vista. Peça pelo WhatsApp."}
         return {"ok":True,"itens":[],"funcionarios":[],"avaliacoes":[],"lista":[],"cadastrados":[]}
+    st["familias"]=[]; st["fam_chamadas"]=[]; st["fam_sugestoes"]=[]; st["fam_modo"]=""; st["fam_seq"]=0
+    def familias_rota(route, path, m, h):
+        """Worker das famílias simulado: fam_modo "" (normal), "erro" (500) ou "lento" (não responde)."""
+        corpo=json.loads(route.request.post_data or "{}") if m=="POST" else {}
+        st["fam_chamadas"].append({"path":path,"m":m,"corpo":corpo,"sessao":h.get("x-tk-sessao")})
+        if path=="/familias":
+            if st["fam_modo"]=="erro": return route.fulfill(status=500,json={"ok":False,"erro":"As famílias de peças não responderam agora."})
+            if st["fam_modo"]=="lento": st.setdefault("fam_pendentes",[]).append(route); return None   # nunca responde: o site desiste em 2,5 s
+            return route.fulfill(json={"ok":True,"familias":st["familias"]},headers={"Cache-Control":"public, max-age=60","Access-Control-Allow-Origin":"*"})
+        if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
+        def de(pid): return next((f for f in st["familias"] if any(x["produto"]==str(pid) for x in f["membros"])),None)
+        def reordenar(f):
+            peso=lambda r:(["PP","P","M","G","GG","XG","EXG"].index(r) if r in ["PP","P","M","G","GG","XG","EXG"] else 50)
+            f["membros"].sort(key=lambda x:(peso(x["rotulo"]),x["produto"]))
+            for k,x in enumerate(f["membros"]): x["ordem"]=k
+        if path=="/familias/ligar":
+            ids=[str(x) for x in corpo.get("produtos",[])]; rot=corpo.get("rotulos") or {}
+            if len(ids)<2: return route.fulfill(status=400,json={"ok":False,"erro":"Escolha pelo menos duas peças para formar a família."})
+            fams={id(f):f for f in [de(i) for i in ids] if f}
+            if len(fams)>1: return route.fulfill(status=409,json={"ok":False,"erro":"Algumas dessas peças já estão em famílias diferentes. Tire da família antes de juntar."})
+            f=list(fams.values())[0] if fams else None; criada=not f
+            if not f:
+                st["fam_seq"]+=1; f={"id":"f%d"%st["fam_seq"],"nome":corpo.get("nome") or "Família","membros":[]}; st["familias"].append(f)
+            elif corpo.get("nome"): f["nome"]=corpo["nome"]
+            for i in ids:
+                x=next((y for y in f["membros"] if y["produto"]==i),None)
+                if not x: x={"produto":i,"rotulo":"","ordem":0}; f["membros"].append(x)
+                if rot.get(i): x["rotulo"]=rot[i]
+            reordenar(f); return route.fulfill(json={"ok":True,"criada":criada,"familia":f})
+        if path=="/familias/desligar":
+            f=de(corpo.get("produto"))
+            if not f: return route.fulfill(json={"ok":True,"jaEstava":True,"dissolvida":False,"familia":None})
+            f["membros"]=[x for x in f["membros"] if x["produto"]!=str(corpo.get("produto"))]
+            if len(f["membros"])<2: st["familias"].remove(f); return route.fulfill(json={"ok":True,"dissolvida":True,"familia":None})
+            reordenar(f); return route.fulfill(json={"ok":True,"dissolvida":False,"familia":f})
+        if path=="/familias/membro":
+            f=next((x for x in st["familias"] if x["id"]==corpo.get("familia")),None)
+            if not f: return route.fulfill(status=404,json={"ok":False,"erro":"Esta família não existe mais. Atualize a tela."})
+            x=next((y for y in f["membros"] if y["produto"]==str(corpo.get("produto"))),None)
+            if not x: x={"produto":str(corpo.get("produto")),"rotulo":"","ordem":0}; f["membros"].append(x)
+            x["rotulo"]=corpo.get("rotulo",""); reordenar(f); return route.fulfill(json={"ok":True,"familia":f})
+        if path=="/familias/sugestoes": return route.fulfill(json={"ok":True,"sugestoes":st["fam_sugestoes"]})
+        if path=="/familias/ignorar":
+            st["fam_sugestoes"]=[g2 for g2 in st["fam_sugestoes"] if g2["chave"]!=corpo.get("chave")]; return route.fulfill(json={"ok":True})
+        return route.fulfill(status=404,json={"ok":False,"erro":"Esta ação de famílias não existe."})
     def hd(route):
         r=route.request;u=r.url
         if "script.google.com" in u:
@@ -503,6 +548,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":(route.request.post_data if "image/" not in (h.get("content-type") or "") and "octet-stream" not in (h.get("content-type") or "") else "<binário>")})
             if m=="OPTIONS": return route.fulfill(status=204,body="")
             if g.get("fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
+            if path=="/familias" or path.startswith("/familias/"):   # v7.44.0: família de produtos (pública: GET /familias; o resto com sessão)
+                return familias_rota(route, path, m, h)
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
             if path=="/cliente/foto" or path.startswith("/fotos"):      # fotos de clientes (Worker v4.7): st["ig"]["fotos"]
                 from urllib.parse import urlparse, parse_qs

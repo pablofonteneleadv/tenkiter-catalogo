@@ -6,6 +6,42 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.45.0 — Esteira: lista focada por categoria, gestor altera as listas, reativação de peça parada e painel completo (entrega 5) — 02/11/2026
+- **Lista focada por categoria** (`estMontarListas_`, padrão ligado): cada funcionária recebe os 20 itens concentrados numa categoria principal do dia.
+  - Categorias ranqueadas pela soma das pontuações dos 20 itens mais urgentes de cada uma (família = 1 item; exclusões de sempre).
+  - Pessoas diferentes ficam com categorias diferentes; rodízio entre dias pela tabela nova `est_foco (data, whats, categoria)`: a categoria de ontem pesa ×0,2, anteontem ×0,45, até 6 dias ×0,75.
+  - Categoria fixa por pessoa (Configurações) é respeitada. Faltando itens, completa com a próxima categoria mais urgente, agrupada, evitando o foco das outras.
+  - Desligado, a montagem é a de antes. A aba Hoje mostra "Categoria do dia".
+- **Gestor altera as listas** (Admin total, Painel → "Ver e alterar a lista"): tirar, colocar (busca no catálogo; família entra inteira), mover para outra pessoa, trocar a categoria do dia (refaz só os não conferidos) e refazer a lista. Item já conferido não sai. Rotas `POST /esteira/lista/tirar|colocar|mover|categoria|refazer`.
+- **Reativação de peça parada:**
+  - O cron (a cada minuto) faz só uma leitura no KV; uma vez por dia, depois da hora configurada (padrão 6h de Fortaleza, com trava e data no KV e no D1), tira um retrato do catálogo público: `est_estoque (produto, data, estoque)` só quando o estoque muda, retratos com mais de 120 dias apagados.
+  - `est_produto.ult_queda_em` muda quando o estoque cai; queda explicada por conferência não conta como venda.
+  - Dias parado = hoje − maior data entre última queda, cadastro, aceite e início da observação (1º retrato). Família avaliada junta. Fora: peça em preparação, sem estoque informado ou com estoque 0.
+  - Degraus configuráveis (padrão 30/60/90): tarefa "Foto nova" (30) e "Vídeo curto" (60) para Fotos, origem `reativacao`, uma vez por período parado e sem duplicar tarefa aberta. 60+: "Sugerir para Postagens" (só aviso). 90+: "Sugestões de promoção/combinação". O sistema nunca muda preço; "Dispensar por 30 dias" (`POST /esteira/reativacao/dispensar`).
+- **Painel completo:** listas por pessoa; "Chegaram e não foram para o site" (preparação há mais de 3 dias); "Esperando Aceitar para o site"; pedidos a caminho (com atraso) e esperando aprovação; peças paradas por degrau e tarefas de reativação abertas; diferença por fornecedor (chegadas de 180 dias, tabela com rolagem própria).
+- **Configurações:** foco por categoria, categoria fixa por pessoa, degraus da reativação e hora do retrato (salvamento parcial preserva o resto).
+- Testes: `worker_esteira.js` 183 ok; `esteira_ui.py` 221 ok.
+
+## 7.44.0 — Família de produtos (Esteira, entrega 4) — 01/11/2026
+- **Família de produtos:** a loja cadastra o mesmo modelo uma vez por tamanho ou idade ("Sunga infantil masculino P", "... M", "... G"). Cada tamanho continua um produto separado, com fotos, estoque e link próprios. Agora esses produtos ficam ligados numa família. A planilha e o Apps Script não mudam: a ligação fica no D1 do instagram-worker (`fam_familia`, `fam_membro`).
+- **Servidor (instagram-worker):**
+  - `GET /familias` é pública (sem sessão, com CORS das demais rotas). Devolve só id, nome e membros (produto, rótulo, ordem), com cache de 5 min no KV e 60 s no navegador/borda. O cache é limpo a cada mudança.
+  - Rotas para `catalogo_cadastrar` ou `gerir_acessos`: `POST /familias/ligar`, `/familias/membro`, `/familias/desligar` (família com uma peça só é desfeita), `/familias/ignorar` e `GET /familias/sugestoes`.
+  - As sugestões agrupam peças do catálogo com o mesmo nome depois de tirar o tamanho/idade do fim (PP…EXG, G1–G4, U/Único, 1–16, 34–56, "N anos", "N meses", RN, "Tam N", "Nº N"), ignorando acento e caixa. Só entram grupos de 2 ou mais que ainda não são família.
+- **Gestão (admin.html + admin-familias.js):**
+  - Na edição da peça aparece a família, com **"+ Novo tamanho desta família"** e **"Tirar da família"** (com segundo toque para confirmar).
+  - "+ Novo tamanho" abre o cadastro já preenchido a partir da peça, pelo fluxo de duplicar: nome sem o tamanho e o campo **"Tamanho/idade desta peça"**, que completa o nome final. Fotos, tamanhos, cores e quantidade ficam vazios. Se a peça original ainda não tem família, o formulário também confirma o tamanho dela.
+  - Quando o cadastro dá certo, a peça nova entra na família. Se o servidor das famílias estiver fora, a ligação fica guardada no aparelho e é refeita na próxima abertura da Gestão.
+  - Seleção em lote: **"Ligar como família"**. A janela sugere o nome da família e o tamanho/idade de cada peça para conferir.
+  - **"Sugestões de famílias"** (botão no topo da lista): grupos com fotos e tamanhos, com "Ligar" ou "Ignorar". Ignorar vale para toda a equipe.
+- **Vitrine (catalogo.js):** continua um card por tamanho, mas os cards da mesma família ficam sempre lado a lado, na ordem da família. O bloco entra na posição do primeiro membro na ordenação atual. Filtros e busca valem por produto: se só parte dos tamanhos passa, aparecem só esses, ainda juntos.
+  - Na peça aberta, **"Outros tamanhos: P · M · G"** leva aos irmãos.
+  - `/familias` tem limite de 2,5 s e cache local de 10 min. Se falhar ou demorar, a vitrine fica como antes. A primeira pintura nunca espera essa resposta. Quando a lista chega depois, a grade só é reorganizada se a pessoa ainda está no topo e sem janela aberta; nos outros casos, isso fica para a próxima renderização.
+- **Esteira:**
+  - Na lista diária, a família conta como 1 dos 20 itens e vai inteira para a mesma pessoa. A pontuação da família é a do membro mais urgente. Tamanho conferido ou atualizado à mão há pouco continua fora; os outros vêm juntos.
+  - Na aba Hoje, a família aparece num cartão com os tamanhos dentro. A conferência continua por tamanho, e a família só conta como feita quando todos os tamanhos dela foram conferidos.
+  - O progresso "X/20" e o Painel contam a família como 1 (`est_lista.familia`).
+
 ## 7.43.0 — Esteira de Produtos (entrega 3: Pedidos, chegada com contagem cega e aprovação) — 01/11/2026
 - Nova aba **Pedidos** na esteira.html. Admin total monta o pedido ao fornecedor: fornecedor, previsão de chegada, fotos do pedido (só ela vê) e itens. Cada item é **reposição** de peça do catálogo (busca por nome ou código) ou **produto novo** (nome, categoria, público, preço de venda, tamanhos, cores e fotos do fornecedor), com quantidade e **custo unitário**. O editor soma as peças e o custo. "Salvar e marcar como enviado" deixa o pedido "a caminho".
 - **Chegada (equipe):** "Chegou mercadoria" lista os pedidos a caminho. Na **contagem cega**, a pessoa não vê nem a quantidade pedida nem o custo. Ela digita o que contou e o sistema responde na hora "Bateu com o pedido" ou "Não bateu com o pedido", com "Recontar" ou "Confirmar". Também há "Não veio" e "+ Veio um modelo que não está aqui" (nome, quantidade e foto pela câmera ou galeria, pelo mesmo envio da entrega 2). O botão "Enviar para a Karla aprovar" só funciona com tudo contado e as diferenças confirmadas.
@@ -33,6 +69,8 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - "Colocar peça em preparação" com busca por nome/código no catálogo; tarefa avulsa por peça.
 - Aba **Hoje** ganha "Tarefas da sua função". "Pedir foto nova" na conferência cria a tarefa "Foto nova" para quem está em Fotos.
 - Servidor: tabela `est_tarefa`, colunas novas em `est_produto` (`etapa`, `aceito_em`, `aceito_por` e referência do nome/foto) por ALTER seguro; rotas `/esteira/preparacao`, `/preparar`, `/tarefa`, `/tarefa-nova`, `/aceitar`; Configurações aceitam salvamento parcial (`modelosPreparacao`).
+
+
 
 
 
