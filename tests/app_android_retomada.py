@@ -10,7 +10,7 @@ with sync_playwright() as p:
  browser=p.chromium.launch(args=['--no-sandbox'])
  for w,h in [(320,700),(390,844),(412,915),(1440,900)]:
   ctx=browser.new_context(viewport={'width':w,'height':h},has_touch=True,is_mobile=w<600,service_workers='block');ctx.add_init_script(SESSION)
-  ctx.add_init_script("""window.nativeSavedConversation=0;window.nativeBackCallbacks=0;window.TKAndroid={versao:()=> '2.4.5',audioNativo:()=>true,lista:()=>{window.nativeSavedConversation=0;window.nativeBackCallbacks++;}};window.nativeNotification=(id,request)=>{window.nativeSavedConversation=id;window.TKMobileOpenConversation(id,false,request)};""")
+  ctx.add_init_script("""window.nativeSavedConversation=0;window.nativeBackCallbacks=0;window.TKAndroid={versao:()=> '2.4.22',audioNativo:()=>true,gavetaAnexo:()=>true,lista:()=>{window.nativeSavedConversation=0;window.nativeBackCallbacks++;}};window.nativeNotification=(id,request)=>{window.nativeSavedConversation=id;window.TKMobileOpenConversation(id,false,request)};""")
   st=install(ctx,perms=PERMS_ALL,versao='3.7');st['ig']['msg']=novo_estado()
   if OLD:
    for file in ['app-mensagens.js','admin-mensagens.js']:

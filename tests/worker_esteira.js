@@ -46,6 +46,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   // configurações (Admin total)
   const c0 = await A(PABLO, 'GET', '/esteira/config');
   chk('config padrão: 20 por pessoa, 21 dias, 4 funções', c0.j.ok && c0.j.config.porPessoa === 20 && c0.j.config.diasSemRepetir === 21 && c0.j.config.funcoes.join() === 'Limpeza,Caixa,Fotos,Atendimento online', c0.j.config);
+  chk('v7.46.1: cada função já vem com instruções iniciais', ['Limpeza', 'Caixa', 'Fotos', 'Atendimento online'].every((f) => String(c0.j.config.instrucoes[f] || '').length > 40), c0.j.config.instrucoes);
   chk('WhatsApp curto é recusado', (await A(PABLO, 'POST', '/esteira/equipe', { whats: '123', nome: 'X' })).r.status === 400);
   await A(PABLO, 'POST', '/esteira/equipe', { whats: '55' + IARA, nome: 'Iara', confere: true, rodizio: true, atendente: true });
   const eq = await A(PABLO, 'POST', '/esteira/equipe', { whats: CLARICE, nome: 'Clarice', confere: true, rodizio: true, atendente: true, aceitar: true });
