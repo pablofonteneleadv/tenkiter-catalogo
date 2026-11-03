@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.53.1] - 2026-11-03
+
+- Retomada segura de postagens pendentes, limites por destino e fila sem bloqueio entre canais
+
+
 ## 7.53.0 — 03/11/2026
 - **Fotos com IA ganhou página própria:** `fotos-ia.html`, acessível pela Gestão. Um editor por foto, com pessoas explícitas, look completo ou cima/baixo, referências do cadastro/aparelho, poses individuais, posição do grupo e direção visual TENKiTER. A mesma peça pode ser usada intencionalmente em pessoas diferentes. Opções avançadas ficam recolhidas, sem controles duplicados de quantidade.
 - **Lotes recuperáveis:** rascunho IndexedDB por conta, edição e novas combinações durante o envio, estados de recebimento/criação/aprovação separados. Clique duplo e resposta perdida não repetem o pedido; confirmação por identidade antes de reenviar. Arquivos ainda não recebidos retomam ao reabrir a página. Os limites de referências e disponibilidade dos motores são informados antes do envio.
