@@ -1475,7 +1475,7 @@ export async function processarPostagens(env) {
     await acompanharPernasZap_(env);                                   // v7.48.3: WhatsApp do "ambos" em paralelo, sem segurar a fila
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
-    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY CASE WHEN serie<>'' AND (status='processando' OR (parte>1 AND EXISTS(SELECT 1 FROM postagem ant WHERE ant.serie=postagem.serie AND ant.parte=postagem.parte-1 AND ant.status IN ('publicado','manual_feito')))) THEN 0 WHEN serie<>'' AND parte>1 THEN 2 ELSE 1 END, agendado_em, id LIMIT 40").bind(t).all()).results || [];
+    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY CASE WHEN serie<>'' AND (status='processando' OR (parte>1 AND EXISTS(SELECT 1 FROM postagem ant WHERE ant.serie=postagem.serie AND ant.parte=postagem.parte-1 AND ant.status IN ('publicado','manual_feito')))) THEN 0 WHEN serie<>'' AND parte>1 THEN 2 ELSE 1 END, agendado_em, id LIMIT 200").bind(t).all()).results || [];
     if (!lin.length) return { feitas: 0 };
     const cfgP = await lerCfgPost(env);
     /* v1.2: o token do Instagram só é exigido quando ALGUMA postagem vencida vai para o Instagram.
@@ -1491,7 +1491,7 @@ export async function processarPostagens(env) {
     const ativas=(await env.DB.prepare("SELECT s.serie,s.tipo,s.canal FROM postagem s WHERE s.serie<>'' AND s.parte=1 AND s.status IN ('publicado','processando','manual_feito','erro') AND EXISTS(SELECT 1 FROM postagem q WHERE q.serie=s.serie AND q.status IN ('agendado','processando','erro','manual_pendente')) ORDER BY s.agendado_em,s.id").all()).results||[];
     const recentes=(await env.DB.prepare("SELECT id,serie,origem_midia,tipo,canal,publicado_em FROM postagem WHERE status IN ('publicado','manual_feito') AND publicado_em>? ORDER BY publicado_em DESC LIMIT 1000").bind(new Date(Date.now()-86400000).toISOString()).all()).results||[];
     const estados=new Map(lin.filter(p=>p.serie).map(p=>[p.serie+':'+p.parte,p])),anteriores=lin.filter(p=>p.serie&&p.parte>1);
-    if(anteriores.length){const rs=(await env.DB.prepare('SELECT serie,parte,status,publicado_em FROM postagem WHERE '+anteriores.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...anteriores.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
+    for(let i=0;i<anteriores.length;i+=40){const parte=anteriores.slice(i,i+40),rs=(await env.DB.prepare('SELECT serie,parte,status,publicado_em FROM postagem WHERE '+parte.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...parte.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
     let feitas = 0, novas = usados, tentadas = 0;
     for (const p of lin) {
       if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
@@ -1882,6 +1882,52 @@ export async function rotasFotos(env, ctx, req, url, J, perms) {       // /fotos
   }
   return null;
 }
+/** Janela móvel por destino: nenhuma mídia vira outra postagem para retomar. */
+async function cotasPostagens_(env,cfg){
+  const desde=new Date(Date.now()-86400000).toISOString(),rows=(await env.DB.prepare("SELECT tipo,canal,publicado_em FROM postagem WHERE status='publicado' AND publicado_em>=? ORDER BY publicado_em").bind(desde).all()).results||[];
+  const por=Object.fromEntries(CANAIS_FILA.map(b=>[b,[]])),ig=[];
+  for(const p of rows){const ms=Date.parse(p.publicado_em);if(!Number.isFinite(ms))continue;for(const b of bucketsDoPost(p.tipo,p.canal))por[b].push(ms);if(canalUsaInstagram_(p.canal))ig.push(ms);}
+  const item=(xs,limite)=>({usadas:xs.length,limite,liberaEm:xs.length>=limite?new Date(xs[xs.length-limite]+86400000+1000).toISOString():''});
+  return {canais:Object.fromEntries(CANAIS_FILA.map(b=>[b,item(por[b],limiteDoTipo(cfg,b))])),instagram:item(ig,cfg.max24h||MAX_POSTS_24H)};
+}
+function esperaCotaPost_(p,cotas){
+  if(p.status!=='agendado'||p.modo!=='auto'||Date.parse(p.agendado_em)>Date.now())return null;
+  const limites=bucketsDoPost(p.tipo,p.canal).map(b=>({canal:b,...cotas.canais[b]}));if(canalUsaInstagram_(p.canal))limites.push({canal:'instagram',...cotas.instagram});
+  const bloqueios=limites.filter(c=>c.usadas>=c.limite);if(!bloqueios.length)return null;
+  return {motivo:'limite24h',limites:bloqueios,retomaEm:bloqueios.map(b=>b.liberaEm).filter(Boolean).sort().at(-1)||''};
+}
+async function retomarPendentesPost_(env,req,b,perms,J){
+  const ids=[...new Set((Array.isArray(b.ids)?b.ids:[]).map(Number))];
+  if(!ids.length||ids.length>200||ids.some(id=>!Number.isSafeInteger(id)||id<1))return J({ok:false,erro:'Selecione de 1 a 200 destinos pendentes.'},400);
+  if(b.limitePorCanal!==undefined&&(b.limitePorCanal!==90||!perms.includes('gerir_acessos')))return J({ok:false,erro:'Somente a gestão pode ajustar o limite interno para 90.'},403);
+  if(!/^[A-Za-z0-9_-]{8,64}$/.test(String(b.idLocal||'')))return J({ok:false,erro:'Atualize a fila antes de retomar.'},400);
+  const chave='po_retoma_'+await sha(msgTelefone_(req.headers.get('X-TK-Whats'))+':'+b.idLocal),assinatura=await sha(JSON.stringify([ids.slice().sort((a,b)=>a-b),b.limitePorCanal||0]));
+  const anterior=await cfgGet(env,chave);if(anterior){const x=JSON.parse(anterior);if(x.assinatura!==assinatura)return J({ok:false,erro:'Esse pedido de retomada mudou. Atualize a fila.'},409);return x.resultado?J(x.resultado):J({ok:false,erro:'A retomada anterior ainda está em verificação. Atualize a fila antes de fazer outro pedido.'},409);}
+  const agoraEm=agora(),reserva=await env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) VALUES(?,?)').bind(chave,JSON.stringify({em:agoraEm,assinatura})).run();
+  if(!reserva.meta?.changes)return J({ok:false,erro:'Esse pedido de retomada já está em andamento. Atualize a fila.'},409);
+  const concluir=async resultado=>{await cfgSet(env,chave,JSON.stringify({em:agoraEm,assinatura,resultado}));return J(resultado);};
+  const rows=[];
+  for(let i=0;i<ids.length;i+=50){const xs=ids.slice(i,i+50);rows.push(...(await env.DB.prepare("SELECT p.* FROM postagem p WHERE p.id IN ("+xs.map(()=>'?').join(',')+") AND p.status='agendado' AND p.modo='auto' AND p.agendado_em<=? AND COALESCE(p.ig_id,'')='' AND COALESCE(p.zap_estado,'')='' AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo r WHERE r.postagem_id=p.id AND r.estado='enviando')").bind(...xs,agoraEm).all()).results);}
+  if(!rows.length)return concluir({ok:true,retomadas:0,preservadas:ids.length,aguardandoLimite:0});
+  let cfg=await lerCfgPost(env);
+  if(b.limitePorCanal===90){
+    await env.DB.prepare("INSERT OR IGNORE INTO cfg(chave,valor) VALUES('po_cfg','{}')").run();const antes=await cfgGet(env,'po_cfg'),bs=[...new Set(rows.flatMap(p=>bucketsDoPost(p.tipo,p.canal)))];
+    const novo=mesclarCfgPost(JSON.parse(antes),{canais:Object.fromEntries(bs.map(b=>[b,{max24h:90}]))});
+    const hist={em:agoraEm,por:String(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'').slice(-4),ids:rows.map(p=>p.id),canais:bs,antes:JSON.parse(antes),depois:novo};
+    const r=await env.DB.batch([env.DB.prepare("UPDATE cfg SET valor=? WHERE chave='po_cfg' AND valor=?").bind(JSON.stringify(novo),antes),env.DB.prepare("INSERT INTO cfg(chave,valor) SELECT 'po_retoma_ultima',? WHERE changes()=1 ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor").bind(JSON.stringify(hist))]);
+    if(!r[0].meta?.changes){await env.DB.prepare('DELETE FROM cfg WHERE chave=? AND valor=?').bind(chave,JSON.stringify({em:agoraEm,assinatura})).run();return J({ok:false,erro:'As regras mudaram durante o ajuste. Atualize a fila e tente novamente.'},409);}cfg=novo;
+  }
+  rows.sort((a,b)=>String(a.agendado_em).localeCompare(String(b.agendado_em))||a.id-b.id);
+  const ocup={},series=new Map(),planos=[];
+  for(const p of rows){const bs=bucketsDoPost(p.tipo,p.canal);for(const b of bs)if(!ocup[b])ocup[b]=await ocupadosDoTipo_(env,b,0,Math.max(gapMaxDoTipoMs(cfg,b),Number(p.intervalo_ms)||0));
+    const ajustada={...cfg,canais:{...cfg.canais}};for(const b of bs)ajustada.canais[b]={...cfg.canais[b],gapMin:Math.max(cfg.canais[b].gapMin,(Number(p.intervalo_ms)||0)/1000)};
+    const t=p.serie&&cfg.partesRapidas&&series.has(p.serie)?series.get(p.serie):ajustarHorarioMulti(ajustada,bs,Date.now(),ocup).t;
+    if(p.serie&&!series.has(p.serie))series.set(p.serie,t);for(const b of bs)ocup[b].push(t);planos.push({id:p.id,quando:new Date(t).toISOString()});
+  }
+  const r=await env.DB.batch(planos.map(p=>env.DB.prepare("UPDATE postagem SET agendado_em=?,urgente=0,atualizado_em=? WHERE id=? AND status='agendado' AND modo='auto' AND agendado_em<=? AND COALESCE(ig_id,'')='' AND COALESCE(zap_estado,'')='' AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando')").bind(p.quando,agoraEm,p.id,agoraEm)));
+  const retomadas=r.reduce((n,x)=>n+(Number(x.meta?.changes)||0),0),cotas=await cotasPostagens_(env,cfg);
+  return concluir({ok:true,retomadas,preservadas:ids.length-retomadas,aguardandoLimite:rows.filter(p=>esperaCotaPost_(p,cotas)).length,config:cfg});
+}
 async function uso24hPorCanal_(env) {
   const o = {}, desde = new Date(Date.now() - 86400000).toISOString();
   try { for (const b of CANAIS_FILA) o[b] = await contarUsados24h_(env, b, desde); } catch (e) { /* o painel só deixa de mostrar o uso */ }
@@ -1932,9 +1978,11 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
-    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: (await status2Info_(env)).ok, status2Motivo: (await status2Info_(env)).motivo, regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    const cfg=await lerCfgPost(env),cotas=await cotasPostagens_(env,cfg);
+    return J({ ok: true, posts: q.map(p=>({...linhaPostagem(p),espera:esperaCotaPost_(p,cotas)})), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: (await status2Info_(env)).ok, status2Motivo: (await status2Info_(env)).motivo, regras: 1, config: cfg, uso24h: Object.fromEntries(CANAIS_FILA.map(b=>[b,cotas.canais[b].usadas])), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
+  if(p==='/post/retomar-pendentes'&&req.method==='POST')return retomarPendentesPost_(env,req,b,perms||[],J);
   if (p === '/post' && req.method === 'POST') {
     const originais = Array.isArray(b.posts) ? b.posts : [b];
     if (!originais.length || originais.length > 60 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a sessenta postagens por vez.' }, 400);

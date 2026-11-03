@@ -751,6 +751,15 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     return route.fulfill(json=r0)
                 pb=json.loads(route.request.post_data or "{}")
                 g["post_chamadas"].append({"path":path,"corpo":pb})
+                if path=="/post/retomar-pendentes":
+                    idem=g.setdefault("retomas",{});key=pb.get("idLocal")
+                    if key not in idem:
+                        ids=set(pb.get("ids",[]));n=sum(x.get("status")=="agendado" and x.get("id") in ids for x in g.get("posts",[]));idem[key]={"ok":True,"retomadas":n,"preservadas":len(ids)-n,"aguardandoLimite":0}
+                        for x in g.get("posts",[]):
+                            if x.get("id") in ids and x.get("status")=="agendado":x["espera"]=None
+                    if g.get("retoma_falha_apos_gravar"):
+                        g["retoma_falha_apos_gravar"]=False;return route.fulfill(status=503,json={"ok":False,"erro":"Sem confirmação da retomada. Atualize a fila antes de tentar novamente."})
+                    return route.fulfill(json=idem[key])
                 if g.get("regras") and path=="/post/config":
                     if m=="POST":
                         if not g.get("pode_regras",True): return route.fulfill(status=403,json={"ok":False,"erro":"Só o gestor muda as regras da fila."})
