@@ -1017,7 +1017,29 @@ try { tkSelExpirar_(); } catch (e) {}
   }
 
   /** slideInicial (opcional) = posição (de 0) da foto/vídeo que já deve aparecer: vem do endereço ?f=<n> (link compartilhado numa foto específica). */
+  let composicoesIA_ = new Map(), composicoesProntas_ = false, composicoesFalharam_ = false;
+  const composicoesCarga_ = fetch(INSTAGRAM_URL + '/catalogo/composicoes', { signal: AbortSignal.timeout(6000) }).then(r => r.ok ? r.json() : null).then(j => {
+    if (!j || !j.ok || !Array.isArray(j.composicoes)) { composicoesFalharam_ = true; return; }
+    composicoesIA_ = new Map(j.composicoes.filter(c => c && Array.isArray(c.membros)).map(c => [String(c.produto), c.membros.map(String)]));
+  }).catch(() => { composicoesFalharam_ = true; }).finally(() => { composicoesProntas_ = true; });
+  function pecasComposicaoIA_(p) {
+    return (composicoesIA_.get(String(p.ID)) || []).map(id => produtos.find(p => String(p.ID) === id)).filter(p => p && !(typeof ehInativo_ === 'function' && ehInativo_(p)));
+  }
+  function slidePecaIA_(q) {
+    const box = document.createElement('div'); box.className = 'composicao-ia-slide';
+    const im = document.createElement('img'); im.alt = q.Nome; im.src = q.Foto_URL || ''; box.appendChild(im);
+    const texto = document.createElement('div');
+    const titulo = document.createElement('strong'); titulo.textContent = q.Nome; texto.appendChild(titulo);
+    const preco = document.createElement('p'); preco.textContent = ehConsulta(q) ? TEXTO_CONSULTA : formatarReal(Number(q.Preco) * (1 - DESCONTO_AVISTA)) + ' à vista'; texto.appendChild(preco);
+    if (estaEsgotado(q)) { const aviso = document.createElement('p'); aviso.textContent = 'Peça esgotada'; texto.appendChild(aviso); }
+    [['Ver produto completo', 0]].concat(String(q.Fotos_Galeria || '').trim() ? [['Mais fotos do produto', 1]] : []).forEach(([rotulo, slide]) => {
+      const a = document.createElement('a'); a.href = linkProduto(q); a.textContent = rotulo;
+      a.addEventListener('click', e => { e.preventDefault(); abrirDetalhe(q.ID, slide); }); texto.appendChild(a);
+    });
+    box.appendChild(texto); return box;
+  }
   function abrirDetalhe(id, slideInicial, silencioso) {
+    if (!composicoesProntas_) { composicoesCarga_.then(() => abrirDetalhe(id, slideInicial, silencioso)); return; }
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
     slideAtualModal_ = 0;
@@ -1033,7 +1055,8 @@ try { tkSelExpirar_(); } catch (e) {}
 
     const fotosGaleria = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s=>s.trim()).filter(Boolean));
     const idVid = idVideoSeguro(p.Video_URL);
-    const totalSlides = fotosGaleria.length + (idVid ? 1 : 0);
+    const pecasIA = pecasComposicaoIA_(p);
+    const totalSlides = fotosGaleria.length + (idVid ? 1 : 0) + pecasIA.length;
 
     document.getElementById('modal-conteudo').innerHTML = `
       <div class="sheet-handle" aria-hidden="true"></div>
@@ -1048,9 +1071,12 @@ try { tkSelExpirar_(); } catch (e) {}
       ${totalSlides > 1 ? `
         <div class="thumbs-galeria">
           ${fotosGaleria.map((f, idx) => { const im = `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`; return equipe_.pode ? `<span class="thumb-wrap">${im}<button type="button" class="x-equipe mini" data-x-idx="${idx}" aria-label="Tirar a foto ${idx+1} da peça">✕</button></span>` : im; }).join('')}
+          ${pecasIA.map((q, i) => `<button type="button" class="thumb-item thumb-composicao" data-idx="${fotosGaleria.length + (idVid ? 1 : 0) + i}" aria-label="Ver peça: ${escaparHtml(q.Nome)}"><img ${atribSrc(fotoMini(q.Foto_URL || '', 120))} alt="" width="50" height="62"></button>`).join('')}
           ${idVid ? (equipe_.pode ? `<span class="thumb-wrap"><div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div><button type="button" class="x-equipe mini" data-x-idx="${fotosGaleria.length}" aria-label="Tirar o vídeo da peça">✕</button></span>` : `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>`) : ''}
         </div>
       ` : ''}
+      ${composicoesFalharam_ && String(p.Descricao || '').startsWith('Composição com peças vendidas separadamente.') ? '<p class="composicao-ia-dica" role="status">Não foi possível carregar as peças deste look. Atualize a página para tentar novamente; o valor da composição continua a consultar.</p>' : ''}
+      ${pecasIA.length ? '<p class="composicao-ia-dica">Composição · deslize para ver cada peça e seu preço. Use também as setas.</p>' : ''}
       <div class="modal-conteudo">
         <div class="codigo-tecido">${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
         <div class="nome">${escaparHtml(p.Nome)}</div>
@@ -1118,7 +1144,7 @@ try { tkSelExpirar_(); } catch (e) {}
     }
 
     // galeria: setas, deslizar o dedo, miniaturas e teclado; o vídeo é o último slide (só carrega quando chega nele)
-    const slides = fotosGaleria.map(u => ({ tipo: 'foto', url: u })).concat(idVid ? [{ tipo: 'video', video: idVid }] : []);
+    const slides = fotosGaleria.map(u => ({ tipo: 'foto', url: u })).concat(idVid ? [{ tipo: 'video', video: idVid }] : []).concat(pecasIA.map(q => ({ tipo: 'produto', produto: q })));
     const area = document.getElementById('slide-area');
     const thumbs = document.querySelectorAll('.thumb-item');
     let atual = 0;
@@ -1134,7 +1160,10 @@ try { tkSelExpirar_(); } catch (e) {}
         if (u.href !== window.location.href) window.history.replaceState(window.history.state, '', u);
       } catch (e) {}
       const s = slides[atual];
+      if (xs) xs.hidden = s.tipo === 'produto';
       area.innerHTML = '';
+      if (s.tipo === 'produto') { area.appendChild(slidePecaIA_(s.produto)); }
+      else
       if (s.tipo === 'foto') {
         const im = document.createElement('img'); im.id = 'foto-principal-modal'; im.alt = p.Nome; im.src = s.url;
         area.appendChild(im);

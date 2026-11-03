@@ -39,7 +39,7 @@ function d1() {
       const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(600, 7)]).toString('base64');
       if (imgModo === 'cota') return R(429, { error: { message: 'You exceeded your current quota. Please retry in 2h10m5s. key=' + GEMINI_OK } });
       if (imgModo === 'semplano') return R(429, { error: { message: 'Quota exceeded for metric generate_content_free_tier_requests, limit: 0' } });
-      if (imgModo === 'cota1' && modelo === 'gemini-nano-banana-2.1') return R(429, { error: { message: 'quota. Please retry in 21h26m11.19s.' } });
+      if (imgModo === 'cota1' && modelo === 'gemini-3.1-flash-lite-image') return R(429, { error: { message: 'quota. Please retry in 21h26m11.19s.' } });
       if (imgModo === '403') return R(403, { error: { message: 'API key not valid' } });
       if (imgModo === 'recusa') return R(200, viaInter ? { steps: [{ type: 'model_output', content: [{ type: 'text', text: 'Não posso gerar essa imagem.' }] }] } : { candidates: [{ content: { parts: [{ text: 'Não posso gerar essa imagem.' }] } }] });
       if (imgModo === 'so-classico' && viaInter) return R(404, { error: { message: 'not found' } });
@@ -874,7 +874,7 @@ function d1() {
     chk('pedido entra na fila', rr.status === 200 && jj.ok && jj.id > 0, jj);
     const id1 = jj.id; let pf;                // o pedido já dispara a geração na hora (waitUntil); o A2 espera terminar
     ({ j: jj } = await A2('GET', '/fotoia/lista'));
-    let it = jj.itens.find((x) => x.id === id1); chk('ficou PRONTA, com endereço da imagem e o modelo usado', it && it.status === 'pronta' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado) && it.modelo === 'gemini-nano-banana-2.1', it);
+    let it = jj.itens.find((x) => x.id === id1); chk('ficou PRONTA, com endereço da imagem e o modelo usado', it && it.status === 'pronta' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado) && it.modelo === 'gemini-3.1-flash-lite-image', it);
     const c1 = imgChamadas[0];
     chk('1º jeito = Interactions, com a chave no CABEÇALHO e nunca na URL', c1 && c1.viaInter && c1.headers.get('x-goog-api-key') === GEMINI_OK && !c1.url.includes(GEMINI_OK), c1 && c1.url);
     chk('o pedido leva a instrução do Pablo, o nome da peça, a observação e as 2 fotos como imagem', c1.body.input[0].text.includes('FIDELIDADE ABSOLUTA') && /Cropped Farm/.test(c1.body.input[0].text) && /fundo areia/.test(c1.body.input[0].text) && c1.body.input.filter((x) => x.type === 'image' && x.data).length === 2 && c1.body.response_format.aspect_ratio === '9:16', c1.body.response_format);
@@ -889,7 +889,7 @@ function d1() {
     ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id2);
     chk('cota acabou: continua NA FILA (não vira erro), com horário para tentar de novo e frase clara', it.status === 'fila' && it.espera && /cota/i.test(it.erro) && Date.parse(it.espera) > Date.now() + 4 * 60000 && it.tent === 0, it);
     chk('a chave não vaza na frase de erro', !JSON.stringify(jj).includes(GEMINI_OK));
-    const nChamou = imgChamadas.length; chk('tentou os 4 modelos antes de desistir (cada um tem a sua cota)', new Set(imgChamadas.map((x) => x.modelo)).size === 4, imgChamadas.map((x) => x.modelo));
+    const nChamou = imgChamadas.length; chk('tentou os três modelos válidos antes de desistir (cada um tem a sua cota)', new Set(imgChamadas.map((x) => x.modelo)).size === 3, imgChamadas.map((x) => x.modelo));
     imgChamadas = []; pf = await W.processarFotoIA(env);
     chk('antes do horário nada é chamado de novo (não gasta tentativa)', imgChamadas.length === 0 && pf.feitas === 0, pf);
     // ---- 3) cota volta: o cron pega sozinho ----
@@ -905,7 +905,7 @@ function d1() {
     imgModo = 'cota1'; await env.CACHE.delete('ia_esgotados'); imgChamadas = [];
     await A2('POST', '/fotoia/acao', { id: id3, acao: 'agora' });
     ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id3);
-    chk('1º modelo sem cota: usa o 2º da lista e fica pronta', it.status === 'pronta' && it.modelo === 'gemini-3.1-flash-lite-image', it);
+    chk('1º modelo sem cota: usa o 2º da lista e fica pronta', it.status === 'pronta' && it.modelo === 'gemini-3.1-flash-image', it);
     // ---- 6) só o jeito clássico funciona ----
     imgModo = 'so-classico'; await env.CACHE.delete('ia_esgotados'); imgChamadas = [];
     ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Body', fotos: [foto] })); const id4 = jj.id;
@@ -931,8 +931,8 @@ function d1() {
     chk('passou do limite do dia: NÃO chama o Google, fica na fila até amanhã', pf.limiteDia === true && imgChamadas.length === 0 && it.status === 'fila' && /Limite de 2/.test(it.erro) && Date.parse(it.espera) > Date.now(), { pf, it });
     await A2('POST', '/fotoia/config', { config: { limiteDia: 20 } });
     // ---- 11) instrução editada vale na hora ----
-    ({ r: rr, j: jj } = await A2('POST', '/fotoia/config', { config: { instrucao: 'FAÇA UMA FOTO SIMPLES COM FUNDO AZUL. ' + 'x'.repeat(20), formato: '4:5', modelos: 'gemini-nano-banana-2.1\n  modelo invalido!!\n gemini-3.1-flash-image' } }));
-    chk('instrução, formato e lista de modelos salvos (modelo com caracteres estranhos é descartado)', jj.ok && /FUNDO AZUL/.test(jj.config.instrucao) && jj.config.formato === '4:5' && JSON.stringify(jj.config.modelos) === JSON.stringify(['gemini-nano-banana-2.1', 'gemini-3.1-flash-image']), jj.config);
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/config', { config: { instrucao: 'FAÇA UMA FOTO SIMPLES COM FUNDO AZUL. ' + 'x'.repeat(20), formato: '4:5', modelos: 'gemini-3.1-flash-lite-image\n  modelo invalido!!\n gemini-3.1-flash-image' } }));
+    chk('instrução, formato e lista de modelos salvos (modelo com caracteres estranhos é descartado)', jj.ok && /FUNDO AZUL/.test(jj.config.instrucao) && jj.config.formato === '4:5' && JSON.stringify(jj.config.modelos) === JSON.stringify(['gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image']), jj.config);
     imgChamadas = []; await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(id8).run(); await env.CACHE.delete('ia_esgotados'); await W.processarFotoIA(env, id8);
     chk('a instrução NOVA e o formato novo são os que vão ao Google', imgChamadas.length >= 1 && /FUNDO AZUL/.test(imgChamadas[0].body.input[0].text) && imgChamadas[0].body.response_format.aspect_ratio === '4:5' && !/FIDELIDADE/.test(imgChamadas[0].body.input[0].text), imgChamadas[0] && imgChamadas[0].body.response_format);
     ({ j: jj } = await A2('POST', '/fotoia/config', { padrao: true })); chk('"Voltar ao padrão" restaura a instrução do Pablo', /FIDELIDADE ABSOLUTA/.test(jj.config.instrucao) && jj.config.formato === '9:16');
@@ -1103,7 +1103,7 @@ function d1() {
     const idl3 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl3);
     const ac2 = aiChamadas[0] || { campos: {} };
     chk('Cloudflare: 4 fotos / 3 looks saem pelo Cloudflare com as 4 referências na ordem', it && it.status === 'pronta' && /^cloudflare:/.test(it.modelo) && ac2.campos.input_image_3 && !ac2.campos.input_image_4, it);
-    chk('Cloudflare: prompt diz 3 pessoas, liga image 1 + image 2 ao look 1 e image 3/4 aos outros (numeração a partir de 1); 4:5 = 768×960; sem seta nem texto mesmo com seta:true', /group of 3 different women/.test(ac2.campos.prompt || '') && /Person 1 \([^)]+\) wears the top garment from image 1 and the bottom garment from image 2\./.test(ac2.campos.prompt || '') && /Person 2 \([^)]+\) wears the full outfit from image 3\./.test(ac2.campos.prompt || '') && /Person 3 \([^)]+\) wears the full outfit from image 4\./.test(ac2.campos.prompt || '') && ac2.campos.width === '768' && ac2.campos.height === '960' && /No text, no letters, no numbers, no arrows, no emojis/.test(ac2.campos.prompt || '') && !/Add one small elegant arrow/.test(ac2.campos.prompt || ''), ac2.campos.prompt);
+    chk('Cloudflare: prompt diz 3 pessoas, liga image 1 + image 2 ao look 1 e image 3/4 aos outros (numeração a partir de 1); 4:5 = 768×960; sem seta nem texto mesmo com seta:true', /group of 3 different women/.test(ac2.campos.prompt || '') && /Person 1 \([^)]+\) wears the top garment from image 1 and the bottom garment from image 2\./.test(ac2.campos.prompt || '') && /Person 2 \([^)]+\) wears the full outfit from image 3\./.test(ac2.campos.prompt || '') && /Person 3 \([^)]+\) wears the full outfit from image 4\./.test(ac2.campos.prompt || '') && ac2.campos.width === '768' && ac2.campos.height === '960' && /No added captions, lettering, numbers, arrows, emojis/.test(ac2.campos.prompt || '') && !/Add one small elegant arrow/.test(ac2.campos.prompt || ''), ac2.campos.prompt);
     chk('Cloudflare: manda que NÃO copie o rosto/corpo da modelo das fotos', /Do NOT copy the face, body, skin or hair/.test(ac2.campos.prompt || ''));
     // e) mais de 4 fotos: o Cloudflare não pode (limite dele) e, sem Gemini, o pedido acusa erro na hora com a saída (dividir)
     aiChamadas = []; await A2('DELETE', '/ia-chave'); 
