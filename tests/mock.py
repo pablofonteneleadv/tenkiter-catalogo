@@ -95,7 +95,21 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             st.setdefault("x_chamadas",[]).append(b)
             if "catalogo_cadastrar" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
             x=next((q for q in P if str(q["ID"])==str(b.get("id") or b.get("destinoId"))),None)
-            if a=="juntarProdutos": return {"ok":True,"arquivados":len(b.get("origemIds",[]))}
+            if a=="juntarProdutos":
+                # v7.50.0: simula de verdade (fotos vão para o destino sem repetir, os outros ficam arquivados) e conta as chamadas
+                st["juntar_n"]=st.get("juntar_n",0)+1
+                if st.get("juntar_erro"): return {"ok":False,"erro":st["juntar_erro"]}
+                if x:
+                    fotos=[u for u in [x["Foto_URL"]]+[g for g in x["Fotos_Galeria"].split(",") if g]]
+                    for oid in b.get("origemIds",[]):
+                        o=next((q for q in P if str(q["ID"])==str(oid)),None)
+                        if not o: continue
+                        for u in [o["Foto_URL"]]+[g for g in o["Fotos_Galeria"].split(",") if g]:
+                            if u and u not in fotos: fotos.append(u)
+                        o["Status"]="Inativo"
+                    x["Fotos_Galeria"]=",".join(fotos[1:])
+                    return {"ok":True,"arquivados":len(b.get("origemIds",[])),"fotosNoDestino":len(fotos)}
+                return {"ok":True,"arquivados":len(b.get("origemIds",[]))}
             if a=="restaurarMidia":
                 r=st.setdefault("x_arq",{}).get(b.get("registro"))
                 if not r: return {"ok":False,"erro":"Registro não encontrado."}
@@ -152,6 +166,14 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             op=b.get("opId"); cr_=st.setdefault("creates",{})
             if op and versao>="4.19" and op in cr_: return dict(cr_[op],repetido=True)
             r_={"ok":True,"id":"999","codigo":"TK-0099"}
+            if st.get("ids_unicos"):   # v7.50.0: cada produto criado com id/código próprio (Separar)
+                st["seq_criado"]=st.get("seq_criado",0)+1; n_=st["seq_criado"]
+                r_={"ok":True,"id":str(1795000000000+n_),"codigo":"TK-%04d"%(900+n_)}
+                novo_={"ID":r_["id"],"Codigo":r_["codigo"],"Nome":b.get("nome",""),"Categoria":b.get("categoria",""),"Genero":b.get("genero",""),"Preco":b.get("preco",""),"Foto_URL":b.get("fotoUrlExistente",""),"Fotos_Galeria":b.get("fotosGaleriaExistentes",""),"Status":"Ativo","Estoque":b.get("estoque",""),"Video_URL":"","Novidade":False,"Tamanhos":b.get("tamanhos",""),"Cores":b.get("cores",""),"Descricao":b.get("descricao",""),"Foto_Stories_URL":""}
+                P.append(novo_)
+            if st.get("create_falha_em") and st.get("seq_criado",0)==st["create_falha_em"] and not st.get("create_falhou"):
+                st["create_falhou"]=True; P.pop(); st["seq_criado"]-=1
+                return {"ok":False,"erro":"Planilha ocupada agora. Tente de novo."}
             st.setdefault("criados",[]).append(dict(b))
             if op: cr_[op]=r_
             return r_
@@ -522,6 +544,10 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if r.method=="POST":
                 b=json.loads(r.post_data or "{}")
                 if log is not None: log.append(b)
+                if st.get("segurar_sessao") and b.get("action")=="sessao":   # v7.50.0: servidor de contas "lento" (a página tem que pintar logada antes)
+                    st.setdefault("sessao_pendentes",[]).append((route,b)); return
+                if st.get("segurar_juntar") and b.get("action")=="juntarProdutos":   # v7.50.0: o teste responde depois (prova que a tela não espera)
+                    st.setdefault("juntar_pendentes",[]).append((route,b)); return
                 if delay: __import__("time").sleep(delay)
                 return route.fulfill(json=post(b))
             if "action=versao" in u: return route.fulfill(json=FLAGS)
@@ -797,6 +823,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         if u.startswith("http://localhost") or u.startswith(BASE_LOCAL): return route.continue_()
         if "fonts.g" in u: return route.abort()
         return route.abort()
+    st["_post"]=post   # v7.50.0: testes que seguram uma resposta (segurar_juntar) respondem depois com a simulação normal
     ctx.route("**/*",hd)
     return st
 SESSION="localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999999999',sessao:'tk2.x.y'}));"

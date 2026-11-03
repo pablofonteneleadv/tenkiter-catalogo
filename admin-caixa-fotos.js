@@ -1,6 +1,7 @@
 /* v7.51.0 — Gestão: cadastrar produto novo com fotos da caixa da equipe (Esteira → aba Fotos → "Cadastrar produto novo").
  * admin.html?caixaFotos=12,13&modo=um      → abre o cadastro NORMAL já com as fotos (já estão no servidor de fotos).
- * admin.html?caixaFotos=12,13&modo=varias  → cada foto vira um produto com os mesmos dados (mesmo caminho do "Cadastro separado").
+ * admin.html?caixaFotos=12,13&modo=varias  → "Cadastrar vários produtos" (7.50.0) já com as fotos: cada foto vira um produto e "Unir fotos"
+ *                                           junta as do mesmo produto (sem esse recurso: o caminho do "Cadastro separado").
  * Nada vira produto sem a pessoa conferir e tocar em Cadastrar. Depois de salvo, a Esteira marca as fotos como usadas, com a peça
  * criada (o aviso fica guardado neste aparelho até o servidor confirmar, sem senha nem dados de pessoas). */
 (function () {
@@ -57,7 +58,10 @@
         var descr = itens.map(function (x) { return x.descricao || x.descricaoLote; }).filter(Boolean).filter(function (x, k, a) { return a.indexOf(x) === k; }).slice(0, 4);
         var quem = itens[0].por || 'equipe';
         var txt = 'Fotos da caixa da equipe (enviadas por ' + quem + ')' + (descr.length ? ': “' + descr.join('”, “') + '”' : '') + '.' + (usadas ? ' Atenção: ' + usadas + ' já foi(ram) usada(s) em outra peça.' : '');
-        if (varias && itens.length >= 2) {
+        if (varias && itens.length >= 2 && typeof window.tkVariasComFotos === 'function') {   // "Cadastrar vários produtos" com "Unir fotos" (7.50.0)
+          window.tkVariasComFotos(itens.map(function (x) { return { url: x.url, caixaId: x.id }; }));
+          var alv = document.getElementById('aviso-lote'); if (alv) { alv.hidden = false; alv.textContent = 'Cada foto vira um produto com os dados que você preencher. Fotos do mesmo produto? Toque em “Unir fotos”. ' + txt; }
+        } else if (varias && itens.length >= 2) {
           window.tkAceitarSeparado(itens.map(function (x) { return { id: 'caixa:' + x.id, legenda: '', midias: [{ tipo: 'foto', url: x.url, capa: true }] }; }));
           var t = document.getElementById('titulo-form'); if (t) t.textContent = 'Vários produtos com fotos da caixa (' + itens.length + ')';
           var b = document.getElementById('btn-salvar'); if (b) b.textContent = 'Cadastrar os ' + itens.length + ' produtos';

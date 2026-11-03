@@ -294,6 +294,8 @@ def admin_ctx(p, larg=390, alt=844):
     cx = {"itens": {11: {"id": 11, "url": M + "cx11.jpg", "descricao": "vestido azul, P e M", "descricaoLote": "Chegaram hoje", "por": "Bia", "status": "cadastro"}, 12: {"id": 12, "url": M + "cx12.jpg", "descricao": "", "descricaoLote": "Chegaram hoje", "por": "Bia", "status": "cadastro"}, 13: {"id": 13, "url": M + "cx13.jpg", "descricao": "", "descricaoLote": "Chegaram hoje", "por": "Bia", "status": "nova"}}, "usar": [], "lidas": []}
     def hd(route):
         u = route.request.url
+        if route.request.resource_type == "image" and "/m/202611/cx" in u:   # fotos da caixa (cor fixa por foto, só para a evidência)
+            return route.fulfill(body=_png_cor([(196, 120, 90), (110, 150, 120), (120, 140, 190)][int(re.search(r"cx(\d+)", u).group(1)) % 3], 120, 150), content_type="image/png")
         if "tenkiter-ig." in u and "/esteira/caixa/" in u:
             if "/esteira/caixa/itens" in u:
                 ids = [int(x) for x in re.search(r"ids=([0-9,]+)", u).group(1).split(",")]; cx["lidas"].append(ids)
@@ -330,19 +332,26 @@ with sync_playwright() as p:
         chk(f"{larg}: Gestão sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
         chk(f"{larg}: Gestão sem erro de JavaScript", not errs, errs)
         b.close()
-    print("== Gestão: vários produtos (cada foto vira um) ==")
-    b, ctx, pg, st, log, errs, cx = admin_ctx(p)
-    pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12,13&modo=varias")
-    pg.wait_for_function("(document.getElementById('titulo-form')||{}).textContent.indexOf('Vários produtos com fotos da caixa')===0", timeout=20000)
-    chk("modo vários: botão 'Cadastrar os 3 produtos' e aviso explicando", "Cadastrar os 3 produtos" in pg.inner_text("#btn-salvar") and "cada uma das 3 fotos vira um produto" in pg.inner_text("#aviso-lote"), pg.inner_text("#aviso-lote"))
-    preencher(pg, "Conjunto caixa")
-    pg.click("#btn-salvar"); pg.wait_for_timeout(8000)
-    cr = [x for x in log if x.get("action") == "create"]
-    capas = sorted(c.get("fotoUrlExistente", "").split("/")[-1] for c in cr)
-    chk("3 produtos criados, cada um com a PRÓPRIA foto", len(cr) == 3 and capas == ["cx11.jpg", "cx12.jpg", "cx13.jpg"], capas)
-    chk("cada produto criado marca a sua foto como usada (um aviso por produto)", sorted(tuple(u["ids"]) for u in cx["usar"] if u.get("uso") == "criado") == [(11,), (12,), (13,)], cx["usar"])
-    chk("sem erro de JavaScript", not errs, errs)
-    b.close()
+    for larg, alt in ((390, 844), (1440, 900)):
+        print(f"== Gestão {larg}px: vários produtos com uniões (7.50.0) ==")
+        b, ctx, pg, st, log, errs, cx = admin_ctx(p, larg, alt)
+        pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12,13&modo=varias")
+        pg.wait_for_function("(document.getElementById('titulo-form')||{}).textContent==='Cadastrar vários produtos' && document.querySelectorAll('#galeria-grid .galeria-item').length===3", timeout=20000)
+        chk(f"{larg}: abre 'Cadastrar vários produtos' com as 3 fotos da caixa: 'Vão ser criados 3 produtos'", "Vão ser criados 3 produtos" in pg.inner_text("#unioes") and pg.inner_text("#btn-salvar") == "Cadastrar 3 produtos" and "Unir fotos" in pg.inner_text("#aviso-lote") and "enviadas por Bia" in pg.inner_text("#aviso-lote"), (pg.inner_text("#unioes"), pg.inner_text("#aviso-lote")))
+        imgs = lambda: pg.locator("#galeria-grid .galeria-item img")
+        pg.click("#uni-unir"); imgs().nth(0).click(); imgs().nth(1).click(); pg.click("#uni-ok"); pg.wait_for_timeout(200)
+        chk(f"{larg}: 'Unir fotos' junta as 2 do mesmo produto → 'Vão ser criados 2 produtos'", "Vão ser criados 2 produtos" in pg.inner_text("#unioes") and pg.inner_text("#btn-salvar") == "Cadastrar 2 produtos", pg.inner_text("#unioes"))
+        pg.evaluate("window.scrollTo(0, document.getElementById('galeria-grid').getBoundingClientRect().top + scrollY - 160)"); pg.wait_for_timeout(300); shot(pg, f"gestao-varias-unioes-{larg}")
+        if larg == 390:
+            preencher(pg, "Conjunto caixa")
+            pg.click("#btn-salvar"); pg.wait_for_timeout(8000)
+            cr = [x for x in log if x.get("action") == "create"]
+            fotos = sorted((c.get("fotoUrlExistente", "").split("/")[-1], c.get("fotosGaleriaExistentes", "").split("/")[-1]) for c in cr)
+            chk("2 produtos: o grupo (capa + galeria) e a foto solta, pelos endereços (sem subir de novo)", len(cr) == 2 and fotos == [("cx11.jpg", "cx12.jpg"), ("cx13.jpg", "")], fotos)
+            chk("cada produto criado marca as suas fotos da caixa como usadas (um aviso por produto)", sorted(tuple(u["ids"]) for u in cx["usar"] if u.get("uso") == "criado") == [(11, 12), (13,)], cx["usar"])
+        chk(f"{larg}: Gestão (vários) sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
+        chk(f"{larg}: sem erro de JavaScript", not errs, errs)
+        b.close()
     print("== Gestão: link quebrado ==")
     b, ctx, pg, st, log, errs, cx = admin_ctx(p)
     cx["itens"] = {}
