@@ -98,7 +98,7 @@ def instalar(ctx, admin=True, familia=False):
         for pid, ts in st["prep"].items():
             x = next(p for p in todos if p["ID"] == pid); tt = [tarefa(t, pid) for t in ts]
             prods.append({"id": pid, "nome": x["Nome"], "codigo": x["Codigo"], "foto": x["Foto_URL"], "noSite": x["Status"] == "Ativo", "preparado_em": "2026-10-31T12:00:00Z", "preparado_por": "Pablo", "tarefas": tt, "feitas": sum(1 for t in tt if t["status"] == "feita"), "total": len(tt)})
-        outras = [tarefa(t, t["produto"]) for t in st["outras"] if t["id"] not in st["feitas"]]
+        outras = [tarefa(t, t["produto"]) for t in st["outras"] if t["id"] not in st["feitas"] and t.get("origem") != "pedido_fotos"]   # v7.51.0: pedidos de fotos ficam na aba Fotos
         return {"ok": True, "data": "2026-11-01", "eu": {"whats": "88999999999", "nome": "Iara", "admin": admin, "membro": True, "confere": True, "aceitar": admin}, "podeAceitar": admin, "funcoes": ["Limpeza", "Caixa", "Fotos", "Atendimento online"], "produtos": prods, "outras": outras}
     def tarefas_hoje():
         out = []
@@ -366,7 +366,7 @@ with sync_playwright() as p:
         card = pg.locator('[data-produto="2001"]')
         chk(f"{w}: Preparação mostra a peça, progresso 1/6 e que está fora do site", "1/6" in card.inner_text() and "fora do site até ser aceita" in card.inner_text() and "Cadastro conferido — feita" in card.inner_text(), card.inner_text()[:300])
         chk(f"{w}: Preparação lista 'Outras tarefas' (foto nova da conferência)", "Outras tarefas" in pg.inner_text("main") and "Vestido Longo Floral" in pg.inner_text("main"))
-        chk(f"{w}: 7.48 Preparação explica o fluxo em passos", pg.locator("ol.passos li").count() == 3 and "Aceitar para o site" in pg.inner_text("ol.passos"))
+        chk(f"{w}: 7.51 Preparação sem o bloco de instruções (só título, botão e lista)", pg.locator("ol.passos").count() == 0 and "antes de aparecer no site" not in pg.inner_text("main") and pg.inner_text("#prep-topo").startswith("Preparação"), pg.inner_text("#prep-topo")[:200])
         pg.wait_for_selector('[data-produto="2001"] details.dados >> text=Tricô macio', timeout=6000)
         dd = card.locator("details.dados")
         chk(f"{w}: 7.48 'Dados do cadastro' aberto no cartão (cores e tamanhos ainda por conferir) com nome, código, preço, categoria, público, tamanhos, cores, estoque e descrição", dd.evaluate("e=>e.open") and all(x in dd.inner_text() for x in ["Blusa Nova Tricô", "TK-2001", "R$ 99,90", "Blusas", "Feminino Adulto", "P, M", "Creme", "5 peças", "Tricô macio", "não (arquivada)"]), dd.inner_text()[:400])
@@ -401,7 +401,7 @@ with sync_playwright() as p:
         chk(f"{w}: aceitar reativa no catálogo (bulkUpdate reativar) antes de registrar", bk.get("tipoAcao") == "reativar" and bk.get("ids") == ["2001"] and bk.get("sessao") == "tk3.teste.sessao" and bk.get("whatsapp") == "88999999999" and st["aceitos"] == ["2001"], bk)
         # colocar peça em preparação (busca no catálogo)
         pg.click("text=Colocar peça em preparação")
-        chk(f"{w}: 7.48 colocar em preparação explica o que acontece e busca em todas as situações", "tarefas do modelo" in pg.inner_text("main") and pg.input_value(".busca-cat .f-situacao") == "todas")
+        chk(f"{w}: 7.48 colocar em preparação explica o que acontece e busca em todas as situações", "Arquivada fica fora do site até ser aceita." in pg.inner_text("main") and pg.input_value(".busca-cat .f-situacao") == "todas")
         pg.fill("#prep-busca", "saia")
         pg.wait_for_selector(".busca-res >> text=Saia Plissada Midi", timeout=6000)
         pg.click(".busca-res >> text=Saia Plissada Midi"); pg.wait_for_selector('[data-produto="1003"]', timeout=6000)
@@ -564,7 +564,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     instalar(ctx, admin=False); ctx.add_init_script("localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999999999',sessao:'tk3.teste.sessao'}));")
     pg = ctx.new_page(); pg.goto(BASE + "esteira.html"); pg.wait_for_selector(".peca", timeout=8000)
-    chk("funcionária vê Hoje, Preparação e Pedidos, sem Painel nem Configurações", pg.locator("nav.abas button").all_inner_texts() == ["Hoje", "Preparação", "Pedidos"] and "Configurações" not in pg.inner_text("body"), pg.locator("nav.abas button").all_inner_texts())
+    chk("funcionária vê Hoje, Preparação, Fotos e Pedidos, sem Painel nem Configurações", pg.locator("nav.abas button").all_inner_texts() == ["Hoje", "Preparação", "Fotos", "Pedidos"] and "Configurações" not in pg.inner_text("body"), pg.locator("nav.abas button").all_inner_texts())
     pg.click("nav.abas >> text=Preparação"); pg.wait_for_selector("text=Blusa Nova Tricô", timeout=6000)
     chk("funcionária não coloca peça nem aceita para o site", pg.locator("text=Colocar peça em preparação").count() == 0 and pg.locator("button.aceitar").count() == 0)
     chk("tarefa de outra função aparece sem botão Feito", pg.locator('.tarefa[data-tarefa="16"] button').count() == 0 and pg.locator('.tarefa[data-tarefa="11"] button', has_text="Feito").count() == 1)
@@ -580,7 +580,7 @@ with sync_playwright() as p:
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
     pg.goto(BASE + "esteira.html"); pg.wait_for_selector(".aviso-ped", timeout=8000)
     chk("equipe: Hoje avisa 'Chegou pedido para conferir'", "Chegou pedido para conferir" in pg.inner_text(".aviso-ped"))
-    chk("equipe: abas Hoje, Preparação e Pedidos", pg.locator("nav.abas button").all_inner_texts() == ["Hoje", "Preparação", "Pedidos"], pg.locator("nav.abas button").all_inner_texts())
+    chk("equipe: abas Hoje, Preparação, Fotos e Pedidos", pg.locator("nav.abas button").all_inner_texts() == ["Hoje", "Preparação", "Fotos", "Pedidos"], pg.locator("nav.abas button").all_inner_texts())
     pg.click(".aviso-ped >> text=Conferir chegada"); pg.wait_for_selector("text=Chegou mercadoria", timeout=6000)
     chk("equipe: 'Chegou mercadoria' lista o pedido a caminho, sem botão de novo pedido", "Malharia Sol" in pg.inner_text("main") and pg.locator("text=Novo pedido").count() == 0)
     pg.click('.peca.pedido[data-pedido="7"]'); pg.wait_for_selector(".item-cont", timeout=6000)

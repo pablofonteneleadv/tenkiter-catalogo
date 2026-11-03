@@ -3645,6 +3645,14 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     abrirCadastro_();
   }
 
+  /* v7.52.0 — Esteira → caixa de fotos da equipe → "Vários produtos": abre o "Cadastrar vários produtos" (com "Unir fotos") já com as fotos,
+     que já estão no servidor de fotos (entram pelo endereço). Cada foto solta vira um produto; cada grupo unido vira um produto com as suas fotos. */
+  window.tkVariasComFotos = function (fotos) {
+    iniciarVarias_();
+    fotosItens = (fotos || []).filter(f => f && /^https:\/\//.test(String(f.url || ''))).map(f => ({ url: String(f.url), caixaId: Number(f.caixaId) || 0 }));
+    desenharFotos(); atualizarFaltas_();
+  };
+
   // v3.6 — "Produtos para aceitar" (importador do Instagram): abre o cadastro NORMAL já preenchido com as mídias do rascunho (já estão no R2) — mesmo caminho de sempre
   // (código TK, categoria, SEO...). Nada vira produto sem o Pablo conferir e apertar "Cadastrar peça". `r` = { id, legenda, precoSug, tamanhosSug, midias:[{tipo,url,capa}] }.
   window.tkAceitarRascunho = function (r) {
@@ -4483,16 +4491,19 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         notificarPush: document.getElementById('novidade').checked ? document.getElementById('notificarPush').checked : false
       };
       // v7.50.0: uniões — cada grupo vira UM produto (capa = 1ª foto do grupo, o resto vai para a galeria); cada foto solta vira um produto.
-      const unidades = unidadesUniao_().map(u => u.filter(i => i.b64)).filter(u => u.length);
+      // v7.52.0: fotos que já estão no servidor (caixa de fotos da Esteira) entram pelo endereço, sem subir de novo
+      const unidades = unidadesUniao_().map(u => u.filter(i => i.b64 || i.url)).filter(u => u.length);
       if (!unidades.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
       if (uniaoModo_) { uniaoModo_ = false; uniaoMarcadas_.clear(); }
       // Vídeo(s) escolhidos no lote vão só no PRIMEIRO produto (um mesmo arquivo em dois produtos se perderia ao mexer num deles); depois dá para juntar os produtos.
       const vidsLote = videosItens.filter(v => v.file).map(v => v.file);
       const vidsLoteItens = videosItens.filter(v => v.file);
       unidades.forEach((u, ix) => {
-        const capa = u[0], gal = u.slice(1);
-        const sem = sementePre_(capa, gal, ix === 0 ? vidsLoteItens : []);
-        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: capa.b64, galeriaNovaB64: gal.map(g => g.b64), dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
+        const capa = u[0], gal = u.slice(1), galNovas = gal.filter(g => g.b64);
+        const sem = sementePre_(capa.b64 ? capa : null, galNovas, ix === 0 ? vidsLoteItens : []);
+        const dadosU = Object.assign({}, base, capa.b64 ? {} : { fotoUrlExistente: capa.url }, gal.some(g => !g.b64) ? { fotosGaleriaExistentes: gal.filter(g => !g.b64).map(g => g.url).join(',') } : {});
+        const daCaixa = u.map(i => i.caixaId || (i.orig && i.orig.caixaId) || 0).filter(Boolean);   // v7.52.0: avisa a Esteira quais fotos da caixa viraram este produto
+        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: capa.b64 || null, galeriaNovaB64: galNovas.map(g => g.b64), dados: dadosU, estado: 'fila', msg: '', rascunhoId: daCaixa.length ? 'caixa:' + daCaixa.join('.') : null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
         guardarEnvio_(envios[envios.length - 1]);
       });
       cancelarDuplicacao();
@@ -6512,7 +6523,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-presenca.js?v=7.40.43"></script>
 <script src="mensagens-gestor.js?v=7.40.43"></script>
 <script src="admin-mensagens.js?v=7.46.0"></script>
-<script src="admin-instagram.js?v=7.17.0"></script>
+<script src="admin-instagram.js?v=7.52.0"></script>
+<script src="admin-caixa-fotos.js?v=7.52.0"></script>
 <script src="video-validation.js?v=7.40.41"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
 <script src="admin-postagens.js?v=7.49.0"></script>
