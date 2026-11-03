@@ -1,0 +1,10 @@
+const a=require('node:assert/strict'),P=require('../fotoia-plano.js');
+const ref=(n,t='look')=>({id:P.id(),produto:String(n),codigo:'TK-'+n,nome:'Peça '+n,url:'https://p.test/'+n+'.jpg',tipo:t});
+const f=P.novaFoto();a(P.validar(f).some(x=>x.includes('falta')));f.pessoas[0].roupa.look=ref(1);a.deepEqual(P.validar(f),[]);
+f.pessoas.push(P.novaPessoa());f.pessoas[1].roupa.look=f.pessoas[0].roupa.look;f.pessoas[1].pose='perfil';
+a.equal(P.referencias(f).refs.length,1);a.deepEqual(P.pacote(f).looks,[[0],[0]]);a.equal(P.pacote(f).pessoas[1].pose,'perfil');
+const base=P.novaBase({...f,tentativa:true,job:4,estado:'enviada'});a.notEqual(base.pedidoId,f.pedidoId);a.equal(base.job,null);a(!base.tentativa);a.notEqual(base.pessoas[0].id,f.pessoas[0].id);a.equal(f.pessoas[0].roupa.look.produto,base.pessoas[0].roupa.look.produto);
+const p=f.pessoas[0];p.modo='par';p.roupa={cima:ref(2,'cima')};a(P.validar(f).some(x=>x.includes('baixo')));p.roupa.baixo=ref(3,'baixo');a.deepEqual(P.validar(f),[]);p.roupa.baixo.tipo='cima';a(P.validar(f).some(x=>x.includes('posição')));
+const raw=P.novaFoto();raw.pessoas[0].roupa.look={id:P.id(),nome:'aparelho'};a(P.validar(raw).some(x=>x.includes('público')));raw.pessoas[0].publico='criancas';a.deepEqual(P.validar(raw),[]);
+const grande=P.novaFoto();grande.pessoas=Array.from({length:5},(_,i)=>({...P.novaPessoa(),roupa:{look:ref(i)}}));a(P.validar(grande).some(x=>x.includes('quatro')));grande.motor='auto';a.deepEqual(P.validar(grande),[]);a(P.validar(grande,{config:{ligado:true,provedores:['cloudflare']},cloudflare:{disponivel:true},temChave:false}).some(x=>x.includes('Gemini')));
+a.equal(P.tipoPeca({Nome:'Conjunto Alfaiataria'}),'look');a.equal(P.tipoPeca({Nome:'Short infantil'}),'baixo');a.equal(P.tipoPeca({Nome:'Blusa floral'}),'cima');console.log('FOTOIA PLANO PASS');

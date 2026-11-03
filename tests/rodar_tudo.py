@@ -88,6 +88,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_og.js", lambda o: "FALHAS=0" in o),         # Worker da Cloudflare com o Apps Script simulado
     ("worker_midia.js", lambda o: "FALHAS=0" in o),      # Worker de mídia (R2) com R2/KV/Apps Script falsos: quem envia, tipos, travas de tamanho e de armazenamento
     ("midia_r2.py", lambda o: "FALHAS=0" in o),          # painel -> R2 (e reserva no Cloudinary)
+    ("fotoia_plano.js", lambda o: "FOTOIA PLANO PASS" in o),
+    ("worker_fotoia_migracao.js", lambda o: "FOTOIA MIGRACAO PASS" in o),
     ("worker_fotoia_catalogo.js", lambda o: "FOTOIA CATALOGO WORKER PASS" in o),
     ("worker_ig.js", lambda o: "FALHAS=0" in o),         # Worker do importador do Instagram (D1/R2/KV e Instagram falsos): ciclo, agrupamento, cópia, ações, token
     ("worker_esteira_fotos.js", lambda o: "FALHAS=0" in o),   # v7.51.0: pedido de fotos (opções + Outro), caixa de fotos da equipe, preparação sem tarefa duplicada
