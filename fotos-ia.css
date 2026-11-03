@@ -8,7 +8,7 @@
 .fotos-ia .fi-header{padding:calc(8px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0;background:var(--preto);box-shadow:none;position:sticky;top:0;z-index:20;color:#fff}
 .fi-marca,.fi-titulo,.fi-abas{max-width:1180px;margin:auto;display:flex;gap:16px;align-items:center}
 .fi-marca{min-height:32px;font-size:.78rem}.fi-marca span{flex:1;font-weight:700;letter-spacing:.06em;color:var(--laranja)}
-.fi-marca a{min-height:44px;display:inline-flex;align-items:center;color:#e6e0d5;text-decoration:none}
+.fi-marca a{min-width:44px;min-height:44px;display:inline-flex;align-items:center;color:#e6e0d5;text-decoration:none}
 .fi-titulo{min-height:44px}.fi-titulo h1{font-size:1.2rem;color:#fff;margin:0;flex:1;letter-spacing:0}.fi-titulo>span{font-size:.8rem;color:#ddd;max-width:38%;overflow-wrap:anywhere}
 .fi-abas{gap:8px;overflow:auto;padding-top:4px}.fi-abas button{min-height:44px;padding:8px 20px;border:0;border-radius:8px 8px 0 0;background:transparent;color:#e6e0d5;font-weight:600;cursor:pointer}.fi-abas button[aria-selected=true]{background:var(--fi-fundo);color:var(--preto)}
 #fi-conteudo{max-width:1180px;margin:auto;padding:20px 16px;outline:none;min-width:0}
@@ -44,7 +44,9 @@
 @media(max-height:560px){.fi-marca{min-height:44px}.fi-marca span{display:none}.fi-titulo{min-height:40px}.fi-folha{max-height:calc(100dvh - 12px)}.fi-picker-busca{padding:8px 12px;gap:4px}.fi-picker-busca input{min-height:44px}.fi-folha-topo{padding:4px 12px}.fi-picker-busca .fi-linha{gap:4px}.fi-picker-busca .fi-linha .fi-btn{font-size:.82rem}}
 @media(prefers-reduced-motion:reduce){.fotos-ia *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
-.fi-preview{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in}.fi-preview .fi-resultado-foto{margin:12px 0}
+.fi-preview{display:block;width:100%;min-height:44px;padding:0;border:0;background:transparent;cursor:zoom-in}.fi-preview .fi-resultado-foto{margin:12px 0}
 
 .fi-editor,.fi-pessoa,.fi-resultado,#fi-lote-titulo,#fi-editor-titulo{scroll-margin-top:170px}
 @media(max-height:560px){.fotos-ia .fi-header{position:relative}.fi-editor,.fi-pessoa,.fi-resultado{scroll-margin-top:12px}}
+
+.fi-ajustes label.fi-linha{min-height:44px}
