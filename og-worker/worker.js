@@ -88,6 +88,28 @@ function imagemDaMidia(m, semPoster) {
 /** ?f=<n> do endereço -> número de 2 a 99, ou 1 (capa) se não for um número válido. */
 function numeroDaFoto(v) { const n = parseInt(v, 10); return n >= 2 && n <= 99 ? n : 1; }
 
+function resumoTamanhos(p) {
+  const tags = String(p.Tamanhos || '').split(',').map(t => t.trim()).filter(Boolean);
+  const ler = nome => tags.filter(t => t.toLowerCase().startsWith(nome.toLowerCase() + ':'))
+    .map(t => t.slice(t.indexOf(':') + 1).trim());
+  const idades = [...new Set(ler('Idade'))], numeros = [...new Set(ler('Veste'))];
+  const tipo = idades.length ? 'idade' : numeros.length ? 'numero' : 'legado';
+  const valores = tipo === 'idade' ? idades : tipo === 'numero' ? numeros
+    : tags.filter(t => !/^(Etiqueta|Idade|Veste):/i.test(t) && !/consultar tamanhos disponíveis/i.test(t));
+  const unicos = [...new Set(valores)];
+  if (!unicos.length) return '';
+  const nums = unicos.map(v => tipo === 'idade' ? Number((v.match(/^(\d+)\s+anos?$/i) || [])[1]) : /^\d+$/.test(v) ? Number(v) : NaN);
+  let texto = unicos.join('/');
+  if (tipo !== 'legado' && nums.every(Number.isFinite)) {
+    const ord = [...new Set(nums)].sort((a,b) => a-b);
+    const passo = tipo === 'idade' ? 1 : 2;
+    texto = ord.length > 1 && ord.every((n,i) => !i || n - ord[i-1] === passo)
+      ? ord[0] + (tipo === 'idade' ? ' a ' : ' ao ') + ord[ord.length-1] : ord.join('/');
+    if (tipo === 'idade') texto += ' anos';
+  }
+  return (tipo === 'idade' ? 'Idades: ' : tipo === 'numero' ? 'Numerações: ' : 'Tamanhos: ') + texto;
+}
+
 function pagina(p, cod, f, semPoster) {
   const lista = midias(p);
   const n = f >= 2 && f <= lista.length ? f : 1;          // foto escolhida (1 = capa)
@@ -96,7 +118,8 @@ function pagina(p, cod, f, semPoster) {
   const avista = cheio * (1 - DESCONTO_AVISTA);
   const semPreco = !(cheio > 0);   // "Consulte valor": nada de R$ 0,00 no título, na descrição nem nos dados estruturados
   const titulo = p.Nome + (p.Codigo ? ' [' + p.Codigo + ']' : '') + ' — ' + (semPreco ? 'Consulte valor' : real(avista) + ' à vista');
-  const desc = (p.Descricao ? String(p.Descricao).slice(0, 160) + ' | ' : '') + (semPreco ? 'Consulte o valor pelo WhatsApp na TENKiTER Modas — Crateús, CE.' : 'De ' + real(cheio) + ' por ' + real(avista) + ' à vista na TENKiTER Modas — Crateús, CE.');
+  const resumo = resumoTamanhos(p);
+  const desc = (resumo ? resumo + ' | ' : '') + (p.Descricao ? String(p.Descricao).slice(0, 110) + ' | ' : '') + (semPreco ? 'Consulte o valor pelo WhatsApp na TENKiTER Modas — Crateús, CE.' : 'De ' + real(cheio) + ' por ' + real(avista) + ' à vista na TENKiTER Modas — Crateús, CE.');
   const capa = p.Foto_URL || (SITE_URL + 'og-banner.jpg');
   const img = imagemDaMidia(lista[n - 1], semPoster) || imagemDaMidia(lista[0], semPoster) || capa;   // a foto escolhida; sem miniatura própria, a capa
   const canonico = linkPeca(p);
