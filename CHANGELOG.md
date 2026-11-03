@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.51.0] - 2026-11-03
+
+- Fotos com IA: lotes por foto, fotos aprovadas nos produtos, composições vinculadas e comparação de motores Cloudflare.
+
+
 ## 7.50.0 — 03/11/2026
 - **Cadastrar vários produtos com uniões** (pedido do Pablo). Toque em **"🔗 Unir fotos"**, marque as fotos que são do mesmo produto e toque em **"Unir N fotos"**: o grupo vira **um produto só** com essas fotos (a 1ª marcada é a capa; "Trocar capa" e "Desfazer" no próprio grupo). Grupos ganham borda colorida e número (G1, G2…); as outras fotos continuam soltas. O contador diz **"Vão ser criados N produtos"** (soltas + grupos) e o botão vira "Cadastrar N produtos". Cada grupo é **um** envio da fila assíncrona (capa + galeria, opId próprio), aproveitando o pré-envio — nada sobe de novo. Funciona por toque e por teclado (Espaço/Enter marcam).
 - **"Juntar produtos repetidos" em segundo plano** (Gestão e loja). A janela fecha na hora e um aviso discreto mostra "Juntando 3 peças em TK-0821…" e depois **"Pronto: TK-0821 ficou com 6 fotos; 2 arquivadas."** ou o erro em português com **"Tentar de novo"**. A fila fica no aparelho (`fila-lote.js`, IndexedDB `tenkiter_lote_fila_v1`, sem credencial) e retoma depois de recarregar, com o mesmo opId (Web Locks evita duas abas repetindo). Usa a ação `juntarProdutos` que já existia; o Apps Script não mudou.
