@@ -89,6 +89,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_midia.js", lambda o: "FALHAS=0" in o),      # Worker de mídia (R2) com R2/KV/Apps Script falsos: quem envia, tipos, travas de tamanho e de armazenamento
     ("midia_r2.py", lambda o: "FALHAS=0" in o),          # painel -> R2 (e reserva no Cloudinary)
     ("worker_ig.js", lambda o: "FALHAS=0" in o),         # Worker do importador do Instagram (D1/R2/KV e Instagram falsos): ciclo, agrupamento, cópia, ações, token
+    ("worker_fotos_postadas.js", lambda o: "FALHAS=0" in o),   # v7.49.0: registro por foto postada, mapa público de fotos novas, foto nova x outra edição
     ("cofre_admin.py", lambda o: "FALHAS=0" in o),       # cofre das Conexões: copiar chaves só com login + senha de novo
     ("foto_cliente.py", lambda o: "FALHAS=0" in o),   # cliente manda foto pela conta (Ela usa TM)
     ("postagens_v49.py", lambda o: "FALHAS=0" in o),   # v4.9: várias peças, filtros, Ela usa TM com seletor, ocultar, 10 posições
@@ -114,6 +115,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_fila.py", lambda o: "FALHAS=0" in o),      # fila de Postagens com regras (pausa, intervalo por tipo, ▲▼, Próximo livre)
     ("postagens_modelo_formato.js", lambda o: "FALHAS=0" in o),
     ("postagens_colagem.py", lambda o: "FALHAS=0" in o),   # 🧩 Colagem + 🖼️ Gerar imagens
+    ("fotos_postadas_ui.py", lambda o: "FALHAS=0" in o),  # v7.49.0: foto nova sobe na vitrine/postador; fotos postadas desmarcadas com "Postada há N dias"
     ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos
     ("video_validacao.py", lambda o: "FALHAS: 0" in o),   # v6.7: validação de vídeo no navegador (cadastro e agendamento)
     ("postagens_avulsas.py", lambda o: "FALHAS=0" in o),   # v4.27: fotos/vídeos avulsos e ordem nas Postagens

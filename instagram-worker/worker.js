@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261102-zap-proativo-1';
+const ESQUEMA_ = '20261103-fotos-postadas-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -105,7 +105,7 @@ async function iniciar(env) {
     for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0'],['origem_midia',"TEXT NOT NULL DEFAULT ''"],['intervalo_ms','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
     /* v7.48.3: estado da perna do WhatsApp (Status 1/2) guardado à parte — no canal "ambos" o Instagram não espera por ela.
        Colunas aditivas (nada é migrado nem apagado): zap_estado = ''|aguardando|confirmado|sem_confirmacao|erro. */
-    for(const [nome,tipo] of [['zap_estado',"TEXT NOT NULL DEFAULT ''"],['zap_req',"TEXT NOT NULL DEFAULT ''"],['zap_desde',"TEXT NOT NULL DEFAULT ''"],['zap_tent','INTEGER NOT NULL DEFAULT 0'],['zap_erro',"TEXT NOT NULL DEFAULT ''"],['zap_consulta',"TEXT NOT NULL DEFAULT ''"]])if(!postCols.has(nome)){try{await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
+    for(const [nome,tipo] of [['zap_estado',"TEXT NOT NULL DEFAULT ''"],['zap_req',"TEXT NOT NULL DEFAULT ''"],['zap_desde',"TEXT NOT NULL DEFAULT ''"],['zap_tent','INTEGER NOT NULL DEFAULT 0'],['zap_erro',"TEXT NOT NULL DEFAULT ''"],['zap_consulta',"TEXT NOT NULL DEFAULT ''"],['fotos_origem',"TEXT NOT NULL DEFAULT ''"]])if(!postCols.has(nome)){try{await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_serie ON postagem(serie,parte)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_publicado ON postagem(status,publicado_em)').run();
     // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
@@ -1716,7 +1716,7 @@ export function validarPostagem(b) {
     if (t - Date.now() > 60 * 86400000) return { erro: 'Dá para agendar até 60 dias à frente.' };
     if (t > Date.now()) quando = new Date(t).toISOString();
   }
-  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), urgente: urgente, sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40), canal: normalizarCanal_(b.canal) } };
+  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), urgente: urgente, sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40), canal: normalizarCanal_(b.canal), fotosOrigem: fpNormalizarOrigens_(b.fotosOrigem) } };
 }
 function progressoPostagem_(r) {
   const aguardando = String(r.ig_id || '').startsWith('zapq:');
@@ -1914,6 +1914,7 @@ async function reagendarVideoOriginal_(env,ctx,linha,quando,J){
 }
 async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
+  if (p === '/post/fotos-postadas' && req.method === 'GET') return J(Object.assign({ ok: true }, await fpPostadas_(env)));   // v7.49.0: quando cada foto da peça foi postada
   if (p === '/posts' && req.method === 'GET') {
     const lim = Math.min(250, Number(url.searchParams.get('limite')) || 60);
     const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
@@ -1971,7 +1972,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       quandos.push(v.quando);
 
 
-      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes, origem_midia, intervalo_ms) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0,lista[i].origemMidia,editorial));
+      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes, origem_midia, intervalo_ms, fotos_origem) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0,lista[i].origemMidia,editorial,v.fotosOrigem.length?JSON.stringify(v.fotosOrigem):''));
     }
     // Todos os destinos entram juntos ou nenhum: uma falha não deixa metade do pedido na fila.
     const criadas = await env.DB.batch(inserts);
@@ -2039,7 +2040,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       const ajuste = proximoLivreMulti(cfg, bs, ocup, fimDaSequencia_(cfg, bs, ocup, Date.now() + 60000));
       const quando = new Date(ajuste.t).toISOString(), em = agora();
       await env.DB.batch([
-        env.DB.prepare("INSERT OR IGNORE INTO postagem (tipo,modo,legenda,midias,produto,template,link,agendado_em,status,criado_por,criado_em,atualizado_em,grupo,seq,canal,urgente,repostado_de) SELECT tipo,modo,legenda,midias,produto,template,link,?,'agendado',?,?,?,grupo,1,?,0,id FROM postagem WHERE id=? AND status IN ('erro','publicado')").bind(quando, String(b.por || 'Repostagem').slice(0,60), em, em, canalNovo, id),
+        env.DB.prepare("INSERT OR IGNORE INTO postagem (tipo,modo,legenda,midias,produto,template,link,agendado_em,status,criado_por,criado_em,atualizado_em,grupo,seq,canal,urgente,repostado_de,fotos_origem) SELECT tipo,modo,legenda,midias,produto,template,link,?,'agendado',?,?,?,grupo,1,?,0,id,fotos_origem FROM postagem WHERE id=? AND status IN ('erro','publicado')").bind(quando, String(b.por || 'Repostagem').slice(0,60), em, em, canalNovo, id),
         env.DB.prepare("UPDATE postagem SET status='cancelado',atualizado_em=? WHERE id=? AND status='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id),
         env.DB.prepare("UPDATE postagem SET zap_estado='repostado',atualizado_em=? WHERE id=? AND status='publicado' AND zap_estado='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id)
       ]);
@@ -5413,6 +5414,7 @@ export default {
     if(url.pathname==='/internal/video'){try{return await videoRunner_(env,req,url,J);}catch(_){return J({ok:false,erro:'Processador indisponível.'},503);}}
     if(url.pathname==='/msg/tempo-real'){try{return await conectarEventos_(env,req);}catch(_){return new Response(null,{status:503,headers:{'Cache-Control':'no-store'}});}}
     if(url.pathname==='/catalogo/tecidos'){try{return await rotaTecidos_(env,req,J);}catch(_){return J({ok:false,erro:'Não foi possível atualizar os tecidos. Tente de novo.'},503);}}
+    if (url.pathname === '/catalogo/fotos-novas') { try { return await rotaFotosNovasPublica_(env, req, h, ctx); } catch (e) { return J({ ok: false, erro: 'As fotos novas não responderam agora.' }, 503); } }   // v7.49.0: pública, sem sessão
     if (url.pathname === '/familias') { try { return await rotaFamiliasPublica_(env, req, h); } catch (e) { return J({ ok: false, erro: 'As famílias de peças não responderam agora.' }, 503); } }   // v7.44.0: pública, sem sessão
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
@@ -6293,7 +6295,7 @@ async function estCatalogo_(env, fresco) {                             // lista 
   const r = await fetch(base + (base.includes('?') ? '&' : '?') + 'action=list&todos=true', { redirect: 'follow', headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25000) });
   const j = await r.json();
   if (!j || !Array.isArray(j.produtos)) throw new Error('O catálogo não respondeu agora. Tente de novo em instantes.');
-  const ps = j.produtos.filter((p) => p && p.ID && String(p.Status || 'Ativo') !== 'Inativo').map((p) => ({ id: String(p.ID), nome: String(p.Nome || '').slice(0, 120), codigo: String(p.Codigo || ''), categoria: String(p.Categoria || '').split(',')[0].trim(), genero: String(p.Genero || '').trim(), estoque: p.Estoque === '' || p.Estoque == null ? '' : String(p.Estoque), tamanhos: String(p.Tamanhos || ''), cores: String(p.Cores || ''), foto: String(p.Foto_URL || ''), cadastro: String(p.Data_Cadastro || '') }));
+  const ps = j.produtos.filter((p) => p && p.ID && String(p.Status || 'Ativo') !== 'Inativo').map((p) => ({ id: String(p.ID), nome: String(p.Nome || '').slice(0, 120), codigo: String(p.Codigo || ''), categoria: String(p.Categoria || '').split(',')[0].trim(), genero: String(p.Genero || '').trim(), estoque: p.Estoque === '' || p.Estoque == null ? '' : String(p.Estoque), tamanhos: String(p.Tamanhos || ''), cores: String(p.Cores || ''), foto: String(p.Foto_URL || ''), fotos: fpFotosDe_(p), cadastro: String(p.Data_Cadastro || '') }));
   try { await env.CACHE.put(chave, JSON.stringify(ps), { expirationTtl: 600 }); } catch (e) { /* cache é conforto */ }
   return ps;
 }
@@ -6532,6 +6534,7 @@ async function estRetrato_(env, agoraMs) {
   for (let k = 0; k < ops.length; k += 50) await env.DB.batch(ops.slice(k, k + 50));
   let inicio = await cfgGet(env, 'est_retrato_inicio'); if (!inicio) { inicio = agora; await cfgSet(env, 'est_retrato_inicio', inicio); }
   let familias = {}; try { familias = await famMapa_(env); } catch (e) { familias = {}; }
+  try { await fpVarrer_(env, catalogo, agora); } catch (e) { /* v7.49.0: fotos novas são conforto; o retrato segue */ }
   const paradas = estParadas_(catalogo, await estInfo_(env), familias, agoraMs, inicio, cfg.reativacao);
   const r = await estReativar_(env, paradas, cfg, agora);
   const res = { data: hoje, em: agora, produtos: catalogo.length, mudaram, quedas, paradas: paradas.length, tarefas: r.criadas };
@@ -6718,7 +6721,9 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.ids) ? d.ids : [d.id]).map((x) => String(x || '').slice(0, 40)).filter(Boolean))].slice(0, 100);
     if (!ids.length) return J({ ok: false, erro: 'Nenhuma peça informada.' }, 400);
     await env.DB.batch(ids.map((id) => env.DB.prepare('INSERT INTO est_produto (id, atualizado_em, atualizado_por) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET atualizado_em=excluded.atualizado_em, atualizado_por=excluded.atualizado_por').bind(id, agora, eu)));
-    return J({ ok: true, registradas: ids.length });
+    let fotosNovas = 0;   // v7.49.0: a Gestão diz quais fotos entraram (e quais são só recorte de uma antiga); preço, nome, tamanho e estoque não contam
+    if (ids.length === 1 && Array.isArray(d.fotos) && d.fotos.length && Array.isArray(d.antes)) { try { fotosNovas = await fpRegistrarToque_(env, ids[0], d.antes, d.fotos, agora); } catch (e) { fotosNovas = 0; } }
+    return J({ ok: true, registradas: ids.length, fotosNovas });
   }
   if (p === '/esteira/listas' && req.method === 'GET') {                 // v7.48.0: as listas da Gestão para os seletores da Esteira
     return J(Object.assign({ ok: true }, await estListasCadastro_(env)));
@@ -7334,4 +7339,121 @@ async function rotasFamilias_(env, req, url, J, perms) {
     return J({ ok: true, sugestoes });
   }
   return J({ ok: false, erro: 'Esta ação de famílias não existe.' }, 404);
+}
+
+/* ==================== v7.49.0: fotos postadas e fotos novas ====================
+ * Pedido do Pablo: "quando eu for postar, quero ver qual foi postado e qual não" e "produto com foto nova vai para o começo".
+ * 1) Foto postada: a postagem nova guarda em `postagem.fotos_origem` as fotos ORIGINAIS do catálogo usadas (inclusive as que entraram
+ *    numa colagem ou num modelo, que geram endereço novo). Conta como postada: publicado (inclusive "Publicado sem confirmação"),
+ *    feito à mão, ou a perna do WhatsApp confirmada/sem confirmação. Agendado, erro e cancelado não contam.
+ *    Postagens antigas (sem fotos_origem) entram como `legado`: a tela casa por endereço igual e, quando a mídia foi transformada,
+ *    pela posição da foto na mesma peça (o padrão de seleção da época era por ordem). Nada é inventado além disso.
+ * 2) Foto nova: `foto_catalogo` lembra quando cada endereço de foto apareceu numa peça. A primeira varredura (ou peça nunca vista)
+ *    é só referência (nova=0). Endereço que aparece depois numa peça já conhecida é foto nova (nova=1). A Gestão também avisa na hora
+ *    pelo /esteira/toque (fotos que entraram e as que são só recorte de uma antiga, `de`). Nada muda no Apps Script nem na planilha. */
+let fpIniciado_ = null;
+async function fpIniciar_(env) {
+  if (fpIniciado_ === env.DB) return;
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS foto_catalogo (produto TEXT NOT NULL, url TEXT NOT NULL, visto_em TEXT NOT NULL, nova INTEGER NOT NULL DEFAULT 0, de TEXT NOT NULL DEFAULT '', PRIMARY KEY (produto, url))"),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_foto_catalogo_nova ON foto_catalogo (nova, produto)'),
+  ]);
+  fpIniciado_ = env.DB;
+}
+const FP_CACHE_ = 'fp:novas:v1';
+const fpUrlOk_ = (u) => { const s = String(u == null ? '' : u).trim(); return /^https:\/\/\S+$/i.test(s) && s.length <= 800 ? s : ''; };
+/** Fotos de um produto do catálogo (capa + galeria), só https, sem repetir, na ordem da peça. */
+function fpFotosDe_(p) {
+  const out = [];
+  [p && p.Foto_URL].concat(String((p && p.Fotos_Galeria) || '').split(',')).forEach((u) => { const x = fpUrlOk_(u); if (x && out.indexOf(x) === -1) out.push(x); });
+  return out.slice(0, 20);
+}
+/** Origens mandadas pelo postador: [{u: endereço original, p: id da peça}]. Lixo é descartado em silêncio (não bloqueia a postagem). */
+function fpNormalizarOrigens_(l) {
+  if (!Array.isArray(l)) return [];
+  const vistos = new Set(), out = [];
+  for (const o of l.slice(0, 40)) {
+    const u = fpUrlOk_(o && (o.u || o.url)); if (!u || vistos.has(u)) continue;
+    vistos.add(u); out.push({ u, p: String((o && (o.p || o.produto)) || '').slice(0, 40) });
+  }
+  return out.slice(0, 30);
+}
+// "Postada": publicado (com ou sem confirmação), feita à mão, ou a perna do WhatsApp confirmada/sem confirmação (no "ambos" o Instagram pode ter falhado).
+const FP_POSTADA_SQL_ = "(status IN ('publicado','manual_feito') OR zap_estado IN ('confirmado','sem_confirmacao') OR (ig_id LIKE 'zap:%' AND status NOT IN ('cancelado','agendado')))";
+async function fpPostadas_(env) {
+  await fpIniciar_(env);
+  const linhas = (await env.DB.prepare('SELECT id, produto, midias, fotos_origem, publicado_em, atualizado_em FROM postagem WHERE ' + FP_POSTADA_SQL_ + ' ORDER BY id DESC LIMIT 4000').all()).results || [];
+  const porUrl = {}, legado = [];
+  const marcar = (u, em) => { if (!porUrl[u] || porUrl[u] < em) porUrl[u] = em; };
+  for (const r of linhas) {
+    const em = String(r.publicado_em || r.atualizado_em || ''); if (!em) continue;
+    let orig = null; if (r.fotos_origem) { try { orig = JSON.parse(r.fotos_origem); } catch (e) { orig = null; } }
+    if (Array.isArray(orig)) { orig.forEach((o) => { const u = fpUrlOk_(o && o.u); if (u) marcar(u, em); }); continue; }
+    let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
+    const u = (Array.isArray(m) ? m : []).filter((x) => x && x.tipo !== 'video').map((x) => fpUrlOk_(x.url)).filter(Boolean);
+    if (u.length) legado.push({ c: String(r.produto || ''), u, em });
+  }
+  const derivadas = {};
+  ((await env.DB.prepare("SELECT url, de FROM foto_catalogo WHERE de!='' LIMIT 5000").all()).results || []).forEach((x) => { derivadas[x.url] = x.de; });
+  return { porUrl, legado: legado.slice(0, 3000), derivadas, agora: new Date().toISOString() };
+}
+async function fpLimparCache_(env) { try { await env.CACHE.delete(FP_CACHE_); } catch (e) { /* expira sozinho em 5 min */ } }
+/** Compara as fotos do catálogo com o que já foi visto. Devolve quantas fotos novas e quantas só de referência. */
+async function fpVarrer_(env, catalogo, agoraIso) {
+  await fpIniciar_(env);
+  if (!Array.isArray(catalogo) || !catalogo.length || catalogo.some((x) => !Array.isArray(x.fotos))) return { pulou: 'sem fotos', novas: 0, base: 0 };
+  const conhecidos = new Map();
+  ((await env.DB.prepare('SELECT produto, url FROM foto_catalogo').all()).results || []).forEach((r) => { const s = conhecidos.get(r.produto) || new Set(); s.add(r.url); conhecidos.set(r.produto, s); });
+  const vazio = !conhecidos.size, ops = []; let novas = 0, base = 0;
+  for (const p of catalogo) {
+    const set = conhecidos.get(String(p.id)), primeira = vazio || !set;
+    for (const u of p.fotos) {
+      if (set && set.has(u)) continue;
+      ops.push(env.DB.prepare('INSERT OR IGNORE INTO foto_catalogo (produto, url, visto_em, nova, de) VALUES (?, ?, ?, ?, \'\')').bind(String(p.id), u, agoraIso, primeira ? 0 : 1));
+      if (primeira) base++; else novas++;
+    }
+  }
+  for (let k = 0; k < ops.length; k += 50) await env.DB.batch(ops.slice(k, k + 50));
+  if (novas) await fpLimparCache_(env);
+  return { novas, base };
+}
+/** Aviso da Gestão ao salvar: `antes` = fotos que a peça já tinha; `fotos` = [{url, de?}] que entraram (de = foto antiga que foi só recortada). */
+async function fpRegistrarToque_(env, produto, antes, fotos, agoraIso) {
+  await fpIniciar_(env);
+  const ops = []; let novas = 0;
+  antes.slice(0, 20).forEach((u) => { const x = fpUrlOk_(u); if (x) ops.push(env.DB.prepare("INSERT OR IGNORE INTO foto_catalogo (produto, url, visto_em, nova, de) VALUES (?, ?, ?, 0, '')").bind(produto, x, agoraIso)); });
+  fotos.slice(0, 20).forEach((f) => {
+    const u = fpUrlOk_(f && f.url), de = fpUrlOk_(f && f.de); if (!u || u === de) return;
+    if (!de) novas++;
+    ops.push(env.DB.prepare('INSERT OR IGNORE INTO foto_catalogo (produto, url, visto_em, nova, de) VALUES (?, ?, ?, ?, ?)').bind(produto, u, agoraIso, de ? 0 : 1, de));
+  });
+  if (ops.length) await env.DB.batch(ops);
+  if (novas) await fpLimparCache_(env);
+  return novas;
+}
+async function fpMapaPublico_(env) {
+  await fpIniciar_(env);
+  const m = {};
+  ((await env.DB.prepare('SELECT produto, MAX(visto_em) AS em FROM foto_catalogo WHERE nova=1 GROUP BY produto').all()).results || []).forEach((r) => { if (r.em) m[String(r.produto)] = r.em; });
+  return m;
+}
+/** Rota pública (antes da sessão): só id da peça → data da última foto nova. Cache curto no KV e no navegador/borda.
+ * Quando o cache expira, uma varredura do catálogo roda em segundo plano (no máximo a cada 15 min) sem atrasar a resposta. */
+async function rotaFotosNovasPublica_(env, req, h, ctx) {
+  const x = new Headers(h || {}); x.set('Content-Type', 'application/json; charset=utf-8');
+  if (req.method !== 'GET') { x.set('Cache-Control', 'no-store'); return new Response(JSON.stringify({ ok: false, erro: 'Ação não disponível.' }), { status: 405, headers: x }); }
+  let corpo = null;
+  try { corpo = await env.CACHE.get(FP_CACHE_); } catch (e) { corpo = null; }
+  if (!corpo) {
+    corpo = JSON.stringify({ ok: true, fotosNovas: await fpMapaPublico_(env) });
+    try { await env.CACHE.put(FP_CACHE_, corpo, { expirationTtl: 300 }); } catch (e) { /* cache é conforto */ }
+    try {
+      if (!(await env.CACHE.get('fp:varrido')) && ctx && typeof ctx.waitUntil === 'function') {
+        await env.CACHE.put('fp:varrido', '1', { expirationTtl: 900 });
+        ctx.waitUntil((async () => { let c = await estCatalogo_(env); if (c.some((p) => !Array.isArray(p.fotos))) c = await estCatalogo_(env, true); await fpVarrer_(env, c, new Date().toISOString()); })().catch(() => {}));
+      }
+    } catch (e) { /* a varredura diária do retrato cobre */ }
+  }
+  x.set('Cache-Control', 'public, max-age=60');
+  return new Response(corpo, { status: 200, headers: x });
 }

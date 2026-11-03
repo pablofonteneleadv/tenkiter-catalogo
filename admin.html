@@ -2682,13 +2682,28 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function limparNomeCategoria_(s) { return String(s == null ? '' : s).replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim(); }
   /* v7.41.0 — Esteira: foto, tamanho, cor ou estoque mudados à mão contam como conferência (a peça sai das listas por alguns dias).
      Preço e descrição não contam. Falha aqui nunca atrapalha o salvamento. */
-  window.tkEsteiraToque = function (ids) {
+  window.tkEsteiraToque = function (ids, fotos) {
     try {
       const s = getSessao(); const lista = (Array.isArray(ids) ? ids : [ids]).map(String).filter(Boolean);
       if (!s || !lista.length || typeof INSTAGRAM_URL === 'undefined') return;
-      fetch(INSTAGRAM_URL + '/esteira/toque', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: JSON.stringify({ ids: lista }) }).catch(() => {});
+      fetch(INSTAGRAM_URL + '/esteira/toque', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: JSON.stringify(Object.assign({ ids: lista }, fotos && lista.length === 1 ? fotos : {})) }).catch(() => {});
     } catch (e) { /* conforto */ }
   };
+  /* v7.49.0: "foto nova" para a ordem da vitrine e do postador. Vai junto do toque: as fotos que a peça já tinha (`antes`) e as que
+     entraram agora (`fotos`), com `de` quando é só o recorte de uma foto antiga. Preço, nome, tamanho e estoque não mandam foto. */
+  function fotosDoToque_(it) {
+    try {
+      if (!it || !it.ehEdicao || !it.subiu) return null;
+      const rec = it.recortesDe || { c: '', g: [] }, fotos = [];
+      if (it.capaNovaB64 && it.subiu.capa) fotos.push({ url: it.subiu.capa, de: rec.c || '' });
+      (it.galeriaNovaB64 || []).forEach((_, i) => { if (it.subiu.gal && it.subiu.gal[i]) fotos.push({ url: it.subiu.gal[i], de: (rec.g || [])[i] || '' }); });
+      if (!fotos.length) return null;
+      const p = (typeof produtos !== 'undefined' && Array.isArray(produtos)) ? produtos.find((x) => String(x.ID) === String(it.dados.id)) : null;
+      if (!p) return null;
+      const antes = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',')).map((x) => String(x || '').trim()).filter((x) => /^https:\/\//i.test(x));
+      return { fotos, antes };
+    } catch (e) { return null; }
+  }
   function esteiraMudouNaLoja_(it) {
     if (!it || !it.ehEdicao || !it.dados) return false;
     if (it.capaNovaB64 || (it.galeriaNovaB64 || []).length || it.videoArquivo || (it.videosRemover || []).length) return true;
@@ -3746,7 +3761,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         const tx = db.transaction('e', 'readwrite');
         tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: null, videoArquivos: arquivosDeVideo_(it), videosSalvos: it.videosSalvos || [], videosRemover: it.videosRemover || [], capaNovaB64: it.capaNovaB64 || null,
           galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, familia: it.familia || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '',
-          subiu: it.subiu || null, v: 2, ka: !!it.ka, pacote: pacoteLeve_(it) });   // v4.25: pacote final leve (sem credencial) para qualquer tela terminar; v4.20: o que já subiu (endereços) fica guardado; v:2 = o servidor sabe reconhecer reenvio (opId)
+          subiu: it.subiu || null, recortesDe: it.recortesDe || null, v: 2, ka: !!it.ka, pacote: pacoteLeve_(it) });   // v4.25: pacote final leve (sem credencial) para qualquer tela terminar; v4.20: o que já subiu (endereços) fica guardado; v:2 = o servidor sabe reconhecer reenvio (opId)
         tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
       });
       db.close();
@@ -3777,7 +3792,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     lista.forEach((r) => {
       if (envios.some(x => x.k === r.k)) return;
       const it = { chave: ++seqEnvios, k: r.k, titulo: r.titulo, ehEdicao: !!r.ehEdicao, temVideo: !!r.temVideo, videoArquivo: null, videoArquivos: (r.videoArquivos && r.videoArquivos.length) ? r.videoArquivos : (r.videoArquivo ? [r.videoArquivo] : []), videosSalvos: r.videosSalvos || [], videosRemover: r.videosRemover || [], capaNovaB64: r.capaNovaB64 || null,
-        galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, familia: r.familia || null, estado: 'fila', msg: '', etapa: 'fila', subiu: r.subiu || undefined };
+        galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, familia: r.familia || null, estado: 'fila', msg: '', etapa: 'fila', subiu: r.subiu || undefined, recortesDe: r.recortesDe || null };
       // v4.20: com o servidor novo (opId) reenviar é seguro: se a peça já tinha sido salva, ele devolve a original em vez de duplicar. Sem isso, pergunta como antes.
       if (r.etapa === 'salvando' && !(opOk && r.v >= 2) && !r.ehEdicao) { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se esta peça chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
       else if (r.msg) { it.estado = 'erro'; it.msg = r.msg; }
@@ -4316,7 +4331,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       }
       // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
       it.estado = 'ok'; it.respSalvo = resultado.resp; if (!it.arquivadaDepois) conferir_.push(it);
-      if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id);
+      if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id, fotosDoToque_(it));
       if (it.familia && !it.ehEdicao && window.tkFamiliaDepoisDeSalvar) window.tkFamiliaDepoisDeSalvar(it, resultado.resp.id);   // v7.44.0: liga a variação nova à família
       if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
       window.logDebug_('════ "' + it.titulo + '": salvo ════');
@@ -4527,6 +4542,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, arquivarDepois: arquivarDepois,
       temVideo: videosNovos.length > 0, videoArquivo: null, videoArquivos: videosNovos.map(v => v.file), videosSalvos: ehEdicao ? videosSalvos : [], videosRemover: ehEdicao ? videosRemovidos.slice() : [],
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
+      // v7.49.0: foto antiga só recortada (✂ Enquadrar) não é foto nova — guarda de qual endereço ela saiu
+      recortesDe: { c: capaItem && capaItem.b64 && capaItem.orig && capaItem.orig.url ? capaItem.orig.url : '', g: resto.filter(i => i.b64).map(i => (i.orig && i.orig.url) || '') },
       dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null, k: novoKEnvio_(), etapa: 'fila', familia: famNova && !ehEdicao ? famNova : null
     });
     guardarEnvio_(envios[envios.length - 1]);
@@ -6496,7 +6513,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-mensagens.js?v=7.46.0"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js?v=7.40.41"></script>
-<script src="admin-postagens.js?v=7.48.3"></script>
+<script src="fotos-novas.js?v=7.49.0"></script>
+<script src="admin-postagens.js?v=7.49.0"></script>
 <script src="admin-fotoia.js"></script>
 <script src="admin-enquadrar.js?v=7.28.0"></script>
 <script src="admin-capa-video.js"></script>

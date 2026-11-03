@@ -577,6 +577,11 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":(route.request.post_data if "image/" not in (h.get("content-type") or "") and "octet-stream" not in (h.get("content-type") or "") else "<binário>")})
             if m=="OPTIONS": return route.fulfill(status=204,body="")
             if g.get("fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
+            if path=="/catalogo/fotos-novas":   # v7.49.0: pública (sem sessão): peça → data da última foto nova; fn_modo "" | "erro" | "lento"
+                st.setdefault("fn_chamadas",[]).append({"sessao":h.get("x-tk-sessao")})
+                if st.get("fn_modo")=="erro": return route.fulfill(status=500,json={"ok":False,"erro":"As fotos novas não responderam agora."})
+                if st.get("fn_modo")=="lento": st.setdefault("fn_pendentes",[]).append(route); return None
+                return route.fulfill(json={"ok":True,"fotosNovas":st.get("fotos_novas",{})},headers={"Cache-Control":"public, max-age=60","Access-Control-Allow-Origin":"*"})
             if path=="/familias" or path.startswith("/familias/"):   # v7.44.0: família de produtos (pública: GET /familias; o resto com sessão)
                 return familias_rota(route, path, m, h)
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
@@ -689,6 +694,9 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if path=="/post/wame/teste":
                 g.setdefault("wame_testes",[]).append(1)
                 return route.fulfill(json={"ok":True,"servidorAtual":g.get("wame_serv","server.wame.api.br"),"resultados":[{"servidor":g.get("wame_serv","server.wame.api.br"),"http":404,"texto":"este servidor não reconhece a chave"},{"servidor":"us.api-wa.me","http":200,"conectado":True,"texto":"conectado"}],"encontrado":"us.api-wa.me","conectado":True})
+            if path=="/post/fotos-postadas":   # v7.49.0: quando cada foto foi postada (porUrl exato, legado por código/posição, derivadas)
+                if g.get("postadas_modo")=="erro": return route.fulfill(status=503,json={"ok":False,"erro":"Não consegui ver as postagens agora."})
+                return route.fulfill(json=dict({"ok":True,"porUrl":{},"legado":[],"derivadas":{}},**g.get("postadas",{})))
             if path=="/posts" or path.startswith("/post"):      # fila de postagens (Worker v4.6): st["ig"]["posts"]
                 g.setdefault("posts",[]); g.setdefault("post_chamadas",[]); g.setdefault("post_seq",100)
                 PADRAO_R={"pausaAtiva":True,"pausaDe":"22:00","pausaAte":"06:30","max24h":90,"agoraIgnora":True,"canais":{"story":{"max24h":40,"gapMin":120,"gapMax":300},"status":{"max24h":40,"gapMin":120,"gapMax":300},"feed":{"max24h":20,"gapMin":300,"gapMax":600},"carrossel":{"max24h":20,"gapMin":300,"gapMax":600},"reels":{"max24h":10,"gapMin":600,"gapMax":1200}}}
