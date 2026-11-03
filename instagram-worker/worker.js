@@ -1905,17 +1905,18 @@ async function retomarPendentesPost_(env,req,b,perms,J){
   const anterior=await cfgGet(env,chave);if(anterior){const x=JSON.parse(anterior);if(x.assinatura!==assinatura)return J({ok:false,erro:'Esse pedido de retomada mudou. Atualize a fila.'},409);return x.resultado?J(x.resultado):J({ok:false,erro:'A retomada anterior ainda está em verificação. Atualize a fila antes de fazer outro pedido.'},409);}
   const agoraEm=agora(),reserva=await env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) VALUES(?,?)').bind(chave,JSON.stringify({em:agoraEm,assinatura})).run();
   if(!reserva.meta?.changes)return J({ok:false,erro:'Esse pedido de retomada já está em andamento. Atualize a fila.'},409);
-  const concluir=async resultado=>{await cfgSet(env,chave,JSON.stringify({em:agoraEm,assinatura,resultado}));return J(resultado);};
+  let registro={em:agoraEm,assinatura};const concluir=async resultado=>{await cfgSet(env,chave,JSON.stringify({...registro,resultado}));return J(resultado);};
   const rows=[];
   for(let i=0;i<ids.length;i+=50){const xs=ids.slice(i,i+50);rows.push(...(await env.DB.prepare("SELECT p.* FROM postagem p WHERE p.id IN ("+xs.map(()=>'?').join(',')+") AND p.status='agendado' AND p.modo='auto' AND p.agendado_em<=? AND COALESCE(p.ig_id,'')='' AND COALESCE(p.zap_estado,'')='' AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo r WHERE r.postagem_id=p.id AND r.estado='enviando')").bind(...xs,agoraEm).all()).results);}
   if(!rows.length)return concluir({ok:true,retomadas:0,preservadas:ids.length,aguardandoLimite:0});
+  registro.antes=rows.map(p=>({id:p.id,agendado_em:p.agendado_em,urgente:p.urgente,atualizado_em:p.atualizado_em}));await cfgSet(env,chave,JSON.stringify(registro));
   let cfg=await lerCfgPost(env);
   if(b.limitePorCanal===90){
     await env.DB.prepare("INSERT OR IGNORE INTO cfg(chave,valor) VALUES('po_cfg','{}')").run();const antes=await cfgGet(env,'po_cfg'),bs=[...new Set(rows.flatMap(p=>bucketsDoPost(p.tipo,p.canal)))];
     const novo=mesclarCfgPost(JSON.parse(antes),{canais:Object.fromEntries(bs.map(b=>[b,{max24h:90}]))});
     const hist={em:agoraEm,por:String(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'').slice(-4),ids:rows.map(p=>p.id),canais:bs,antes:JSON.parse(antes),depois:novo};
     const r=await env.DB.batch([env.DB.prepare("UPDATE cfg SET valor=? WHERE chave='po_cfg' AND valor=?").bind(JSON.stringify(novo),antes),env.DB.prepare("INSERT INTO cfg(chave,valor) SELECT 'po_retoma_ultima',? WHERE changes()=1 ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor").bind(JSON.stringify(hist))]);
-    if(!r[0].meta?.changes){await env.DB.prepare('DELETE FROM cfg WHERE chave=? AND valor=?').bind(chave,JSON.stringify({em:agoraEm,assinatura})).run();return J({ok:false,erro:'As regras mudaram durante o ajuste. Atualize a fila e tente novamente.'},409);}cfg=novo;
+    if(!r[0].meta?.changes){await env.DB.prepare('DELETE FROM cfg WHERE chave=? AND valor=?').bind(chave,JSON.stringify(registro)).run();return J({ok:false,erro:'As regras mudaram durante o ajuste. Atualize a fila e tente novamente.'},409);}cfg=novo;
   }
   rows.sort((a,b)=>String(a.agendado_em).localeCompare(String(b.agendado_em))||a.id-b.id);
   const ocup={},series=new Map(),planos=[];
