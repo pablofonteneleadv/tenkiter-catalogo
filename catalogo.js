@@ -479,7 +479,8 @@ try { tkSelExpirar_(); } catch (e) {}
     if (o === 'menor') return lista.slice().sort((a, b) => cmpPreco_(a, b, 1));
     if (o === 'maior') return lista.slice().sort((a, b) => cmpPreco_(a, b, -1));
     if (o === 'az') return lista.slice().sort((a, b) => String(a.Nome).localeCompare(String(b.Nome), 'pt-BR'));
-    return lista;                                   // "mais recentes": a ordem que o servidor mandou
+    // "mais recentes": a ordem que o servidor mandou; v7.49.0: peça com FOTO NOVA sobe para o começo (sem o mapa, fica igual)
+    return window.TKFotosNovas ? window.TKFotosNovas.ordenar(lista) : lista;
   }
   document.getElementById('ordem').addEventListener('change', () => aplicarFiltros());
 
@@ -539,6 +540,14 @@ try { tkSelExpirar_(); } catch (e) {}
       if ((window.scrollY || 0) < 120 && !aberto) { listaFiltradaAtual = agruparFamilias_(listaFiltradaAtual); renderizarGrid(); }
     }).catch(() => { clearTimeout(limite); });
   })();
+  /* v7.49.0: foto nova sobe na ordem "mais recentes". Mesmo cuidado das famílias: cache local pinta na hora; o Worker tem 2,5 s;
+   * sem resposta, a vitrine fica como antes. Chegando depois, só reorganiza se a pessoa está no topo e nada está aberto. */
+  if (window.TKFotosNovas) window.TKFotosNovas.carregar(() => {
+    if (!produtos.length) return;
+    const o = document.getElementById('ordem'); if (o && o.value && o.value !== 'recentes') return;
+    const aberto = document.querySelector('#overlay.aberto') || (window.TKCamadas && TKCamadas.total && TKCamadas.total() > 0);
+    if ((window.scrollY || 0) < 120 && !aberto) aplicarFiltros();
+  });
   const semAcentoBusca = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const indiceBusca = new Map(); // ID -> { texto, palavras } (não grava nada no produto)
   function indiceDe(p) {
