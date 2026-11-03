@@ -93,9 +93,22 @@ const DDL = [
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
 const ESQUEMA_ = '20261103-fotos-postadas-1';
+export async function garantirEsquemaFotoIA_(env) {
+  // Feature guard independent of schema_ig_version: deployed databases may carry
+  // the generic marker but still predate the per-photo request identity.
+  await env.DB.prepare(DDL.find(s => s.startsWith('CREATE TABLE IF NOT EXISTS fotoia ('))).run();
+  const cols = new Set(((await env.DB.prepare('PRAGMA table_info(fotoia)').all()).results || []).map(c => c.name));
+  for (const [nome, tipo] of [['refs', "TEXT DEFAULT '[]'"], ['plano', "TEXT DEFAULT ''"], ['request_id', 'TEXT']]) {
+    if (cols.has(nome)) continue;
+    try { await env.DB.prepare('ALTER TABLE fotoia ADD COLUMN ' + nome + ' ' + tipo).run(); }
+    catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
+  }
+  await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_fotoia_request ON fotoia(request_id)').run();
+}
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
+    await garantirEsquemaFotoIA_(env);
     let versao;
     try { versao = await cfgGet(env,'schema_ig_version'); }
     catch(e) { if (!/no such table/i.test(String(e))) throw e; }
@@ -198,10 +211,7 @@ async function migrarEsquema_(env) {
   } catch (e) { /* tenta de novo na próxima vez */ }
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_post_repostado_de ON postagem(repostado_de)').run();
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
-  try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN refs TEXT DEFAULT '[]'").run(); } catch (e) { /* já existe */ }
-  try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN plano TEXT DEFAULT ''").run(); } catch (e) { /* já existe */ }
-  try { await env.DB.prepare('ALTER TABLE fotoia ADD COLUMN request_id TEXT').run(); } catch (e) { /* já existe */ }
-  await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_fotoia_request ON fotoia(request_id)').run();
+  await garantirEsquemaFotoIA_(env);
   try {   // v3.7: preço sempre calculado (o escrito é o à vista). Corrige os rascunhos antigos cujo preço da legenda foi gravado como se fosse o cheio.
     if (!(await cfgGet(env, 'mig_preco_v2'))) {
       const velhos = (await env.DB.prepare("SELECT id, preco_sug FROM rascunho WHERE COALESCE(preco_foto,'')='' AND COALESCE(preco_sug,'')!='' AND status IN ('pendente','descartado')").all()).results || [];
@@ -2269,6 +2279,38 @@ const perfilDe_ = (quem, k, en) => {
   return lista[k % lista.length][en ? 1 : 0];
 };
 /** Valida/monta o plano a partir do que o painel mandou. → {ok:true, plano} | {ok:false, erro}. Nunca lança. */
+export const FOTOIA_VISUAL_ = {
+  cenarios: [
+    { id: 'loja', nome: 'Estúdio TENKiTER', pt: 'Estúdio em areia e bege quente, fundo simples, luz suave e cor real da roupa.', en: 'Warm sand and beige studio, simple background, soft light and true garment colors.' },
+    { id: 'limpo', nome: 'Fundo claro', pt: 'Fundo claro liso e luz neutra, fotografia limpa de catálogo.', en: 'Plain light background with neutral light, clean product catalog photography.' },
+    { id: 'natural', nome: 'Luz natural', pt: 'Ambiente discreto em tons neutros com luz natural suave, sem mudar as cores da peça.', en: 'Quiet neutral setting with soft natural light; never shift garment colors.' }
+  ],
+  estilos: [
+    { id: 'natural', nome: 'Natural da loja', pt: 'Expressão acolhedora e postura confortável, acabamento natural da TENKiTER.', en: 'Warm approachable expression, comfortable posture, natural TENKiTER catalog finish.' },
+    { id: 'casual', nome: 'Casual', pt: 'Expressão espontânea, pose relaxada e fotografia realista, sem acessórios extras.', en: 'Spontaneous expression and relaxed realistic catalog pose, without extra accessories.' },
+    { id: 'elegante', nome: 'Elegante', pt: 'Postura elegante e simples, expressão suave, sem exagerar brilho nem retocar a roupa.', en: 'Simple elegant posture and soft expression; do not exaggerate shine or retouch garment details.' }
+  ],
+  composicoes: [
+    { id: 'lado_a_lado', nome: 'Lado a lado', pt: 'Pessoas lado a lado, sem se encobrir, na ordem indicada da esquerda para a direita.', en: 'People side by side without occlusion, in the specified left-to-right order.' },
+    { id: 'profundidade', nome: 'Leve profundidade', pt: 'Pessoas em profundidade leve, mantendo a ordem esquerda-direita e todas as roupas visíveis.', en: 'Slightly staggered depth, preserving left-to-right order and full garment visibility.' }
+  ],
+  poses: [
+    { id: 'frente', nome: 'De frente', pt: 'Em pé de frente, braços relaxados sem cobrir a roupa.', en: 'Standing front-facing, relaxed arms away from garment details.' },
+    { id: 'tres_quartos', nome: 'Leve 3/4', pt: 'Em pé levemente a três quartos, mantendo a frente da roupa visível.', en: 'Standing at a gentle three-quarter angle while keeping the garment front visible.' },
+    { id: 'perfil', nome: 'Perfil', pt: 'Em pé de perfil para mostrar o caimento lateral, sem esconder o corpo com os braços.', en: 'Standing side profile to show the garment side fit, arms not hiding the silhouette.' },
+    { id: 'sentada', nome: 'Sentada', pt: 'Sentada em banco simples, enquadramento inteiro e roupa visível, pose natural adequada à idade.', en: 'Seated on a simple stool, full-body framing and visible garments, natural age-appropriate pose.' },
+    { id: 'caminhando', nome: 'Passo leve', pt: 'Passo leve e natural, sem movimento que esconda detalhes ou altere o caimento da peça.', en: 'A gentle natural walking step without motion hiding details or altering garment fit.' }
+  ]
+};
+const escolhaVisualFotoIA_ = (lista, id) => lista.find(x => x.id === id);
+export function textoVisualFotoIA_(plano, en) {
+  const v = plano.visual; if (!v) return '';
+  const out = [en ? 'PHOTO DIRECTION (registered garment facts and fidelity remain mandatory):' : 'DIREÇÃO DA FOTO (cadastro e fidelidade das peças continuam obrigatórios):'];
+  for (const [campo, lista] of [['cenario','cenarios'],['estilo','estilos'],['composicao','composicoes']]) { const x = escolhaVisualFotoIA_(FOTOIA_VISUAL_[lista], v[campo]); if (x) out.push(x[en ? 'en' : 'pt']); }
+  plano.looks.forEach((l, i) => { const pose = escolhaVisualFotoIA_(FOTOIA_VISUAL_.poses, l.pose || 'frente'); out.push((en ? 'Person ' : 'Pessoa ') + (i+1) + ': ' + pose[en ? 'en' : 'pt']); });
+  out.push(en ? 'The photo contains exactly ' + plano.looks.length + ' people. Styling and notes must never change the assigned clothes, person count, audience or registered ages/sizes. Do not invent garments.' : 'A foto tem exatamente ' + plano.looks.length + ' pessoas. Estilo e observações nunca mudam roupas atribuídas, quantidade de pessoas, público ou idades/tamanhos cadastrados. Não invente roupas.');
+  return out.join('\n');
+}
 export function montarPlanoFotoIA_(b, n, cfg) {
   b = b && typeof b === 'object' ? b : {};
   const destino = DESTINOS_FOTOIA[b.destino] ? b.destino : ((cfg && cfg.formato === '4:5') ? 'carrossel' : 'status');
@@ -2279,9 +2321,11 @@ export function montarPlanoFotoIA_(b, n, cfg) {
     papeis = Array.isArray(b.papeis) ? b.papeis.map((x) => String(x)) : [];
     if (papeis.length !== n || papeis.some((x) => PAPEIS_FOTOIA.indexOf(x) === -1)) return { ok: false, erro: 'Diga o que a IA deve usar em cada foto (peça de cima, de baixo ou look inteiro).' };
   }
+  const planoV2 = b.versaoPlano === 2;
+  if (planoV2 && (!Array.isArray(b.looks) || !b.looks.length)) return {ok:false,erro:'Defina explicitamente a roupa de cada pessoa.'};
   const cima = [], baixo = [];
   papeis.forEach((p, i) => { if (p === 'cima') cima.push(i); else if (p === 'baixo') baixo.push(i); });
-  if (cima.length !== baixo.length) {
+  if (!planoV2 && cima.length !== baixo.length) {
     const d = Math.abs(cima.length - baixo.length), falta = cima.length > baixo.length ? 'de baixo' : 'de cima';
     return { ok: false, faltam: cima.length > baixo.length ? 'baixo' : 'cima', erro: 'Faltam ' + d + ' peça' + (d > 1 ? 's' : '') + ' ' + falta + ' para combinar com as ' + (cima.length > baixo.length ? cima.length + ' de cima' : baixo.length + ' de baixo') + '. A IA não inventa peças: escolha ' + (d > 1 ? 'as que faltam' : 'a que falta') + ' ou mude o papel das fotos.' };
   }
@@ -2290,7 +2334,7 @@ export function montarPlanoFotoIA_(b, n, cfg) {
     const usados = {};
     for (const l of b.looks) {
       const ix = Array.isArray(l) ? l.map((x) => Number(x)) : [];
-      if (!ix.length || ix.length > 2 || ix.some((i) => !Number.isInteger(i) || i < 0 || i >= n || usados[i])) return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' };
+      if (!ix.length || ix.length > 2 || ix.some((i) => !Number.isInteger(i) || i < 0 || i >= n || (!planoV2 && usados[i])) || new Set(ix).size !== ix.length) return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' };
       if (ix.length === 1) { if (papeis[ix[0]] !== 'look') return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' }; }
       else { const ps = ix.map((i) => papeis[i]).sort().join('+'); if (ps !== 'baixo+cima') return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' }; }
       ix.forEach((i) => { usados[i] = true; });
@@ -2306,13 +2350,25 @@ export function montarPlanoFotoIA_(b, n, cfg) {
   /* v1.9: a imagem NUNCA leva seta nem texto (o modelo errava as letras). `seta` fica sempre false só para pedidos/painéis antigos continuarem lendo o campo;
    seta, chamada e emoji vão no editor de visuais da aba Postagens. */
   const plano = { v: 1, destino: destino, formato: DESTINOS_FOTOIA[destino].formato, seta: false, quem: quem, looks: looks.map((l) => ({ partes: l })), rotulos: rot };
+  if (planoV2) {
+    if (!Array.isArray(b.pessoas) || b.pessoas.length !== looks.length) return { ok: false, erro: 'Confira as pessoas e roupas desta foto.' };
+    const visual = b.visual && typeof b.visual === 'object' ? b.visual : {};
+    const v = { cenario: visual.cenario || 'loja', estilo: visual.estilo || 'natural', composicao: visual.composicao || 'lado_a_lado' };
+    if (!escolhaVisualFotoIA_(FOTOIA_VISUAL_.cenarios,v.cenario) || !escolhaVisualFotoIA_(FOTOIA_VISUAL_.estilos,v.estilo) || !escolhaVisualFotoIA_(FOTOIA_VISUAL_.composicoes,v.composicao)) return { ok: false, erro: 'Escolha cenário, estilo e composição disponíveis.' };
+    for (let i=0; i<plano.looks.length; i++) {
+      const pessoa = b.pessoas[i] || {}, pose = pessoa.pose || 'frente', publico = pessoa.publico || 'cadastro';
+      if (!escolhaVisualFotoIA_(FOTOIA_VISUAL_.poses,pose) || !['cadastro','mulheres','homens','criancas'].includes(publico)) return { ok: false, erro: 'Confira a pose e o público de cada pessoa.' };
+      plano.looks[i].pose = pose; plano.looks[i].publico = publico;
+    }
+    plano.v = 2; plano.visual = v;
+  }
   if (b.pecas !== undefined) {
     if (!Array.isArray(b.pecas) || b.pecas.length !== n) return { ok: false, erro: 'As peças informadas não correspondem às fotos. Refaça o pedido.' };
     plano.pecas = b.pecas.map((p) => {
       p = p && typeof p === 'object' ? p : {};
       const cod = String(p.codigo || '').trim();
       const valor = typeof p.avista === 'number' && Number.isFinite(p.avista) && p.avista > 0 && p.avista <= 10000000 ? Math.round(p.avista * 100) / 100 : null;
-      return { codigo: /^[a-zA-Z0-9_.-]{1,60}$/.test(cod) ? cod : '', nome: String(p.nome || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120), avista: valor };
+      return { produto: /^[a-zA-Z0-9_.-]{1,80}$/.test(String(p.produto || '')) ? String(p.produto) : '', codigo: /^[a-zA-Z0-9_.-]{1,60}$/.test(cod) ? cod : '', nome: String(p.nome || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120), avista: valor };
     });
   }
   if (b.motor !== undefined && !['auto', 'klein4b', 'klein9b', 'fluxdev'].includes(b.motor)) return { ok: false, erro: 'Escolha um dos motores disponíveis para esta foto.' };
@@ -2337,6 +2393,14 @@ export function publicoFotoIA_(peca) {
   if (/homem|masculin/.test(t)) return 'homens';
   return '';
 }
+// For explicit plans, a registered top/bottom must not silently become an invented full outfit.
+function tipoCadastroFotoIA_(peca) {
+  const p=peca.cadastro||{}, t=' '+String((p.categoria||'')+' '+(p.nome||'')).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()+' ';
+  if(/\b(vestido\w*|macac\w*|macaquinho\w*|conjunto\w*|fantasia\w*|biquini\w*|maio\w*|pijama\w*)\b/.test(t))return 'look';
+  if(/\b(calca\w*|short\w*|saia\w*|bermuda\w*|legging\w*|pantalona\w*|jogger\w*|calcoes)\b/.test(t))return 'baixo';
+  if(/\b(blusa\w*|camiseta\w*|camisa\w*|cropped\w*|top\w*|regata\w*|body|bodies|jaqueta\w*|casaco\w*|colete\w*|moletom\w*|cardigan\w*|bata\w*)\b/.test(t))return 'cima';
+  return '';
+}
 export function idadesFotoIA_(p) {
   if (!p || !p.cadastro || publicoFotoIA_(p) !== 'criancas') return [];
   const c = p.cadastro, tam = String(c.tamanhos || '').toLowerCase();
@@ -2350,6 +2414,7 @@ export function idadesFotoIA_(p) {
 function perfilCadastroFotoIA_(plano, lk, k, en) {
   const pecas = lk.partes.map(r => (plano.pecas || [])[r.i]).filter(p => p && p.cadastro);
   const quem = pecas.map(publicoFotoIA_).find(Boolean);
+  if (!quem && lk.publico && lk.publico !== 'cadastro') return lk.publico === 'criancas' ? (en ? 'child model proportioned to the provided clothing, ordinary age-appropriate catalog pose' : 'modelo infantil proporcional à roupa de referência, pose natural de catálogo adequada à idade') : perfilDe_(lk.publico, k, en);
   if (!quem) return perfilDe_(plano.quem, k, en);
   if (quem === 'criancas') return en ? 'age-appropriate child model; exact age and fit follow the registered garment sizes below; natural child proportions, ordinary catalog pose' : 'modelo infantil com idade e proporções compatíveis com as idades e tamanhos cadastrados abaixo; pose natural de catálogo';
   return en ? 'adult model; gender and body proportions compatible with the registered audience and sizes below' : 'modelo adulto com público e proporções compatíveis com os tamanhos cadastrados abaixo';
@@ -2385,6 +2450,7 @@ export function promptFotoIA(cfg, job, nFotos) {
   t += 'Estampas e bordados reais da roupa, inclusive letras visíveis na referência, são detalhes do produto: preserve-os. A proibição de texto vale para chamadas, preços e enfeites adicionados à campanha.\n';
   if (job && job.extra) t += 'Observação do lojista para esta imagem: ' + String(job.extra).slice(0, 600) + '\n';
   if ((plano.pecas || []).some(p => p.cadastro)) t += 'PRIORIDADE FINAL: público, idade e tamanho de cada peça cadastrada prevalecem sobre preferências gerais de modelo, idades aleatórias e variedade de corpos. Para crianças, proporções, roupas e poses naturais adequadas à idade. Não transforme a peça para caber em outro público.\n';
+  if (plano.visual) t += '\n' + textoVisualFotoIA_(plano, false);
   return t;
 }
 function corpoFotoIA_(modo, modelo, cfg, prompt, fontes) {
@@ -2462,6 +2528,7 @@ export function promptCf(cfg, job, nRefs) {
   if (!/\{extra\}/.test(base) && extra) t += '\n' + extra;
   if ((plano.pecas || []).some(p => p.cadastro)) t += '\nRegistered audience and sizes for each person override general model preferences, random ages and body variety. Children must look their registered age, with ordinary age-appropriate catalog clothing and poses. Never copy reference faces.';
   t += '\n' + (LIVRE_DESTINO_EN_[plano.destino] || '') + ' No added captions, lettering, numbers, arrows, emojis, stickers, logos or watermark. Preserve the actual garment print and embroidery, including existing lettering visible in the reference; never add or erase product details.';
+  if (plano.visual) t += '\n' + textoVisualFotoIA_(plano, true);
   return t.replace(/[ \t]+\n/g, '\n').trim();
 }
 /** → {ok, buf, mime, modelo} | {ok:false, espera:true, ateMs, erro} | {ok:false, indisponivel:true} | {ok:false, erro}. Nunca lança. */
@@ -2522,7 +2589,7 @@ export async function gerarComMotores_(env, cfg0, job, fontes, refs, chaveGemini
   if (espera) return { ok: false, espera: true, ateMs: ateMs, semPlano: semPlanoGem && !tentouCf, contaTent: !!ultimo, erro: erro };   // um motor só espera cota, mas o outro deu erro de verdade: isso conta tentativa
   return { ok: false, fatal: fatal && !ultimo, erro: erro || ultimo };
 }
-const resumoPlano_ = (x) => { try { const p = x.plano ? JSON.parse(x.plano) : null; return p && Array.isArray(p.looks) ? { looks: p.looks.length, destino: p.destino || '', seta: false, quem: p.quem || '', origem: p.origem || null, motor: p.motor || 'auto', pecas: Array.isArray(p.pecas) ? p.pecas : [] } : null; } catch (e) { return null; } };
+const resumoPlano_ = (x) => { try { const p = x.plano ? JSON.parse(x.plano) : null; return p && Array.isArray(p.looks) ? { looks: p.looks.length, destino: p.destino || '', seta: false, quem: p.quem || '', visual: p.visual || null, combinacoes: p.looks.map(l=>l.partes), pessoas: p.looks.map(l=>({pose:l.pose || 'frente', publico:l.publico || 'cadastro'})), origem: p.origem || null, motor: p.motor || 'auto', pecas: Array.isArray(p.pecas) ? p.pecas : [] } : null; } catch (e) { return null; } };
 const linhaFotoIA_ = (env, x) => ({ plano: resumoPlano_(x), id: x.id, status: x.status, nome: x.nome || '', produto: x.produto || '', extra: x.extra || '', resultado: x.resultado ? urlMidia(env, x.resultado) : '', modelo: x.modelo || '', erro: x.erro || '', espera: x.status === 'fila' && x.prox_em ? x.prox_em : '', tent: x.tent || 0,
   fontes: (function () { try { return JSON.parse(x.fontes || '[]').map((k) => urlMidia(env, k)); } catch (e) { return []; } })(), criado_em: x.criado_em, pronto_em: x.pronto_em || '' });
 /** Faz UM pedido da fila (o mais antigo que já pode, ou `soId`). Nunca lança. */
@@ -2544,8 +2611,9 @@ export async function processarFotoIA(env, soId) {
       await env.DB.prepare('UPDATE fotoia SET prox_em=?, erro=?, atualizado_em=? WHERE id=?').bind(amanha, 'Limite de ' + cfg.limiteDia + ' imagens por dia atingido. Continua amanhã.', agoraIso, job.id).run();
       return { feitas: 0, limiteDia: true };
     }
-    await env.CACHE.put('fotoia_trava', '1', { expirationTtl: 90 });
-    await env.DB.prepare("UPDATE fotoia SET status='gerando', atualizado_em=? WHERE id=?").bind(agoraIso, job.id).run();
+    const claim = await env.DB.prepare("UPDATE fotoia SET status='gerando', atualizado_em=? WHERE id=? AND status='fila'").bind(agoraIso, job.id).run();
+    if (!claim.meta || claim.meta.changes !== 1) return { feitas: 0, ocupado: true };
+    try { await env.CACHE.put('fotoia_trava', '1', { expirationTtl: 90 }); } catch (e) { /* the D1 claim remains authoritative */ }
     try {
       let chaves = []; try { chaves = JSON.parse(job.fontes || '[]'); } catch (e) { chaves = []; }
       const fontes = [];
@@ -2611,10 +2679,11 @@ async function salvarComposicaoFotoIA_(env, req, J) {
   const x = await env.DB.prepare('SELECT * FROM fotoia WHERE id=?').bind(Number(b.id)).first();
   if (!x || x.status !== 'aprovada') return J({ ok: false, erro: 'Escolha uma foto aprovada.' }, 409);
   const plano = planoDe_(x, 1, {}), catalogo = await estCatalogo_(env, true);
-  const codigos = [...new Set((plano.pecas || []).map(p => p.codigo).filter(Boolean))];
-  const membros = codigos.map(c => catalogo.find(p => p.codigo === c)).filter(Boolean).map(p => p.id);
+  const origens = (plano.pecas || []).filter(p => p.produto || p.codigo);
+  const resolvidos = origens.map(o => catalogo.find(p => o.produto ? p.id === o.produto : p.codigo === o.codigo));
+  const membros = [...new Set(resolvidos.filter(Boolean).map(p=>p.id))];
   const produto = catalogo.find(p => p.id === String(b.produto));
-  if (!produto || membros.length < 2 || membros.length !== codigos.length || membros.includes(produto.id)) return J({ ok: false, erro: 'A composição precisa de um cadastro próprio e de pelo menos duas peças ativas de origem.' }, 400);
+  if (!produto || membros.length < 2 || resolvidos.some(p => !p) || membros.includes(produto.id)) return J({ ok: false, erro: 'A composição precisa de um cadastro próprio e de pelo menos duas peças ativas de origem.' }, 400);
   await composicoesFotoIA_(env);
   const existentes = await env.DB.prepare('SELECT produto, job FROM fotoia_composicao WHERE produto=? OR job=?').bind(produto.id, x.id).all();
   if ((existentes.results || []).some(r => r.produto !== produto.id || r.job !== x.id)) return J({ ok: false, erro: 'Esta foto já tem outra composição vinculada.' }, 409);
@@ -2636,7 +2705,7 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
     const esg = await modelosEsgotados(env), agoraMs = Date.now(), de = {}; cfg.modelos.forEach((m) => { if (esg[m] && esg[m] > agoraMs) de[m] = new Date(esg[m]).toISOString(); });
     const cont = {}; ((await env.DB.prepare('SELECT status, COUNT(*) AS n FROM fotoia GROUP BY status').all()).results || []).forEach((x) => { cont[x.status] = x.n; });
     const cfAte = Number(await env.CACHE.get('fotoia_cf_ate')) || 0;
-    return J({ ok: true, config: cfg, padrao: { instrucao: INSTRUCAO_FOTOIA_PADRAO, instrucaoCf: INSTRUCAO_CF_PADRAO, limiteDia: CFG_FOTOIA_PADRAO.limiteDia, modelos: CFG_FOTOIA_PADRAO.modelos, cfModelo: CF_MODELO_PADRAO }, cloudflare: { disponivel: !!(env.AI && typeof env.AI.run === 'function'), semGratisAte: cfAte > Date.now() ? new Date(cfAte).toISOString() : '' }, podeEditar: gestor, temChave: !!chave, fimChave: chave ? String(chave).slice(-4) : '', hoje: { usadas: uso.n, limite: cfg.limiteDia }, semCota: de, contagens: cont });
+    return J({ ok: true, opcoes: Object.fromEntries(Object.entries(FOTOIA_VISUAL_).map(([k,v])=>[k,v.map(x=>({id:x.id,nome:x.nome}))])), config: cfg, padrao: { instrucao: INSTRUCAO_FOTOIA_PADRAO, instrucaoCf: INSTRUCAO_CF_PADRAO, limiteDia: CFG_FOTOIA_PADRAO.limiteDia, modelos: CFG_FOTOIA_PADRAO.modelos, cfModelo: CF_MODELO_PADRAO }, cloudflare: { disponivel: !!(env.AI && typeof env.AI.run === 'function'), semGratisAte: cfAte > Date.now() ? new Date(cfAte).toISOString() : '' }, podeEditar: gestor, temChave: !!chave, fimChave: chave ? String(chave).slice(-4) : '', hoje: { usadas: uso.n, limite: cfg.limiteDia }, semCota: de, contagens: cont });
   }
   if (p === '/fotoia/config' && req.method === 'POST') {
     if (!gestor) return J({ ok: false, erro: 'Só o administrador total muda a instrução e os limites da IA.' }, 403);
@@ -2645,6 +2714,7 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
     const nova = normalizarCfgFotoIA(Object.assign({}, await lerCfgFotoIA(env), b && b.config));
     await cfgSet(env, 'fotoia_cfg', JSON.stringify(nova)); return J({ ok: true, config: nova });
   }
+  if (p === '/fotoia/pedido' && req.method === 'GET') { const chave = url.searchParams.get('pedidoId') || ''; if (!/^[a-zA-Z0-9_-]{12,80}$/.test(chave)) return J({ ok:false, erro:'Identificação da foto inválida.' },400); const x = await env.DB.prepare('SELECT id,status FROM fotoia WHERE request_id=?').bind(chave).first(); return J({ok:true,encontrado:!!x,...(x || {})}); }
   if (p === '/fotoia/fila' && req.method === 'POST') {
     let b; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
     const pedidoId = b && typeof b.pedidoId === 'string' && /^[a-zA-Z0-9_-]{12,80}$/.test(b.pedidoId) ? b.pedidoId : null;
@@ -2655,23 +2725,25 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
     const cfgPed = await lerCfgFotoIA(env), pl = montarPlanoFotoIA_(b, fotos.length, cfgPed), comPlano = !!(b && (b.papeis || b.looks || b.destino || b.quem));      // sem nada disso = pedido no formato antigo (cada foto = um look, proporção da configuração)
     if (!pl.ok) return J({ ok: false, erro: pl.erro, faltam: pl.faltam || '' }, 400);
     if (pl.plano.motor !== 'auto' && (!env.AI || !cfgPed.provedores.includes('cloudflare'))) return J({ ok: false, erro: 'O gestor precisa habilitar o Cloudflare nas instruções antes deste teste.' }, 409);
-    if ((pl.plano.pecas || []).some(p => p.codigo)) {
+    if ((pl.plano.pecas || []).some(p => p.codigo || p.produto)) {
       let catalogo;
       try { catalogo = await estCatalogo_(env, true); } catch (e) { return J({ ok: false, erro: 'Não consegui conferir idade, público e tamanho no cadastro. Tente novamente.' }, 503); }
       for (const peca of pl.plano.pecas) {
-        if (!peca.codigo) continue;
-        const p = catalogo.find(p => p.codigo === peca.codigo);
+        if (!peca.codigo && !peca.produto) continue;
+        const p = catalogo.find(p => peca.produto ? p.id === peca.produto : p.codigo === peca.codigo);
         if (!p) return J({ ok: false, erro: 'Uma peça não está mais ativa no cadastro. Atualize sua seleção.' }, 409);
-        peca.nome = p.nome;
+        peca.nome = p.nome; peca.produto = p.id; peca.codigo = p.codigo;
         peca.cadastro = { publico: p.genero.slice(0, 120), tamanhos: p.tamanhos.slice(0, 180), categoria: p.categoria.slice(0, 100), nome: p.nome };
       }
       for (const look of pl.plano.looks) {
+        if(pl.plano.v===2)for(const r of look.partes){const tipo=tipoCadastroFotoIA_(pl.plano.pecas[r.i]||{});if(['cima','baixo'].includes(tipo)&&r.papel!==tipo)return J({ok:false,erro:'Confira as posições das peças do cadastro. Uma peça de cima ou de baixo precisa de sua combinação, sem inventar roupas.'},400);}
         const publicos = look.partes.map(r => publicoFotoIA_(pl.plano.pecas[r.i])).filter(Boolean);
         if (publicos.includes('criancas') && publicos.some(q => q !== 'criancas')) return J({ ok: false, erro: 'Este look mistura peça infantil e adulta. Separe as peças em pessoas diferentes.' }, 400);
         const idades = look.partes.map(r => idadesFotoIA_(pl.plano.pecas[r.i])).filter(a => a.length);
         if (idades.length > 1 && !idades[0].some(n => idades.every(a => a.includes(n)))) return J({ ok: false, erro: 'As idades cadastradas das peças deste look não combinam. Escolha faixas compatíveis ou coloque em pessoas diferentes.' }, 400);
       }
     }
+    if (pl.plano.v === 2 && pl.plano.looks.some(l => l.publico === 'cadastro' && !l.partes.some(r => pl.plano.pecas && pl.plano.pecas[r.i] && pl.plano.pecas[r.i].cadastro))) return J({ ok: false, erro: 'Escolha o público da pessoa que usa somente fotos do aparelho.' }, 400);
     if (pl.plano.motor !== 'auto' && fotos.length > FOTOIA_CF_MAX_REF) return J({ ok: false, erro: 'Este motor aceita até quatro referências por foto. Escolha menos peças ou outro motor.' }, 400);
 
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM fotoia WHERE status IN ('fila','gerando')").first()) || {}).n) || 0;
@@ -2708,10 +2780,17 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
     return J({ ok: true, id: id });
   }
   if (p === '/fotoia/lista' && req.method === 'GET') {
-    const st = url.searchParams.get('status') || 'todas';
-    const q = st === 'todas' ? env.DB.prepare('SELECT * FROM fotoia ORDER BY id DESC LIMIT 40') : env.DB.prepare('SELECT * FROM fotoia WHERE status=? ORDER BY id DESC LIMIT 40').bind(st);
+    const st = url.searchParams.get('status') || 'todas', antes = Number(url.searchParams.get('antes')) || 0;
+    if (!['todas','ativas','fila','gerando','pronta','aprovada','erro','descartada','cancelada'].includes(st) || !Number.isSafeInteger(antes) || antes < 0) return J({ok:false,erro:'Escolha um filtro de resultados válido.'},400);
+    const cond = [], args = [];
+    if (st === 'ativas') cond.push("status NOT IN ('descartada','cancelada')");
+    else if (st === 'fila') cond.push("status IN ('fila','gerando')");
+    else if (st !== 'todas') { cond.push('status=?'); args.push(st); }
+    if (antes) { cond.push('id<?'); args.push(antes); }
+    const q = env.DB.prepare('SELECT * FROM fotoia' + (cond.length?' WHERE '+cond.join(' AND '):'') + ' ORDER BY id DESC LIMIT 41').bind(...args);
+    const linhas = (await q.all()).results || [], vis = linhas.slice(0,40);
     const cont = {}; ((await env.DB.prepare('SELECT status, COUNT(*) AS n FROM fotoia GROUP BY status').all()).results || []).forEach((x) => { cont[x.status] = x.n; });
-    return J({ ok: true, itens: ((await q.all()).results || []).map((x) => linhaFotoIA_(env, x)), contagens: cont });
+    return J({ ok:true, itens:vis.map(x=>linhaFotoIA_(env,x)), contagens:cont, temMais:linhas.length>40, proximo:linhas.length>40?vis.at(-1).id:null });
   }
   if (p === '/fotoia/acao' && req.method === 'POST') {
     let b; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
@@ -6316,6 +6395,11 @@ export default {
       if (p === '/token' && req.method === 'DELETE') { await cfgSet(env, 'ig_token', null); await cfgSet(env, 'ig_token_exp', null); await cfgSet(env, 'ig_usuario', null); return J({ ok: true }); }
       return J({ ok: false, erro: 'Não encontrado.' }, 404);
     } catch (e) {
+      if (url.pathname.startsWith('/fotoia')) {
+        const referencia = hex(6), estrutura = /no such (column|table)|ON CONFLICT clause/i.test(String(e));
+        console.error(JSON.stringify({ evento:'fotoia_falha', rota:url.pathname, referencia, tipo:estrutura?'estrutura':'interno' }));
+        return J({ ok:false, codigo:estrutura?'fotoia_estrutura':'fotoia_confirmacao', referencia, erro:estrutura?'A estrutura de Fotos com IA precisa ser atualizada. Seu lote foi mantido; tente novamente em instantes.':'Não consegui confirmar o recebimento da foto. Seu lote foi mantido; tente novamente.' },estrutura?503:500);
+      }
       return J({ ok: false, erro: e && e.codigo ? e.message : 'Algo deu errado. Tente de novo.' }, e && e.codigo ? e.codigo : 500);
     }
   }

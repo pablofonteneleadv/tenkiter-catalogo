@@ -207,6 +207,8 @@ jobs:
           node tests/worker_familias.js
           # v7.49.0: fotos postadas (por foto, inclusive colagem) e mapa público de fotos novas
           node tests/worker_fotos_postadas.js
+          node tests/fotoia_plano.js
+          node tests/worker_fotoia_migracao.js
           node tests/worker_fotoia_catalogo.js
           node tests/worker_tempo_atendimento.js
           node tests/worker_prioridade_clientes.js

@@ -584,6 +584,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 return route.fulfill(json={"ok":True,"fotosNovas":st.get("fotos_novas",{})},headers={"Cache-Control":"public, max-age=60","Access-Control-Allow-Origin":"*"})
             if path=="/familias" or path.startswith("/familias/"):   # v7.44.0: família de produtos (pública: GET /familias; o resto com sessão)
                 return familias_rota(route, path, m, h)
+            if path=="/catalogo/composicoes":
+                return route.fulfill(json={"ok":True,"composicoes":[{"produto":x["produto"],"membros":x["membros"]} for x in g.get("fotoia",{}).get("composicoes",[])]})
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
             if path=="/cliente/foto" or path.startswith("/fotos"):      # fotos de clientes (Worker v4.7): st["ig"]["fotos"]
                 from urllib.parse import urlparse, parse_qs
@@ -616,8 +618,12 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     g["foto_seq"]+=1; g["fotos"].append({"id":g["foto_seq"],"origem":"equipe","url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/fe%d.jpg"%g["foto_seq"],"whats":w,"nome":nome,"instagram":ig2,"obs":q1("obs"),"status":"nova","vinculo":vinc,"criadoPor":q1("por")})
                     return route.fulfill(json={"ok":True,"id":g["foto_seq"],"vinculo":vinc,"nome":nome,"whats":w,"instagram":ig2})
             if path.startswith("/fotoia"):      # Fotos com IA (Worker v1.5): st["ig"]["fotoia"]
+                if not any(x in perms for x in ("catalogo_cadastrar","gerir_acessos")):
+                    return route.fulfill(status=403,json={"ok":False,"erro":"Sua conta não permite criar fotos com IA."})
                 import json as _j
-                fi=g.setdefault("fotoia",{"itens":[],"seq":0,"chamadas":[],"pode_editar":True,"tem_chave":True,
+                from urllib.parse import urlparse, parse_qs
+                qs=parse_qs(urlparse(u).query); q1=lambda k:(qs.get(k) or [""])[0]
+                fi=g.setdefault("fotoia",{"itens":[],"seq":0,"chamadas":[],"pode_editar":"gerir_acessos" in perms,"tem_chave":True,
                     "cfg":{"ligado":True,"instrucao":"# SKILL: Tenkiter Modas — FIDELIDADE ABSOLUTA ao produto. Seta →","modelos":["gemini-nano-banana-2.1","gemini-3.1-flash-lite-image"],"modo":"auto","formato":"9:16","tamanho":"1K","limiteDia":20,"provedores":["gemini","cloudflare"],"cfModelo":"@cf/black-forest-labs/flux-2-klein-4b","instrucaoCf":"Foto {nome} {extra}"},"cf":{"disponivel":True,"semGratisAte":""}})
                 body={}
                 try: body=_j.loads(route.request.post_data or "{}")
@@ -635,16 +641,53 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     else: fi["cfg"].update({k:v for k,v in (body.get("config") or {}).items() if k!="modelos"}); 
                     if (body.get("config") or {}).get("modelos") is not None: fi["cfg"]["modelos"]=[x.strip() for x in str(body["config"]["modelos"]).split("\n") if x.strip()]
                     return route.fulfill(json={"ok":True,"config":fi["cfg"]})
+                if path=="/fotoia/pedido" and m=="GET":
+                    rid=q1("pedidoId"); x=next((x for x in fi["itens"] if x.get("pedidoId")==rid),None)
+                    return route.fulfill(json={"ok":True,"encontrado":bool(x),**({"id":x["id"],"status":x["status"]} if x else {})})
                 if path=="/fotoia/fila" and m=="POST":
+                    rid=body.get("pedidoId")
+                    ja=next((x for x in fi["itens"] if rid and x.get("pedidoId")==rid),None)
+                    if ja:return route.fulfill(json={"ok":True,"id":ja["id"],"repetido":True})
                     fi["seq"]+=1
-                    fi["itens"].insert(0,{"id":fi["seq"],"status":fi.get("novo_status","fila"),"nome":body.get("nome",""),"produto":body.get("produto",""),"extra":body.get("extra",""),"resultado":"","modelo":"","erro":fi.get("novo_erro",""),"espera":fi.get("novo_espera",""),"tent":0,"fontes":[],"criado_em":"2026-10-18T12:00:00Z","pronto_em":"","plano":({"looks":len(body.get("looks") or []),"destino":body.get("destino",""),"seta":bool(body.get("seta")),"quem":body.get("quem",""),"pecas":body.get("pecas",[])} if body.get("papeis") else None)})
+                    plano=None
+                    if body.get("papeis"):
+                        plano={"looks":len(body.get("looks") or []),"destino":body.get("destino",""),"seta":False,"quem":body.get("quem",""),"pecas":body.get("pecas",[]),"motor":body.get("motor","auto"),"visual":body.get("visual"),"pessoas":body.get("pessoas",[]),"combinacoes":[[{"i":i,"papel":body["papeis"][i]} for i in l] for l in body.get("looks",[])]}
+                    fi["itens"].insert(0,{"id":fi["seq"],"pedidoId":rid,"status":fi.get("novo_status","fila"),"nome":body.get("nome",""),"produto":body.get("produto",""),"extra":body.get("extra",""),"resultado":"","modelo":"","erro":fi.get("novo_erro",""),"espera":fi.get("novo_espera",""),"tent":0,"fontes":["https://res.cloudinary.com/z/image/upload/v1/referencia-%s.jpg"%i for i in range(len(body.get("fotos",[])))],"criado_em":"2026-11-03T12:00:00Z","pronto_em":"","plano":plano})
                     return route.fulfill(json={"ok":True,"id":fi["seq"]})
                 if path=="/fotoia/lista":
-                    return route.fulfill(json={"ok":True,"itens":fi["itens"],"contagens":cts()})
+                    status=q1("status") or "todas"; antes=int(q1("antes") or 0)
+                    def ver(x):
+                        if antes and x["id"]>=antes:return False
+                        return (status=="todas" or (status=="ativas" and x["status"] not in ("descartada","cancelada")) or (status=="fila" and x["status"] in ("fila","gerando")) or x["status"]==status)
+                    xs=sorted([x for x in fi["itens"] if ver(x)],key=lambda x:x["id"],reverse=True)
+                    return route.fulfill(json={"ok":True,"itens":xs[:40],"contagens":cts(),"temMais":len(xs)>40,"proximo":xs[39]["id"] if len(xs)>40 else None})
+                if path=="/fotoia/incorporar" and m=="POST":
+                    x=next((x for x in fi["itens"] if x["id"]==body.get("id")),None)
+                    if not x or x["status"]!="aprovada":return route.fulfill(status=409,json={"ok":False,"erro":"Aprove a foto antes de colocar no produto."})
+                    import hashlib
+                    chave=hashlib.sha256((str(x["id"])+x.get("resultado","")).encode()).hexdigest()[:20]
+                    return route.fulfill(json={"ok":True,"url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/"+chave+".jpg"})
+                if path=="/fotoia/composicao":
+                    cs=fi.setdefault("composicoes",[])
+                    if m=="GET":
+                        x=next((x for x in cs if x["job"]==int(q1("id") or 0)),None)
+                        return route.fulfill(json={"ok":True,"produto":x["produto"] if x else ""})
+                    x=next((x for x in fi["itens"] if x["id"]==body.get("id")),None)
+                    if not x:return route.fulfill(status=404,json={"ok":False,"erro":"Pedido não encontrado."})
+                    membros=list(dict.fromkeys(str(p.get("produto") or next((z["ID"] for z in P if z.get("Codigo")==p.get("codigo")),"")) for p in (x.get("plano") or {}).get("pecas",[])))
+                    membros=[p for p in membros if p]
+                    cs[:]=[c for c in cs if c["job"]!=x["id"]]+[{"job":x["id"],"produto":str(body.get("produto")),"membros":membros}]
+                    return route.fulfill(json={"ok":True})
                 if path=="/fotoia/acao" and m=="POST":
                     x=next((i for i in fi["itens"] if i["id"]==body.get("id")),None)
                     if not x: return route.fulfill(status=404,json={"ok":False,"erro":"Pedido não encontrado."})
                     a=body.get("acao")
+                    if a=="comparar":
+                        import copy
+                        ja=next((q for q in fi["itens"] if (q.get("plano") or {}).get("origem")==x["id"] and (q.get("plano") or {}).get("motor")==body.get("motor") and q["status"] in ("fila","gerando")),None)
+                        if ja:return route.fulfill(json={"ok":True,"id":ja["id"],"repetido":True})
+                        fi["seq"]+=1; novo=copy.deepcopy(x); novo["id"]=fi["seq"]; novo["status"]="fila";novo["resultado"]="";novo["plano"]["origem"]=x["id"];novo["plano"]["motor"]=body.get("motor");fi["itens"].insert(0,novo)
+                        return route.fulfill(json={"ok":True,"id":novo["id"]})
                     if a=="aprovar": x["status"]="aprovada"
                     elif a=="descartar": x["status"]="descartada"; x["resultado"]=""
                     elif a=="cancelar": x["status"]="cancelada"

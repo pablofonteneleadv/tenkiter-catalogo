@@ -42,6 +42,20 @@ const {DatabaseSync}=require('node:sqlite');
  r=await call('/fotoia/fila',{fotos:[f,f,f,f,f],motor:'klein9b',papeis:['look','look','look','look','look']});assert.equal(r.status,400);
  r=await call('/fotoia/fila',{fotos:[f],refs:[f],papeis:['look'],motor:'fluxdev'});assert(r.j.ok);assert.equal(aiCalls.at(-1).m,'@cf/black-forest-labs/flux-2-dev');assert.equal(aiCalls.at(-1).form.get('steps'),'25');
  const old=W.promptFotoIA({...W.CFG_FOTOIA_PADRAO,instrucao:'Se enviei 4 fotos, são 4 pessoas com 4 looks.'},{plano:JSON.stringify({looks:[{partes:[{i:0,papel:'cima'},{i:1,papel:'baixo'}]}],rotulos:[],quem:'mulheres',destino:'status',formato:'9:16'})},2);assert(!old.includes('são 4 pessoas'));
+ // Explicit v2 may deliberately reuse a garment across people; v1 retains its old contract.
+ const v2={pedidoId:'teste_fotoia_v2_01',versaoPlano:2,fotos:[f,f],refs:[f,f],papeis:['cima','baixo'],looks:[[0,1],[0,1]],pessoas:[{pose:'perfil',publico:'cadastro'},{pose:'sentada',publico:'cadastro'}],visual:{cenario:'limpo',estilo:'elegante',composicao:'profundidade'},motor:'klein4b',pecas:[{produto:'1'},{produto:'2'}]};
+ r=await call('/fotoia/fila',v2);assert(r.j.ok,JSON.stringify(r));const v2id=r.j.id;
+ const pv=JSON.parse((await DB.prepare('SELECT plano FROM fotoia WHERE id=?').bind(v2id).first()).plano);assert.equal(pv.v,2);assert.equal(pv.looks.length,2);assert.equal(pv.looks[0].pose,'perfil');assert.equal(pv.visual.cenario,'limpo');assert.equal(pv.pecas[0].produto,'1');
+ const pp=aiCalls.at(-1).form.get('prompt');assert(pp.includes('Exactly 2 people'));assert(pp.includes('6 anos'));assert(pp.includes('profile')||pp.includes('side'));assert(pp.toLowerCase().includes('seated')||pp.toLowerCase().includes('sitting'));
+ r=await call('/fotoia/pedido?pedidoId='+v2.pedidoId);assert.equal(r.j.id,v2id);assert.equal(r.j.encontrado,true);
+ r=await call('/fotoia/pedido?pedidoId=teste_ausente_001');assert.equal(r.j.encontrado,false);
+ r=await call('/fotoia/fila',{...v2,pedidoId:'teste_invalido_001',pessoas:[{pose:'inexistente'},{pose:'frente'}]});assert.equal(r.status,400);
+ r=await call('/fotoia/fila',{...v2,pedidoId:'teste_sem_looks_01',looks:[]});assert.equal(r.status,400);
+ r=await call('/fotoia/fila',{...v2,pedidoId:'teste_posicao_001',looks:[[0],[1]],papeis:['look','look']});assert.equal(r.status,400);assert(r.j.erro.includes('posições'));
+ // Generation claim must prevent simultaneous processors from charging twice.
+ const claimed=await DB.prepare("INSERT INTO fotoia(status,nome,fontes,refs,plano,criado_em) VALUES('fila','concorrente',?,?,?,?)").bind(row.fontes,row.refs,row.plano,new Date().toISOString()).run();const claimId=claimed.meta.last_row_id;
+ const before=aiCalls.length;await Promise.all([W.processarFotoIA(env,claimId),W.processarFotoIA(env,claimId)]);assert.equal(aiCalls.length,before+1,'only one D1 claim can generate');
+ r=await call('/fotoia/lista?status=aprovada');assert(r.j.itens.every(x=>x.status==='aprovada'));
  console.log('FOTOIA CATALOGO WORKER PASS: metadata from registered catalog, child/adult guard, prompts, 9B/Dev contracts, request dedupe, approval, permanent copy, composition validation/idempotence, discard preservation.');
  fs.unlinkSync(tmp);sqlite.close();
 })().catch(e=>{console.error(e);process.exitCode=1});
