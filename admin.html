@@ -182,7 +182,7 @@
   .btn-primario { background: var(--laranja); color: var(--preto); margin-top: 18px; }
   .btn-cancelar-duplicar { background: #eee; color: #555; margin-top: 8px; display: none; }
 
-  /* Bar de ações em lote (v4.10 FE-04: rolagem horizontal no celular + "Mais ações" para o Juntar/Separar não sumirem) */
+  /* Ações em lote sempre disponíveis na grade fixa. */
   .bulk-bar { background: var(--preto); color: #fff; padding: 12px; border-radius: 12px; margin-bottom: 12px; display: none; position: sticky; top: 0; z-index: 40; }
   .bulk-bar.ativa { display: block; }
   .bulk-bar-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.85rem; }
@@ -190,11 +190,7 @@
   .bulk-bar-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px; }
   .bulk-bar-actions button[hidden] { display: none; }
   .bulk-bar-actions button { min-height: 44px; }
-  .bulk-bar-actions button { width: auto; font-size: 0.78rem; line-height: 1.15; padding: 6px 8px; background: #333; color: #fff; white-space: normal; text-align: center; overflow-wrap: anywhere; }
-  .bulk-bar-actions button.mais { background: var(--laranja); color: #0d0d0d; }
-  .bulk-mais { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.15); }
-  .bulk-mais[hidden] { display: none; }
-  .bulk-mais button { width: auto; min-height: 44px; font-size: 0.78rem; line-height: 1.15; padding: 6px 8px; background: #333; color: #fff; white-space: normal; text-align: center; }
+  .bulk-bar-actions button { width: auto; font-size: 0.78rem; line-height: 1.15; padding: 6px 4px; background: #333; color: #fff; white-space: normal; text-align: center; overflow-wrap: normal; display: block; }
   .bulk-bar { max-height: 60vh; overflow-y: auto; }
 
   /* v4.10 (FE-03): menu "Cadastrar" com 3 caminhos */
@@ -1607,16 +1603,14 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <button type="button" style="width:auto;padding:2px 8px;" id="btn-cancelar-bulk">Desmarcar todos</button>
     </div>
     <div class="bulk-bar-actions">
-      <button type="button" id="btn-bulk-editar"><span class="ic" data-ico="lapis">✏️</span> Editar peças</button>
+      <button type="button" id="btn-bulk-editar">Editar peças</button>
       <button type="button" id="btn-bulk-preco">% Alterar Preços</button>
       <button type="button" id="btn-bulk-novidade">Marcar Novidades</button>
-      <button type="button" id="btn-bulk-arquivar"><span class="ic" data-ico="arquivar">🗃&#65039;</span> Arquivar em Massa</button>
-      <button type="button" id="btn-bulk-reativar"><span class="ic" data-ico="atualizar">🔄</span> Reativar em Massa</button>
-      <button type="button" id="btn-bulk-postar"><span class="ic" data-ico="camera">📸</span> Enviar para Postagens</button>
-      <button type="button" id="btn-bulk-juntar" hidden><span class="ic" data-ico="link">🔗</span> Juntar em 1 produto</button>
-      <button type="button" class="mais" id="btn-bulk-mais" aria-expanded="false">⋯ Mais ações</button>
-    </div>
-    <div class="bulk-mais" id="bulk-mais" hidden>
+      <button type="button" id="btn-bulk-arquivar">Arquivar em Massa</button>
+      <button type="button" id="btn-bulk-reativar">Reativar em Massa</button>
+      <button type="button" id="btn-bulk-postar">Enviar para Postagens</button>
+      <button type="button" id="btn-bulk-juntar" hidden>Juntar em 1 produto</button>
+      <button type="button" id="btn-bulk-fotoia" hidden>Enviar para modelo IA</button>
       <button type="button" id="btn-bulk-separar" hidden>✂️ Separar em peças</button>
     </div>
   </div>
@@ -4857,6 +4851,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (typeof window.tkPostarPecas !== 'function') { alert('A aba Postagens ainda não carregou. Tente de novo em instantes.'); return; }
     window.tkPostarPecas(ids.map(String));
   }
+  document.getElementById('btn-bulk-fotoia').addEventListener('click', () => {
+    if (window.tkFotoIA) window.tkFotoIA.abrir(Array.from(selecionadosBulk));
+    else alert('Fotos com IA ainda está carregando. Tente novamente em instantes.');
+  });
   document.getElementById('btn-bulk-postar').addEventListener('click', () => {
     const ids = Array.from(selecionadosBulk);
     if (!ids.length) return;
@@ -4952,13 +4950,6 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (confirm('Reativar os produtos selecionados? Eles voltam a aparecer no catálogo público.')) {
       await executarAcaoEmLote('reativar', true);
     }
-  });
-
-  /* ===================== v4.10 (FE-04/FE-05): "Mais ações" — Separar e Editar em massa ===================== */
-  document.getElementById('btn-bulk-mais').addEventListener('click', (e) => {
-    const box = document.getElementById('bulk-mais');
-    box.hidden = !box.hidden;
-    e.currentTarget.setAttribute('aria-expanded', String(!box.hidden));
   });
 
   /* ===== v7.50.0: Separar — cada foto vira um produto com as mesmas informações (inverso do Juntar), em segundo plano =====

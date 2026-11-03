@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.53.2] - 2026-11-03
+
+- Gestão: ações de lote sempre visíveis, Separar na grade e envio das peças selecionadas para modelo IA, sem iniciar geração.
+
+
 ## [7.53.1] - 2026-11-03
 
 - Retomada segura de postagens pendentes, limites por destino e fila sem bloqueio entre canais

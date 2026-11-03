@@ -209,12 +209,11 @@ body .mais-menu .btn-excluir:hover { background: #fdecec !important; }
 body .bulk-bar { border-radius: var(--tk-raio); padding: 12px; }
 body .bulk-bar-header { font-size: 0.86rem; font-weight: 600; }
 body #btn-cancelar-bulk { min-height: 40px; padding: 0 12px !important; border-radius: var(--tk-raio-p); background: transparent; color: #fff; border: 1px solid #555; font-size: 0.8rem; }
-body .bulk-bar-actions button, body .bulk-mais button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+body .bulk-bar-actions button {
+  display: block; align-items: center; justify-content: center; gap: 6px;
   border-radius: var(--tk-raio-p); background: #2a2a2a; border: 1px solid #3a3a3a; font-size: 0.8rem; font-weight: 600;
 }
 body .bulk-bar-actions button .tk-ico { width: 16px; height: 16px; }
-body .bulk-bar-actions button.mais { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
 body #btn-bulk-postar { background: #8a1259; border-color: #8a1259; }
 
 /* ---------- avisos ---------- */
