@@ -277,6 +277,10 @@ jobs:
           python3 tests/video_camera_90s.py
           python3 tests/mensagens_camera_menu.py
           python3 tests/video_validacao.py
+          # v7.50.0: uniões no cadastro, Juntar/Separar em segundo plano, sessão rápida, seleção abre a peça
+          python3 tests/gestao_unioes.py
+          python3 tests/juntar_admin.py
+          python3 tests/selecao_botoes.py
 
       - name: Evidências dos reparos integrados
         if: always() && github.event_name == 'pull_request'

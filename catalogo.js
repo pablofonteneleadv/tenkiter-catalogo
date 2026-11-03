@@ -1333,30 +1333,30 @@ try { tkSelExpirar_(); } catch (e) {}
       lb.innerHTML = '<input type="radio" name="juntar-destino" value="' + escaparHtml(String(p.ID)) + '"' + (i === 0 ? ' checked' : '') + '><img ' + atribSrc(fotoMini(p.Foto_URL, 120)) + ' alt=""><span><b>' + escaparHtml(p.Nome) + '</b><br>' + escaparHtml(p.Codigo || '') + ' · ' + fotos + (fotos === 1 ? ' foto' : ' fotos') + '</span>';
       lista.appendChild(lb);
     });
-    document.getElementById('juntar-erro').hidden = true; document.getElementById('juntar-prog').hidden = true;
+    document.getElementById('juntar-erro').hidden = true;
     document.getElementById('juntar-ok').disabled = false; document.getElementById('juntar-ok').textContent = 'Juntar';
     abrirComHistorico_('overlay-juntar');
   }
   document.getElementById('juntar-fechar').addEventListener('click', () => { if (!document.getElementById('juntar-ok').disabled) fecharComHistorico_('overlay-juntar'); });
-  document.getElementById('juntar-ok').addEventListener('click', async () => {
-    const btn = document.getElementById('juntar-ok'), er = document.getElementById('juntar-erro'), prog = document.getElementById('juntar-prog');
+  // v7.50.0: juntar roda em SEGUNDO PLANO (fila-lote.js): a janela fecha logo, a pessoa continua na loja e um aviso discreto mostra o resultado.
+  document.getElementById('juntar-ok').addEventListener('click', () => {
+    const er = document.getElementById('juntar-erro');
     const marcado = document.querySelector('input[name="juntar-destino"]:checked'); if (!marcado) return;
     const sel = getSacola().map(String).map(id => produtos.find(p => String(p.ID) === id)).filter(Boolean);
     const destino = sel.find(p => String(p.ID) === marcado.value), outros = sel.filter(p => String(p.ID) !== marcado.value);
     if (!destino || !outros.length) return;
-    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' peça' : ' peças') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nAs outras ficam arquivadas e as fotos delas passam para esta.')) return;
-    btn.disabled = true; btn.textContent = 'Juntando…'; er.hidden = true; prog.hidden = false;
-    document.querySelectorAll('#juntar-lista input').forEach(i => i.disabled = true);
-    try {
-      const r = await pedirEquipe_({ action: 'juntarProdutos', destinoId: destino.ID, origemIds: outros.map(p => p.ID) });
-      if (r && r.ok) {
-        btn.textContent = '✔ Pronto!'; prog.hidden = true;
-        limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards();
-        try { const resp = await buscarListaPublica(); if (Array.isArray(resp.produtos)) { const rec = resp.produtos.reverse(); salvarCatalogoCache(rec); aplicarProdutosRecebidos(rec); } } catch (e) {}
-        btn.disabled = false; fecharComHistorico_('overlay-juntar'); atualizarBarraFiltros_();
-        avisoEquipe_('✔ Pronto! "' + destino.Nome + '" ficou com ' + (r.fotosNoDestino != null ? r.fotosNoDestino + ' foto(s)' : 'as fotos juntas') + '. ' + outros.length + ' arquivada(s).');
-      } else { prog.hidden = true; btn.disabled = false; btn.textContent = 'Juntar'; document.querySelectorAll('#juntar-lista input').forEach(i => i.disabled = false); er.textContent = erroEquipe_(r); er.hidden = false; }
-    } catch (e) { prog.hidden = true; btn.disabled = false; btn.textContent = 'Juntar'; document.querySelectorAll('#juntar-lista input').forEach(i => i.disabled = false); er.textContent = 'Sem conexão. Tente de novo.'; er.hidden = false; }
+    if (!window.TKFilaLote) { er.textContent = 'Não consegui preparar o envio agora. Atualize a página e tente de novo.'; er.hidden = false; return; }
+    if (TKFilaLote.ocupado(sel.map(p => p.ID))) { er.textContent = 'Alguma dessas peças já está sendo juntada. Espere o aviso de “Pronto” e tente de novo.'; er.hidden = false; return; }
+    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' peça' : ' peças') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nAs outras ficam arquivadas e as fotos delas passam para esta. Você pode continuar usando a loja enquanto junta.')) return;
+    TKFilaLote.juntar({ id: destino.ID, codigo: destino.Codigo, nome: destino.Nome }, outros.map(p => ({ id: p.ID, codigo: p.Codigo, nome: p.Nome })));
+    limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards();
+    fecharComHistorico_('overlay-juntar'); atualizarBarraFiltros_();
+  });
+  if (window.TKFilaLote) TKFilaLote.configurar({
+    chamar: (corpo) => pedirEquipe_(corpo),
+    aoConcluir: async () => {   // a lista pública já sem as peças arquivadas e com as fotos juntas
+      try { const resp = await buscarListaPublica(); if (Array.isArray(resp.produtos)) { const rec = resp.produtos.reverse(); salvarCatalogoCache(rec); aplicarProdutosRecebidos(rec); } } catch (e) {}
+    }
   });
   function erroEquipe_(r) { return (r && r.erro) || (r && r.semPermissao ? 'Sua conta não tem esse acesso.' : 'Não consegui agora. Tente de novo.'); }
   let toastEquipeTimer_ = null;
@@ -1435,6 +1435,7 @@ try { tkSelExpirar_(); } catch (e) {}
 
     async function depoisDeEntrar(u) {
       usuario = u; definirEquipe_(usuario);
+      if (window.TKUsuarioCache) TKUsuarioCache.gravar(u);   // v7.50.0: a Gestão abre logada na hora
       atualizarBotao();
       fecharConta_();
       await sincronizar();
@@ -1472,7 +1473,7 @@ try { tkSelExpirar_(); } catch (e) {}
         }
         if (window.TKFotoCliente) corpo.appendChild(TKFotoCliente.bloco());
         const sair = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-sair', text: 'Sair da conta' });
-        sair.addEventListener('click', () => { limparSessao(); usuario = null; definirEquipe_(null); atualizarBotao(); fecharConta_(); });
+        sair.addEventListener('click', () => { limparSessao(); if (window.TKUsuarioCache) TKUsuarioCache.limpar(); usuario = null; definirEquipe_(null); atualizarBotao(); fecharConta_(); });
         corpo.appendChild(sair);
         return;
       }
@@ -1536,13 +1537,21 @@ try { tkSelExpirar_(); } catch (e) {}
     ov.addEventListener('click', (e) => { if (e.target === ov) fecharConta_(); });
 
     // só aparece se o backend já tem contas; catálogo antigo segue exatamente como era
+    // v7.50.0: quem entrou na Gestão (ou aqui) aparece logado NA HORA, com o "quem é você" guardado para esta mesma sessão (sessao-rapida.js);
+    // a conferência com o servidor corre em paralelo com a versão e corrige se a sessão não valer mais.
     (async () => {
+      const guardado = window.TKUsuarioCache ? TKUsuarioCache.ler() : null;
+      if (guardado) { usuario = guardado; btn.style.display = ''; atualizarBotao(); }
+      const pU = getSessao() ? conferirSessao().catch(() => ({ semRede: true })) : Promise.resolve(null);
       const v = await versaoServidor();
       if (!v || !v.acessos) return;
       btn.style.display = '';
-      const u = await conferirSessao();
-      if (u && !u.semRede) { usuario = u; definirEquipe_(usuario); atualizarBotao(); sincronizar(); }
-      else if (!u) definirEquipe_(null);     // sessão acabou: tira o ✕ que foi mostrado antes da conferência
+      const u = await pU;
+      if (u && !u.semRede) { usuario = u; if (window.TKUsuarioCache) TKUsuarioCache.gravar(u); definirEquipe_(usuario); atualizarBotao(); sincronizar(); }
+      else if (!u) {     // sessão acabou: tira o ✕ e o "logado" que foram mostrados antes da conferência
+        if (guardado) { usuario = null; if (window.TKUsuarioCache) TKUsuarioCache.limpar(); atualizarBotao(); avisoEquipe_('Sua sessão terminou neste aparelho. Entre de novo para continuar.'); }
+        definirEquipe_(null);
+      }
     })();
   })(); } catch (erroConta) { console.warn('Conta de cliente indisponível:', erroConta); }
 

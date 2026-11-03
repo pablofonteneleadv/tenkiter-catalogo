@@ -124,9 +124,10 @@ function abrirSacola() {
       '<div class="sheet-topo"><div class="nome">Minha seleção (' + itens.length + ')</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
       (sumiram > 0 ? '<p class="texto-pequeno" role="status">' + sumiram + (sumiram === 1 ? ' peça saiu' : ' peças saíram') + ' do catálogo e foi removida da sacola.</p>' : '') +
       itens.map(function (p) {
+        // v7.50.0: tocar na miniatura ou no nome abre a peça (a seleção continua aberta por baixo; voltar retorna a ela)
         return '<div class="item-sacola">' +
-          '<img src="' + escaparHtml(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + '" alt="" width="48" height="60" loading="lazy">' +
-          '<div class="info"><div class="nome">' + escaparHtml(p.Nome) + '</div>' +
+          '<button type="button" class="mini-btn" data-abrir-id="' + escaparHtml(p.ID) + '" aria-label="Ver a peça ' + escaparHtml(p.Nome) + '"><img src="' + escaparHtml(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + '" alt="" width="48" height="60" loading="lazy"></button>' +
+          '<div class="info"><button type="button" class="nome-btn nome" data-abrir-id="' + escaparHtml(p.ID) + '">' + escaparHtml(p.Nome) + '</button>' +
           (p.Codigo ? '<div class="codigo">' + escaparHtml(p.Codigo) + '</div>' : '') +
           '<div class="preco">' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista') + '</div></div>' +
           '<button type="button" class="btn-remover" data-remover-id="' + escaparHtml(p.ID) + '" aria-label="Remover da sacola: ' + escaparHtml(p.Nome) + '">' + icPed_('fechar', '✕') + '</button></div>';
@@ -155,6 +156,16 @@ function abrirSacola() {
       '<div class="barra-compra"><div class="bc-total"><small>Total à vista</small><strong>' + totalTexto_(itens) + '</strong></div>' +
       '<button type="button" class="bc-pedir" id="btn-enviar-sacola">' + icPed_('whatsapp', '💬') + (PEDIDOS_ATIVOS ? ' Enviar minha seleção' : ' Enviar para a loja') + '</button></div>';
 
+    container.querySelectorAll('[data-abrir-id]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        guardarRascunho_();
+        // a janela da peça vem antes da seleção no HTML: sobe por cima dela enquanto estiver aberta a partir daqui
+        var ov = document.getElementById('overlay'); if (ov) ov.style.zIndex = '102';
+        var volta = function (ev) { if (ev && ev.detail && ev.detail.chave === 'overlay') { if (ov) ov.style.zIndex = ''; document.removeEventListener('tk:camada-fechada', volta); } };
+        document.addEventListener('tk:camada-fechada', volta);
+        abrirDetalhe(b.dataset.abrirId, fotoDaSacola(b.dataset.abrirId) - 1);
+      });
+    });
     container.querySelectorAll('[data-remover-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         guardarRascunho_(); removerDaSacola(btn.dataset.removerId); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); abrirSacola();

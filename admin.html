@@ -235,6 +235,8 @@
   .produto { display: flex; gap: 10px; background: var(--branco); border-radius: 12px; padding: 10px; margin-bottom: 10px; align-items: flex-start; position: relative; }
   .produto-chk { margin-top: 25px; }
   .foto-ampliar { width: auto; flex: none; padding: 0; margin: 0; border: 0; background: none; border-radius: 8px; cursor: zoom-in; min-height: 0; line-height: 0; position: relative; }
+  .foto-ampliar .foto-qtd { position: absolute; left: 3px; bottom: 3px; display: inline-flex; align-items: center; gap: 2px; background: rgba(0,0,0,.78); color: #fff; font-size: .66rem; font-weight: 800; line-height: 1; padding: 3px 6px; border-radius: 999px; pointer-events: none; }
+  .foto-ampliar .foto-qtd .tk-ico { width: 12px; height: 12px; }
   .foto-ampliar::after { content: '🔍'; position: absolute; right: 2px; bottom: 2px; font-size: .7rem; line-height: 1; background: rgba(255,255,255,.85); border-radius: 6px; padding: 2px 3px; }
   .produto img { width: 56px; height: 70px; object-fit: cover; border-radius: 8px; background: #eee; }
   .produto-info { flex: 1; min-width: 0; }
@@ -360,6 +362,32 @@
   .galeria-item .mover { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; border-radius: 0 0 6px 6px; overflow: hidden; }
   .galeria-item .mover button { flex: 1; height: 24px; border: none; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 24px; }
   .galeria-item .mover button:disabled { opacity: 0.35; cursor: default; }
+  /* v7.50.0: uniões no "Cadastrar vários produtos" — fotos do mesmo grupo viram UM produto (borda + número do grupo) */
+  .unioes { margin: 0 0 8px; display: flex; flex-direction: column; gap: 8px; }
+  .unioes[hidden] { display: none; }
+  .uni-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .uni-conta { flex: 1 1 180px; font-size: .88rem; font-weight: 800; color: #141414; }
+  .uni-conta small { display: block; font-weight: 500; color: #625c53; font-size: .76rem; }
+  .unioes button { width: auto; min-height: 44px; padding: 0 14px; border-radius: 10px; font-weight: 800; font-size: .86rem; cursor: pointer; }
+  .uni-unir { background: #0d0d0d; color: #fff; border: 2px solid #0d0d0d; }
+  .uni-ok { background: var(--laranja); color: #0d0d0d; border: 2px solid var(--laranja); }
+  .uni-ok:disabled { opacity: .45; cursor: default; }
+  .uni-cancelar, .uni-grupo button { background: #fff; color: #141414; border: 1.5px solid #c9c2b6; }
+  .uni-dica { font-size: .8rem; color: #5c3a00; background: #fff7ec; border: 1px solid #f3d3a6; border-radius: 10px; padding: 8px 10px; }
+  .uni-dica[role=alert] { color: #8a1c13; background: #fdecea; border-color: #f5c2bd; }
+  .uni-grupos { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+  .uni-grupo { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; border: 2px solid var(--gcor, #0d0d0d); border-left-width: 6px; border-radius: 12px; padding: 3px 4px 3px 10px; font-size: .82rem; background: #fff; min-width: 0; }
+  .uni-grupo > span { flex: 1 1 auto; min-width: 0; }
+  .uni-grupo b { color: #141414; }
+  .unioes .uni-grupo button { min-height: 40px; padding: 0 9px; font-size: .78rem; flex: none; }
+  @media (min-width: 700px) { .uni-grupo { flex: 0 1 auto; } }
+  .galeria-item[data-grupo] img { border-color: var(--gcor); border-width: 3px; }
+  .galeria-item .selo-grupo { position: absolute; left: 4px; bottom: 28px; background: var(--gcor); color: #fff; font-size: .62rem; font-weight: 800; padding: 1px 6px; border-radius: 6px; pointer-events: none; }
+  .galeria-item .selo-grupo.capa-g { bottom: auto; top: 4px; }
+  .galeria-item.uni-marcando img { cursor: pointer; opacity: .78; }
+  .galeria-item.uni-marcada img { opacity: 1; outline: 3px solid var(--laranja); outline-offset: 2px; }
+  .galeria-item .uni-check { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.92); border: 2px solid #0d0d0d; color: #0d0d0d; font-weight: 900; display: flex; align-items: center; justify-content: center; pointer-events: none; font-size: .95rem; }
+  .galeria-item.uni-marcada .uni-check { background: var(--laranja); border-color: #0d0d0d; }
   #video-preview { display: none; width: 100%; max-width: 260px; max-height: 300px; margin: 10px auto 0; border-radius: 8px; background: #000; }
   #video-atual { display: none; margin-top: 10px; font-size: 0.85rem; }
   #btn-remover-video { display: none; margin-top: 8px; background: #c62828; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; }
@@ -521,6 +549,18 @@
   .lote-rodape .btn-primario { width: auto; margin: 0; min-height: 50px; padding: 0 18px; flex: none; }
   .lote-rodape .btn-primario:disabled { opacity: .45; }
   .juntar-ajuda { font-size: .88rem; color: #444; margin: 4px 0 10px; }
+  /* v7.50.0: Separar */
+  .sheet.sep-sheet { height: auto; max-height: 92vh; max-height: 92dvh; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .sep-previa { font-size: .92rem; color: #141414; margin: 4px 0 10px; }
+  #sep-ok { min-height: 48px; flex: none; }   /* alvo ≥44 px mesmo quando a janela aperta (fonte do Linux do CI rendia 43 px) */
+  .sep-previa small { display: block; color: #625c53; font-size: .8rem; margin-top: 4px; }
+  .sep-fotos { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; flex: none; }
+  .sep-foto { position: relative; flex: none; width: 64px; }
+  .sep-foto img { width: 64px; height: 80px; object-fit: cover; border-radius: 8px; border: 2px solid #ddd; display: block; background: #eee; }
+  .sep-foto.fica img { border-color: var(--laranja); }
+  .sep-foto span { display: block; font-size: .68rem; font-weight: 700; color: #444; text-align: center; margin-top: 3px; line-height: 1.2; }
+  .sep-fam { border: 0; padding: 0; margin: 0 0 8px; overflow-y: auto; }
+  .sep-fam legend { font-weight: 800; font-size: .9rem; margin-bottom: 6px; padding: 0; }
   .aviso-busca { background: #fff7ee; border: 1px solid var(--laranja); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; font-size: .88rem; }
   .aviso-busca button { width: auto; min-height: 44px; margin: 6px 0 0; padding: 8px 14px; border-radius: 8px; background: #0d0d0d; color: #fff; border: 0; font-weight: 700; display: block; }
   .chk-consulta { display: flex; align-items: center; gap: 10px; min-height: 48px; margin: 8px 0 0; font-size: .92rem; cursor: pointer; }
@@ -594,6 +634,8 @@
   .aviso-gestao button { width: auto; margin-top: 6px; padding: 8px 12px; font-size: 0.78rem; background: var(--laranja); color: #0d0d0d; }
   .btn-ferr { width: auto; padding: 9px 14px; font-size: 0.85rem; border-radius: 8px; }
   .sem-cadastrar #card-pedidos, .sem-cadastrar #aviso-codigos, .sem-cadastrar #aviso-pedidos-novos, .sem-cadastrar #btn-bulk-estoque, .sem-cadastrar #btn-bulk-categoria { display: none !important; }
+  /* v7.50.0: logado pelo guardado do aparelho, até o servidor confirmar: ações sensíveis ficam escondidas (o servidor confere toda chamada de qualquer jeito) */
+  body.sessao-conferindo .btn-excluir, body.sessao-conferindo #btn-abrir-conexoes, body.sessao-conferindo #btn-importar-csv, body.sessao-conferindo #details-config, body.sessao-conferindo #btn-abrir-push { display: none !important; }
   .sem-auditoria #btn-abrir-metricas, .sem-precos #btn-importar-csv, .sem-gerir #btn-abrir-conexoes, .sem-gerir #btn-abrir-mensagens { display: none !important; }
   .sem-cadastrar #btn-abrir-postagens, .sem-cadastrar #btn-abrir-fotoia { display: none !important; }
   /* Ferramentas do gestor: cada bloco só para quem tem a permissão dele (o servidor já barra; aqui some da tela) */
@@ -1073,7 +1115,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   <nav class="atalhos-hoje" id="atalhos-hoje" aria-label="O que fazer agora">
     <strong>O que fazer agora</strong>
     <div class="atalhos-linha">
-      <button type="button" data-atalho="cadastrar"><span class="ic" data-ico="mais">➕</span> Cadastrar peça</button>
+      <!-- v7.50.0: "Cadastrar peça" saiu daqui — o botão laranja "+ Cadastrar" logo abaixo já faz isso -->
       <button type="button" data-atalho="pedidos" id="atalho-pedidos" hidden><span class="ic" data-ico="recibo">🧾</span> Pedidos</button>
       <button type="button" data-atalho="postagens" id="atalho-postagens"><span class="ic" data-ico="camera">📸</span> Postagens</button>
       <button type="button" data-atalho="lista"><span class="ic" data-ico="pacote">📦</span> Estoque</button>
@@ -1234,6 +1276,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <section class="passo" data-passo="fotos">
         <div class="passo-tit"><span class="num">1</span><span id="passo-fotos-nome">Fotos da peça</span> <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 8)</span></div>
         <p class="passo-sub" id="passo-fotos-varias" hidden>Cada foto vira um produto separado, com os dados que você preencher abaixo.</p>
+        <div class="unioes" id="unioes" role="group" aria-label="Uniões de fotos" hidden></div>
         <div class="foto-box" id="galeria-box">
           <label class="btn-foto" for="galeria-input"><span class="ic" data-ico="camera">📷</span> Tirar foto ou escolher da galeria</label>
           <input type="file" id="galeria-input" accept="image/*" multiple class="input-oculto">
@@ -1437,6 +1480,22 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
     </div>
   </div>
 
+  <!-- v7.50.0: "Separar" — cada foto vira um produto com as mesmas informações (roda em segundo plano, fila-lote.js) -->
+  <div class="overlay-sheet" id="overlay-separar">
+    <div class="sheet sep-sheet" role="dialog" aria-modal="true" aria-labelledby="sep-titulo">
+      <div class="sheet-topo"><strong id="sep-titulo">Separar em produtos</strong><button type="button" class="sheet-x" id="sep-fechar" aria-label="Fechar">✕</button></div>
+      <p class="sep-previa" id="sep-previa" aria-live="polite"></p>
+      <div class="sep-fotos" id="sep-fotos" role="list" aria-label="Fotos da peça, na ordem"></div>
+      <fieldset class="sep-fam" id="sep-fam">
+        <legend>Os produtos novos…</legend>
+        <label class="precos-modo"><input type="radio" name="sep-fam" value="familia" checked><span><b id="sep-fam-rot">Unir numa família</b><small id="sep-fam-sub">Ficam ligados, aparecendo juntos na vitrine.</small></span></label>
+        <label class="precos-modo"><input type="radio" name="sep-fam" value="nao"><span><b>Deixar soltos</b><small>Cada um fica sozinho, sem família.</small></span></label>
+      </fieldset>
+      <div id="sep-erro" class="juntar-erro" role="alert" hidden></div>
+      <button type="button" class="btn-primario" id="sep-ok">Separar</button>
+    </div>
+  </div>
+
   <!-- v7.16: "Escolher peça para copiar" em tela cheia (passo 3 do cadastro): últimos cadastrados, busca, filtros e fotos grandes.
        Tocar na peça copia todos os dados dela (com Desfazer); ✎ abre a peça para editar. -->
   <div class="overlay-sheet cp-overlay" id="overlay-copiar">
@@ -1603,6 +1662,8 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 
 <script src="common.js"></script>
+<script src="sessao-rapida.js?v=7.50.0"></script>
+<script src="fila-lote.js?v=7.50.0"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
 <script src="admin-tecidos.js?v=7.48.1" defer></script>
 <script src="icones.js?v=7.17.0"></script>
@@ -1750,11 +1811,16 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   // v7.40.11 (app Mensagens): guarda quem está logado neste aparelho para abrir na hora, sem esperar o servidor de contas.
   const APP_MENSAGENS_ = new URLSearchParams(location.search).get('app') === 'mensagens';
   function guardarUsuarioApp_(usuario) { if (!APP_MENSAGENS_) return; try { const s = getSessao(); if (s && usuario) localStorage.setItem('tk_app_usuario', JSON.stringify({ sessao: s.sessao, usuario })); } catch (e) {} }
-  function usuarioAppGuardado_() { if (!APP_MENSAGENS_) return null; try { const c = JSON.parse(localStorage.getItem('tk_app_usuario') || 'null'), s = getSessao(); return c && s && c.sessao === s.sessao && c.usuario && temPermissao(c.usuario, 'catalogo_admin') ? c.usuario : null; } catch (e) { return null; } }
+  function usuarioAppGuardado_() {
+    if (APP_MENSAGENS_) { try { const c = JSON.parse(localStorage.getItem('tk_app_usuario') || 'null'), s = getSessao(); if (c && s && c.sessao === s.sessao && c.usuario && temPermissao(c.usuario, 'catalogo_admin')) return c.usuario; } catch (e) {} }
+    // v7.50.0: no site também — quem entrou na loja (ou aqui) aparece logado na hora; o servidor confere por trás (sessao-rapida.js)
+    const u = window.TKUsuarioCache ? TKUsuarioCache.ler() : null;
+    return u && temPermissao(u, 'catalogo_admin') ? u : null;
+  }
 
   function aplicarUsuario(usuario) {
     usuarioAdmin = usuario;
-    guardarUsuarioApp_(usuario);
+    if (!usuario.doCache) { guardarUsuarioApp_(usuario); if (window.TKUsuarioCache) TKUsuarioCache.gravar(usuario); }
     const s = getSessao();
     adminPin = s ? s.sessao : '';
     sessionStorage.removeItem('tenkiter_admin_pin');
@@ -1766,6 +1832,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     aplicarPermissoes(usuario);
     esconderLogin();
     mostrarFaixaCpf_(usuario);
+    setTimeout(() => { try { ligarFilaLote_(); } catch (e) {} }, 0);   // v7.50.0: retoma Juntar/Separar que ficaram na fila deste aparelho
   }
 
   // Estagiário em diante sem CPF: faixa vermelha grande aqui mesmo (sem ir a configurações)
@@ -1837,6 +1904,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       return;
     }
     if (j.exigeLogin || j.sessaoInvalida || j.inativa || j.pinInvalido) {
+      if (document.getElementById('login-overlay').classList.contains('visivel')) { if (j.sessaoInvalida || j.inativa) limparSessao(); return; }   // v7.50.0: a tela de login já está aberta com o motivo
       // Antes de pedir login, CONFERE a sessão de verdade: respostas atrasadas de chamadas feitas antes do login terminar (ou de uma ação
       // que mandou credencial vazia) não podem derrubar quem já está logado nem reabrir a tela de login (bug real, Pablo 12/10/2026).
       if (!acessoPronto_) return;                    // a abertura do painel ainda decide sozinha (iniciarAcesso)
@@ -1858,12 +1926,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   let acessoPronto_ = false, conferindoAcesso_ = false;
 
   (async function iniciarAcesso() {
-    try { await iniciarAcessoCorpo_(); } finally { acessoPronto_ = true; }
+    try { await iniciarAcessoCorpo_(); } finally { acessoPronto_ = true; try { ligarFilaLote_(); } catch (e) {} }
   })();
   async function iniciarAcessoCorpo_() {
     const pSessao = getSessao() ? conferirSessao() : null; // em paralelo com a versão: uma ida ao servidor a menos
-    const rapido = usuarioAppGuardado_();               // app: abre já com o login guardado; a conferência segue por trás
-    if (rapido) { modoLogin = true; aplicarUsuario(rapido); }
+    const rapido = usuarioAppGuardado_();               // app e site (v7.50.0): abre já com o login guardado; a conferência segue por trás
+    if (rapido) { modoLogin = true; aplicarUsuario(rapido); document.body.classList.add('sessao-conferindo'); }
     const v = await versaoServidor();
     if (v === null || (getSessao() && !v.acessos && !v.ok)) {
       // sem internet (ou servidor lento/fora do ar) agora: se já havia login, segue com o token guardado; senão, como sempre foi
@@ -1877,8 +1945,25 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     pinAindaAtivo = !!v.pinAtivo;
     const usr = pSessao ? await pSessao : await conferirSessao();
     if (usr && usr.semRede) { const s = getSessao(); if (s) { adminPin = s.sessao; document.getElementById('btn-trocar-user').style.display = 'none'; return; } }
-    if (usr && temPermissao(usr, 'catalogo_admin')) { if (rapido) { usuarioAdmin = usr; guardarUsuarioApp_(usr); return; } return aplicarUsuario(usr); }
+    if (usr && temPermissao(usr, 'catalogo_admin')) {
+      if (rapido) {   // já estava pintado com o guardado: só confirma (permissões novas valem a partir de agora), sem reabrir nada
+        usuarioAdmin = usr; guardarUsuarioApp_(usr); if (window.TKUsuarioCache) TKUsuarioCache.gravar(usr);
+        aplicarPermissoes(usr);
+        funcionarioNome = usr.name || funcionarioNome; document.getElementById('lbl-funcionario').textContent = funcionarioNome;
+        document.getElementById('lbl-perfil').textContent = usr.perfil ? '· ' + usr.perfil : '';
+        document.body.classList.remove('sessao-conferindo');
+        mostrarFaixaCpf_(usr);
+        return;
+      }
+      return aplicarUsuario(usr);
+    }
     if (usr && !usr.semRede) try { localStorage.removeItem('tk_app_usuario'); } catch (e) {}
+    if (rapido && (usr ? !usr.semRede : !getSessao())) {   // v7.50.0: a sessão guardada não vale mais (ou a conta perdeu o acesso): desfaz o "logado" pintado antes
+      usuarioAdmin = null; adminPin = ''; if (window.TKUsuarioCache) TKUsuarioCache.limpar();
+      document.body.classList.remove('sessao-conferindo');
+      document.getElementById('lbl-funcionario').textContent = 'Anônimo'; document.getElementById('lbl-perfil').textContent = '';
+      return mostrarLogin(usr ? 'Sua conta não tem mais acesso à Área de Gestão. Fale com a gestão.' : 'Sua sessão terminou neste aparelho. Entre de novo para continuar.');
+    }
     if (!usr && getSessao()) { // a sessão NÃO foi recusada pelo servidor (só não respondeu): não derruba o login
       const s2 = getSessao(); modoLogin = true; adminPin = s2.sessao; document.getElementById('lbl-funcionario').textContent = funcionarioNome || s2.whatsapp; document.getElementById('btn-trocar-user').style.display = 'none'; return;
     }
@@ -1978,6 +2063,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   let generoNovoTocado_ = false;
   let selecionadosBulk = new Set();
   let juntarLiberado_ = false;
+  let opIdemp_ = false;              // v7.50.0: servidor 4.19+ reconhece reenvio (opId) — exigido para o Separar em segundo plano
   let updateLoteLiberado_ = false;   // v7.18: servidor 4.28 salva várias edições de dados numa chamada só
 
   /* ===================== v2.3: fotos unificadas (até 8, com capa e ordem) e vídeo (1) ===================== */
@@ -2027,8 +2113,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     TKFotoGrande.abrir({
       itens: fotosItens.map(i => ({ url: i.url || i.prev, tipo: 'foto' })),
       indice: idx,
-      capa: (k) => !!(fotosItens[k] && fotosItens[k].capa),
-      aoCapa: (k) => tornarCapa(k)
+      capa: (k) => modoFormulario === 'varias' ? ehCapaDoGrupo_(fotosItens[k]) : !!(fotosItens[k] && fotosItens[k].capa),
+      aoCapa: (k) => { if (modoFormulario !== 'varias') return tornarCapa(k); const it = fotosItens[k]; if (it && it.grupo) tornarCapaGrupo_(it); else document.getElementById('status').textContent = 'Foto solta: ela já é a capa do próprio produto. Para escolher a capa de um grupo, use “Trocar capa” no grupo.'; }
     });
   }
   // v4.32: "✂ Enquadrar" — janela com zoom/mover/girar vendo Site, Feed/Carrossel (4:5) e Story. "Usar" troca a foto por um JPEG 4:5 pronto
@@ -2043,20 +2129,20 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         for (const foto of originais) {
           const origem = foto.orig || foto;
           const url = await TKEnquadrar.renderizar(origem.url || origem.prev, ajuste);
-          novos.push({ b64: url.split(',')[1], prev: url, capa: !!foto.capa, orig: origem, padrao: foto.auto ? foto : foto.padrao, enquadramento: Object.assign({}, ajuste) });
+          novos.push({ b64: url.split(',')[1], prev: url, capa: !!foto.capa, grupo: foto.grupo || 0, orig: origem, padrao: foto.auto ? foto : foto.padrao, enquadramento: Object.assign({}, ajuste) });
         }
         if (!vigente() || originais.length !== fotosItens.length || originais.some((foto, k) => fotosItens[k] !== foto)) return false;
         fotosItens = novos; novos.forEach(foto => preAgendar_(foto, 'foto')); desenharFotos();
         return true;
       } : null,
       aoAplicar: (dataUrl, ajuste) => {
-        const novo = { b64: dataUrl.split(',')[1], prev: dataUrl, capa: !!it.capa, orig: base, padrao: it.auto ? it : it.padrao, enquadramento: ajuste };   // v7.26: "voltar" leva à foto encaixada padrão (já enviada)
+        const novo = { b64: dataUrl.split(',')[1], prev: dataUrl, capa: !!it.capa, grupo: it.grupo || 0, orig: base, padrao: it.auto ? it : it.padrao, enquadramento: ajuste };   // v7.26: "voltar" leva à foto encaixada padrão (já enviada)
         const k = fotosItens.indexOf(it); if (k < 0) return;
         fotosItens[k] = novo; preAgendar_(novo, 'foto'); desenharFotos();
       },
       aoVoltar: () => {
         const k = fotosItens.indexOf(it); if (k < 0) return;
-        const volta = it.padrao || base; volta.capa = !!it.capa; fotosItens[k] = volta; desenharFotos();
+        const volta = it.padrao || base; volta.capa = !!it.capa; volta.grupo = it.grupo || 0; fotosItens[k] = volta; desenharFotos();
       }
     });
   }
@@ -2069,8 +2155,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
       img.src = it.url ? fotoMini(it.url, 200) : it.prev; img.decoding = 'async';
       img.title = 'Toque para ver a foto grande';
-      img.addEventListener('click', () => abrirFotoGrandeForm_(idx));
+      img.addEventListener('click', () => { if (uniaoModo_ && modoFormulario === 'varias') { alternarMarcaUniao_(it); return; } abrirFotoGrandeForm_(idx); });
       box.appendChild(img);
+      if (modoFormulario === 'varias') marcarItemUniao_(box, img, it);   // v7.50.0: borda e número do grupo, ou o ✓ de "marcar"
 
       if (it.capa && modoFormulario !== 'varias') { const s = document.createElement('span'); s.className = 'selo-capa'; s.textContent = '★ CAPA'; box.appendChild(s); }   // v7.23: em "vários produtos" cada foto é a capa do próprio produto
       if (!it.url) { const n = document.createElement('span'); n.className = 'novo'; n.textContent = 'NOVA'; box.appendChild(n); }
@@ -2079,7 +2166,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       if (it.orig && !it.auto) { const se = document.createElement('span'); se.className = 'selo-enq'; se.textContent = '✂ ajustada'; box.appendChild(se); }
 
       const x = document.createElement('button'); x.type = 'button'; x.className = 'btn-remover'; x.textContent = '✕'; x.title = 'Tirar esta foto'; x.setAttribute('aria-label', 'Tirar a foto ' + (idx + 1));
-      x.addEventListener('click', () => { fotosItens.splice(idx, 1); desenharFotos(); });
+      x.addEventListener('click', () => { uniaoMarcadas_.delete(it); fotosItens.splice(idx, 1); desenharFotos(); });
       box.appendChild(x);
 
       const enq = document.createElement('button'); enq.type = 'button'; enq.className = 'btn-enq'; enq.textContent = '✂ Enquadrar';
@@ -2102,8 +2189,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     { const v = modoFormulario === 'varias', n = document.getElementById('passo-fotos-nome'), sub = document.getElementById('passo-fotos-varias');
       if (n) n.textContent = v ? 'Fotos · uma por produto' : 'Fotos da peça'; if (sub) sub.hidden = !v;
       const dica = document.querySelector('#galeria-box .dica-midia-expansivel'); if (dica) dica.hidden = v; }
+    desenharUnioes_();
     if (modoFormulario === 'varias') {
-      document.getElementById('galeria-contador').textContent = '(' + fotosItens.length + (fotosItens.length === 1 ? ' produto)' : ' produtos)');
+      const nProd = unidadesUniao_().length;
+      document.getElementById('galeria-contador').textContent = '(' + nProd + (nProd === 1 ? ' produto)' : ' produtos)');
       document.getElementById('galeria-input').disabled = false;
       document.getElementById('galeria-box').classList.remove('cheia');
     } else {
@@ -2112,6 +2201,123 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       document.getElementById('galeria-box').classList.toggle('cheia', fotosItens.length >= MAX_GALERIA);
     }
     if (typeof atualizarFaltas_ === 'function') atualizarFaltas_();
+  }
+
+  /* ===== v7.50.0: uniões no "Cadastrar vários produtos" =====
+   * Cada foto solta vira um produto; um GRUPO (2 ou mais fotos unidas) vira UM produto com essas fotos (a 1ª é a capa).
+   * O grupo mora na própria foto (it.grupo = número); a ordem do grupo é a ordem das fotos na fila. Nada sobe de novo: só muda como o envio é montado. */
+  let uniaoModo_ = false, seqGrupo_ = 0, uniaoErro_ = '';
+  const uniaoMarcadas_ = new Set();
+  const CORES_GRUPO_ = ['#1f5fbf', '#7b2cbf', '#1b6e3c', '#b3261e', '#0b6a78', '#8a4b00', '#4a4a4a'];
+  /** Produtos que o envio vai criar, na ordem: [[capa, ...galeria], ...]. Foto solta = [foto]. */
+  function unidadesUniao_() {
+    const out = [], porGrupo = new Map();
+    fotosItens.forEach((it) => {
+      if (modoFormulario === 'varias' && it.grupo) { let u = porGrupo.get(it.grupo); if (!u) { u = []; porGrupo.set(it.grupo, u); out.push(u); } u.push(it); }
+      else out.push([it]);
+    });
+    // grupo que ficou com 1 foto só (as outras foram tiradas) é uma foto solta
+    out.forEach((u) => { if (u.length === 1 && u[0].grupo) u[0].grupo = 0; });
+    return out;
+  }
+  function gruposUniao_() { return unidadesUniao_().filter((u) => u.length > 1); }
+  function numeroGrupo_(it) { const gs = gruposUniao_(); for (let i = 0; i < gs.length; i++) if (gs[i].indexOf(it) !== -1) return i + 1; return 0; }
+  function corGrupo_(n) { return CORES_GRUPO_[(n - 1) % CORES_GRUPO_.length]; }
+  function ehCapaDoGrupo_(it) { if (!it || !it.grupo) return false; const g = gruposUniao_().find((u) => u.indexOf(it) !== -1); return !!g && g[0] === it; }
+  function marcarItemUniao_(box, img, it) {
+    const n = it.grupo ? numeroGrupo_(it) : 0;
+    if (n) {
+      box.dataset.grupo = String(n); box.style.setProperty('--gcor', corGrupo_(n));
+      const capa = ehCapaDoGrupo_(it);
+      const s = document.createElement('span'); s.className = 'selo-grupo' + (capa ? ' capa-g' : ''); s.textContent = (capa ? '★ ' : '') + 'G' + n; box.appendChild(s);
+    }
+    if (uniaoModo_) {
+      const marcada = uniaoMarcadas_.has(it);
+      box.classList.add('uni-marcando'); box.classList.toggle('uni-marcada', marcada);
+      img.setAttribute('role', 'checkbox'); img.setAttribute('aria-checked', String(marcada)); img.tabIndex = 0;
+      img.setAttribute('aria-label', 'Foto ' + (fotosItens.indexOf(it) + 1) + (n ? ', no grupo ' + n : '') + (marcada ? ', marcada para unir' : ', toque para marcar'));
+      img.onkeydown = (ev) => { if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); alternarMarcaUniao_(it); } };
+      const c = document.createElement('span'); c.className = 'uni-check'; c.setAttribute('aria-hidden', 'true'); c.textContent = marcada ? '✓' : ''; box.appendChild(c);
+    }
+  }
+  function alternarMarcaUniao_(it) {
+    if (uniaoMarcadas_.has(it)) uniaoMarcadas_.delete(it);
+    else if (uniaoMarcadas_.size >= MAX_GALERIA) { uniaoErro_ = 'Um produto aceita até ' + MAX_GALERIA + ' fotos. Desmarque alguma antes de marcar outra.'; desenharFotos(); return; }
+    else uniaoMarcadas_.add(it);
+    uniaoErro_ = '';
+    const foco = fotosItens.indexOf(it); desenharFotos();
+    const im = document.querySelectorAll('#galeria-grid .galeria-item img')[foco]; if (im) im.focus({ preventScroll: true });
+  }
+  function confirmarUniao_() {
+    const marcadas = fotosItens.filter((it) => uniaoMarcadas_.has(it));
+    if (marcadas.length < 2) { uniaoErro_ = 'Marque pelo menos 2 fotos do mesmo produto.'; desenharFotos(); return; }
+    const g = ++seqGrupo_;
+    // as fotos do grupo ficam lado a lado, a partir da posição da primeira marcada (a capa é a primeira)
+    const pos = fotosItens.indexOf(marcadas[0]);
+    const resto = fotosItens.filter((it) => !uniaoMarcadas_.has(it));
+    const antes = fotosItens.slice(0, pos).filter((it) => !uniaoMarcadas_.has(it)).length;
+    marcadas.forEach((it) => { it.grupo = g; });
+    fotosItens = resto.slice(0, antes).concat(marcadas, resto.slice(antes));
+    uniaoMarcadas_.clear(); uniaoModo_ = false; uniaoErro_ = '';
+    desenharFotos();
+    const n = numeroGrupo_(marcadas[0]);
+    document.getElementById('status').textContent = 'Grupo ' + n + ' criado com ' + marcadas.length + ' fotos: vira 1 produto.';
+  }
+  function desfazerGrupo_(n) {
+    const g = gruposUniao_()[n - 1]; if (!g) return;
+    g.forEach((it) => { it.grupo = 0; });
+    desenharFotos();
+    document.getElementById('status').textContent = 'Grupo ' + n + ' desfeito: cada foto volta a ser um produto.';
+  }
+  /** "Trocar capa": a próxima foto do grupo passa a ser a capa (vai para o começo do grupo). */
+  function tornarCapaGrupo_(it) {
+    const g = gruposUniao_().find((u) => u.indexOf(it) !== -1); if (!g || g[0] === it) { desenharFotos(); return; }
+    const a = fotosItens.indexOf(g[0]), b = fotosItens.indexOf(it);
+    fotosItens.splice(b, 1); fotosItens.splice(a, 0, it);
+    desenharFotos();
+  }
+  function desenharUnioes_() {
+    const box = document.getElementById('unioes'); if (!box) return;
+    const varias = modoFormulario === 'varias';
+    if (!varias) { uniaoModo_ = false; uniaoMarcadas_.clear(); }
+    box.hidden = !varias || !fotosItens.length;
+    const salvar = document.getElementById('btn-salvar');
+    if (box.hidden) { if (varias && salvar) salvar.textContent = 'Cadastrar os produtos'; box.replaceChildren(); return; }
+    const unidades = unidadesUniao_(), grupos = unidades.filter((u) => u.length > 1), soltas = unidades.length - grupos.length, n = unidades.length;
+    if (salvar) salvar.textContent = n === 1 ? 'Cadastrar 1 produto' : 'Cadastrar ' + n + ' produtos';
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const bt = (txt, cls, fn, rotulo) => { const b = el('button', cls, txt); b.type = 'button'; b.addEventListener('click', fn); if (rotulo) b.setAttribute('aria-label', rotulo); return b; };
+    box.replaceChildren();
+    const topo = el('div', 'uni-topo');
+    const conta = el('p', 'uni-conta'); conta.id = 'uni-conta'; conta.setAttribute('aria-live', 'polite'); conta.style.margin = '0';
+    conta.append(document.createTextNode(n === 1 ? 'Vai ser criado 1 produto' : 'Vão ser criados ' + n + ' produtos'));
+    conta.append(el('small', '', grupos.length ? (soltas + (soltas === 1 ? ' foto solta' : ' fotos soltas') + ' + ' + grupos.length + (grupos.length === 1 ? ' grupo' : ' grupos')) : 'Cada foto vira um produto. Fotos do mesmo produto? Una as fotos.'));
+    topo.append(conta);
+    if (uniaoModo_) {
+      const k = uniaoMarcadas_.size;
+      const ok = bt(k >= 2 ? 'Unir ' + k + ' fotos' : 'Unir fotos', 'uni-ok', confirmarUniao_); ok.id = 'uni-ok'; ok.disabled = k < 2;
+      topo.append(ok, bt('Cancelar', 'uni-cancelar', () => { uniaoModo_ = false; uniaoMarcadas_.clear(); uniaoErro_ = ''; desenharFotos(); }));
+    } else if (fotosItens.length >= 2) {
+      const b = bt('🔗 Unir fotos', 'uni-unir', () => { uniaoModo_ = true; uniaoMarcadas_.clear(); uniaoErro_ = ''; desenharFotos(); const p = document.querySelector('#galeria-grid .galeria-item img'); if (p) p.focus({ preventScroll: true }); });
+      b.id = 'uni-unir'; topo.append(b);
+    }
+    box.append(topo);
+    if (uniaoModo_ || uniaoErro_) {
+      const d = el('p', 'uni-dica', uniaoErro_ || 'Toque nas fotos que são do MESMO produto e depois em “Unir”. A primeira marcada vira a capa.');
+      d.style.margin = '0'; if (uniaoErro_) d.setAttribute('role', 'alert'); box.append(d);
+    }
+    if (grupos.length) {
+      const ul = el('ul', 'uni-grupos'); ul.setAttribute('aria-label', 'Grupos de fotos');
+      grupos.forEach((g, i) => {
+        const li = el('li', 'uni-grupo'); li.style.setProperty('--gcor', corGrupo_(i + 1)); li.dataset.grupo = String(i + 1);
+        const t = el('span'); t.append(el('b', '', 'Grupo ' + (i + 1)), document.createTextNode(' · ' + g.length + ' fotos'));
+        li.append(t,
+          bt('Trocar capa', '', () => tornarCapaGrupo_(g[1]), 'Trocar a capa do grupo ' + (i + 1)),
+          bt('Desfazer', '', () => desfazerGrupo_(i + 1), 'Desfazer o grupo ' + (i + 1)));
+        ul.append(li);
+      });
+      box.append(ul);
+    }
   }
 
   function desenharVideo() {
@@ -4276,18 +4482,21 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         novidade: document.getElementById('novidade').checked,
         notificarPush: document.getElementById('novidade').checked ? document.getElementById('notificarPush').checked : false
       };
-      const fotos = fotosItens.filter(i => i.b64);
-      if (!fotos.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
-      // Vídeo(s) escolhidos no lote vão só na PRIMEIRA peça (um mesmo arquivo em duas peças se perderia ao mexer numa delas); depois dá para juntar os produtos.
+      // v7.50.0: uniões — cada grupo vira UM produto (capa = 1ª foto do grupo, o resto vai para a galeria); cada foto solta vira um produto.
+      const unidades = unidadesUniao_().map(u => u.filter(i => i.b64)).filter(u => u.length);
+      if (!unidades.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
+      if (uniaoModo_) { uniaoModo_ = false; uniaoMarcadas_.clear(); }
+      // Vídeo(s) escolhidos no lote vão só no PRIMEIRO produto (um mesmo arquivo em dois produtos se perderia ao mexer num deles); depois dá para juntar os produtos.
       const vidsLote = videosItens.filter(v => v.file).map(v => v.file);
       const vidsLoteItens = videosItens.filter(v => v.file);
-      fotos.forEach((f, ix) => {
-        const sem = sementePre_(f, [], ix === 0 ? vidsLoteItens : []);
-        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
+      unidades.forEach((u, ix) => {
+        const capa = u[0], gal = u.slice(1);
+        const sem = sementePre_(capa, gal, ix === 0 ? vidsLoteItens : []);
+        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: capa.b64, galeriaNovaB64: gal.map(g => g.b64), dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
         guardarEnvio_(envios[envios.length - 1]);
       });
       cancelarDuplicacao();
-      document.getElementById('status').textContent = 'Cadastrando ' + fotos.length + ' peça(s) em segundo plano.';
+      document.getElementById('status').textContent = 'Cadastrando ' + unidades.length + (unidades.length === 1 ? ' produto' : ' produtos') + ' em segundo plano.';
       sairDoCadastro_();
       desenharEnvios(); processarEnvios();
       return;
@@ -4531,6 +4740,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   /* ícone de linha (icones.js) com o emoji de reserva, para os botões do cartão da peça */
   const icA_ = (nome, reserva) => (window.TKIcone && TKIcone(nome)) || reserva;
+  /** v7.50.0: quantas fotos a peça tem (capa + galeria, sem repetir). */
+  function fotosDaPeca_(p) { const v = []; [p && p.Foto_URL].concat(String((p && p.Fotos_Galeria) || '').split(',')).forEach((u) => { u = String(u || '').trim(); if (u && v.indexOf(u) === -1) v.push(u); }); return v; }
+  function qtdFotos_(p) { return fotosDaPeca_(p).length; }
   function renderizarProdutos() {
     const busca = semAcento_(document.getElementById('busca-admin').value);
     const container = document.getElementById('lista-produtos');
@@ -4553,10 +4765,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const inativo = ehInativo_(p);
       const esg = !inativo && estaEsgotado(p);
       const idE = escaparHtml(p.ID);
+      const nFotos_ = qtdFotos_(p);   // v7.50.0: selo "📷 N" na miniatura, como a vitrine
       return `
       <div class="produto${inativo ? ' arquivado' : ''}">
         <input type="checkbox" class="produto-chk" data-id="${idE}" aria-label="Selecionar ${escaparHtml(p.Nome)}" ${selecionadosBulk.has(String(p.ID)) ? 'checked' : ''}>
-        <button type="button" class="foto-ampliar" data-ampliar-id="${idE}" aria-label="Ampliar a foto de ${escaparHtml(p.Nome)}"><img ${atribSrc(fotoMini(p.Foto_URL, 200))} alt="" loading="lazy" decoding="async" width="64" height="80"></button>
+        <button type="button" class="foto-ampliar" data-ampliar-id="${idE}" aria-label="Ampliar a foto de ${escaparHtml(p.Nome)}${nFotos_ > 1 ? ' (' + nFotos_ + ' fotos)' : ''}"><img ${atribSrc(fotoMini(p.Foto_URL, 200))} alt="" loading="lazy" decoding="async" width="64" height="80">${nFotos_ > 1 ? `<span class="foto-qtd" aria-hidden="true">${icA_('camera', '📷')} ${nFotos_}</span>` : ''}</button>
         <div class="produto-info">
           <div class="codigo-tecido"><div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
@@ -4572,6 +4785,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
             <details class="mais"><summary aria-label="Mais ações">⋯</summary>
               <div class="mais-menu">
                 <button type="button" class="btn-duplicar" data-duplicar-id="${idE}">${icA_('copiar', '📋')} Duplicar</button>
+                ${nFotos_ > 1 && !inativo ? `<button type="button" class="btn-separar" data-separar-id="${idE}">✂️ Separar em ${nFotos_} produtos</button>` : ''}
                 ${Object.keys(auditoriaMapa_).length ? `<button type="button" data-hist-id="${idE}">${icA_('relogio', '🕘')} Histórico</button>` : ''}
                 ${inativo
                   ? `<button type="button" class="btn-reativar" data-reativar-id="${idE}">${icA_('atualizar', '🔄')} Reativar</button>`
@@ -4593,6 +4807,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       });
     });
     container.querySelectorAll('[data-postar-id]').forEach(btn => btn.addEventListener('click', () => enviarParaPostagem_([btn.dataset.postarId])));
+    container.querySelectorAll('[data-separar-id]').forEach(btn => btn.addEventListener('click', () => { const d = btn.closest('details'); if (d) d.open = false; abrirSeparar_(btn.dataset.separarId); }));
     container.querySelectorAll('[data-link-id]').forEach(btn => btn.addEventListener('click', () => copiarLink(btn.dataset.linkId)));
     container.querySelectorAll('[data-editar-id]').forEach(btn => btn.addEventListener('click', () => editarProduto(btn.dataset.editarId)));
     // Toque na miniatura = a foto original, grande, com as outras fotos e o vídeo da peça (‹ ›)
@@ -4617,7 +4832,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       cnt.textContent = selecionadosBulk.size + ' selecionados';
       const bj = document.getElementById('btn-bulk-juntar'); if (bj) bj.hidden = !(juntarLiberado_ && selecionadosBulk.size >= 2);
       // v4.10+: "Separar" só faz sentido com UMA peça marcada (a que tem várias fotos). Antes o botão ficava sempre escondido.
-      const bs = document.getElementById('btn-bulk-separar'); if (bs) bs.hidden = !(selecionadosBulk.size >= 1);
+      // v7.50.0: "Separar" com UMA peça marcada que tenha mais de 1 foto
+      const bs = document.getElementById('btn-bulk-separar'); if (bs) { const um = selecionadosBulk.size === 1 ? produtos.find(x => String(x.ID) === Array.from(selecionadosBulk)[0]) : null; bs.hidden = !(um && qtdFotos_(um) > 1); if (um && !bs.hidden) bs.textContent = '✂️ Separar em ' + qtdFotos_(um) + ' produtos'; }
     } else {
       bar.classList.remove('ativa');
       const bs2 = document.getElementById('btn-bulk-separar'); if (bs2) bs2.hidden = true;
@@ -4734,14 +4950,56 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     e.currentTarget.setAttribute('aria-expanded', String(!box.hidden));
   });
 
-  /** Separar: inverso do Juntar. Mantém a 1ª peça como está e devolve as fotos extras como peças novas. */
-  document.getElementById('btn-bulk-separar').addEventListener('click', async () => {
+  /* ===== v7.50.0: Separar — cada foto vira um produto com as mesmas informações (inverso do Juntar), em segundo plano =====
+   * A peça original fica com a 1ª foto (e o vídeo); para cada foto extra é criado um produto novo com os mesmos dados.
+   * Nada é apagado: as fotos só mudam de produto. A pessoa escolhe unir os novos numa família (nova ou a atual) ou deixar soltos. */
+  let separarId_ = null;
+  function dadosParaSeparar_(p) {
+    const consulta = ehConsulta(p);
+    const d = { nome: String(p.Nome || ''), categoria: String(p.Categoria || ''), genero: String(p.Genero || ''), preco: consulta ? '' : String(p.Preco == null ? '' : p.Preco),
+      estoque: p.Estoque == null ? '' : String(p.Estoque), tamanhos: String(p.Tamanhos || ''), cores: String(p.Cores || ''), descricao: String(p.Descricao || '') };
+    if (consulta && consultarLiberado_) d.consultarValor = true;
+    return d;
+  }
+  function abrirSeparar_(id) {
+    const p = produtos.find(x => String(x.ID) === String(id)); if (!p) return;
+    const fotos = fotosDaPeca_(p), n = fotos.length;
+    if (n < 2) { alert('Esta peça tem uma foto só: não há o que separar.'); return; }
+    if (!opIdemp_) { alert('Para separar com segurança, o servidor do catálogo precisa estar atualizado (versão 4.19 ou mais nova). Fale com o Pablo.'); return; }
+    separarId_ = String(p.ID);
+    const rot = p.Codigo || p.Nome;
+    const pv = document.getElementById('sep-previa'); pv.replaceChildren();
+    const b = document.createElement('b'); b.textContent = 'Vai virar ' + n + ' produtos.';
+    const sm = document.createElement('small'); sm.textContent = rot + ' fica com a 1ª foto' + (p.Video_URL ? ' e o vídeo' : '') + '; ' + (n - 1) + (n - 1 === 1 ? ' produto novo é criado' : ' produtos novos são criados') + ' com as mesmas informações (nome, preço, tamanhos, cores…). Nenhuma foto é apagada.';
+    pv.append(b, sm);
+    document.getElementById('sep-fotos').innerHTML = fotos.map((u, i) => '<div class="sep-foto' + (i === 0 ? ' fica' : '') + '" role="listitem"><img ' + atribSrc(fotoMini(u, 160)) + ' alt="Foto ' + (i + 1) + '" loading="lazy"><span>' + (i === 0 ? 'fica em ' + escaparHtml(rot) : 'produto novo') + '</span></div>').join('');
+    const f = window.tkFamiliaDe ? window.tkFamiliaDe(p.ID) : null;
+    document.getElementById('sep-fam-rot').textContent = f ? 'Manter na família “' + (f.nome || 'atual') + '”' : 'Unir numa família nova';
+    document.getElementById('sep-fam-sub').textContent = f ? 'Os ' + (n - 1) + ' novos entram na mesma família de ' + rot + '.' : 'Os ' + n + ' produtos ficam ligados, aparecendo juntos na vitrine.';
+    document.querySelector('input[name="sep-fam"][value="familia"]').checked = true;
+    document.getElementById('sep-ok').textContent = 'Separar em ' + n + ' produtos';
+    const er = document.getElementById('sep-erro'); er.hidden = true; er.textContent = '';
+    abrirComHistorico_('overlay-separar');
+  }
+  document.getElementById('sep-fechar').addEventListener('click', () => fecharComHistorico_('overlay-separar'));
+  document.getElementById('overlay-separar').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-separar') fecharComHistorico_('overlay-separar'); });
+  document.getElementById('sep-ok').addEventListener('click', () => {
+    const p = produtos.find(x => String(x.ID) === String(separarId_)), er = document.getElementById('sep-erro');
+    if (!p) return;
+    if (!window.TKFilaLote) { er.textContent = 'Não consegui preparar o envio agora. Atualize a página e tente de novo.'; er.hidden = false; return; }
+    if (TKFilaLote.ocupado([p.ID])) { er.textContent = 'Esta peça já está sendo juntada ou separada. Espere o aviso de “Pronto”.'; er.hidden = false; return; }
+    const fotos = fotosDaPeca_(p), unir = (document.querySelector('input[name="sep-fam"]:checked') || {}).value === 'familia';
+    const f = window.tkFamiliaDe ? window.tkFamiliaDe(p.ID) : null;
+    const base = dadosParaSeparar_(p);
+    const baseOriginal = Object.assign({}, base, { novidade: !!(p.Novidade === true || p.Novidade === 'TRUE' || p.Novidade === 'true') });
+    TKFilaLote.separar({ produto: { id: p.ID, codigo: p.Codigo, nome: p.Nome }, fotos, base, baseOriginal,
+      familia: unir ? { modo: f ? 'atual' : 'nova', nome: f ? '' : ((window.tkFamiliaSepararNome ? window.tkFamiliaSepararNome(p.Nome).base : '') || p.Nome) } : { modo: 'nao' } });
+    selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos(); fecharComHistorico_('overlay-separar');
+  });
+  document.getElementById('btn-bulk-separar').addEventListener('click', () => {
     const ids = Array.from(selecionadosBulk);
     if (ids.length !== 1) { alert('Para separar, marque UMA peça só (a que tem várias fotos).'); return; }
-    if (!confirm('Separar esta peça em várias? A 1ª foto continua na peça original e cada foto extra vira uma peça nova com os mesmos dados.')) return;
-    const r = await chamarAdmin_({ action: 'separarProduto', id: ids[0] });
-    if (r && r.ok) { alert('Pronto! ' + (r.criados || 0) + ' peça(s) nova(s) criada(s).'); selecionadosBulk.clear(); atualizarBarraBulk(); await carregarProdutos(); }
-    else alert('Não consegui separar' + (r && r.erro ? ': ' + r.erro : '.') + '\nSe o servidor ainda não tiver essa ação, use "Editar em massa" ou o cadastro normal.');
+    abrirSeparar_(ids[0]);
   });
 
   /* ===== Editar peças em lote (janela interativa) =====
@@ -4950,7 +5208,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
 
   /* ===== v3.7: juntar produtos repetidos (backend juntarProdutos) ===== */
-  versaoServidor().then(v => { juntarLiberado_ = !!(v && v.juntarProdutos); updateLoteLiberado_ = !!(v && v.updateLote); atualizarBarraBulk(); }).catch(() => {});
+  versaoServidor().then(v => { juntarLiberado_ = !!(v && v.juntarProdutos); updateLoteLiberado_ = !!(v && v.updateLote); opIdemp_ = !!(v && v.opIdempotente); atualizarBarraBulk(); }).catch(() => {});
   function juntarSelecionados_() { return produtos.filter(p => selecionadosBulk.has(String(p.ID))); }
   document.getElementById('btn-bulk-juntar').addEventListener('click', () => {
     const sel = juntarSelecionados_();
@@ -4967,27 +5225,27 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
   document.getElementById('juntar-fechar').addEventListener('click', () => fecharComHistorico_('overlay-juntar'));
   document.getElementById('overlay-juntar').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-juntar') fecharComHistorico_('overlay-juntar'); });
-  document.getElementById('juntar-ok').addEventListener('click', async () => {
-    const btn = document.getElementById('juntar-ok'), er = document.getElementById('juntar-erro');
+  // v7.50.0: juntar roda em SEGUNDO PLANO (fila-lote.js): a janela fecha logo e um aviso discreto mostra o andamento e o resultado.
+  document.getElementById('juntar-ok').addEventListener('click', () => {
+    const er = document.getElementById('juntar-erro');
     const marcado = document.querySelector('input[name="juntar-destino"]:checked');
     const sel = juntarSelecionados_(); if (!marcado || sel.length < 2) return;
     const destino = sel.find(p => String(p.ID) === marcado.value); const outros = sel.filter(p => String(p.ID) !== marcado.value);
-    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' produto' : ' produtos') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nOs outros ficam arquivados e as fotos deles passam para este.')) return;
-    btn.disabled = true; btn.textContent = 'Juntando… aguarde, está funcionando'; er.hidden = true;
-    try {
-      const r = await chamarAdmin_({ action: 'juntarProdutos', destinoId: destino.ID, origemIds: outros.map(p => p.ID) });
-      if (r && r.ok) {
-        selecionadosBulk.clear(); atualizarBarraBulk(); fecharComHistorico_('overlay-juntar');
-        await carregarProdutos();
-        alert('Pronto! Ficou "' + destino.Nome + '" com ' + r.fotosNoDestino + ' foto(s). ' + r.arquivados + ' arquivado(s).');
-      } else {
-        const t = textoErroCat_(r, 'Não consegui juntar agora. Tente de novo.');
-        if (t) { er.textContent = t; er.hidden = false; }
-      }
-    } catch (e) { er.textContent = 'Sem conexão. Tente de novo.'; er.hidden = false; }
-    finally { btn.disabled = false; btn.textContent = 'Juntar'; }
+    if (!window.TKFilaLote) { er.textContent = 'Não consegui preparar o envio agora. Atualize a página e tente de novo.'; er.hidden = false; return; }
+    if (TKFilaLote.ocupado(sel.map(p => p.ID))) { er.textContent = 'Alguma dessas peças já está sendo juntada ou separada. Espere o aviso de “Pronto” e tente de novo.'; er.hidden = false; return; }
+    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' produto' : ' produtos') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nOs outros ficam arquivados e as fotos deles passam para este. Você pode continuar trabalhando enquanto junta.')) return;
+    TKFilaLote.juntar({ id: destino.ID, codigo: destino.Codigo, nome: destino.Nome }, outros.map(p => ({ id: p.ID, codigo: p.Codigo, nome: p.Nome })));
+    selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos(); fecharComHistorico_('overlay-juntar');
   });
-
+  /** A fila de lote fala com o servidor com a sessão de quem está logado AGORA (nada de credencial guardada na fila). */
+  function ligarFilaLote_() {
+    if (!window.TKFilaLote || !adminPin) return;
+    TKFilaLote.configurar({
+      chamar: (corpo) => chamarAdmin_(corpo),
+      ligarFamilia: (ids, fam) => window.tkFamiliaLigar ? window.tkFamiliaLigar(ids, fam) : Promise.resolve({ ok: false, erro: 'As famílias ainda não carregaram.' }),
+      aoConcluir: async () => { try { await carregarProdutos(); } catch (e) {} }
+    });
+  }
   const BOTOES_BULK_IDS = ['btn-bulk-preco', 'btn-bulk-novidade', 'btn-bulk-arquivar', 'btn-bulk-reativar', 'btn-bulk-juntar', 'btn-bulk-postar'];
   function travarBotoesBulk(travar) {
     BOTOES_BULK_IDS.forEach(id => {
@@ -6248,7 +6506,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.40.28">
 <script src="admin-disponibilidade.js?v=7.41.0"></script>
-<script src="admin-familias.js?v=7.47.1"></script>
+<script src="admin-familias.js?v=7.50.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.40.45">
 <script src="mensagens-presenca.js?v=7.40.43"></script>
