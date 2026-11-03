@@ -136,7 +136,10 @@ with sync_playwright() as p:
         card2 = pg.locator(".produto", has=pg.locator(".codigo", has_text="TK-0822")).first
         card2.locator("details.mais > summary").click(); card2.locator("[data-separar-id]").click(); pg.wait_for_selector("#overlay-separar.aberto")
         pg.check("input[name=sep-fam][value=nao]"); pg.click("#sep-ok")
-        a = esperar_aviso(pg, "ok")
+        # o aviso "ok" do TK-0821 pode ainda estar na tela: espera o resultado DESTA separação (TK-0822)
+        try: pg.wait_for_function("() => { const x = document.getElementById('tk-fila-lote'); return x && !x.hidden && x.dataset.estado === 'ok' && /TK-0822/.test(x.textContent); }", timeout=8000)
+        except Exception: pass
+        a = aviso(pg)
         chk(f"{w} item 6: 'Deixar soltos' termina sem ligar família", a and "virou 3 produtos soltos" in a["txt"] and len([c for c in st["fam_chamadas"] if c["path"] == "/familias/ligar"]) == n_lig, a)
         chk(f"{w} Gestão: sem erro de JavaScript", not errs, errs)
         ctx.close()

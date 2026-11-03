@@ -552,6 +552,7 @@
   /* v7.50.0: Separar */
   .sheet.sep-sheet { height: auto; max-height: 92vh; max-height: 92dvh; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
   .sep-previa { font-size: .92rem; color: #141414; margin: 4px 0 10px; }
+  #sep-ok { min-height: 48px; flex: none; }   /* alvo ≥44 px mesmo quando a janela aperta (fonte do Linux do CI rendia 43 px) */
   .sep-previa small { display: block; color: #625c53; font-size: .8rem; margin-top: 4px; }
   .sep-fotos { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; flex: none; }
   .sep-foto { position: relative; flex: none; width: 64px; }
