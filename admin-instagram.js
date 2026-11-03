@@ -319,7 +319,7 @@
   }
   window.addEventListener('tk:peca-salva', async (ev) => {
     const d = ev && ev.detail; if (!d || !d.rascunhoId) return;
-    if (/^caixa:/.test(String(d.rascunhoId))) return;   // v7.51.0: fotos da caixa da Esteira (admin-caixa-fotos.js), não é rascunho do Instagram
+    if (/^caixa:/.test(String(d.rascunhoId))) return;   // v7.52.0: fotos da caixa da Esteira (admin-caixa-fotos.js), não é rascunho do Instagram
     await ig('/acao', 'POST', { acao: 'aceitado', id: d.rascunhoId, produtoId: d.id || d.codigo || '' });
     if (st) carregarStatus();
   });

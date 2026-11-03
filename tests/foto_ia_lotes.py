@@ -25,6 +25,7 @@ with sync_playwright() as p:
     pg.wait_for_function('typeof produtos !== "undefined" && produtos.length')
     pg.evaluate('document.getElementById("details-ferramentas").open=true')
     pg.click('#btn-abrir-fotoia')
+    pg.locator('#fia-quantidade').evaluate("e=>e.closest('details').open=true")
     pg.wait_for_selector('#fia-quantidade')
     pg.fill('#fia-quantidade', '10')
     pg.locator('#fia-quantidade').dispatch_event('change')
@@ -56,6 +57,7 @@ with sync_playwright() as p:
     assert all(len(x['pecas']) == len(x['looks']) for x in jobs)
     # Dois pares: a troca das peças de baixo precisa mudar a associação mantendo todos os papéis.
     pg.click('[data-v=gerar]')
+    pg.locator('#fia-quantidade').evaluate("e=>e.closest('details').open=true")
     pg.fill('#fia-quantidade', '2')
     pg.locator('#fia-quantidade').dispatch_event('change')
     pg.set_input_files('#fia-arq', files[:4])

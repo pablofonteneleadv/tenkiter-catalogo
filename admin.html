@@ -3645,7 +3645,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     abrirCadastro_();
   }
 
-  /* v7.51.0 — Esteira → caixa de fotos da equipe → "Vários produtos": abre o "Cadastrar vários produtos" (com "Unir fotos") já com as fotos,
+  /* v7.52.0 — Esteira → caixa de fotos da equipe → "Vários produtos": abre o "Cadastrar vários produtos" (com "Unir fotos") já com as fotos,
      que já estão no servidor de fotos (entram pelo endereço). Cada foto solta vira um produto; cada grupo unido vira um produto com as suas fotos. */
   window.tkVariasComFotos = function (fotos) {
     iniciarVarias_();
@@ -4491,7 +4491,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         notificarPush: document.getElementById('novidade').checked ? document.getElementById('notificarPush').checked : false
       };
       // v7.50.0: uniões — cada grupo vira UM produto (capa = 1ª foto do grupo, o resto vai para a galeria); cada foto solta vira um produto.
-      // v7.51.0: fotos que já estão no servidor (caixa de fotos da Esteira) entram pelo endereço, sem subir de novo
+      // v7.52.0: fotos que já estão no servidor (caixa de fotos da Esteira) entram pelo endereço, sem subir de novo
       const unidades = unidadesUniao_().map(u => u.filter(i => i.b64 || i.url)).filter(u => u.length);
       if (!unidades.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
       if (uniaoModo_) { uniaoModo_ = false; uniaoMarcadas_.clear(); }
@@ -4502,7 +4502,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         const capa = u[0], gal = u.slice(1), galNovas = gal.filter(g => g.b64);
         const sem = sementePre_(capa.b64 ? capa : null, galNovas, ix === 0 ? vidsLoteItens : []);
         const dadosU = Object.assign({}, base, capa.b64 ? {} : { fotoUrlExistente: capa.url }, gal.some(g => !g.b64) ? { fotosGaleriaExistentes: gal.filter(g => !g.b64).map(g => g.url).join(',') } : {});
-        const daCaixa = u.map(i => i.caixaId || (i.orig && i.orig.caixaId) || 0).filter(Boolean);   // v7.51.0: avisa a Esteira quais fotos da caixa viraram este produto
+        const daCaixa = u.map(i => i.caixaId || (i.orig && i.orig.caixaId) || 0).filter(Boolean);   // v7.52.0: avisa a Esteira quais fotos da caixa viraram este produto
         envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: capa.b64 || null, galeriaNovaB64: galNovas.map(g => g.b64), dados: dadosU, estado: 'fila', msg: '', rascunhoId: daCaixa.length ? 'caixa:' + daCaixa.join('.') : null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
         guardarEnvio_(envios[envios.length - 1]);
       });
@@ -6523,12 +6523,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-presenca.js?v=7.40.43"></script>
 <script src="mensagens-gestor.js?v=7.40.43"></script>
 <script src="admin-mensagens.js?v=7.46.0"></script>
-<script src="admin-instagram.js?v=7.51.0"></script>
-<script src="admin-caixa-fotos.js?v=7.51.0"></script>
+<script src="admin-instagram.js?v=7.52.0"></script>
+<script src="admin-caixa-fotos.js?v=7.52.0"></script>
 <script src="video-validation.js?v=7.40.41"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
 <script src="admin-postagens.js?v=7.49.0"></script>
-<script src="admin-fotoia.js"></script>
+<script src="admin-fotoia.js?v=7.51.0"></script>
 <script src="admin-enquadrar.js?v=7.28.0"></script>
 <script src="admin-capa-video.js"></script>
 <script src="nav.js?v=7.38.2" data-ativo="gestao"></script>

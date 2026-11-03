@@ -102,6 +102,8 @@ with sync_playwright() as p:
     pg.click(".fia-selitem >> nth=3 >> [data-v=baixo]"); pg.wait_for_timeout(250)
     pg.set_input_files("#fia-arq", fa); pg.wait_for_timeout(700)
     chk("foto do aparelho entra na lista como 'look inteiro' (5 de 6)", pg.locator(".fia-selitem").count() == 5 and "5 de 6" in pg.inner_text("#fia-aba") and pg.locator(".fia-selitem >> nth=4 >> [data-v=look][aria-pressed=true]").count() == 1 and "Foto do aparelho" in pg.inner_text(".fia-selitem >> nth=4"))
+    pg.locator("#fia-quantidade").evaluate("e=>e.closest('details').open=true")
+    pg.fill("#fia-quantidade", "3"); pg.locator("#fia-quantidade").dispatch_event("change")
     chk("5 fotos = 3 pessoas; mais de 4 fotos: explica o limite do Cloudflare e oferece dividir (padrão) ou uma imagem só", "3 pessoas na imagem" in pg.inner_text(".fia-looks") and "Mais de 4 fotos" in pg.inner_text("#fia-aba") and pg.input_value("#fia-divide") == "sim" and "(2 imagens)" in pg.inner_text("[data-a=enviar]"), pg.inner_text("[data-a=enviar]"))
     pg.click("[data-a=destino][data-v=reels]"); pg.wait_for_timeout(200)
     chk("destino Reels marcado (Status é o padrão)", pg.locator("[data-a=destino][data-v=reels][aria-pressed=true]").count() == 1 and pg.locator("[data-a=destino][data-v=status][aria-pressed=true]").count() == 0)
@@ -119,6 +121,8 @@ with sync_playwright() as p:
     pg.fill("#fia-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click("[data-a=tipo][data-v=todas]"); pg.wait_for_timeout(200); pg.fill("#fia-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click(".fia-peca >> nth=0"); pg.wait_for_timeout(300)
     for k in range(3): pg.click(".fia-foto >> nth=%d >> button" % k)
     pg.set_input_files("#fia-arq", [fa, fa]); pg.wait_for_timeout(900)
+    pg.locator("#fia-quantidade").evaluate("e=>e.closest('details').open=true")
+    pg.fill("#fia-quantidade", "5"); pg.locator("#fia-quantidade").dispatch_event("change")  # divisão automática explícita; o padrão novo preserva uma foto inteira
     chk("5 looks inteiros (3 da peça + 2 do aparelho)", pg.locator(".fia-selitem").count() == 5 and "5 pessoas na imagem" in pg.inner_text(".fia-looks"))
     pg.select_option("#fia-divide", "nao"); pg.wait_for_timeout(250)
     chk("'uma imagem só' mostra um pedido só no botão", "(2 imagens)" not in pg.inner_text("[data-a=enviar]"))

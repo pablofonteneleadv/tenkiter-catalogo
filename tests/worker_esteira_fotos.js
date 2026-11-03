@@ -1,4 +1,4 @@
-// v7.51.0 — Esteira: pedido de fotos simplificado, caixa de fotos da equipe e preparação sem tarefa duplicada.
+// v7.52.0 — Esteira: pedido de fotos simplificado, caixa de fotos da equipe e preparação sem tarefa duplicada.
 // Rotas /esteira/* com D1 REAL (SQLite do Node), catálogo e sessão FALSOS. Nada vai ao Google, à Cloudflare nem ao servidor de mídia.
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');

@@ -219,7 +219,7 @@
   .peca-linha > .semfoto, .ficha-curta > .semfoto { width:52px; height:64px; border-radius:8px; background:var(--linha); flex:none; }
   .semfoto.ph-media { width:56px; height:70px; } .semfoto.ph-grande { width:96px; height:120px; border-radius:10px; } .semfoto.ph-mini { width:44px; height:55px; border-radius:6px; }
   .semfoto[class*="ph-"] { flex:none; background:var(--linha); border-radius:8px; }
-  /* v7.51.0 — aba Fotos: opções de foto, cartão só de fotos, caixa de fotos da equipe */
+  /* v7.52.0 — aba Fotos: opções de foto, cartão só de fotos, caixa de fotos da equipe */
   .aba-num { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; margin-left:4px; padding:0 5px; border-radius:99px; background:var(--laranja); color:var(--preto); font-size:.72rem; font-weight:800; }
   .esc-fotos { display:grid; gap:8px; } .esc-fotos .rot, .cx-alvo .rot { margin:0; font-size:.88rem; font-weight:600; }
   .opc-fotos button[aria-pressed="false"], .cx-capa button[aria-pressed="false"] { text-decoration:none; color:var(--preto); background:#fff; }
@@ -422,7 +422,7 @@
     nav.hidden = abas.length < 2;
     const curto = abas.length > 4 && window.matchMedia('(max-width: 560px)').matches;   // v7.43.0: 5 abas cabem em 390 px sem rolar
     nav.classList.toggle('curto', curto);
-    const fz = (HOJE && HOJE.fotos) || {}, nFotos = (fz.pedidas || 0) + (fz.caixa || 0);   // v7.51.0: aviso discreto na aba Fotos
+    const fz = (HOJE && HOJE.fotos) || {}, nFotos = (fz.pedidas || 0) + (fz.caixa || 0);   // v7.52.0: aviso discreto na aba Fotos
     abas.forEach(([id, rot, rc]) => { const b = el('button', '', curto ? rc : rot); b.type = 'button'; b.dataset.aba = id; if (curto && rc !== rot) b.setAttribute('aria-label', rot);
       if (id === 'fotos' && nFotos) { b.append(el('span', 'aba-num', String(nFotos))); b.setAttribute('aria-label', 'Fotos, ' + nFotos + (nFotos === 1 ? ' pendência' : ' pendências')); } b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(ABA === id)); b.onclick = () => { ABA = id; desenharAbas(); abrirAba(); }; nav.append(b); });
   }
@@ -452,7 +452,7 @@
     app.append(prog);
     r.funcoes.forEach((f) => { const c = el('div', 'card funcao'); c.append(el('h3', '', 'Sua função hoje: ' + f.funcao)); c.append(el('p', f.instrucoes ? '' : 'muted', f.instrucoes || 'Sem instruções cadastradas para esta função.')); app.append(c); });
     const pedFotos = (r.tarefas || []).filter((t) => t.origem === 'pedido_fotos'), outrasT = (r.tarefas || []).filter((t) => t.origem !== 'pedido_fotos');
-    if (pedFotos.length) {                                                 // v7.51.0: pedidos de fotos: cartão só de fotos (um por peça)
+    if (pedFotos.length) {                                                 // v7.52.0: pedidos de fotos: cartão só de fotos (um por peça)
       const c = el('div', 'card'); c.id = 'fotos-pedidas-hoje'; const gs = gruposPedidoFotos(pedFotos);
       c.append(el('h2', '', 'Fotos pedidas'), ...gs.map((g) => cartaoPedidoFotos(g, () => telaHoje())));
       app.append(c);
@@ -559,7 +559,7 @@
     const tFoto = el('h3', '', 'As fotos estão boas?'), fotos = el('div', 'dois');
     const dFoto = el('p', 'muted', urlOk(p.foto) ? 'Toque na foto lá em cima para ver todas e, se quiser, “Ver no site”.' : 'Esta peça ainda não tem foto.');
     const fOk = el('button', 'bt', 'Sim'), fNova = el('button', 'bt', 'Pedir fotos'); fOk.type = fNova.type = 'button'; fNova.id = 'conf-pedir-fotos';
-    const escFotos = escolhaFotos('conf');   // v7.51.0: a pessoa diz como quer as fotos (no pano, no manequim, outras cores/estampas ou escreve)
+    const escFotos = escolhaFotos('conf');   // v7.52.0: a pessoa diz como quer as fotos (no pano, no manequim, outras cores/estampas ou escreve)
     const marcarFoto = (v) => { estado.fotoNova = v; fOk.setAttribute('aria-pressed', String(!v)); fNova.setAttribute('aria-pressed', String(v)); escFotos.hidden = !v; };
     fOk.onclick = () => marcarFoto(false); fNova.onclick = () => marcarFoto(true); fotos.append(fOk, fNova); marcarFoto(false);
     detalhes.append(lEst, avisoEst, blocoChips('Tamanhos disponíveis', estado.tamanhos, tamOn), blocoChips('Cores disponíveis', estado.cores, corOn), tFoto, dFoto, fotos, escFotos);
@@ -697,7 +697,7 @@
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren();
     catalogoFundo();                                  // dados e fotos de cada peça chegam logo depois
-    const topo = el('div', 'card'); topo.id = 'prep-topo'; topo.append(el('h2', '', 'Preparação'));   // v7.51.0: sem o bloco de instruções (pedido do Pablo)
+    const topo = el('div', 'card'); topo.id = 'prep-topo'; topo.append(el('h2', '', 'Preparação'));   // v7.52.0: sem o bloco de instruções (pedido do Pablo)
     if (r.podeAceitar) topo.append(...blocoColocar(r));
     app.append(topo);
     if (!r.produtos.length) app.append(el('div', 'card vazio', 'Nenhuma peça em preparação agora.'));
@@ -819,7 +819,7 @@
     return c;
   }
 
-  /* ---------- v7.51.0: aba Fotos — pedir fotos do jeito que quer, cartão só de fotos e caixa de fotos da equipe ----------
+  /* ---------- v7.52.0: aba Fotos — pedir fotos do jeito que quer, cartão só de fotos e caixa de fotos da equipe ----------
    * Fotos sobem ao servidor de fotos (Worker de mídia, R2) como na preparação. Envio para a caixa fica guardado neste aparelho
    * (IndexedDB, sem senha nem dados de pessoas) até o servidor confirmar; o mesmo op nunca vira duas fotos na caixa. */
   const OPCOES_FOTO = [['pano', 'No pano'], ['manequim', 'No manequim'], ['cores', 'Das outras cores/estampas'], ['outro', 'Outro (escrever)']];

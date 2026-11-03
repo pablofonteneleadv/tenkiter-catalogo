@@ -19,7 +19,8 @@
   let extraTxt = '', aba = 'gerar', cfg = null, info = null, itens = [], cont = {}, filtro = 'todas', timer = null, busca = '', enviando = false, msgTxt = '', msgTipo = '';
   let sel = [], abertas = [], tipoFiltro = 'todas', giro = 0, destino = 'status', quem = 'mulheres', dividirModo = 'sim';          // sel = fotos escolhidas {url, peca, cod, papel}
   const MAX_FOTOS = 6, CF_MAX = 4;
-  let quantidadeLooks = 0, looksPorImagem = 2;
+  let quantidadeLooks = 0, looksPorImagem = 2, fotosPlanejadas = [], motor = 'auto', modelosFoto = 1, editandoFoto = -1, modelosManuais = false;
+  const salvandoCatalogo = new Set();
   const limiteFotos = () => quantidadeLooks ? 40 : MAX_FOTOS;
 
   /* ---------- Worker ---------- */
@@ -45,7 +46,7 @@
       .sheet-fia { max-width: 760px; height: 94vh; max-height: 94vh; }
       .fia-abas { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 8px; padding-bottom: 4px; }
       .fia-abas button { flex: none; width: auto; padding: 9px 13px; border-radius: 999px; border: 1px solid #ddd; background: #fff; color: #222; font-size: 0.84rem; font-weight: 700; cursor: pointer; min-height: 44px; }
-      .fia-abas button[aria-selected="true"] { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
+      .fia-abas button[aria-selected="true"], .fia-abas button[aria-pressed="true"] { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
       .fia-aviso { background: #fff3e0; border: 1px solid #ffcc80; color: #6b3f00; border-radius: 10px; padding: 9px 11px; font-size: 0.85rem; margin: 8px 0; line-height: 1.4; }
       .fia-ok { background: #e8f5e9; border: 1px solid #a5d6a7; color: #1b5e20; border-radius: 10px; padding: 9px 11px; font-size: 0.85rem; margin: 8px 0; }
       .fia-erro { background: #ffebee; border: 1px solid #ef9a9a; color: #8e0000; border-radius: 10px; padding: 9px 11px; font-size: 0.85rem; margin: 8px 0; }
@@ -104,7 +105,12 @@
   }
 
   /* ---------- janela ---------- */
+  function cssCatalogo_() {
+    if ($('fia-estilo-catalogo')) return;
+    const st = document.createElement('style'); st.id = 'fia-estilo-catalogo'; st.textContent = '.fia-automatico summary{min-height:44px;cursor:pointer;padding:12px 0;font-size:.9rem}.fia-planejamento{margin-bottom:16px;border-bottom:1px solid #deddd6}.fia-planejamento h3{margin:8px 0}.fia-foto-plano{padding:8px 0;border-bottom:1px solid #eee}.fia-catalogo{margin:16px 0;border-top:1px solid #deddd6;padding-top:12px}.fia-catalogo summary{min-height:44px;cursor:pointer;font-weight:700;display:list-item}.fia-catalogo input[type=checkbox]{width:20px;height:20px;min-height:20px;flex:none;margin:0 8px 0 0}.fia-catalogo label{display:flex;align-items:center;min-height:44px;flex-wrap:wrap;gap:4px}.fia-catalogo label:has([data-fia-nome]){display:block}.fia-catalogo .fia-grupo{border:0;border-bottom:1px solid #deddd6;border-radius:0;padding:4px 0;margin:4px 0}.fia-catalogo input[data-fia-nome]{width:100%;min-height:44px}.fia-catalogo button{white-space:normal;max-width:100%}.fia-catalogo [role=status]{font-size:.92rem;overflow-wrap:anywhere}'; document.head.appendChild(st);
+  }
   function montar() {
+    cssCatalogo_();
     if ($('overlay-fotoia')) return;
     css();
     const o = document.createElement('div'); o.className = 'overlay-sheet'; o.id = 'overlay-fotoia';
@@ -237,13 +243,15 @@
     const a = $('fia-aba'); if (!a) return;
     const yC = $('fia-corpo').scrollTop, g0 = a.querySelector('.fia-pecas'), yG = g0 ? g0.scrollTop : 0;
     const pecas = pecasFiltradas(), ml = montarLooks(), nSel = sel.length, selDe = (u, pid) => sel.findIndex((x) => x.url === u && String(x.pid || '') === String(pid || ''));
+    if (!modelosManuais) modelosFoto = ml.looks.length || 1;
     const abertasP = abertas.map((id) => (typeof produtos !== 'undefined' ? produtos : []).find((x) => String(x.ID) === String(id))).filter(Boolean);
     const provs = (info.config && info.config.provedores) || [], temGem = info.temChave && provs.indexOf('gemini') !== -1, temCf = !!(info.cloudflare && info.cloudflare.disponivel && provs.indexOf('cloudflare') !== -1);
-    const pedidos = !ml.erro ? gruposDoPlano(ml.looks).length : 1;
+    const pedidos = quantidadeLooks && !ml.erro ? gruposDoPlano(ml.looks).length : 1;
     const filtros = [['todas', 'Todas'], ['cima', '👚 De cima'], ['baixo', '👖 De baixo'], ['look', '👗 Looks e peças únicas']];
-    a.innerHTML = statusHtml() + (msgTxt ? '<p class="' + (msgTipo === 'erro' ? 'fia-erro' : 'fia-ok') + '">' + esc(msgTxt) + '</p>' : '') +
-      '<label for="fia-quantidade">Quantos looks deseja neste lote? (opcional)</label><input id="fia-quantidade" type="number" min="1" max="20" step="1" value="' + (quantidadeLooks || '') + '" placeholder="Ex.: 10"><p class="fia-dica">Informe a quantidade e escolha as peças para completar os looks. Não repetimos ou inventamos roupas para completar o lote.</p>' +
-      (quantidadeLooks ? '<label for="fia-looks-imagem">Divisão sugerida por imagem</label><select id="fia-looks-imagem"><option value="2"' + (looksPorImagem === 2 ? ' selected' : '') + '>Até 2 looks por imagem</option><option value="3"' + (looksPorImagem === 3 ? ' selected' : '') + '>Até 3 looks por imagem</option></select><p class="fia-dica">Até 4 fotos de referência por imagem no motor grátis. Três looks só cabem quando suas referências cabem nesse limite. Confira a qualidade: mais pessoas podem reduzir a fidelidade.</p>' : '') +
+    a.innerHTML = statusHtml() + (msgTxt ? '<p role="status" class="' + (msgTipo === 'erro' ? 'fia-erro' : 'fia-ok') + '">' + esc(msgTxt) + '</p>' : '') + planoFotosHtml_() +
+      '<details class="fia-automatico"' + (quantidadeLooks ? ' open' : '') + '><summary>Distribuir um total de looks automaticamente</summary><label for="fia-quantidade">Divisão automática: total de looks (opcional)</label><input id="fia-quantidade" type="number" min="1" max="20" step="1" value="' + (quantidadeLooks || '') + '" placeholder="Ex.: 10"><p class="fia-dica">Para definir os modelos de cada foto, deixe este campo vazio e use Adicionar esta foto ao lote. Preencha apenas se quiser distribuir automaticamente um total de looks.</p>' +
+      (quantidadeLooks ? '<label for="fia-looks-imagem">Divisão automática sugerida (opcional)</label><select id="fia-looks-imagem"><option value="2"' + (looksPorImagem === 2 ? ' selected' : '') + '>Até 2 looks por imagem</option><option value="3"' + (looksPorImagem === 3 ? ' selected' : '') + '>Até 3 looks por imagem</option></select><p class="fia-dica">Até 4 fotos de referência por imagem no motor grátis. Três looks só cabem quando suas referências cabem nesse limite. Confira a qualidade: mais pessoas podem reduzir a fidelidade.</p>' : '') +
+      '</details>' +
       '<div class="fia-aviso">Escolha até <b>' + limiteFotos() + ' fotos</b> (de várias peças e do aparelho) e diga o que a IA vai usar de cada uma. A imagem sai com <b>uma pessoa diferente para cada look</b> (modelos diversos, não as das fotos). Se a cota acabar, o pedido <b>espera na fila</b> e sai sozinho — não precisa ficar na tela.</div>' +
       '<label for="fia-busca">1. Escolha as peças (toque para ver as fotos)</label><input type="text" id="fia-busca" placeholder="Nome ou código…" value="' + esc(busca) + '" autocomplete="off">' +
       '<div class="fia-filtros" role="group" aria-label="Tipo de peça">' + filtros.map((f) => '<button type="button" data-a="tipo" data-v="' + f[0] + '" aria-pressed="' + (tipoFiltro === f[0]) + '">' + f[1] + '</button>').join('') + '</div>' +
@@ -261,11 +269,47 @@
       '<label>3. Para onde vai a imagem?</label><div class="fia-filtros" role="group" aria-label="Destino">' + DESTINOS.map((d) => '<button type="button" data-a="destino" data-v="' + d[0] + '" aria-pressed="' + (destino === d[0]) + '">' + d[1] + ' <small>' + d[2] + '</small></button>').join('') + '</div>' +
       '<p class="fia-dica">A imagem sai <b>sem texto, sem seta e sem emoji</b>: só as pessoas com as roupas. Setas, chamadas e emojis você coloca depois em <b>📸 Postagens → ➕ Adicionar</b>.</p>' +
       '<label for="fia-quem">Quem veste</label><select id="fia-quem">' + QUEM.map((q) => '<option value="' + q[0] + '"' + (quem === q[0] ? ' selected' : '') + '>' + q[1] + '</option>').join('') + '</select>' +
-      (nSel > CF_MAX && !ml.erro ? '<div class="fia-aviso"><b>Mais de ' + CF_MAX + ' fotos:</b> o Cloudflare grátis aceita até ' + CF_MAX + ' fotos por imagem; o Gemini (plano com imagens) aceita ' + MAX_FOTOS + '.<label for="fia-divide" style="margin-top:6px">Como enviar</label><select id="fia-divide"><option value="sim"' + (dividirModo === 'sim' ? ' selected' : '') + '>Dividir em ' + dividirLooks(ml.looks).length + ' imagens (funciona no grátis; cada imagem tem alguns dos looks)</option><option value="nao"' + (dividirModo === 'nao' ? ' selected' : '') + '>Uma imagem só com todos os looks (só o Gemini com plano de imagens)</option></select>' + (!temGem && dividirModo === 'nao' ? '<p class="fia-erro">Sem a chave do Gemini, “uma imagem só” não vai sair. Escolha dividir.</p>' : '') + '</div>' : '') +
+      (quantidadeLooks && nSel > CF_MAX && !ml.erro ? '<div class="fia-aviso"><b>Mais de ' + CF_MAX + ' fotos:</b> o Cloudflare grátis aceita até ' + CF_MAX + ' fotos por imagem; o Gemini (plano com imagens) aceita ' + MAX_FOTOS + '.<label for="fia-divide" style="margin-top:6px">Como enviar</label><select id="fia-divide"><option value="sim"' + (dividirModo === 'sim' ? ' selected' : '') + '>Dividir em ' + dividirLooks(ml.looks).length + ' imagens (funciona no grátis; cada imagem tem alguns dos looks)</option><option value="nao"' + (dividirModo === 'nao' ? ' selected' : '') + '>Uma imagem só com todos os looks (só o Gemini com plano de imagens)</option></select>' + (!temGem && dividirModo === 'nao' ? '<p class="fia-erro">Sem a chave do Gemini, “uma imagem só” não vai sair. Escolha dividir.</p>' : '') + '</div>' : '') +
       '<label for="fia-extra">4. Observação para esta imagem (opcional)</label><input type="text" id="fia-extra" maxlength="300" value="' + esc(extraTxt) + '" placeholder="Ex.: luz de fim de tarde, só mulheres de cabelo longo…">' +
-      '<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || !nSel || ml.erro || (quantidadeLooks && ml.looks.length !== quantidadeLooks) || !(temGem || temCf) ? 'disabled' : '') + '>' + (enviando ? 'Enviando…' : '➕ Colocar na fila' + (pedidos > 1 ? ' (' + pedidos + ' imagens)' : '')) + '</button></div>';
+      '<label for="fia-modelos-foto">Modelos nesta foto</label><input id="fia-modelos-foto" type="number" min="1" max="6" step="1" value="' + modelosFoto + '"><p class="fia-dica">Uma pessoa por look: combine uma peça de cima e uma de baixo, ou escolha um look completo. Idade, público e tamanho do cadastro têm prioridade.</p>' +
+      '<label for="fia-motor">Motor desta foto</label><select id="fia-motor">' + [['auto','Automático (configuração do gestor)'],['klein4b','FLUX.2 Klein 4B · econômico'],['klein9b','FLUX.2 Klein 9B · testar fidelidade'],['fluxdev','FLUX.2 Dev · teste detalhado (mais cota)']].map(m => '<option value="' + m[0] + '"' + (motor === m[0] ? ' selected' : '') + (m[0] !== 'auto' && !temCf ? ' disabled' : '') + '>' + m[1] + '</option>').join('') + '</select><p class="fia-dica">Os três motores Cloudflare compartilham a cota diária. 9B e Dev consomem mais; Dev também é mais lento. Em plano pago, exceder a franquia pode gerar cobrança. Cada teste gera só uma foto, sem trocar de motor silenciosamente.</p>' +
+      '<div class="fia-linha"><button type="button" class="fia-btn" data-a="planejar" ' + (enviando || !nSel ? 'disabled' : '') + '>' + (editandoFoto >= 0 ? 'Salvar alterações da foto' : 'Adicionar esta foto ao lote') + '</button></div>' +
+      (fotosPlanejadas.length ? '' : '<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || (fotosPlanejadas.length ? nSel > 0 || editandoFoto >= 0 : !nSel || ml.erro || (quantidadeLooks && ml.looks.length !== quantidadeLooks)) || !(temGem || temCf) ? 'disabled' : '') + '>' + (enviando ? 'Enviando…' : fotosPlanejadas.length ? 'Gerar lote (' + fotosPlanejadas.length + ' fotos)' : (quantidadeLooks ? '➕ Colocar na fila' : 'Gerar esta foto') + (pedidos > 1 ? ' (' + pedidos + ' imagens)' : '')) + '</button></div>');
+    if (enviando) a.querySelectorAll('input,select,button').forEach(el => { el.disabled = true; });
     ligarArrasto();
     $('fia-corpo').scrollTop = yC; const g1 = a.querySelector('.fia-pecas'); if (g1) g1.scrollTop = yG;
+  }
+  function planoFotosHtml_() {
+    if (!fotosPlanejadas.length) return '<p class="fia-dica">Para configurar foto por foto, escolha as peças abaixo e toque em “Adicionar esta foto ao lote”. Depois configure a próxima.</p>';
+    return '<section class="fia-planejamento" aria-label="Fotos do lote"><h3>Seu lote · ' + fotosPlanejadas.length + ' fotos</h3>' + fotosPlanejadas.map((f, i) => '<div class="fia-foto-plano"><b>Foto ' + (i + 1) + ' · ' + f.modelos + (f.modelos === 1 ? ' modelo' : ' modelos') + '</b>' + (f.sel.length > CF_MAX ? '<p class="fia-dica">Mais de quatro referências: exige Gemini com geração habilitada; não usa a franquia Cloudflare.</p>' : '') + '<p class="fia-dica">' + f.sel.map(x => esc(x.peca || 'Foto do aparelho') + ' (' + esc(PAPEL_ROT[x.papel]) + ')').join(' + ') + '</p><div class="fia-linha"><button type="button" class="fia-btn" data-a="editar-foto" data-i="' + i + '">Editar foto ' + (i + 1) + '</button><button type="button" class="fia-btn" data-a="remover-foto" data-i="' + i + '">Remover</button></div></div>').join('') + '<p class="fia-dica">As fotos só entram na fila quando você tocar em Gerar lote. ' + (sel.length ? 'Adicione ou salve a foto em edição para liberar o envio.' : 'Configure outra foto abaixo ou envie o lote.') + '</p><div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || sel.length || editandoFoto >= 0 ? 'disabled' : '') + '>' + (enviando ? 'Enviando lote…' : 'Gerar lote (' + fotosPlanejadas.length + ' fotos)') + '</button></div></section>';
+  }
+  function planejarFoto_() {
+    const ml = montarLooks();
+    const temGem = info.temChave && (info.config.provedores || []).includes('gemini');
+    if (!sel.length || ml.erro || ml.looks.length !== modelosFoto) { msg('Escolha exatamente ' + modelosFoto + ' look(s) completos para esta foto, sem faltar cima ou baixo.', 'erro'); desenharGerar(); return; }
+    if (sel.length > MAX_FOTOS || (sel.length > CF_MAX && (!temGem || motor !== 'auto'))) { msg('Esta foto precisa de ' + sel.length + ' referências. Cloudflare aceita quatro; até seis precisam do Gemini com geração de imagens habilitada. Não vamos dividir os modelos desta foto.', 'erro'); desenharGerar(); return; }
+    if (fotosPlanejadas.length >= 20 && editandoFoto < 0) { msg('O lote aceita até 20 fotos.', 'erro'); desenharGerar(); return; }
+    const f = { pedidoId: editandoFoto >= 0 ? fotosPlanejadas[editandoFoto].pedidoId : crypto.randomUUID(), sel: sel.map(x => ({ ...x })), looks: ml.looks, modelos: modelosFoto, giro, destino, quem, motor, extra: extraTxt };
+    if (editandoFoto >= 0) fotosPlanejadas[editandoFoto] = f; else fotosPlanejadas.push(f);
+    sel = []; abertas = []; giro = 0; editandoFoto = -1; modelosManuais = false; quantidadeLooks = 0; msg('Foto salva no planejamento do lote.', 'ok'); desenharGerar();
+  }
+  async function enviarFotosPlanejadas_() {
+    if (enviando || sel.length || editandoFoto >= 0) return;
+    enviando = true; const total = fotosPlanejadas.length; desenharGerar();
+    while (fotosPlanejadas.length) {
+      const f = fotosPlanejadas[0]; msg('Preparando foto ' + (total - fotosPlanejadas.length + 1) + ' de ' + total + '. Você pode fechar esta janela e continuar no painel enquanto envia.', 'ok'); desenharGerar();
+      const corpo = await corpoFoto_(f);
+      if (!corpo) { enviando = false; msg('Não consegui ler uma referência. As fotos ainda não enviadas continuam no lote.', 'erro'); desenharGerar(); return; }
+      const r = await api('/fotoia/fila', 'POST', corpo);
+      if (!r || !r.ok) { enviando = false; msg(erroTxt(r) + ' As fotos restantes foram mantidas.', 'erro'); desenharGerar(); return; }
+      fotosPlanejadas.shift(); desenharGerar();
+    }
+    enviando = false; aba = 'fila'; filtro = 'todas'; msg('Lote enviado. Cada foto mantém seus modelos e peças.', 'ok'); await carregarLista(); desenhar(); religar();
+  }
+  async function corpoFoto_(f) {
+    const fotos = [], refs = [];
+    for (const x of f.sel) { const r = await fotoPronta(x.url); if (!r) return null; fotos.push({ mime: 'image/jpeg', data: r.grande.split(',')[1] }); if (r.pequena) refs.push({ mime: 'image/jpeg', data: r.pequena.split(',')[1] }); }
+    return { pedidoId: f.pedidoId, produto: new Set(f.sel.map(x => x.cod || '')).size === 1 ? f.sel[0].cod || '' : '', nome: f.sel.map(x => x.peca || 'Foto do aparelho').join(' + ').slice(0, 120), fotos, refs: f.sel.length <= CF_MAX && refs.length === fotos.length ? refs : [], papeis: f.sel.map(x => x.papel), looks: f.looks, rotulos: f.sel.map(x => x.peca || ''), pecas: f.sel.map(x => { const p = produtos.find(p => String(p.ID) === String(x.pid)); return { codigo: x.cod || '', nome: x.peca || '', avista: p && Number(p.Preco) > 0 ? Math.round(Number(p.Preco) * (1 - DESCONTO_AVISTA) * 100) / 100 : null }; }), destino: f.destino, quem: f.quem, motor: f.motor, extra: f.extra };
   }
   function dataBr(iso) { try { const d = new Date(iso); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
   const ROT = { fila: 'Na fila', gerando: 'Gerando…', pronta: 'Pronta', aprovada: 'Aprovada', erro: 'Erro', descartada: 'Descartada', cancelada: 'Cancelada' };
@@ -279,6 +323,7 @@
     return '<div class="fia-cartao" data-id="' + x.id + '"><h3>' + esc(x.nome || 'Peça sem nome') + ' <span class="fia-chip ' + esc(x.status) + '">' + esc(ROT[x.status] || x.status) + '</span></h3>' +
       '<small>' + (x.produto ? esc(x.produto) + ' · ' : '') + 'pedido em ' + esc(dataBr(x.criado_em)) + (x.modelo ? ' · ' + esc(x.modelo) : '') + '</small>' +
       (x.plano ? '<small>' + x.plano.looks + (x.plano.looks === 1 ? ' look (1 pessoa)' : ' looks (' + x.plano.looks + ' pessoas)') + ' · ' + esc(({ status: 'Status', reels: 'Reels', carrossel: 'Capa de carrossel' })[x.plano.destino] || '') + '</small>' : '') +
+      (x.plano && x.plano.origem ? '<small>Comparação do pedido ' + Number(x.plano.origem) + ' · original preservado</small>' : '') +
       (x.extra ? '<small>Observação: ' + esc(x.extra) + '</small>' : '') +
       (x.status === 'fila' && x.espera ? '<p class="fia-aviso">⏳ ' + esc(x.erro || 'Esperando a cota.') + ' Tenta de novo por volta de <b>' + esc(dataBr(x.espera)) + '</b>.</p>' : '') +
       (x.status === 'fila' && !x.espera && !x.erro ? '<small>Aguardando a vez (1 por minuto).</small>' : '') +
@@ -286,7 +331,76 @@
       (x.status === 'erro' ? '<p class="fia-erro">' + esc(x.erro || 'Não deu certo.') + '</p>' : '') +
       '<div class="fia-resu">' + (x.resultado ? '<img alt="Imagem gerada" data-a="ampliar" data-u="' + esc(x.resultado) + '" ' + atribSrc(x.resultado) + '>' : '') +
       '<div class="fia-fontes" title="Fotos enviadas à IA">' + (x.fontes || []).map((u) => '<img alt="" loading="lazy" ' + atribSrc(u) + '>').join('') + '</div></div>' +
-      legendaHtml(x) + '<div class="fia-linha">' + botoes.map((b) => '<button type="button" class="fia-btn ' + b[2] + '" data-a="acao" data-v="' + b[0] + '" data-id="' + x.id + '">' + b[1] + '</button>').join('') + '</div></div>';
+      legendaHtml(x) + catalogoHtml_(x) + compararHtml_(x) + '<div class="fia-linha">' + botoes.map((b) => '<button type="button" class="fia-btn ' + b[2] + '" data-a="acao" data-v="' + b[0] + '" data-id="' + x.id + '">' + b[1] + '</button>').join('') + '</div></div>';
+  }
+  function compararHtml_(x) {
+    if (!['pronta', 'aprovada'].includes(x.status)) return '';
+    return '<details class="fia-catalogo"><summary>Testar outro motor</summary><p class="fia-dica">Mantém esta imagem e gera uma comparação com as mesmas peças. Os motores compartilham a franquia Cloudflare; 9B e Dev usam mais cota. Nenhuma imagem será publicada ou aprovada automaticamente.</p><label for="fia-teste-' + x.id + '">Motor do teste</label><select id="fia-teste-' + x.id + '"><option value="klein4b">FLUX.2 Klein 4B</option><option value="klein9b">FLUX.2 Klein 9B</option><option value="fluxdev">FLUX.2 Dev (mais cota)</option></select><button type="button" class="fia-btn" data-a="comparar" data-id="' + x.id + '">Gerar uma comparação</button><p class="fia-teste-retorno" role="status"></p></details>';
+  }
+  function produtosDaFoto_(x) {
+    const codigos = [...new Set((x.plano && x.plano.pecas || []).map(p => p.codigo).filter(Boolean))];
+    if (!codigos.length && x.produto) codigos.push(x.produto);
+    return codigos.map(c => produtos.find(p => String(p.Codigo) === String(c))).filter(Boolean);
+  }
+  function catalogoHtml_(x) {
+    if (x.status !== 'aprovada' || !x.resultado) return '';
+    const ps = produtosDaFoto_(x);
+    if (!ps.length) return '<p class="fia-dica">Foto sem produto de origem vinculado. Baixe a imagem para usar no cadastro.</p>';
+    return '<details class="fia-catalogo fia-catalogo-produto"><summary>Colocar no produto</summary><p class="fia-dica">Escolha onde usar esta foto aprovada. As fotos originais serão preservadas.</p>' + ps.map(p => '<div class="fia-grupo"><label><input type="checkbox" data-fia-produto="' + esc(p.ID) + '" checked> ' + esc(p.Nome) + '</label><label><input type="checkbox" data-fia-capa="' + esc(p.ID) + '"> Usar como capa deste produto</label></div>').join('') + '<button type="button" class="fia-btn pri" data-a="catalogo-salvar" data-id="' + x.id + '">Adicionar aos produtos escolhidos</button>' + (ps.length > 1 ? '<label>Nome do produto misto<input type="text" data-fia-nome maxlength="120" value="' + esc('Look · ' + ps.map(p => p.Nome).join(' + ').slice(0, 110)) + '"></label><p class="fia-dica">Cria um cadastro próprio, com esta capa e “Consultar valor”. As peças vinculadas mostram seus próprios preços e fotos.</p><button type="button" class="fia-btn" data-a="catalogo-salvar" data-misto="sim" data-id="' + x.id + '">Criar produto misto com todas as peças</button>' : '') + '<p data-fia-retorno role="status"></p></details>';
+  }
+  async function catalogoAtual_() {
+    const r = await fetch(API_URL + '?action=list&todos=true', { cache: 'no-store' }).then(r => r.json());
+    if (!r || !Array.isArray(r.produtos)) throw new Error('Não consegui atualizar os produtos. Nada foi alterado.');
+    return r.produtos;
+  }
+  async function adicionarFotoProduto_(p, url, capa) {
+    const todas = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',')).map(u => String(u || '').trim()).filter(Boolean);
+    const unica = [...new Set(todas.concat(url))], novaCapa = capa || !p.Foto_URL ? url : p.Foto_URL;
+    if (unica.filter(u => u !== novaCapa).length > 8) throw new Error('A galeria de ' + p.Nome + ' já está completa (oito fotos). Organize as fotos no cadastro antes de acrescentar outra.');
+    const r = await chamarAdmin_({ action: 'update', id: p.ID, fotoUrlExistente: novaCapa, fotosGaleriaExistentes: unica.filter(u => u !== novaCapa).join(',') });
+    if (!r || !r.ok) throw new Error((r && r.erro) || 'Não consegui salvar este produto.');
+  }
+  async function salvarNoCatalogo_(id, misto, btn) {
+    if (salvandoCatalogo.has(id)) return;
+    const x = itens.find(x => x.id === id), box = btn.closest('.fia-catalogo'), ret = box.querySelector('[data-fia-retorno]');
+    const ids = Array.from(box.querySelectorAll('[data-fia-produto]:checked')).map(e => e.dataset.fiaProduto);
+    if (!misto && !ids.length) { ret.textContent = 'Escolha pelo menos um produto.'; return; }
+    const nome = misto ? box.querySelector('[data-fia-nome]').value.trim() : '';
+    if (misto && !nome) { ret.textContent = 'Informe o nome do produto misto.'; return; }
+    salvandoCatalogo.add(id); box.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    ret.textContent = 'Guardando uma cópia permanente da foto…';
+    const salvos = [];
+    try {
+      const copia = await api('/fotoia/incorporar', 'POST', { id }); if (!copia || !copia.ok) throw new Error(erroTxt(copia));
+      const atuais = await catalogoAtual_();
+      if (misto) {
+        ret.textContent = 'Criando o cadastro e vinculando as peças…';
+        // Same intent across retries, devices and lost responses. Existing backend deduplicates opId.
+        const status = await api('/fotoia/composicao?id=' + id); if (!status || !status.ok) throw new Error(erroTxt(status));
+        let produtoMisto = status.produto || '';
+        try { if (!produtoMisto) produtoMisto = localStorage.getItem('tk_fotoia_misto_' + id) || ''; } catch (e) { /* registro de vínculo ainda funciona */ }
+        const uniao = campo => [...new Set(produtosDaFoto_(x).flatMap(p => String(p[campo] || '').split(',').map(s => s.trim())).filter(Boolean))].join(', ');
+        const r = produtoMisto ? { ok: true, id: produtoMisto } : await chamarAdmin_({ action: 'create', opId: 'fotoia-misto-' + id, nome, categoria: uniao('Categoria'), genero: uniao('Genero'), preco: '0', consultarValor: true, estoque: '', tamanhos: '', cores: '', descricao: 'Composição com peças vendidas separadamente. Consulte a disponibilidade de cada peça.', novidade: false, notificarPush: false, fotoUrlExistente: copia.url, fotosGaleriaExistentes: '' });
+        if (!r || !r.ok || !r.id) throw new Error((r && r.erro) || 'Não consegui confirmar o cadastro. Tente novamente: o mesmo pedido não cria outro produto.');
+        const existente = atuais.find(p => String(p.ID) === String(r.id));
+        if (existente && existente.Foto_URL !== copia.url) await adicionarFotoProduto_(existente, copia.url, true);
+        try { localStorage.setItem('tk_fotoia_misto_' + id, String(r.id)); } catch (e) { /* backend também reconhece opId nos reenvios recentes */ }
+        const v = await api('/fotoia/composicao', 'POST', { id, produto: String(r.id) });
+        if (!v || !v.ok) throw new Error('O produto foi criado, mas faltou vincular as peças. Tente novamente para concluir sem duplicar. ' + erroTxt(v));
+        ret.textContent = 'Produto misto pronto com esta foto, peças vinculadas e valor a consultar.';
+      } else {
+        for (const pid of ids) {
+          const p = atuais.find(p => String(p.ID) === pid); if (!p) throw new Error('Um produto não está mais disponível. Atualize a lista.');
+          const capa = box.querySelector('[data-fia-capa="' + CSS.escape(pid) + '"]').checked;
+          ret.textContent = 'Salvando em ' + p.Nome + '…';
+          await adicionarFotoProduto_(p, copia.url, capa);
+          salvos.push(p.Nome);
+        }
+        ret.textContent = 'Foto adicionada em ' + salvos.length + ' produto(s).';
+      }
+      await carregarProdutos();
+    } catch (e) { ret.textContent = (salvos.length ? 'Já salvo: ' + salvos.join(', ') + '. ' : '') + e.message; }
+    finally { salvandoCatalogo.delete(id); box.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
   }
   function conteudoDasPecas(x) {
     const ps = x && x.plano && Array.isArray(x.plano.pecas) ? x.plano.pecas : [];
@@ -300,12 +414,13 @@
     return '<details class="fia-legenda"><summary>Legenda e link das peças</summary><p class="fia-dica">Preços à vista registrados ao gerar. Confira preço e disponibilidade antes de compartilhar.</p><label>Legenda<textarea readonly rows="5">' + esc(c.texto) + '</textarea></label><button type="button" class="fia-btn" data-a="copiar-legenda" data-id="' + x.id + '">Copiar legenda</button><label>Link destas peças<input readonly value="' + esc(c.link) + '"></label><button type="button" class="fia-btn" data-a="copiar-link" data-id="' + x.id + '">Copiar link</button></details>';
   }
   function desenharFila(manterRolagem) {
+    if (manterRolagem && $('fia-aba') && ($('fia-aba').querySelector('.fia-catalogo[open]') || salvandoCatalogo.size)) return;
     const a = $('fia-aba'); if (!a) return;
     const legendasAbertas = new Set(Array.from(a.querySelectorAll('.fia-cartao')).filter(c => c.querySelector('.fia-legenda[open]')).map(c => c.dataset.id));
     const y = $('fia-corpo').scrollTop;
     const filtros = [['todas', 'Todas'], ['fila', 'Na fila'], ['pronta', 'Prontas'], ['aprovada', 'Aprovadas'], ['erro', 'Com erro'], ['descartada', 'Descartadas']];
     const vis = itens.filter((x) => filtro === 'todas' ? x.status !== 'descartada' && x.status !== 'cancelada' : x.status === filtro || (filtro === 'fila' && x.status === 'gerando'));
-    a.innerHTML = statusHtml() + '<div class="fia-abas">' + filtros.map((f) => '<button type="button" data-a="filtro" data-v="' + f[0] + '" aria-selected="' + (filtro === f[0]) + '">' + f[1] + '</button>').join('') + '</div>' +
+    a.innerHTML = statusHtml() + (msgTxt ? '<p role="status" class="' + (msgTipo === 'erro' ? 'fia-erro' : 'fia-ok') + '">' + esc(msgTxt) + '</p>' : '') + '<div class="fia-abas">' + filtros.map((f) => '<button type="button" data-a="filtro" data-v="' + f[0] + '" aria-pressed="' + (filtro === f[0]) + '">' + f[1] + '</button>').join('') + '</div>' +
       (vis.length ? vis.map(cartao).join('') : '<p class="fia-dica">Nada aqui ainda. Volte em “✨ Gerar” e coloque uma peça na fila.</p>');
     a.querySelectorAll('.fia-cartao').forEach(c => { const d = c.querySelector('.fia-legenda'); if (d && legendasAbertas.has(c.dataset.id)) d.open = true; });
     if (manterRolagem) $('fia-corpo').scrollTop = y;
@@ -353,7 +468,11 @@
     if (a === 'tirar') { sel.splice(Number(b.dataset.i), 1); giro = 0; msg(''); desenharGerar(); return; }
     if (a === 'trocar') { giro++; desenharGerar(); return; }
     if (a === 'destino') { destino = b.dataset.v; desenharGerar(); return; }
-    if (a === 'enviar') return enviar();
+    if (a === 'planejar') return planejarFoto_();
+    if (a === 'remover-foto') { const i = Number(b.dataset.i); if (editandoFoto >= 0) { msg('Salve a foto em edição antes de remover outra.', 'erro'); desenharGerar(); return; } fotosPlanejadas.splice(i, 1); desenharGerar(); return; }
+    if (a === 'editar-foto') { if (sel.length) { msg('Adicione a foto atual ao lote antes de editar outra.', 'erro'); desenharGerar(); return; } const i = Number(b.dataset.i), f = fotosPlanejadas[i]; if (!f) return; sel = f.sel.map(x => ({ ...x })); giro = f.giro; destino = f.destino; quem = f.quem; motor = f.motor; modelosFoto = f.modelos; modelosManuais = true; extraTxt = f.extra; editandoFoto = i; desenharGerar(); return; }
+    if (a === 'catalogo-salvar') return salvarNoCatalogo_(Number(b.dataset.id), b.dataset.misto === 'sim', b);
+    if (a === 'enviar') return fotosPlanejadas.length ? enviarFotosPlanejadas_() : enviar();
     if (a === 'ampliar') { try { if (window.TKFotoGrande) { window.TKFotoGrande.abrir({ itens: [{ url: b.dataset.u }], indice: 0 }); return; } } catch (er) { /* abre normal */ } window.open(b.dataset.u, '_blank', 'noopener'); return; }
     if (a === 'copiar-legenda' || a === 'copiar-link') {
       const item = itens.find(x => String(x.id) === String(b.dataset.id));
@@ -362,6 +481,7 @@
       catch (err) { b.textContent = 'Selecione o texto acima para copiar'; }
       return;
     }
+    if (a === 'comparar') { const id = Number(b.dataset.id), motorTeste = $('fia-teste-' + id).value; b.disabled = true; b.textContent = 'Colocando teste na fila…'; const r = await api('/fotoia/acao', 'POST', { id, acao: 'comparar', motor: motorTeste }); msg(r && r.ok ? 'Comparação na fila (pedido ' + r.id + '). A imagem anterior foi mantida.' : erroTxt(r), r && r.ok ? 'ok' : 'erro'); if (r && r.ok) { filtro = 'todas'; await carregarLista(); desenhar(); religar(); } else { b.disabled = false; b.textContent = 'Gerar uma comparação'; b.closest('details').querySelector('.fia-teste-retorno').textContent = erroTxt(r); } return; }
     if (a === 'acao') return acao(b.dataset.v, Number(b.dataset.id), b);
     if (a === 'salvarcfg') return salvarCfg();
     if (a === 'padrao') { if (!confirm('Voltar as instruções, a proporção, os modelos, o motor e o limite para o padrão?')) return; const r = await api('/fotoia/config', 'POST', { padrao: true }); if (r && r.ok) { cfg = JSON.parse(JSON.stringify(r.config)); await carregarConfig(); msg('Voltou ao padrão.', 'ok'); } else msg(erroTxt(r), 'erro'); desenhar(); return; }
@@ -376,6 +496,8 @@
     if (e.target.id === 'fia-quantidade') { const n = Number(e.target.value); if (e.target.value && (!Number.isInteger(n) || n < 1 || n > 20)) { msg('Escolha de 1 a 20 looks.', 'erro'); desenharGerar(); return; } quantidadeLooks = n || 0; if (!quantidadeLooks && sel.length > MAX_FOTOS) { quantidadeLooks = Math.min(20, montarLooks().looks.length || 20); msg('Para sair do lote, reduza primeiro a seleção a seis fotos.', 'erro'); } dividirModo = 'sim'; desenharGerar(); return; }
     if (e.target.id === 'fia-looks-imagem') { looksPorImagem = Number(e.target.value) === 3 ? 3 : 2; desenharGerar(); return; }
     const id = e.target.id;
+    if (id === 'fia-modelos-foto') { const n = Number(e.target.value); modelosManuais = true; modelosFoto = Number.isInteger(n) && n >= 1 && n <= 6 ? n : 1; e.target.value = modelosFoto; return; }
+    if (id === 'fia-motor') { motor = e.target.value; return; }
     if (id === 'fia-quem') { quem = e.target.value; return; }
     if (id === 'fia-divide') { dividirModo = e.target.value; desenharGerar(); return; }
     if (id !== 'fia-arq') return;
@@ -410,6 +532,7 @@
   }
   async function enviar() {
     if (enviando) return;
+    if (!quantidadeLooks && sel.length) { planejarFoto_(); if (!sel.length && fotosPlanejadas.length) return enviarFotosPlanejadas_(); return; }
     if (!sel.length) { msg('Toque em pelo menos 1 foto.', 'erro'); desenharGerar(); return; }
     const ml = montarLooks(); if (ml.erro) { msg('Faltam ' + ml.erro.n + ' peça(s) de ' + ml.erro.faltam + ' para fechar os looks.', 'erro'); desenharGerar(); return; }
     const provs = (info.config && info.config.provedores) || [], usaCf = provs.indexOf('cloudflare') !== -1 && !!(info.cloudflare && info.cloudflare.disponivel);
@@ -431,7 +554,7 @@
       const nomes = []; ordem.forEach((i) => { const n = sel[i].peca || 'Foto do aparelho'; if (nomes.indexOf(n) === -1) nomes.push(n); });
       const unica = new Set(ordem.map((i) => sel[i].cod || '')).size === 1 && sel[ordem[0]].cod ? sel[ordem[0]].cod : '';
       const corpo = { nome: (nomes.slice(0, 3).join(' + ') + (nomes.length > 3 ? ' +' + (nomes.length - 3) : '') + (grupos.length > 1 ? ' (parte ' + (gi + 1) + '/' + grupos.length + ')' : '')).slice(0, 120), produto: unica, extra: extra, fotos: fotos,
-        papeis: ordem.map((i) => sel[i].papel), looks: looks, rotulos: ordem.map((i) => sel[i].peca || ''), destino: destino, quem: quem };
+        papeis: ordem.map((i) => sel[i].papel), looks: looks, rotulos: ordem.map((i) => sel[i].peca || ''), destino: destino, quem: quem, motor: motor };
       corpo.pecas = ordem.map(i => {
         const p = (typeof produtos !== 'undefined' ? produtos : []).find(p => String(p.ID) === String(sel[i].pid));
         const preco = p ? Number(p.Preco) : 0;
@@ -443,7 +566,7 @@
       criados.push(r.id);
     }
     Object.keys(cacheFoto).forEach((k) => { delete cacheFoto[k]; });
-    enviando = false; sel = []; abertas = []; giro = 0; extraTxt = ''; msg(criados.length > 1 ? criados.length + ' imagens na fila! Acompanhe em “Fila e resultados”.' : 'Pedido na fila! Acompanhe em “Fila e resultados”.', 'ok');
+    enviando = false; sel = []; abertas = []; giro = 0; extraTxt = ''; quantidadeLooks = 0; modelosManuais = false; msg(criados.length > 1 ? criados.length + ' imagens na fila! Acompanhe em “Fila e resultados”.' : 'Pedido na fila! Acompanhe em “Fila e resultados”.', 'ok');
     aba = 'fila'; filtro = 'todas'; await carregarConfig(); await carregarLista(); desenhar(); religar();      // 'todas': quem estava olhando só os erros/descartadas vê o pedido novo
   }
   async function baixar(url, nome) {

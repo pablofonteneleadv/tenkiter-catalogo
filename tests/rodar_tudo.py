@@ -88,6 +88,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_og.js", lambda o: "FALHAS=0" in o),         # Worker da Cloudflare com o Apps Script simulado
     ("worker_midia.js", lambda o: "FALHAS=0" in o),      # Worker de mídia (R2) com R2/KV/Apps Script falsos: quem envia, tipos, travas de tamanho e de armazenamento
     ("midia_r2.py", lambda o: "FALHAS=0" in o),          # painel -> R2 (e reserva no Cloudinary)
+    ("worker_fotoia_catalogo.js", lambda o: "FOTOIA CATALOGO WORKER PASS" in o),
     ("worker_ig.js", lambda o: "FALHAS=0" in o),         # Worker do importador do Instagram (D1/R2/KV e Instagram falsos): ciclo, agrupamento, cópia, ações, token
     ("worker_esteira_fotos.js", lambda o: "FALHAS=0" in o),   # v7.51.0: pedido de fotos (opções + Outro), caixa de fotos da equipe, preparação sem tarefa duplicada
     ("worker_fotos_postadas.js", lambda o: "FALHAS=0" in o),   # v7.49.0: registro por foto postada, mapa público de fotos novas, foto nova x outra edição
@@ -134,6 +135,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("selecao_vida.py", lambda o: "FALHAS=0" in o),        # v4.27: seleção que expira (2 h/3 h), placa libera/segura, sugestões e sinônimos da busca
     ("selecao_botoes.py", lambda o: "FALHAS: []" in o),    # v6.1: Compartilhar / Limpar seleção / Edição em lote
     ("pendente_flutuante.py", lambda o: "FALHAS=0" in o),  # v4.27: ação pendente de conexão vira chip flutuante
+    ("foto_ia_catalogo.py", lambda o: "FOTOS IA CATÁLOGO PASS" in o),
     ("foto_ia_lotes.py", lambda o: "P-26 LOTES PASS" in o),
     ("foto_ia.py", lambda o: "FALHAS=0" in o),             # v4.27: painel 🎨 Fotos com IA (fila, instrução editável, aviso de plano sem imagens)
     ("worker_grupo.js", lambda o: "FALHAS=0" in o),

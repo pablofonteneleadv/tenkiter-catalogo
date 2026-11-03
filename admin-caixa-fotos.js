@@ -1,4 +1,4 @@
-/* v7.51.0 — Gestão: cadastrar produto novo com fotos da caixa da equipe (Esteira → aba Fotos → "Cadastrar produto novo").
+/* v7.52.0 — Gestão: cadastrar produto novo com fotos da caixa da equipe (Esteira → aba Fotos → "Cadastrar produto novo").
  * admin.html?caixaFotos=12,13&modo=um      → abre o cadastro NORMAL já com as fotos (já estão no servidor de fotos).
  * admin.html?caixaFotos=12,13&modo=varias  → "Cadastrar vários produtos" (7.50.0) já com as fotos: cada foto vira um produto e "Unir fotos"
  *                                           junta as do mesmo produto (sem esse recurso: o caminho do "Cadastro separado").

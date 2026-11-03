@@ -1,4 +1,4 @@
-"""v7.51.0 — Esteira: pedir fotos com opções prontas, cartão só de fotos, caixa de fotos da equipe e Preparação sem instruções.
+"""v7.52.0 — Esteira: pedir fotos com opções prontas, cartão só de fotos, caixa de fotos da equipe e Preparação sem instruções.
 Jornada em esteira.html (e o cadastro da Gestão aberto com as fotos da caixa) com catálogo, login, servidor da Esteira e servidor de
 fotos SIMULADOS. Nada vai ao Google, à Cloudflare nem ao servidor de mídia. Celular (390) e computador (1440).
 Evidências .jpg em tests/saida/esteira-fotos/ (TK_EVID=docs/ux/esteira-fotos-20261103 gera as do PR)."""
