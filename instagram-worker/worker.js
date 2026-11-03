@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261029-atendimento-agenda-3';
+const ESQUEMA_ = '20261030-nova-conversa-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -124,6 +124,8 @@ async function iniciar(env) {
       const existentes = new Set((await env.DB.prepare('PRAGMA table_info('+t+')').all()).results.map(c=>c.name));
       if (!cols.every(c=>existentes.has(c))) throw new Error('Esquema de Mensagens incompleto. Tente novamente.');
     }
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_instagram_usuario(contato TEXT PRIMARY KEY,usuario TEXT NOT NULL,em TEXT NOT NULL)").run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_ig_usuario ON msg_instagram_usuario(usuario)').run();
     await cfgSet(env,'schema_ig_version',ESQUEMA_);
   })();
   inicializacoes_.set(env.DB,promessa);
@@ -256,6 +258,7 @@ function msgRecurso_(p, req, url) {
   if (p === '/msg/notas') return 'notas';
   if (/^\/msg\/agend/.test(p)) return 'agenda';
   if (p === '/msg/acompanhamento') return 'agenda';
+  if(p==='/msg/iniciar')return 'responder';
   if (/^\/msg\/funil/.test(p)) return 'funil';
   if (p === '/msg/metricas') return 'metricas';
   if (p === '/msg/exportar') return 'exportar';
@@ -2615,7 +2618,7 @@ function normalizarInstagram_(b) {
     const dica = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/mp4', story_mention: 'image/jpeg', reel: 'video/mp4', ig_reel: 'video/mp4' }[anexo] || '';
     const rt = m.reply_to && typeof m.reply_to === 'object' ? m.reply_to : null;
     const histUrl = rt && rt.story && typeof rt.story.url === 'string' && /^https:\/\//i.test(rt.story.url) ? rt.story.url : '';
-    out.push({ extId: mid, contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora(),
+    out.push({ instagramUsuario:!eco?String(ev.sender?.username||''):'',extId: mid, contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora(),
       midiaUrl: dica ? pu : '', midiaMime: dica, midiaSeg: 0, ctxTipo: rt && rt.story ? 'story' : (rt && rt.mid ? 'resposta' : ''), ctxRef: rt && rt.mid ? String(rt.mid).slice(0, 200) : '', ctxUrl: histUrl });
   };
   for (const e of b.entry) {
@@ -2752,6 +2755,7 @@ async function gravarMensagem_(env, canal, m) {
     transacao.push(env.DB.prepare("UPDATE msg_acompanhamento SET status='cancelada',atualizado_em=?,erro='Cliente respondeu.' WHERE status='ativo' AND (conversa_id=? OR alvo="+alvo+") AND entrada_ref<(SELECT id FROM msg_mensagem WHERE canal=? AND ext_id=?)").bind(t,c.id,c.id,canal,m.extId));
     transacao.push(env.DB.prepare("UPDATE msg_agenda SET status='cancelada',erro='Cliente respondeu.' WHERE status='pendente' AND acompanhamento IN (SELECT id FROM msg_acompanhamento WHERE status='cancelada' AND (conversa_id=? OR alvo="+alvo+"))").bind(c.id,c.id));
   }
+  if(canal==='instagram'&&!saida&&/^[a-z0-9._]{1,30}$/i.test(String(m.instagramUsuario||''))){transacao.push(env.DB.prepare('INSERT INTO msg_instagram_usuario(contato,usuario,em) VALUES(?,?,?) ON CONFLICT(contato) DO UPDATE SET usuario=excluded.usuario,em=excluded.em WHERE excluded.em>=msg_instagram_usuario.em').bind(m.contato,String(m.instagramUsuario).toLowerCase(),m.em));}
   const [r] = await env.DB.batch(transacao);
   if (!r.meta || r.meta.changes !== 1) return false;
   await notificarNovidade_(env,canal);
@@ -3652,7 +3656,7 @@ async function processarEventoZernio_(env, b, basico=false) {
   const ot = a0 ? String(a0.originalType || '') : '', tipoA = a0 ? String(a0.type || '') : '';
   const tipo = !a0 ? 'texto' : ot === 'story_mention' ? 'menção em story' : (ZERNIO_TIPO_[tipoA] || 'anexo');
   const mime = { imagem: 'image/jpeg', 'vídeo': 'video/mp4', 'áudio': 'audio/mp4', 'menção em story': 'image/jpeg' }[tipo] || '';
-  const m = { extId: String(msg.platformMessageId || msg.id || '').slice(0, 200), contato: contato, nome: entrada ? String(snd.name || (snd.username ? '@' + snd.username : '')).slice(0, 80) : '', grupo: 0,
+  const m = { instagramUsuario:entrada?String(snd.username||''):'', extId: String(msg.platformMessageId || msg.id || '').slice(0, 200), contato: contato, nome: entrada ? String(snd.name || (snd.username ? '@' + snd.username : '')).slice(0, 80) : '', grupo: 0,
     direcao: entrada ? 'entrada' : 'saida', tipo: tipo, texto: String(msg.text || '').slice(0, MSG_TEXTO_MAX), em: msg.sentAt && !isNaN(Date.parse(msg.sentAt)) ? new Date(msg.sentAt).toISOString() : agora(),
     midiaUrl: mime && a0 && /^https:\/\//i.test(String(a0.url || '')) ? String(a0.url) : '', midiaMime: mime, midiaSeg: 0, ctxTipo: '', ctxRef: '', ctxUrl: '', ctxPost: 0 };
   if (!m.extId) return false;
@@ -4834,6 +4838,27 @@ export default {
       if(p==='/msg/pessoas/google'&&req.method==='POST')return J(await indexarNomesGoogle_(env));
       if(p==='/msg/pessoa'&&req.method==='GET'){const r=await pessoaAtendimento_(env,Number(url.searchParams.get('conversa')));return r?J(r):J({ok:false,erro:'Conversa não encontrada.'},404);}
       if(p==='/msg/pessoa'&&req.method==='POST'){const r=await salvarPessoaAtendimento_(env,await req.json().catch(()=>({})));return J(r,r.ok?200:400);}
+      if(p==='/msg/iniciar'&&req.method==='POST'){
+        const d=await req.json().catch(()=>({})),canal=String(d.canal||'');
+        if(!MSG_CANAIS.includes(canal))return J({ok:false,erro:'Escolha WhatsApp 1, WhatsApp 2 ou Instagram.'},400);
+        let c;
+        if(canal==='instagram'){
+          const usuario=String(d.destino||'').trim().replace(/^@/,'').toLowerCase();
+          if(!/^[a-z0-9._]{1,30}$/.test(usuario))return J({ok:false,erro:'Digite o @ do Instagram.'},400);
+          const encontrados=(await env.DB.prepare("SELECT id FROM msg_conversa WHERE canal='instagram' AND grupo=0 AND (contato IN (SELECT contato FROM msg_instagram_usuario WHERE usuario=?) OR lower(nome)=? OR lower(nome)=?) LIMIT 2").bind(usuario,usuario,'@'+usuario).all()).results;
+          if(encontrados.length!==1)return J({ok:false,erro:'Não encontrei uma conversa única com esse @. O Instagram exige que o cliente inicie o contato. Peça que envie uma mensagem à loja; depois você pode responder por aqui.'},409);
+          c=encontrados[0];
+        }else{
+          const valor=String(d.destino||'').trim();if(valor.length>40||!/^\+?[\d\s().-]+$/.test(valor))return J({ok:false,erro:'Digite um WhatsApp válido com DDD.'},400);
+          const raw=valor.replace(/\D/g,''),fone=pessoaTelefone_(raw);
+          if(![10,11,12,13].includes(raw.length)||!fone||!/^55[1-9][0-9]{9,10}$/.test(fone.d))return J({ok:false,erro:'Digite um WhatsApp com DDD, como (88) 99999-9999.'},400);
+          const existente=await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND grupo=0 AND (contato=? OR contato=?) ORDER BY total DESC,id LIMIT 1').bind(canal,fone.d,fone.chave).first();
+          if(existente)c=existente;else{
+            const em=agora();await env.DB.prepare("INSERT OR IGNORE INTO msg_conversa(canal,contato,nome,grupo,ultima_em,criado_em,atualizada_em,pessoa) VALUES(?,?,?,0,?,?,?,?)").bind(canal,fone.d,'',em,em,em,fone.chave).run();c=await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal,fone.d).first();
+          }
+        }
+        return J({ok:true,conversa:c.id});
+      }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const cursorConsulta=agora();

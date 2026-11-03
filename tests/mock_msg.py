@@ -97,6 +97,15 @@ def tratar(route, path, method, body, s):
             canais[c] = {"conversas": k["conversas"], "mensagens": 9, "ultima": "x" if k["conversas"] else "", "ligadoEm": s["ligado"].get(c, ""), "v2": c in s["v2"], "pausado": bool(s["pausa"].get(c)), "naoLidas": k["nao_lidas"], "semResposta": k["sem_resposta"]}
         canais["instagram"]["pronto"] = s["ig_pronto"]
         return J({"ok": True, "canais": canais, "urlInstagram": "https://tenkiter-ig.example/wh/instagram/SEGREDO" if s["ig_pronto"] else ""}) or True
+    if path == "/msg/iniciar":
+        s.setdefault("inicios",[]).append(body)
+        if s.get("iniciar_falha"):return J({"ok":False,"erro":"Não foi possível abrir agora. Tente novamente."},503) or True
+        canal=body.get("canal");destino=body.get("destino","")
+        if canal=="instagram":
+            rs=[x for x in s["convs"] if x["canal"]==canal and x["nome"].lower().lstrip('@')==destino.lower().lstrip('@')]
+            if len(rs)!=1:return J({"ok":False,"erro":"O cliente precisa iniciar o contato no Instagram."},409) or True
+            return J({"ok":True,"conversa":rs[0]["id"]}) or True
+        return J({"ok":True,"conversa":4}) or True
     if path == "/msg/conversas":
         c = q.get("canal"); f = q.get("filtro", ""); b = (q.get("busca") or "").lower(); tp = q.get("tipo", "")
         s.setdefault("consultas", []).append({"canal": c, "filtro": f, "tipo": tp, "etiqueta": q.get("etiqueta", ""),"fila":q.get("fila",""),"escopo":q.get("escopo","todos")})

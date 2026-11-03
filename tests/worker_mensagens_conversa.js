@@ -756,6 +756,9 @@ function d1() {
   const zc1 = await DB.prepare("SELECT id, nome, canal, contato FROM msg_conversa WHERE canal='instagram' AND contato='IGSID_1'").first();
   chk('mensagem do Direct entra no canal Instagram com o nome do cliente', zr1.r.status === 200 && zc1 && zc1.nome === 'Bia Lima' && !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_txt' AND texto='Oi, quanto custa?' AND direcao='entrada'").first()), zc1);
   await zPost(zEv());
+  const abrirBia=await A('POST','/msg/iniciar',{canal:'instagram',destino:'@BiaLima'});
+  chk('novo atendimento por @ usa username recebido, mesmo com nome de exibição diferente',abrirBia.j.ok&&!!abrirBia.j.conversa,abrirBia.j);
+  chk('abrir por @ não envia mensagem',zEnvios.length===0);
   chk('o mesmo aviso repetido (o Zernio tenta até 7 vezes) não duplica', (await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='mid_txt'").first()).n === 1);
   await DB.prepare("INSERT INTO postagem (tipo, modo, midias, agendado_em, status, ig_id, publicado_em, canal) VALUES ('story','auto','[{\"url\":\"https://tenkiter-midia.fake/m/s1.jpg\",\"tipo\":\"imagem\"}]', '2026-10-27T10:00:00Z', 'publicado', 'IGSTORY1', '2026-10-27T10:00:00Z', 'ambos')").run();
   const poId = (await DB.prepare("SELECT id FROM postagem WHERE ig_id='IGSTORY1'").first()).id;

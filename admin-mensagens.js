@@ -138,7 +138,7 @@
     return '';
   }
   function filtrarFerramentas_() {
-    const gaveta=$('ms-gaveta'),tipo=gaveta?.dataset.tipo||'';
+    const gaveta=$('ms-gaveta'),tipo=gaveta?.dataset.tipo||'';if(tipo==='nova-conversa'&&!podeFerramenta_('responder'))fecharGaveta_();
     if((['agenda','agenda-painel','agendar-opcoes'].includes(tipo)&&!podeFerramenta_('agenda'))||(tipo==='automacoes'&&!podeFerramenta_('configuracoes')))fecharGaveta_();
     document.querySelectorAll('#overlay-mensagens [data-ms]').forEach(b=>{const k=recursoAcao_(b.dataset.ms);if(k&&!podeFerramenta_(k))b.hidden=true;});
     document.querySelectorAll('#overlay-mensagens [data-filtro="com_notas"]').forEach(b=>{b.hidden=!podeFerramenta_('notas');});
@@ -707,6 +707,7 @@
 
   function iconeFluido_(nome){
     const p={conversas:'M4 5h16v12H9l-5 4z',funil:'M3 4h18l-7 8v7l-4 2v-9z',notas:'M5 3h14v13l-5 5H5zM14 21v-5h5',mais:'M5 12h.01M12 12h.01M19 12h.01',chevron:'m9 5 7 7-7 7',selecao:'M9 11l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2',painel:'M4 20V10M10 20V4M16 20v-7M22 20H2',auto:'m13 2-9 12h7l-1 8 10-13h-7z',atualizar:'M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M18 18A8 8 0 0 1 5 15',config:'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',usuario:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5m-2-2 2 2-2 2',baixar:'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5',permissoes:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',conexao:'m8 3 3 3-5 5-3-3M16 21l-3-3 5-5 3 3M8 16l8-8',busca:'M21 21l-5-5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',filtros:'M4 6h16M7 12h10M10 18h4M8 3v6M16 9v6M12 15v6'};
+    p['nova-conversa']=p.conversas;
     p.agenda='M5 5h14v16H5zM5 9h14M8 3v4M16 3v4M8 13h3M8 17h6';
     const n=el('span','ms-linha-icone');n.setAttribute('aria-hidden','true');n.innerHTML='<svg viewBox="0 0 24 24"><path d="'+p[nome]+'"/></svg>';return n;
   }
@@ -897,11 +898,20 @@
     const etapas=(ETQ||[]).filter(e=>e.venda);if(etapas.length){const e=sec('Etapa da venda');selecao(e,'ms-ft-etapa','Etapa da venda',[['0','Todas as etapas'],...etapas.map(x=>[String(x.id),x.nome])],etqFiltro);}
     const pe=el('div','ms-filtros-pe');pe.append(botao('ms-btn','Limpar','filtros-limpar'),botao('ms-btn prim','Aplicar filtros','filtros-aplicar'));painel.appendChild(pe);
   }
+  function abrirNovaConversa_(){
+    if(!podeFerramenta_('responder'))return;const corpo=gaveta_('Nova conversa');if(!corpo)return;propostaGaveta_('nova-conversa',document.activeElement);const gen=$('ms-gaveta').dataset.gen,epoca=epocaConta_;
+    const rot=el('label','ms-ag-filtro'),sel=el('select','ms-copia');sel.id='ms-nova-canal';rot.append(el('span','','Canal'),sel);CANAIS.forEach(([v,t])=>{const o=el('option','',t);o.value=v;sel.appendChild(o);});sel.value=canal==='todos'?'whatsapp1':canal;
+    const ld=el('label','ms-ag-filtro'),dest=el('input','ms-copia');dest.id='ms-nova-destino';dest.type='tel';dest.maxLength=40;ld.append(el('span','','Número ou @ do cliente'),dest);
+    const info=el('p','ms-auto-exp'),status=el('p','ms-auto-exp');status.setAttribute('role','status');
+    const ajustar=()=>{const ig=sel.value==='instagram';dest.type=ig?'text':'tel';dest.placeholder=ig?'@usuario':'(88) 99999-9999';info.textContent=ig?'Abre uma conversa já recebida deste @. Para um novo contato, o cliente precisa escrever à loja primeiro.':'Escolha o WhatsApp da loja e digite o número do cliente com DDD.';};sel.addEventListener('change',ajustar);ajustar();
+    const b=botao('ms-btn prim','Abrir conversa','nova-confirmar');b.id='ms-nova-confirmar';b.addEventListener('click',async()=>{if(!dest.value.trim()){status.textContent='Preencha o número ou @ do cliente.';dest.focus();return;}b.disabled=true;status.textContent='Abrindo…';const r=await worker_('/msg/iniciar','POST',{canal:sel.value,destino:dest.value.trim()});if(epoca!==epocaConta_||$('ms-gaveta')?.dataset.gen!==gen)return;b.disabled=false;if(!r.ok){status.textContent=r.erro||'Não foi possível abrir agora. Tente novamente.';return;}fecharGaveta_();await desempilharEsperando_();if(epoca===epocaConta_)await abrirConversa(r.conversa,false);});
+    dest.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();if(!b.disabled)b.click();}});corpo.append(rot,ld,info,status,b);dest.focus();
+  }
   function abrirMais_(){
     const anterior=document.activeElement,corpo=gaveta_('Mais');if(!corpo)return;propostaGaveta_('mais',anterior);
     const mapa={selecionar:'selecao',painel:'painel',funil:'funil','auto-cfg':'auto','agenda-painel':'agenda',atualizar:'atualizar','leitura-cfg':'config','trocar-usuario':'usuario','app-atualizar':'baixar','app-permissoes':'permissoes',conexao:'conexao',exp:'baixar'};
     const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>{const b=botao('ms-mais-item','',acao,dados);b.append(iconeFluido_(mapa[acao]),el('span','ms-mais-texto',nome),iconeFluido_('chevron'));sec.appendChild(b);});corpo.appendChild(sec);};
-    grupo('Atendimento',[['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Agendamentos','agenda-painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
+    grupo('Atendimento',[['Nova conversa','nova-conversa'],['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Agendamentos','agenda-painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
     grupo('Conta e aplicativo',[['Configurações de leitura e nome','leitura-cfg'],['Trocar usuário','trocar-usuario'],...(window.TKAndroid?[['Atualizar app','app-atualizar'],['Permissões do app','app-permissoes']]:[]),...(canal!=='todos'?[['Conexão deste canal','conexao']]:[])]);
     grupo('Exportar',[...(canal!=='todos'?[['Este canal (CSV)','exp',{params:'formato=csv&canal='+canal,rotulo:'o canal'}],['Este canal (TXT para IA)','exp',{params:'formato=txt&canal='+canal,rotulo:'o canal'}]]:[]),['Tudo (CSV, três canais)','exp',{params:'formato=csv',rotulo:'tudo'}],['Tudo (JSON)','exp',{params:'formato=json',rotulo:'tudo'}]]);
     corpo.querySelectorAll('.ms-mais-grupo').forEach(sec=>{if(![...sec.querySelectorAll('button')].some(b=>!b.hidden))sec.hidden=true;});
@@ -3015,6 +3025,7 @@
     else if (a === 'resp-editar') abrirRespostas_(true);
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
     else if (a === 'auto-cfg') abrirAuto_();
+    else if(a==='nova-conversa')abrirNovaConversa_();
     else if (a === 'agenda-painel') { fecharMenu(); abrirPainelAgenda_(); }
     else if (a === 'agenda-conversa') { const id=Number(b.dataset.id);$('ms-gaveta')?.remove();await desempilharEsperando_('ms-gaveta');await abrirConversa(id); }
     else if (a === 'agenda-opcoes') { fecharMenu(); abrirAgendarOpcoes_(); }

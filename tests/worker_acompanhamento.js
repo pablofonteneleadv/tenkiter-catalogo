@@ -98,6 +98,16 @@ sqlite.exec("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,text
 assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Envio incerto não tira da espera');sqlite.exec("UPDATE msg_mensagem SET status='enviada' WHERE ext_id='humana-fila'");assert.equal((await fila('fila=em_atendimento')).j.conversas.length,1);
 sqlite.exec("UPDATE msg_conversa SET dono='Ana' WHERE id=600");assert.equal((await fila('fila=em_atendimento&escopo=meus')).j.conversas.length,1);sqlite.exec("UPDATE msg_conversa SET dono='Outra pessoa' WHERE id=600");assert.equal((await fila('fila=em_atendimento&escopo=meus')).j.conversas.length,0);
 sqlite.exec("DELETE FROM msg_mensagem WHERE ext_id='humana-fila';INSERT INTO msg_encerramento(conversa_id,canal,motivo,em) VALUES(600,'whatsapp1','concluido','2026-11-03T13:00:00Z')");assert.equal((await fila('fila=em_atendimento')).j.conversas.length,1,'Histórico de encerramento mantém reaberta em atendimento');assert.equal((await fila('fila=inventada')).status,400);
+// Nova conversa abre sem enviar; repetir/variar formato reutiliza a mesma conversa.
+const iniciar=async(d,auth=headers)=>{const r=await W.default.fetch(new Request('https://worker.test/msg/iniciar',{method:'POST',headers:auth,body:JSON.stringify(d)}),env,{});return {status:r.status,j:await r.json()}};
+const antesNova=envios.length;let nova=await iniciar({canal:'whatsapp1',destino:'(88) 98888-1234'});assert(nova.j.ok);const novaId=nova.j.conversa;
+assert.equal((await iniciar({canal:'whatsapp1',destino:'+55 88 98888-1234'})).j.conversa,novaId);assert.equal((await iniciar({canal:'whatsapp1',destino:'88988881234'})).j.conversa,novaId);
+const outroCanal=await iniciar({canal:'whatsapp2',destino:'88988881234'});assert(outroCanal.j.ok);assert.notEqual(outroCanal.j.conversa,novaId);assert.equal(envios.length,antesNova,'Abrir não envia mensagem');
+assert.equal(sqlite.prepare('SELECT total FROM msg_conversa WHERE id=?').get(novaId).total,0,'Não inventa mensagem');
+for(const destino of ['123','número88988881234','https://site.test/88988881234','+00 88 988881234'])assert.equal((await iniciar({canal:'whatsapp1',destino})).status,400);
+assert.equal((await iniciar({canal:'outro',destino:'88988881234'})).status,400);assert.equal((await iniciar({canal:'instagram',destino:'@nunca.conversou'})).status,409);assert.equal((await iniciar({canal:'instagram',destino:'../../teste'})).status,400);
+sqlite.prepare("UPDATE msg_conversa SET nome='@cliente.conhecido' WHERE id=500").run();assert.equal((await iniciar({canal:'instagram',destino:'@Cliente.Conhecido'})).j.conversa,500);
+assert.equal((await iniciar({canal:'whatsapp1',destino:'88988881234'},{})).status,401);pode=false;cache.clear();assert.equal((await iniciar({canal:'whatsapp1',destino:'88988881234'})).status,403);pode=true;cache.clear();
 // Sessão do cadastro dura30dias: autorização de um pedido de45dias é renovada, limitada ao pedido.
 const convOutra=sqlite.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp2' LIMIT 1").get().id;
 const longa=await agendar({conversa:convOutra,texto:'Agendamento futuro',quando:new Date(clock+45*86400000).toISOString(),idLocal:'agenda-longa-0001'});assert(longa.j.ok);
