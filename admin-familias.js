@@ -363,7 +363,7 @@
   /* ---------- botões da Gestão ---------- */
   function ligarBotoes() {
     const bulk = document.querySelector('#bulk-bar .bulk-bar-actions');
-    if (bulk && !$('btn-bulk-familia')) { const b = botao('Ligar como família', '', ligarSelecionadas); b.id = 'btn-bulk-familia'; b.hidden = true; const mais = $('btn-bulk-mais'); bulk.insertBefore(b, mais || null); }
+    if (bulk && !$('btn-bulk-familia')) { const b = botao('Ligar como família', '', ligarSelecionadas); b.id = 'btn-bulk-familia'; b.hidden = true; bulk.append(b); }
     const topo = document.querySelector('.lista-topo');
     if (topo && !$('btn-fam-sugestoes')) { const b = botao('Sugestões de famílias', 'btn-fam-sug', abrirSugestoes); b.id = 'btn-fam-sugestoes'; topo.append(b); }
   }

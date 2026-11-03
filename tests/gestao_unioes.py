@@ -88,7 +88,7 @@ with sync_playwright() as p:
         pg.evaluate("window.scrollBy(0,-80)"); evid(pg, "gestao-card-fotos-%d.jpg" % w)
         # 6 — barra de seleção
         card.locator(".produto-chk").check(); pg.wait_for_timeout(250)
-        pg.click("#btn-bulk-mais"); pg.wait_for_timeout(150)
+        assert not pg.locator("#btn-bulk-mais").count()  # Separar fica na grade permanente
         chk(f"{w} item 6: com o TK-0821 marcado, 'Mais ações' oferece 'Separar em 6 produtos'", pg.locator("#btn-bulk-separar").is_visible() and "Separar em 6 produtos" in pg.inner_text("#btn-bulk-separar"))
         um.locator(".produto-chk").check(); pg.wait_for_timeout(250)
         chk(f"{w} item 6: com 2 peças marcadas o Separar some", pg.locator("#btn-bulk-separar").is_hidden())

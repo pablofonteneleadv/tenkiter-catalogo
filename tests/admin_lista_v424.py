@@ -26,7 +26,7 @@ with sync_playwright() as p:
         chk("todos os botões do lote cabem na tela (nada cortado)", all(x["l"] >= 0 and x["r"] <= d["vw"] and not x["sw"] for x in d["bs"]), d["bs"])
         chk("botões com pelo menos 44 px de altura", all(x["h"] >= 43.5 for x in d["bs"]), [x["h"] for x in d["bs"]])
         chk("a barra não passa de 60% da tela e a página não ganha rolagem lateral", d["barH"] <= d["vh"] * .6 + 1 and d["doc"] <= d["vw"] + 1, d)
-        chk("as ações continuam todas lá (preços, novidades, arquivar, reativar, postagens, mais)", all(pg.locator("#" + i).count() == 1 for i in ["btn-bulk-preco", "btn-bulk-novidade", "btn-bulk-arquivar", "btn-bulk-reativar", "btn-bulk-postar", "btn-bulk-mais"]))
+        chk("as ações continuam todas lá (preços, novidades, arquivar, reativar, postagens, separar e modelo IA)", all(pg.locator("#" + i).count() == 1 for i in ["btn-bulk-preco", "btn-bulk-novidade", "btn-bulk-arquivar", "btn-bulk-reativar", "btn-bulk-postar", "btn-bulk-separar", "btn-bulk-fotoia"]))
         pg.click("#btn-cancelar-bulk"); pg.wait_for_timeout(200)
         ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 780}, is_mobile=True, has_touch=True, service_workers="block")
