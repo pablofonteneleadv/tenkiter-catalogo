@@ -281,7 +281,7 @@
   }
   function planoFotosHtml_() {
     if (!fotosPlanejadas.length) return '<p class="fia-dica">Para configurar foto por foto, escolha as peças abaixo e toque em “Adicionar esta foto ao lote”. Depois configure a próxima.</p>';
-    return '<section class="fia-planejamento" aria-label="Fotos do lote"><h3>Seu lote · ' + fotosPlanejadas.length + ' fotos</h3>' + fotosPlanejadas.map((f, i) => '<div class="fia-foto-plano"><b>Foto ' + (i + 1) + ' · ' + f.modelos + ' modelo(s)</b>' + (f.sel.length > CF_MAX ? '<p class="fia-dica">Mais de quatro referências: exige Gemini com geração habilitada; não usa a franquia Cloudflare.</p>' : '') + '<p class="fia-dica">' + f.sel.map(x => esc(x.peca || 'Foto do aparelho') + ' (' + esc(PAPEL_ROT[x.papel]) + ')').join(' + ') + '</p><div class="fia-linha"><button type="button" class="fia-btn" data-a="editar-foto" data-i="' + i + '">Editar foto ' + (i + 1) + '</button><button type="button" class="fia-btn" data-a="remover-foto" data-i="' + i + '">Remover</button></div></div>').join('') + '<p class="fia-dica">As fotos só entram na fila quando você tocar em Gerar lote. ' + (sel.length ? 'Adicione ou salve a foto em edição para liberar o envio.' : 'Configure outra foto abaixo ou envie o lote.') + '</p><div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || sel.length || editandoFoto >= 0 ? 'disabled' : '') + '>' + (enviando ? 'Enviando lote…' : 'Gerar lote (' + fotosPlanejadas.length + ' fotos)') + '</button></div></section>';
+    return '<section class="fia-planejamento" aria-label="Fotos do lote"><h3>Seu lote · ' + fotosPlanejadas.length + ' fotos</h3>' + fotosPlanejadas.map((f, i) => '<div class="fia-foto-plano"><b>Foto ' + (i + 1) + ' · ' + f.modelos + (f.modelos === 1 ? ' modelo' : ' modelos') + '</b>' + (f.sel.length > CF_MAX ? '<p class="fia-dica">Mais de quatro referências: exige Gemini com geração habilitada; não usa a franquia Cloudflare.</p>' : '') + '<p class="fia-dica">' + f.sel.map(x => esc(x.peca || 'Foto do aparelho') + ' (' + esc(PAPEL_ROT[x.papel]) + ')').join(' + ') + '</p><div class="fia-linha"><button type="button" class="fia-btn" data-a="editar-foto" data-i="' + i + '">Editar foto ' + (i + 1) + '</button><button type="button" class="fia-btn" data-a="remover-foto" data-i="' + i + '">Remover</button></div></div>').join('') + '<p class="fia-dica">As fotos só entram na fila quando você tocar em Gerar lote. ' + (sel.length ? 'Adicione ou salve a foto em edição para liberar o envio.' : 'Configure outra foto abaixo ou envie o lote.') + '</p><div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || sel.length || editandoFoto >= 0 ? 'disabled' : '') + '>' + (enviando ? 'Enviando lote…' : 'Gerar lote (' + fotosPlanejadas.length + ' fotos)') + '</button></div></section>';
   }
   function planejarFoto_() {
     const ml = montarLooks();
@@ -353,6 +353,13 @@
     if (!r || !Array.isArray(r.produtos)) throw new Error('Não consegui atualizar os produtos. Nada foi alterado.');
     return r.produtos;
   }
+  async function adicionarFotoProduto_(p, url, capa) {
+    const todas = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',')).map(u => String(u || '').trim()).filter(Boolean);
+    const unica = [...new Set(todas.concat(url))], novaCapa = capa || !p.Foto_URL ? url : p.Foto_URL;
+    if (unica.filter(u => u !== novaCapa).length > 8) throw new Error('A galeria de ' + p.Nome + ' já está completa (oito fotos). Organize as fotos no cadastro antes de acrescentar outra.');
+    const r = await chamarAdmin_({ action: 'update', id: p.ID, fotoUrlExistente: novaCapa, fotosGaleriaExistentes: unica.filter(u => u !== novaCapa).join(',') });
+    if (!r || !r.ok) throw new Error((r && r.erro) || 'Não consegui salvar este produto.');
+  }
   async function salvarNoCatalogo_(id, misto, btn) {
     if (salvandoCatalogo.has(id)) return;
     const x = itens.find(x => x.id === id), box = btn.closest('.fia-catalogo'), ret = box.querySelector('[data-fia-retorno]');
@@ -375,21 +382,18 @@
         const uniao = campo => [...new Set(produtosDaFoto_(x).flatMap(p => String(p[campo] || '').split(',').map(s => s.trim())).filter(Boolean))].join(', ');
         const r = produtoMisto ? { ok: true, id: produtoMisto } : await chamarAdmin_({ action: 'create', opId: 'fotoia-misto-' + id, nome, categoria: uniao('Categoria'), genero: uniao('Genero'), preco: '0', consultarValor: true, estoque: '', tamanhos: '', cores: '', descricao: 'Composição com peças vendidas separadamente. Consulte a disponibilidade de cada peça.', novidade: false, notificarPush: false, fotoUrlExistente: copia.url, fotosGaleriaExistentes: '' });
         if (!r || !r.ok || !r.id) throw new Error((r && r.erro) || 'Não consegui confirmar o cadastro. Tente novamente: o mesmo pedido não cria outro produto.');
+        const existente = atuais.find(p => String(p.ID) === String(r.id));
+        if (existente && existente.Foto_URL !== copia.url) await adicionarFotoProduto_(existente, copia.url, true);
         try { localStorage.setItem('tk_fotoia_misto_' + id, String(r.id)); } catch (e) { /* backend também reconhece opId nos reenvios recentes */ }
         const v = await api('/fotoia/composicao', 'POST', { id, produto: String(r.id) });
         if (!v || !v.ok) throw new Error('O produto foi criado, mas faltou vincular as peças. Tente novamente para concluir sem duplicar. ' + erroTxt(v));
-        ret.textContent = 'Produto misto criado com as peças vinculadas e valor a consultar.';
+        ret.textContent = 'Produto misto pronto com esta foto, peças vinculadas e valor a consultar.';
       } else {
         for (const pid of ids) {
           const p = atuais.find(p => String(p.ID) === pid); if (!p) throw new Error('Um produto não está mais disponível. Atualize a lista.');
           const capa = box.querySelector('[data-fia-capa="' + CSS.escape(pid) + '"]').checked;
-          const todas = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',')).map(u => String(u || '').trim()).filter(Boolean);
-          const unica = [...new Set(todas.concat(copia.url))];
-          const novaCapa = capa || !p.Foto_URL ? copia.url : p.Foto_URL;
           ret.textContent = 'Salvando em ' + p.Nome + '…';
-          if (unica.filter(u => u !== novaCapa).length > 8) throw new Error('A galeria de ' + p.Nome + ' já está completa (oito fotos). Organize as fotos no cadastro antes de acrescentar outra.');
-          const r = await chamarAdmin_({ action: 'update', id: p.ID, fotoUrlExistente: novaCapa, fotosGaleriaExistentes: unica.filter(u => u !== novaCapa).join(',') });
-          if (!r || !r.ok) throw new Error((r && r.erro) || 'Não consegui salvar este produto.');
+          await adicionarFotoProduto_(p, copia.url, capa);
           salvos.push(p.Nome);
         }
         ret.textContent = 'Foto adicionada em ' + salvos.length + ' produto(s).';

@@ -18,9 +18,9 @@ with sync_playwright() as p:
         b['Nome']='Short infantil liso 6 anos'; b['Categoria']='Short'; b['Genero']='Infantil Menina'; b['Tamanhos']='6 anos'
         a['Fotos_Galeria']='https://res.cloudinary.com/z/image/upload/v1/galeria.jpg'; a['Video_URL']='https://res.cloudinary.com/z/video/upload/v1/video.mp4'
         fotos_originais = [a['Foto_URL'], a['Fotos_Galeria']]; valor_original=a['Preco']
-        copies=[]; links=[]; falhar=[True]
+        copies=[]; links=[]; falhar=[True]; versao_foto=['a']
         def incorporar(route):
-            copies.append(json.loads(route.request.post_data)); route.fulfill(json={'ok':True,'url':'https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/'+'a'*20+'.jpg'})
+            copies.append(json.loads(route.request.post_data)); route.fulfill(json={'ok':True,'url':'https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/'+versao_foto[0]*20+'.jpg'})
         def vincular(route):
             if route.request.method=='GET': return route.fulfill(json={'ok':True,'produto':links[0]['produto'] if links else ''})
             body=json.loads(route.request.post_data)
@@ -69,9 +69,12 @@ with sync_playwright() as p:
         assert all(set(u).issubset({'action','id','fotoUrlExistente','fotosGaleriaExistentes','pin','sessao','whatsapp','funcionario'}) for u in st['atualizados'])
         # Fail linking after create, then retry with the same opId: only one actual product.
         box.locator('[data-misto=sim]').click(); pg.wait_for_function('document.querySelector("[data-fia-retorno]").textContent.includes("faltou vincular")')
-        box.locator('[data-misto=sim]').click(); pg.wait_for_function('document.querySelector("[data-fia-retorno]").textContent.includes("Produto misto criado")')
+        box.locator('[data-misto=sim]').click(); pg.wait_for_function('document.querySelector("[data-fia-retorno]").textContent.includes("Produto misto pronto")')
         assert len(st['criados'])==1 and len(links)==1
         novo=next(q for q in ps if q['ID']==links[0]['produto']); assert float(novo['Preco'])==0 and novo['Foto_URL']==a['Foto_URL']
+        if width == 390:
+            versao_foto[0]='b'; box.locator('[data-misto=sim]').click(); pg.wait_for_function('document.querySelector("[data-fia-retorno]").textContent.includes("Produto misto pronto")')
+            assert novo['Foto_URL'].endswith('b'*20+'.jpg') and a['Foto_URL'] in novo['Fotos_Galeria'] and len(st['criados'])==1
         box.scroll_into_view_if_needed(); pg.screenshot(path=str(OUT/f'incorporar-{width}.png'))
         assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')
         assert not errors,errors
@@ -88,7 +91,8 @@ with sync_playwright() as p:
             assert not erros_axe,erros_axe
         # Real public product detail journey; right arrow and touch navigate constituent slides.
         pg.goto(BASE+'?c='+novo['Codigo']); pg.wait_for_selector('.composicao-ia-dica')
-        pg.locator('#seta-dir').click(); pg.wait_for_selector('.composicao-ia-slide')
+        for _ in range(1+len([u for u in str(novo.get('Fotos_Galeria','')).split(',') if u.strip()])): pg.locator('#seta-dir').click()
+        pg.wait_for_selector('.composicao-ia-slide')
         assert a['Nome'] in pg.locator('.composicao-ia-slide').inner_text()
         assert 'à vista' in pg.locator('.composicao-ia-slide').inner_text()
         pg.screenshot(path=str(OUT/f'vitrine-{width}.png'))
