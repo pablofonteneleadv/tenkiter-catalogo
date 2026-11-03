@@ -15,7 +15,7 @@ def ambiente(browser,w=390,h=844,perms=PERMS_ALL):
 
 def escolher(pg,pessoa=0,papel='look',codigo='TK-0003'):
  pg.locator('.fi-pessoa').nth(pessoa).locator('[data-a=escolher][data-papel='+papel+']').click();pg.fill('#fi-busca',codigo);pg.click('[data-picker=produto]');pg.locator('[data-picker=foto]').first.click();pg.wait_for_selector('#fi-picker',state='hidden')
-def salvar(pg):pg.click('[data-a=salvar-foto]');pg.wait_for_selector('.fi-editor',state='hidden');pg.wait_for_selector('[data-a=enviar]')
+def salvar(pg):pg.locator('[data-a=salvar-foto]').evaluate('e=>{e.click();e.click()}');pg.wait_for_selector('.fi-editor',state='hidden');pg.wait_for_selector('[data-a=enviar]')
 def foto(pg,n=1):
  for i in range(n):
   if i:pg.click('[data-a=pessoa-nova]')
