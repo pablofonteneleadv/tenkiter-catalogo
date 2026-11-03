@@ -62,7 +62,7 @@
     if(enviando||!mesmoDono())return;if(!retomando&&estado.editor){mudarAviso('Salve ou cancele a foto em edição antes de enviar.','erro');return}
     const fotos=estado.fotos.filter(f=>!f.job&&(retomando?['pendente','enviando','confirmar'].includes(f.estado):['rascunho','erro','pendente','enviando','confirmar'].includes(f.estado)));
     if(!fotos.length)return;const ruins=fotos.flatMap(f=>P.validar(f,info).map(e=>(f.titulo||'Foto '+(estado.fotos.indexOf(f)+1))+': '+e));if(ruins.length){mudarAviso(ruins.join(' '),'erro');return}
-    enviando=true;const conta=dono,token=geracao;fotos.forEach(f=>{if(!f.tentativa)f.estado='pendente'});
+    enviando=true;const conta=dono,token=geracao;let falhaGeral='';fotos.forEach(f=>{if(!f.tentativa)f.estado='pendente'});
     try{await salvar();if(aba==='lote')renderLote(true);for(let i=0;i<fotos.length;i++){
       if(token!==geracao||!mesmoDono()||conta!==dono)return;const f=fotos[i];
       if(f.tentativa){const c=await S.pedir('/fotoia/pedido?pedidoId='+encodeURIComponent(f.pedidoId));if(c.ok&&c.encontrado){f.job=c.id;f.estado='enviada';f.erro='';await salvar();continue}if(!c.ok){f.estado='confirmar';f.erro=S.erroLegivel(c);await salvar();continue}}
@@ -71,8 +71,8 @@
       if(token!==geracao||!mesmoDono())return;const r=await S.pedir('/fotoia/fila',pacote);if(token!==geracao||!mesmoDono())return;
       if(r.ok&&r.id){f.estado='enviada';f.job=r.id;f.erro=''}else if(r.http>=400&&r.http<500){f.estado='erro';delete f.tentativa;f.erro=S.erroLegivel(r);if(r.exigeLogin){await salvar();telaLogin(f.erro);return}}else{f.estado='confirmar';f.erro=S.erroLegivel(r);const c=await S.pedir('/fotoia/pedido?pedidoId='+encodeURIComponent(f.pedidoId));if(c.ok&&c.encontrado){f.estado='enviada';f.job=c.id;f.erro=''}}
       await salvar();if(aba==='lote')renderLote(true);
-    }}catch(e){mudarAviso(e.message,'erro')}
-    finally{if(token===geracao&&mesmoDono()){enviando=false;const n=fotos.filter(f=>!f.job).length,novas=estado.fotos.some(f=>!f.job&&!fotos.includes(f));mudarAviso(n?n+(n===1?' foto precisa':' fotos precisam')+' de confirmação ou ajuste. As já recebidas foram mantidas.':fotos.length+(fotos.length===1?' foto recebida':' fotos recebidas')+' para criação.'+(novas?' As novas fotos continuam no planejamento.':' Acompanhe em Resultados.'),n?'erro':'ok');await salvar().catch(()=>{});if(aba==='lote'&&info)renderLote(true);if(info)resultados?.atualizarLista?.()}}
+    }}catch(e){falhaGeral=e.message;mudarAviso(falhaGeral,'erro')}
+    finally{if(token===geracao&&mesmoDono()){enviando=false;const n=fotos.filter(f=>!f.job).length,novas=estado.fotos.some(f=>!f.job&&!fotos.includes(f));mudarAviso(falhaGeral||(n?n+(n===1?' foto precisa':' fotos precisam')+' de confirmação ou ajuste. As já recebidas foram mantidas.':fotos.length+(fotos.length===1?' foto recebida':' fotos recebidas')+' para criação.'+(novas?' As novas fotos continuam no planejamento.':' Acompanhe em Resultados.')),falhaGeral||n?'erro':'ok');await salvar().catch(()=>{});if(aba==='lote'&&info)renderLote(true);if(info)resultados?.atualizarLista?.()}}
   }
   function retomar(){estado.fotos.forEach(f=>{if(f.estado==='enviando')f.estado='confirmar'});enviar(true)}
   function abrirPicker(pessoa,papel){picker={pessoa,papel,busca:'',todas:false,produto:null,token:geracao};const o=$('fi-picker');o.hidden=false;document.body.style.overflow='hidden';TKCamadas.empilhar('fi-picker',()=>fecharPicker(true));$('fi-picker-titulo').textContent='Escolher '+({look:'look completo',cima:'peça de cima',baixo:'peça de baixo'})[papel];$('fi-busca').value='';$('fi-picker-erro').textContent='';$('fi-picker-todas').setAttribute('aria-pressed','false');$('fi-arquivo-btn').textContent='Foto do aparelho';desenharPicker();$('fi-busca').focus();}

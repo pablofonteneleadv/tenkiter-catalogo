@@ -3,7 +3,7 @@
   'use strict';
   const esc=escaparHtml;
   root.TKFotoIAResultados=function(ctx){
-    const {app,servico:S}=ctx;let itens=[],filtro='ativas',mais=false,antes=null,timer=null,buscando=false,aberto=false,mensagem='',tipoMsg='',focoJob=null,destruido=false,pendente=false;
+    const {app,servico:S}=ctx;let itens=[],filtro='ativas',mais=false,antes=null,timer=null,buscando=false,aberto=false,mensagem='',tipoMsg='',focoJob=null,destruido=false,pendente=null;
     const ocupados=new Set(),feito=new Map();
     const rot={fila:'Na fila de criação',gerando:'Criando imagem',pronta:'Pronta para revisar',aprovada:'Aprovada',erro:'Precisa de atenção',descartada:'Descartada',cancelada:'Cancelada'};
     const data=iso=>{try{return new Date(iso).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Fortaleza'})}catch(e){return''}};
@@ -26,12 +26,12 @@
       if(focoFiltro)app.querySelector('#fi-resultados-filtro')?.focus({preventScroll:true});
       if(focoJob){const el=app.querySelector('[data-job="'+focoJob+'"]');if(el){el.tabIndex=-1;el.focus();el.scrollIntoView({block:'start'});focoJob=null}}
     }
-    async function carregar(maisAntigos=false,forcar=false){if(destruido)return;if(buscando){pendente=true;return}buscando=true;const atual=filtro;try{const r=await S.pedir('/fotoia/lista?status='+encodeURIComponent(filtro)+(maisAntigos&&antes?'&antes='+antes:''));if(destruido||atual!==filtro)return;if(r.exigeLogin){parar();ctx.aoLogin('Renove sua sessão para acompanhar as fotos.');return}if(!r.ok){mensagem=S.erroLegivel(r);tipoMsg='erro';if(aberto){const e=app.querySelector('#fi-resultados-aviso');if(e){e.textContent=mensagem;e.className='fi-retorno erro'}else render()}return}
+    async function carregar(maisAntigos=false,forcar=false){if(destruido)return;if(buscando){pendente={maisAntigos:maisAntigos||pendente?.maisAntigos||false,forcar:forcar||pendente?.forcar||false};return}buscando=true;const atual=filtro;try{const r=await S.pedir('/fotoia/lista?status='+encodeURIComponent(filtro)+(maisAntigos&&antes?'&antes='+antes:''));if(destruido||atual!==filtro)return;if(r.exigeLogin){parar();ctx.aoLogin('Renove sua sessão para acompanhar as fotos.');return}if(!r.ok){mensagem=S.erroLegivel(r);tipoMsg='erro';if(aberto){const e=app.querySelector('#fi-resultados-aviso');if(e){e.textContent=mensagem;e.className='fi-retorno erro'}else render()}return}
       ctx.aoContagens?.(r.contagens||{});
       if(mensagem==='Carregando filtro…'||tipoMsg==='erro'){mensagem='';tipoMsg=''}
       if(maisAntigos){const mapa=new Map(itens.map(x=>[x.id,x]));(r.itens||[]).forEach(x=>mapa.set(x.id,x));itens=[...mapa.values()];mais=!!r.temMais;antes=r.proximo||null}else{const novos=new Map((r.itens||[]).map(x=>[x.id,x]));if(itens.length>40){itens=itens.map(x=>novos.get(x.id)||x);for(const x of r.itens||[])if(!itens.some(y=>y.id===x.id))itens.unshift(x)}else{itens=r.itens||[];mais=!!r.temMais;antes=r.proximo||null}}
       if(aberto&&(forcar||podeRender()))render();else if(aberto){for(const x of itens){const c=app.querySelector('[data-job="'+x.id+'"] [data-job-status]');if(c){c.textContent=rot[x.status]||x.status;c.className='fi-status '+x.status}}}
-    }finally{buscando=false;if(pendente&&!destruido){pendente=false;carregar(false,true).catch(()=>{})}}}
+    }finally{buscando=false;if(pendente&&!destruido){const p=pendente;pendente=null;carregar(p.maisAntigos,p.forcar).catch(()=>{})}}}
     function iniciarTimer(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(aberto&&!document.hidden&&!ocupados.size)carregar(false,false).catch(()=>{})},window.TK_FOTOIA_POLL_MS||6000)}
     function abrir(){aberto=true;render();carregar(false,true).catch(e=>{mensagem=e.message;tipoMsg='erro';render()});iniciarTimer()}
     function parar(){aberto=false;if(timer)clearInterval(timer);timer=null}
@@ -46,7 +46,7 @@
         if(a==='baixar'){await S.baixar(x.resultado,'tenkiter-ia-'+id+'.jpg');ret.textContent='Download iniciado.';return}
         if(a==='incorporar'){const escolhas=[...card.querySelectorAll('[data-produto]:checked')].map(e=>({id:e.dataset.produto,capa:card.querySelector('[data-capa="'+CSS.escape(e.dataset.produto)+'"]').checked}));if(!escolhas.length)throw Error('Escolha pelo menos um produto.');const r=await S.incorporar(x,escolhas,t=>ret.textContent=t);ret.textContent='Foto adicionada em '+r.total+(r.total===1?' produto.':' produtos.');ret.className='fi-retorno ok';return}
         if(a==='misto'){const nome=card.querySelector('[data-nome-misto]').value.trim();if(!nome)throw Error('Informe o nome do produto misto.');await S.misto(x,nome);ret.textContent='Produto misto pronto com esta foto e as peças vinculadas.';ret.className='fi-retorno ok';return}
-        const r=await S.pedir('/fotoia/acao',{id,acao:a,...(a==='comparar'?{motor:card.querySelector('[data-motor-teste]').value}:{})});if(!r.ok)throw Error(S.erroLegivel(r));feito.set(id,a==='comparar'?'Comparação recebida no pedido '+r.id+'. A imagem anterior foi mantida.':a==='aprovar'?'Foto aprovada. Escolha Colocar no produto para usá-la no catálogo.':'Pedido atualizado.');mensagem=a==='comparar'?'Comparação recebida para criação, pedido '+r.id+'.':'Atualização confirmada.';tipoMsg='ok';await ctx.atualizar?.();itens=[];antes=null;mais=false;await carregar(false,true);
+        const r=await S.pedir('/fotoia/acao',{id,acao:a,...(a==='comparar'?{motor:card.querySelector('[data-motor-teste]').value}:{})});if(!r.ok)throw Error(S.erroLegivel(r));feito.set(id,a==='comparar'?(r.repetido?'Esta comparação já existe no pedido '+r.id+'. Consulte Todo o histórico para encontrá-la.':'Comparação recebida no pedido '+r.id+'. A imagem anterior foi mantida.'):a==='aprovar'?'Foto aprovada. Escolha Colocar no produto para usá-la no catálogo.':'Pedido atualizado.');mensagem=a==='comparar'?(r.repetido?'Comparação já existente, pedido '+r.id+'. Consulte Todo o histórico.':'Comparação recebida para criação, pedido '+r.id+'.'):'Atualização confirmada.';tipoMsg='ok';await ctx.atualizar?.();itens=[];antes=null;mais=false;await carregar(false,true);
       }catch(err){ret.textContent=err.message;ret.className='fi-retorno erro'}finally{ocupados.delete(id);card.querySelectorAll('button').forEach(e=>e.disabled=false)}
     }
     function ajustes(aviso=''){parar();const i=ctx.info();if(!i?.podeEditar){app.innerHTML='<p class="fi-vazio">Os ajustes são exclusivos da gestão.</p>';return}const c=i.config,p=c.provedores||[],ordem=p.length===1?p[0]:p[0]==='cloudflare'?'cf-gem':'gem-cf';

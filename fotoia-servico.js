@@ -15,7 +15,7 @@
     }catch(e){return{ok:false,semRede:true,incerto:!!corpo,erro:e.name==='AbortError'?'A confirmação demorou mais que o esperado. Confira o envio antes de tentar de novo.':'A conexão falhou. Seu trabalho foi mantido neste aparelho.'};}
     finally{clearTimeout(t)}
   }
-  async function catalogo(){const r=await fetch(API_URL+'?action=list&todos=true',{cache:'no-store'});const j=await r.json();if(!r.ok||!Array.isArray(j.produtos))throw Error('Não consegui carregar as peças do catálogo. Tente novamente.');return j.produtos;}
+  async function catalogo(){try{const r=await fetch(API_URL+'?action=list&todos=true',{cache:'no-store'});const j=await r.json();if(!r.ok||!Array.isArray(j?.produtos))throw Error();return j.produtos}catch(e){throw Error('Não consegui carregar as peças do catálogo. Confira sua conexão e tente novamente.')}}
   function atualizar(dados,esperado){const s=getSessao();if(esperado&&String(s?.whatsapp||'')!==esperado)return Promise.resolve({ok:false,erro:'A conta mudou. Entre novamente na conta de origem para concluir.'});if(!s)return Promise.resolve({ok:false,erro:'Entre na sua conta.'});return apiPost({...dados,pin:s.sessao,sessao:s.sessao,whatsapp:s.whatsapp});}
   function fontesProduto(p){return [...new Set([p.Foto_URL].concat(String(p.Fotos_Galeria||'').split(',')).map(s=>String(s||'').trim()).filter(u=>/^https:\/\//i.test(u)&&!(/\.(mp4|mov|webm)(?:\?|$)/i.test(u))))];}
   async function adicionarFotoProduto(p,url,capa,conta){
