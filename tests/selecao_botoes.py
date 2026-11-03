@@ -41,7 +41,7 @@ with sync_playwright() as p:
             chk("Juntar abre a janela no catálogo (sem sair)", pg.locator("#overlay-juntar.aberto").count() == 1 and pg.url.endswith("index.html") or "admin" not in pg.url)
             chk("2 peças para escolher", pg.locator("#juntar-lista input").count() == 2)
             pg.click("#juntar-ok"); pg.wait_for_timeout(100)
-            chk("mostra que está carregando", pg.locator("#juntar-prog:visible").count() == 1 or pg.locator("#overlay-juntar.aberto").count() == 0)
+            chk("v7.50.0: a janela fecha na hora e o aviso discreto mostra o andamento/resultado", pg.locator("#overlay-juntar.aberto").count() == 0 and pg.locator("#tk-fila-lote:visible").count() == 1)
             pg.wait_for_timeout(1500)
             chk("fechou e a seleção esvaziou", pg.locator("#overlay-juntar.aberto").count() == 0 and pg.evaluate("getSacola().length") == 0)
             pg.evaluate("salvarSacola([String(produtos[0].ID), String(produtos[1].ID)]); atualizarBarraFiltros_()")

@@ -160,6 +160,16 @@
     pintarForm();
     try { if (typeof atualizarFaltas_ === 'function') atualizarFaltas_(); } catch (e) {}
   }
+  /* v7.50.0: "Separar" (fila-lote.js) — família atual da peça e ligar as peças separadas (nova família ou a atual; repetir não muda nada). */
+  window.tkFamiliaDe = (id) => familiaDe(id);
+  window.tkFamiliaCarregar = () => carregar();
+  window.tkFamiliaLigar = async function (ids, fam) {
+    const corpo = { produtos: ids.map(String), juntar: true };
+    const nome = fam && String(fam.nome || '').trim(); if (nome && fam.modo === 'nova') corpo.nome = nome.slice(0, 80);
+    const r = await srv('/familias/ligar', corpo);
+    if (r && r.ok && r.familia) usarFamilia(r.familia);
+    return r;
+  };
   window.tkFamiliaNovaVariacao = novaVariacao;
   window.tkFamiliaNovoTamanho = novaVariacao;   // nome antigo (7.44.0)
   /** Chamado no "Cadastrar": devolve o que o envio precisa guardar para ligar a peça nova (null = não é variação). Nunca bloqueia o cadastro. */

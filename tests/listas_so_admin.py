@@ -35,7 +35,7 @@ with sync_playwright() as p:
         # ---- funcionária com cadastro, sem Admin total ----
         ctx, pg, log, errs = abrir(b, EQUIPE, w, h)
         chk(f"{w} equipe: a página marca 'sem-gerir'", pg.evaluate("document.body.classList.contains('sem-gerir')"))
-        pg.locator("button", has_text="Cadastrar peça").first.click(); pg.wait_for_timeout(600)
+        pg.click("#card-menu-cadastro > summary"); pg.click("#menu-cad-nova"); pg.wait_for_timeout(600)   # v7.50.0: o atalho saiu do "O que fazer agora"
         pg.evaluate("document.getElementById('tecido').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
         t = pg.locator("#tecido")
         chk(f"{w} equipe: campo Tecido não aceita escrever (só escolher)", t.evaluate("e => e.readOnly") and t.get_attribute("list") is None and pg.evaluate("!document.getElementById('tecido-ajuda').hidden"), [t.evaluate("e => e.readOnly"), t.get_attribute("list")])
