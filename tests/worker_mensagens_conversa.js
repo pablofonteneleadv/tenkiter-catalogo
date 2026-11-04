@@ -936,6 +936,12 @@ function d1() {
   await wh('/wh/wafly/1/'+seg,msg('CTX-POSTADOR','5588989012345','Esse',{isStatusReply:true,referenceMessageId:'WAF-STATUS-POSTADOR',momment:Date.now()}));
   const vinculoPost=await DB.prepare("SELECT ctx_post,ctx_aprox FROM msg_mensagem WHERE ext_id='CTX-POSTADOR'").first();
   chk('status do Postador usa ID confirmado do recibo, não o mais recente',vinculoPost.ctx_post===postExato.meta.last_row_id&&vinculoPost.ctx_aprox===0,vinculoPost);
+  const ctxPostRow=await DB.prepare("SELECT id,conversa_id FROM msg_mensagem WHERE ext_id='CTX-POSTADOR'").first();
+  const ctxPostApi=(await A('GET','/msg/mensagens?conversa='+ctxPostRow.conversa_id)).j.mensagens.find(m=>m.id===ctxPostRow.id);
+  chk('recibo exato do Postador permite confirmação sem arquivo duplicado',ctxPostApi.ctx_confirmado===1,ctxPostApi);
+  await DB.prepare("UPDATE msg_mensagem SET ctx_ref='SEM-RECIBO',ctx_aprox=0 WHERE id=?").bind(ctxPostRow.id).run();
+  const ctxLegadoApi=(await A('GET','/msg/mensagens?conversa='+ctxPostRow.conversa_id)).j.mensagens.find(m=>m.id===ctxPostRow.id);
+  chk('fallback legado único sem mídia ou recibo exato não vira confirmação',ctxLegadoApi.ctx_confirmado===0,ctxLegadoApi);
   const ctxResponse=await w.fetch(new Request('https://ig.test/msg/midia?id='+exact.id+'&ctx=1',{headers:{'X-TK-Whats':'88999990000','X-TK-Sessao':'tk2.admin'}}),env,{});
   chk('vídeo do status é servido autenticado como vídeo',ctxResponse.status===200&&ctxResponse.headers.get('content-type')==='video/mp4');
   await wh('/wh/wafly/1/'+seg,msg('OWN-STATUS-VIDEO','status@broadcast','',{fromMe:true,video:{videoUrl:'https://cdn.fake/own-status.mp4',mimeType:'video/mp4'},text:undefined,momment:Date.now()}));

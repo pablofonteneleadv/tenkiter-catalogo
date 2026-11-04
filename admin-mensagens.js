@@ -2053,7 +2053,7 @@
     const q = el('div', 'ms-ctx'), col = el('div', 'ms-ctx-txt');
     col.appendChild(el('b', '', m.direcao === 'saida' ? 'Você respondeu a um story' : 'Respondeu ao seu story'));
     if (m.ctx_legenda) col.appendChild(el('span', 'ms-ctx-leg', m.ctx_legenda));
-    const det = []; if(m.ctx_confirmado&&aberta&&aberta.canal!=='instagram')det.push('Status confirmado'); if (m.ctx_em) det.push('publicado ' + hora(m.ctx_em)); if (m.ctx_aprox) det.push('story provável (havia mais de um no ar)');
+    const det = []; if(m.ctx_confirmado&&aberta&&aberta.canal!=='instagram')det.push('Status confirmado'); if (m.ctx_em) det.push('publicado ' + hora(m.ctx_em)); if (m.ctx_aprox) det.push('referência do status ainda não confirmada');
     if (!m.ctx_midia) det.push('não encontrei a imagem deste story');
     if (det.length) col.appendChild(el('span', 'ms-ctx-det', det.join(' · ')));
     q.appendChild(col);
