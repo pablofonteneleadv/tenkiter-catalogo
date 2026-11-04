@@ -5675,7 +5675,7 @@ export default {
       }
       return resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
     };
-    if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
+    if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao, X-TK-Operacao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if(url.pathname==='/internal/video'){try{return await videoRunner_(env,req,url,J);}catch(_){return J({ok:false,erro:'Processador indisponível.'},503);}}
     if(url.pathname==='/msg/tempo-real'){try{return await conectarEventos_(env,req);}catch(_){return new Response(null,{status:503,headers:{'Cache-Control':'no-store'}});}}
     if(url.pathname==='/catalogo/tecidos'){try{return await rotaTecidos_(env,req,J);}catch(_){return J({ok:false,erro:'Não foi possível atualizar os tecidos. Tente de novo.'},503);}}
@@ -5698,7 +5698,7 @@ export default {
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
-    if (url.pathname.startsWith('/esteira/')) { try { return await rotasEsteira_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500); } }   // v7.41.0
+    if (url.pathname.startsWith('/esteira/')) { try { return await esteiraComando_(env,req,url,J,perms,ctx); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500); } }   // v7.41.0
     const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0 || url.pathname.indexOf('/fotoia') === 0;
     const ehMsg = url.pathname.startsWith('/msg/');
     if (!ehMsg && (ehPost ? (perms.indexOf('gerir_acessos') === -1 && perms.indexOf('catalogo_cadastrar') === -1) : perms.indexOf('gerir_acessos') === -1)) return J({ ok: false, erro: ehPost ? 'Você não tem permissão para postar no Instagram.' : 'Só o administrador total acessa o importador do Instagram.' }, 403);
@@ -7007,6 +7007,27 @@ async function estCaixaRepetidas_(env, itens) {
   const rows = (await env.DB.prepare('SELECT id, hash, enviada_em, enviada_por FROM est_caixa WHERE hash IN (' + hs.map(() => '?').join(',') + ") AND status<>'descartada' ORDER BY id").bind(...hs).all()).results || [];
   for (const x of itens) { if (!x.hash) continue; const o = rows.find((r) => r.hash === x.hash && r.id < x.id); if (o) out[x.id] = { id: o.id, em: o.enviada_em || '', por: o.enviada_por || '' }; }
   return out;
+}
+/** Recibos por conta/operação: perder a resposta não repete uma criação.
+ * Não retoma mutação de resultado incerto. O cliente consulta o mesmo recibo. */
+async function esteiraComando_(env,req,url,J,perms,ctx){
+  const op=req.headers.get('X-TK-Operacao')||url.searchParams.get('op')||'',consulta=url.pathname==='/esteira/operacoes/status';
+  if(!consulta&&(req.method!=='POST'||!op))return rotasEsteira_(env,req,url,J,perms);
+  if(!/^[A-Za-z0-9:_-]{10,180}$/.test(op))return J({ok:false,erro:'Identificação do processo inválida.'},400);
+  await iniciar(env);
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS est_comando(dono TEXT NOT NULL,op TEXT NOT NULL,rota TEXT NOT NULL,hash TEXT NOT NULL,estado TEXT NOT NULL,resultado TEXT NOT NULL DEFAULT '',http INTEGER NOT NULL DEFAULT 200,autorizacao TEXT NOT NULL,criado_em TEXT NOT NULL,atualizado_em TEXT NOT NULL,PRIMARY KEY(dono,op))").run();
+  const dono=estFone_(req.headers.get('X-TK-Whats')),em=agora(),autorizacao=perms.slice().sort().join('|');
+  await estIniciar_(env);const equipe=await estEquipe_(env),admin=perms.includes('gerir_acessos'),membro=equipe.some(e=>estFone_(e.whats)===dono),gestor=admin||perms.includes('catalogo_cadastrar')||perms.includes('catalogo_admin');
+  if(!admin&&!membro&&!(gestor&&(url.pathname.startsWith('/esteira/caixa')||consulta)))return J({ok:false,erro:'Seu acesso à Esteira mudou. Confira com o administrador.'},403);
+  const ler=()=>env.DB.prepare('SELECT * FROM est_comando WHERE dono=? AND op=?').bind(dono,op).first();
+  const responder=r=>{if(!r)return J({ok:false,erro:'Este processo não foi encontrado nesta conta.'},404);if(r.autorizacao!==autorizacao)return J({ok:false,erro:'Seu acesso mudou. Confira este processo com o administrador.'},403);if(r.estado==='concluido'){try{return J(JSON.parse(r.resultado),r.http)}catch(_){return J({ok:false,incerto:true,erro:'Não consegui recuperar a confirmação. Confira o resultado antes de repetir.'},409)}}const incerto=r.estado==='incerto'||Date.now()-Date.parse(r.criado_em)>120000;return J({ok:false,aguardando:!incerto,incerto,erro:incerto?'Este processo ainda não tem confirmação. Confira o resultado antes de repetir.':'Conferindo a confirmação do processo.'},incerto?409:202)};
+  if(consulta)return responder(await ler());
+  const corpo=await req.clone().text();if(new TextEncoder().encode(corpo).length>1000000)return J({ok:false,erro:'Este processo é grande demais. Divida em partes menores.'},413);
+  const hash=await sha(url.pathname+'|'+corpo);
+  const g=await env.DB.prepare("INSERT OR IGNORE INTO est_comando(dono,op,rota,hash,estado,autorizacao,criado_em,atualizado_em) VALUES (?,?,?,?,'processando',?,?,?)").bind(dono,op,url.pathname,hash,autorizacao,em,em).run();
+  if(!g.meta?.changes){const r=await ler();if(r&&r.hash!==hash)return J({ok:false,incerto:true,erro:'Os dados deste processo mudaram. Confira a solicitação original antes de repetir.'},409);return responder(r)}
+  const trabalho=(async()=>{try{const res=await rotasEsteira_(env,req,url,J,perms),texto=await res.clone().text();if(res.status>=500||new TextEncoder().encode(texto).length>1500000){await env.DB.prepare("UPDATE est_comando SET estado='incerto',atualizado_em=? WHERE dono=? AND op=?").bind(agora(),dono,op).run();return J({ok:false,incerto:true,erro:'O servidor não confirmou a conclusão. Confira o processo antes de repetir.'},409)}await env.DB.prepare("UPDATE est_comando SET estado='concluido',resultado=?,http=?,atualizado_em=? WHERE dono=? AND op=?").bind(texto,res.status,agora(),dono,op).run();return res}catch(_){await env.DB.prepare("UPDATE est_comando SET estado='incerto',atualizado_em=? WHERE dono=? AND op=?").bind(agora(),dono,op).run();return J({ok:false,incerto:true,erro:'Não recebi a confirmação. O processo foi guardado para conferência.'},409)}})();
+  if(typeof ctx?.waitUntil==='function')ctx.waitUntil(trabalho.then(()=>{},()=>{}));return await trabalho;
 }
 async function rotasEsteira_(env, req, url, J, perms) {
   await iniciar(env); await estIniciar_(env);

@@ -28,6 +28,8 @@
   nav.abas.curto { gap:2px; } nav.abas.curto button { padding:0 5px; min-width:44px; font-size:.86rem; }   /* v7.43.0: abas do Admin no celular (7.51.0: 6 abas com Fotos) */
   nav.abas.curto .aba-num { min-width:8px; width:8px; height:8px; padding:0; margin-left:3px; font-size:0; vertical-align:top; }   /* no celular, só um ponto (o número vai no nome acessível) */
   main { max-width:760px; margin:0 auto; padding:16px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); display:grid; gap:14px; }
+  #esteira-processos-abrir{min-height:44px;padding:6px 10px;background:transparent;color:#fff;border:1px solid #555;border-radius:8px;font:600 .8rem Inter,sans-serif;white-space:nowrap} #esteira-processos-abrir.com-aviso{border-color:var(--laranja);color:#ffd5a0}
+  #esteira-processos{max-width:728px;margin:12px auto 0;padding:12px 16px;background:var(--branco);border:1px solid var(--linha);border-radius:12px} #esteira-processos>div{display:flex;align-items:center;justify-content:space-between} #esteira-processos button{min-height:44px;min-width:44px;padding:8px 12px;border:1px solid var(--linha);border-radius:8px;background:var(--areia);color:var(--preto)} #esteira-processos>p,#esteira-processos li p{font-size:.85rem;color:var(--suave);margin:6px 0} #esteira-processos ul{max-height:42dvh;overflow:auto;list-style:none;padding:0;margin:0} #esteira-processos li{padding:10px 0;border-top:1px solid var(--linha)}
   .esteira-vista { display:grid; gap:14px; min-width:0; }
   .card { background:var(--branco); border:1px solid var(--linha); border-radius:14px; padding:14px; display:grid; gap:10px; min-width:0; }
   .card h2, .card h3 { margin:0; font-size:1.05rem; }
@@ -276,6 +278,9 @@
 <script src="catalogo-tecido.js?v=7.40.26"></script>
 <script src="conta.js"></script>
 <script src="esteira-fluidez.js?v=7.53.3"></script>
+<script src="esteira-processos.js"></script>
+<script src="fotos-novas.js"></script>
+<script src="produtos-busca.js"></script>
 <script>
 (function () {
   'use strict';
@@ -283,13 +288,22 @@
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const app = $('app');
   let EU = null, ABA = 'hoje', HOJE = null, CATALOGO = null, usuario = null;
+  let versaoTela=0;
+  const fotosLocais=new Map();
+  function snapshotEnvio(v){if(typeof v==='string'&&fotosLocais.has(v))return{fotoLocal:true,arquivo:fotosLocais.get(v)};if(Array.isArray(v))return v.map(snapshotEnvio);if(v&&typeof v==='object'&&!(v instanceof Blob))return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,snapshotEnvio(x)]));return v;}
+  async function resolverFotos(v,c,caminho='anexo'){if(v?.fotoLocal&&v.arquivo instanceof Blob)return c.etapa(caminho,async()=>enviarFoto(await reduzirFoto(v.arquivo)));if(Array.isArray(v)){const a=[];for(let i=0;i<v.length;i++)a.push(await resolverFotos(v[i],c,caminho+'-'+i));return a;}if(v&&typeof v==='object'&&!(v instanceof Blob)){const a={};for(const[k,x]of Object.entries(v))a[k]=await resolverFotos(x,c,caminho+'-'+k);return a;}return v;}
 
   const fluidez=TKEsteiraFluidez(app,getSessao);
-  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),r=await srvRede(rota,corpo);if(r.ok)fluidez.invalidar(bloco);return r;}
-  async function srvRede(rota, corpo) {
+  let ultimoClique=null;document.addEventListener('click',e=>{ultimoClique=e.target.closest('button')},true);
+  const processos=TKEsteiraProcessos({dono:()=>getSessao()?.whatsapp,worker:workerProcesso,executores:{acao:executarAcao,conferir:executarConferencia,aceitar:executarAceite,fotos:executarFotos,caixa:executarCaixa,colocar:executarColocar,pedido:executarPedido,aplicar:executarAplicacao},aoConcluir:j=>{if(j.tipo==='acao'){fluidez.invalidar();return;}if(j.tipo==='fotos'&&j.dados.tarefas?.length){document.querySelectorAll('.pedido-fotos[data-produto="'+CSS.escape(j.dados.produto)+'"] [role=status]').forEach(st=>{st.hidden=false;st.textContent=j.resultado.fotos+' fotos adicionadas ao produto. Pedido concluído.'})}if(j.tipo==='caixa'){AVISO_FOTOS=j.dados.fotos.length+(j.dados.fotos.length===1?' foto enviada':' fotos enviadas')+' para a caixa.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}refrescarDepois();},aoErro:m=>{const e=$('esteira-processos-abrir');if(e)e.title=m}});
+  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));
+    const fundo=ultimoClique?.closest('.fundo');if(fundo&&ultimoClique.closest('.pe')&&fundo.esteiraFechar)fundo.esteiraFechar();
+    const r=await processos.aguardar(id);if(r.ok)fluidez.invalidar(bloco);return Object.assign({},r,{foraDaTela:origem!==ABA||tela!==app.dataset.tela||versao!==versaoTela});}
+  async function workerProcesso(rota,corpo,op){let r=await srvRede(rota,corpo,op);for(let i=0;r.aguardando&&i<20;i++){await new Promise(ok=>setTimeout(ok,1000));r=await srvRede('/esteira/operacoes/status?op='+encodeURIComponent(op))}if(r.aguardando)return{ok:false,incerto:true,erro:'O processo ainda está em confirmação. Pode continuar trabalhando e conferir em Processos.'};return r;}
+  async function srvRede(rota, corpo, op) {
     const s = getSessao(); if (!s) return { ok: false, erro: 'Entre na sua conta para continuar.', exigeLogin: true };
     try {
-      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:corpo ? undefined : AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: corpo ? JSON.stringify(corpo) : undefined });
+      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:corpo ? undefined : AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, ...(op?{'X-TK-Operacao':op}:{}) }, body: corpo ? JSON.stringify(corpo) : undefined });
       const j = await r.json().catch(() => ({ ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' }));
       if (r.status === 401) j.exigeLogin = true;
       return j;
@@ -313,7 +327,7 @@
     return catPromessa;
   }
   const naHora = (pr, ms) => Promise.race([pr, new Promise((ok) => setTimeout(() => ok(null), ms))]);
-  const urlOk = (u) => /^https:\/\/[^\s"'<>]+$/.test(String(u || '').trim());
+  const urlOk = (u) => fotosLocais.has(u)||/^https:\/\/[^\s"'<>]+$/.test(String(u || '').trim());
   function midiasDoProduto(x) {                       // capa + galeria (sem repetir) + vídeo direto, no formato do TKFotoGrande
     const fotos = [...new Set([x.Foto_URL].concat(lista(x.Fotos_Galeria)).map((u) => String(u || '').trim()).filter(urlOk))].map((url) => ({ url, tipo: 'foto' }));
     const v = String(x.Video_URL || '').trim();
@@ -434,6 +448,7 @@
 
   /* ---------- Hoje ---------- */
   async function telaHoje(recarregar) {
+    versaoTela++;
     const vista=fluidez.preparar('hoje','Montando a sua lista de hoje…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
@@ -537,6 +552,7 @@
     return Object.assign(autenticacao(), dados);
   }
   function abrirConferencia(p) {
+    if(processos.pendente('conferir:'+p.id)){processos.abrir();return;}
     const ant = document.activeElement;
     const fundo = el('div', 'fundo'), folha = el('div', 'folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-label', 'Conferir ' + p.nome);
     const topo = el('div', 'topo'), fechar = el('button', 'fechar', '×'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar');
@@ -575,7 +591,7 @@
     const salvar = el('button', 'bt laranja', 'Salvar conferência'); salvar.type = 'button';
     corpo.append(id, atalhos, datas, tAchou, achou, detalhes, status); pe.append(salvar);
     folha.append(topo, corpo, pe); fundo.append(folha); marcarAchou(true);
-    const fecharTudo = () => { fundo.remove(); if (window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    const fecharTudo = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
     fechar.onclick = fecharTudo; fundo.onclick = (e) => { if (e.target === fundo) fecharTudo(); };
     fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fecharTudo(); } };
     salvar.onclick = async () => {
@@ -589,20 +605,11 @@
       const mudouEst = contou && String(Number(iEst.value)) !== String(p.estoque === '' || p.estoque == null ? '' : Number(p.estoque));
       const mudouTam = estado.achou && novoTam.length !== estado.tamanhos.length, mudouCor = estado.achou && novaCor.length !== estado.cores.length;
       try {
-        if (mudouEst || mudouTam || mudouCor) {
-          const cat = await catalogoCompleto(), x = cat.get(String(p.id));
-          if (!x) throw new Error('Esta peça não está mais no catálogo. Avise o administrador.');
-          const dados = pacoteUpdate(x, { estoque: mudouEst ? String(Number(iEst.value)) : (x.Estoque != null ? String(x.Estoque) : ''), tamanhos: mudouTam ? novoTam.join(', ') : (x.Tamanhos || ''), cores: mudouCor ? novaCor.join(', ') : (x.Cores || '') });
-          const r = await apiPost(dados);
-          if (!r || !r.ok) throw new Error(legivel(r && r.erro, 'O catálogo não aceitou a mudança. Tente de novo.'));
-          Object.assign(x, { Estoque: dados.estoque, Tamanhos: dados.tamanhos, Cores: dados.cores });
-        }
-        const rc = await srv('/esteira/conferir', { id: p.id, achou: estado.achou, estoqueAntes: p.estoque, estoqueDepois: contou ? String(Number(iEst.value)) : '', mudouTamanhos: mudouTam, mudouCores: mudouCor, fotoNova: pedeFotos, pedidoFotos: pedeFotos ? escFotos.valor() : undefined });
-        if (!rc.ok) throw new Error(rc.erro || 'Não consegui registrar a conferência.');
-        p.feito = true; if (mudouEst) p.estoque = String(Number(iEst.value));
-        const pg = progressoHoje(HOJE.lista); HOJE.feitas = pg.feitas; HOJE.total = pg.total;
-        fecharTudo(); telaHoje(false);
-      } catch (e) { salvar.disabled = false; status.className = 'erro'; status.textContent = e.message || 'Não consegui salvar. Tente de novo.'; }
+        const mud={};if(mudouEst)mud.estoque=String(Number(iEst.value));if(mudouTam)mud.tamanhos=novoTam.join(', ');if(mudouCor)mud.cores=novaCor.join(', ');
+        await guardarProcesso('conferir',{id:String(p.id),antes:p.estoque,remover:{tamanhos:estado.tamanhos.filter(t=>!tamOn.has(t)),cores:estado.cores.filter(c=>!corOn.has(c))},mud,registro:{id:p.id,achou:estado.achou,estoqueAntes:p.estoque,estoqueDepois:contou?String(Number(iEst.value)):'',mudouTamanhos:mudouTam,mudouCores:mudouCor,fotoNova:pedeFotos,pedidoFotos:pedeFotos?escFotos.valor():undefined}},'Conferir '+p.nome,'conferir:'+p.id);
+        fecharTudo();
+      } catch(e){salvar.disabled=false;status.className='erro';status.textContent=e.message||'Não consegui guardar a conferência.';}
+
     };
     document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar('esteira-conferir', () => fundo.remove()); bSim.focus({ preventScroll: true });
   }
@@ -664,9 +671,9 @@
     const acoes = el('div', 'acoes-t'); let obs = null;
     const marcar = async (v, botao) => {
       botao.disabled = true; msg('Salvando…');
-      const r = await srv('/esteira/tarefa', { id: t.id, feita: v, obs: obs ? obs.value : undefined });
+      const r = await srv('/esteira/tarefa', { id: t.id, feita: v, obs: obs ? obs.value : undefined }); if(r.foraDaTela)return;
       if (!r.ok) { botao.disabled = false; return msg(r.erro || 'Não consegui salvar. Tente de novo.', 'erro'); }
-      aoMudar();
+      if(!r.foraDaTela)aoMudar();
     };
     if (feita) { const d = el('button', 'bt discreto', 'Desfazer'); d.type = 'button'; d.setAttribute('aria-label', 'Desfazer ' + t.titulo); d.onclick = () => marcar(false, d); acoes.append(d); li.append(acoes, st); return li; }
     obs = el('input'); obs.type = 'text'; obs.maxLength = 300; obs.placeholder = 'Observação (opcional)'; obs.value = t.obs || ''; obs.setAttribute('aria-label', 'Observação: ' + t.titulo);
@@ -674,11 +681,9 @@
       const arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
       const bF = el('button', 'bt', 'Adicionar fotos'); bF.type = 'button'; bF.title = 'Câmera ou galeria'; bF.onclick = () => arq.click();
       arq.onchange = async () => {
-        const fs = [...arq.files].slice(0, 8); arq.value = ''; if (!fs.length) return;
-        bF.disabled = true;
-        try { const n = await adicionarFotos(t.produto, fs, (m) => msg(m)); msg((n === 1 ? '1 foto adicionada' : n + ' fotos adicionadas') + ' ao produto. Toque em Feito quando terminar.', 'ok'); if (!obs.value) obs.value = (n === 1 ? '1 foto enviada' : n + ' fotos enviadas') + ' pela Esteira'; }
-        catch (e) { msg(e.message || 'Não consegui enviar as fotos. Tente de novo.', 'erro'); }
-        bF.disabled = false;
+        const fs=[...arq.files].slice(0,8);arq.value='';if(!fs.length)return;bF.disabled=true;
+        try{await guardarProcesso('fotos',{produto:String(t.produto),fotos:fs},'Adicionar fotos: '+t.titulo).then(id=>{void processos.aguardar(id).then(r=>{if(r.ok&&st.isConnected)msg(r.fotos+' foto'+(r.fotos===1?' adicionada':'s adicionadas')+' ao produto.','ok')});return id;});msg('Fotos guardadas na fila. Pode continuar trabalhando.','ok');}
+        catch(e){msg(e.message,'erro');}finally{bF.disabled=false;}
       };
       acoes.append(bF, arq);
     }
@@ -700,6 +705,7 @@
     });
   }
   async function telaPrep() {
+    versaoTela++;
     const vista=fluidez.preparar('prep','Carregando a preparação…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
@@ -723,7 +729,7 @@
    *  o: {id, rotulo, situacoes, padrao, fora(x), linha(x, st) → botão, max} */
   function buscaCatalogo(o) {
     const box = el('div', 'busca-cat'); box.style.cssText = 'display:grid;gap:8px';
-    const [lb, inp] = campoTexto(o.rotulo || 'Buscar no catálogo', '', { id: o.id, ph: 'Nome ou código da peça' }); inp.autocomplete = 'off'; inp.type = 'search';
+    const [lb, inp] = campoTexto(o.rotulo || 'Buscar no catálogo', '', { id: o.id, ph: 'Nome, código, cor, tecido ou tamanho' }); inp.autocomplete = 'off'; inp.type = 'search';
     const filtros = el('div', 'filtros'); filtros.setAttribute('role', 'group'); filtros.setAttribute('aria-label', 'Filtros da busca');
     const sel = (cls, rot, opcoes, valor) => { const s = el('select', cls); s.setAttribute('aria-label', rot); opcoes.forEach(([v, t]) => { const op = el('option', '', t); op.value = v; s.append(op); }); s.value = valor; return s; };
     const sits = o.situacoes || ['ativas', 'esgotadas', 'arquivadas', 'todas'], padrao = o.padrao || 'ativas';
@@ -737,16 +743,17 @@
       if (sCat.options.length === 1) vals('Categoria').forEach((v) => { const op = el('option', '', v); op.value = v; sCat.append(op); });
       if (sGen.options.length === 1) vals('Genero').forEach((v) => { const op = el('option', '', v); op.value = v; sGen.append(op); });
     };
-    catalogoFundo().then((c) => { if (c) encher(c); });
+    let faceta=()=>true;
+    catalogoFundo().then((c) => { if(c){encher(c);faceta=TKProdutosBusca.filtros(box,[...c.values()],buscar);buscar();} });
+    TKFotosNovas.carregar(()=>buscar());
     const temCat = (x, v) => !v || String(x.Categoria || '').split(',').map((t) => t.trim()).includes(v), temGen = (x, v) => !v || String(x.Genero || '').split(',').map((t) => t.trim()).includes(v);
-    let espera = null, vez = 0;
+    let espera = null, vez = 0, limite=40;
     const buscar = async () => {
       const minha = ++vez, q = semAcento(inp.value.trim()); marcar(); res.replaceChildren(); st.diga('');
-      if (q.length < 2 && !sCat.value && !sGen.value) return st.diga(q ? 'Digite pelo menos 2 letras (ou escolha uma categoria).' : '');
       let cat = CATALOGO; if (!cat) { st.diga('Buscando…'); try { cat = await catalogoCompleto(); } catch (e) { return st.diga(e.message, 'erro'); } encher(cat); }
       if (minha !== vez) return;
-      const casa = (x) => (q.length < 2 || semAcento(x.Nome).includes(q) || semAcento(x.Codigo).includes(q) || String(x.ID) === q) && temCat(x, sCat.value) && temGen(x, sGen.value) && !(o.fora && o.fora(x));
-      const todos = [...cat.values()].filter(casa), achados = todos.filter((x) => naSituacao(x, sSit.value)), max = o.max || 12;
+      const casa = (x) => TKProdutosBusca.casa(x,q) && faceta(x) && temCat(x, sCat.value) && temGen(x, sGen.value) && !(o.fora && o.fora(x));
+      const todos = TKProdutosBusca.ordenar([...cat.values()]).filter(casa), achados = todos.filter((x) => naSituacao(x, sSit.value)), max = limite;
       if (!achados.length) {
         const outras = todos.length;
         st.diga(outras ? (outras === 1 ? '1 peça combina, mas está em outra situação. Troque o filtro “' + SITUACOES[sSit.value].replace(/ \(.*/, '') + '”.' : outras + ' peças combinam, mas estão em outra situação. Troque o filtro “' + SITUACOES[sSit.value].replace(/ \(.*/, '') + '”.') : 'Nenhuma peça com esse nome ou código' + (sCat.value || sGen.value ? ' nos filtros escolhidos.' : '.'));
@@ -754,10 +761,12 @@
       }
       if (achados.length > max) st.diga('Mostrando ' + max + ' de ' + achados.length + '. Escreva mais do nome ou use os filtros.');
       achados.slice(0, max).forEach((x) => res.append(o.linha(x, st)));
+      if(achados.length>max){const mais=el('button','bt','Mostrar mais 40');mais.type='button';mais.onclick=()=>{limite+=40;buscar();};res.append(mais);}
     };
     inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
     [sSit, sCat, sGen].forEach((s) => { s.onchange = buscar; });
     box.focar = () => inp.focus();
+    void buscar();
     return box;
   }
   const situacaoTxt = (x) => (ehInativo(x) ? 'arquivada (fora do site)' : typeof estaEsgotado === 'function' && estaEsgotado(x) ? 'esgotada' : 'no site');
@@ -771,7 +780,7 @@
       it.append(foto(x.Foto_URL), t, el('span', 'chip al', 'Preparar')); it.setAttribute('aria-label', 'Colocar ' + (x.Nome || 'peça') + ' em preparação');
       it.onclick = async () => {
         it.disabled = true; st.diga('Criando as tarefas…');
-        const y = await srv('/esteira/preparar', { id: String(x.ID), nome: x.Nome || '', codigo: x.Codigo || '', foto: String(x.Foto_URL || '') });
+        const y = await srv('/esteira/preparar', { id: String(x.ID), nome: x.Nome || '', codigo: x.Codigo || '', foto: String(x.Foto_URL || '') }); if(y.foraDaTela)return;
         if (!y.ok) { it.disabled = false; st.diga(y.erro || 'Não consegui colocar a peça em preparação.', 'erro'); return; }
         telaPrep();
       };
@@ -802,7 +811,7 @@
     const sF = el('select'); sF.setAttribute('aria-label', 'Função da nova tarefa'); [['', 'Qualquer pessoa da equipe']].concat(r.funcoes.map((f) => [f, f])).forEach(([v, rot]) => { const o = el('option', '', rot); o.value = v; if (v === 'Fotos') o.selected = true; sF.append(o); });
     const bCriar = el('button', 'bt prim', 'Criar tarefa'); bCriar.type = 'button';
     const stN = el('p', 'muted'); stN.setAttribute('role', 'status');
-    bCriar.onclick = async () => { bCriar.disabled = true; const y = await srv('/esteira/tarefa-nova', { produto: pr.id, titulo: iT.value, funcao: sF.value }); if (!y.ok) { bCriar.disabled = false; stN.className = 'erro'; stN.textContent = y.erro || 'Não consegui criar a tarefa.'; return; } telaPrep(); };
+    bCriar.onclick = async () => { bCriar.disabled = true; const y = await srv('/esteira/tarefa-nova', { produto: pr.id, titulo: iT.value, funcao: sF.value }); if(y.foraDaTela)return; if (!y.ok) { bCriar.disabled = false; stN.className = 'erro'; stN.textContent = y.erro || 'Não consegui criar a tarefa.'; return; } telaPrep(); };
     nova.append(iT, sF, bCriar, stN);
     bNova.onclick = () => { nova.hidden = !nova.hidden; bNova.setAttribute('aria-expanded', String(!nova.hidden)); if (!nova.hidden) iT.focus(); };
     // aceitar (confirmação no próprio botão: confirm() não existe em alguns aparelhos)
@@ -811,21 +820,10 @@
     const voltar = (erro) => { bAc.disabled = false; delete bAc.dataset.confirma; bAc.textContent = 'Aceitar para o site'; stA.className = 'erro'; stA.textContent = erro; };
     bAc.onclick = async () => {
       if (!bAc.dataset.confirma) { const falta = pr.total - pr.feitas; bAc.dataset.confirma = '1'; bAc.textContent = falta > 0 ? 'Faltam ' + falta + (falta === 1 ? ' tarefa' : ' tarefas') + '. Toque de novo para aceitar' : 'Toque de novo para mostrar no site'; stA.className = 'muted'; stA.textContent = falta > 0 ? 'Se aceitar agora, as tarefas que faltam ficam dispensadas.' : ''; return; }
-      bAc.disabled = true; stA.className = 'muted'; stA.textContent = 'Conferindo a peça no catálogo…';
-      let reativou = false;
-      try {
-        CATALOGO = null; const x = (await catalogoCompleto()).get(String(pr.id));
-        if (!x) return voltar('Esta peça não está no catálogo (pode ter sido excluída). Avise o administrador.');
-        if (ehInativo(x)) {
-          stA.textContent = 'Colocando a peça no site…';
-          const y = await apiPost(Object.assign(autenticacao(), { action: 'bulkUpdate', ids: [x.ID], tipoAcao: 'reativar', valor: true }));
-          if (!y || !y.ok) return voltar(legivel(y && y.erro, 'O catálogo não aceitou colocar a peça no site. Nada foi mudado; tente de novo.'));
-          x.Status = 'Ativo'; reativou = true;
-        }
-        const z = await srv('/esteira/aceitar', { id: pr.id });
-        if (!z.ok) return voltar((reativou ? 'A peça já está no site, mas não consegui registrar o aceite: ' : '') + (z.erro || 'Não consegui registrar o aceite. Tente de novo.'));
-        telaPrep();
-      } catch (e) { voltar(e.message || 'Não consegui aceitar agora. Tente de novo.'); }
+      bAc.disabled=true;stA.className='muted';stA.textContent='Guardando o aceite…';
+      try{await guardarProcesso('aceitar',{id:String(pr.id)},'Aceitar '+pr.nome,'aceitar:'+pr.id);stA.textContent='Aceite guardado. Pode continuar trabalhando; acompanhe em Processos.';}
+      catch(e){voltar(e.message||'Não consegui guardar o aceite.');}
+
     };
     c.append(bNova, nova, bAc, stA);
     return c;
@@ -881,16 +879,11 @@
     const bOk = bt('Feito', 'feito-fotos');
     const ac = acoes(bAdd, bOk);
     const pronto = (txt) => { ac.replaceChildren(); st.diga(txt, 'ok'); c.classList.add('feito'); setTimeout(() => { if (c.isConnected) aoMudar(); }, 1600); };
-    arq.onchange = async () => {
-      const fs = [...arq.files].slice(0, 8); arq.value = ''; if (!fs.length) return;
-      bAdd.disabled = bOk.disabled = true; let n = 0;
-      try { n = await adicionarFotos(pd.produto, fs, (m) => st.diga(m)); }
-      catch (e) { bAdd.disabled = bOk.disabled = false; return st.diga(e.message || 'Não consegui enviar as fotos. Tente de novo.', 'erro'); }
-      const r = await srv('/esteira/fotos/concluir', { ids, fotos: n });
-      if (!r.ok) { bOk.disabled = false; return st.diga((n === 1 ? 'A foto já está' : 'As ' + n + ' fotos já estão') + ' no produto, mas não consegui marcar o pedido: ' + (r.erro || 'tente de novo') + ' Toque em Feito.', 'erro'); }
-      pronto((n === 1 ? '1 foto adicionada' : n + ' fotos adicionadas') + ' ao produto. Pedido concluído.');
+    arq.onchange=async()=>{const fs=[...arq.files].slice(0,8);arq.value='';if(!fs.length)return;bAdd.disabled=true;bOk.disabled=true;
+      try{await guardarProcesso('fotos',{produto:String(pd.produto),fotos:fs,tarefas:ids},'Fotos pedidas: '+(pd.nome||pd.produto));st.diga('Fotos guardadas na fila. Pode continuar trabalhando.','ok');}
+      catch(e){bAdd.disabled=bOk.disabled=false;st.diga(e.message,'erro');}
     };
-    bOk.onclick = async () => { bOk.disabled = true; st.diga('Salvando…'); const r = await srv('/esteira/fotos/concluir', { ids }); if (!r.ok) { bOk.disabled = false; return st.diga(r.erro || 'Não consegui salvar. Tente de novo.', 'erro'); } pronto('Pedido concluído.'); };
+    bOk.onclick = async () => { bOk.disabled = true; st.diga('Salvando…'); const r = await srv('/esteira/fotos/concluir', { ids }); if(r.foraDaTela)return; if (!r.ok) { bOk.disabled = false; return st.diga(r.erro || 'Não consegui salvar. Tente de novo.', 'erro'); } pronto('Pedido concluído.'); };
     c.append(topo, ul, acoesCadastro(x, pd.produto), ac, arq, st);
     return c;
   }
@@ -927,7 +920,7 @@
       const lotes = new Map(); regs.filter((r) => r.url).forEach((r) => { if (!lotes.has(r.lote)) lotes.set(r.lote, []); lotes.get(r.lote).push(r); });
       for (const [lote, rs] of lotes) {
         aviso && aviso('Registrando na caixa…');
-        const y = await srv('/esteira/caixa/enviar', { lote, descricaoLote: rs[0].descricaoLote || '', produto: rs[0].produto || '', produtoNome: rs[0].produtoNome || '', itens: rs.map((r) => ({ op: r.op, url: r.url, descricao: r.descricao || '', hash: r.hash || '' })) });
+        const y = await srv('/esteira/caixa/enviar', { lote, descricaoLote: rs[0].descricaoLote || '', produto: rs[0].produto || '', produtoNome: rs[0].produtoNome || '', itens: rs.map((r) => ({ op: r.op, url: r.url, descricao: r.descricao || '', hash: r.hash || '' })) }); if(y.foraDaTela)return;
         if (!y.ok) { erro = erro || y.erro || 'O servidor não registrou as fotos.'; continue; }
         for (const r of rs) await cxTirar(r.op);
         itens.push(...(y.itens || []));
@@ -966,7 +959,7 @@
         if (!alvo) { st.diga('Escolha a peça que precisa de fotos.', 'erro'); return busca.focar(); }
         const e = esc.erro(); if (e) return st.diga(e, 'erro');
         bOk.disabled = true; st.diga('Salvando…');
-        const r = await srv('/esteira/fotos/pedir', Object.assign({ produto: String(alvo.ID), nome: alvo.Nome || '', codigo: alvo.Codigo || '', foto: String(alvo.Foto_URL || ''), op, de: 'esteira' }, esc.valor()));
+        const r = await srv('/esteira/fotos/pedir', Object.assign({ produto: String(alvo.ID), nome: alvo.Nome || '', codigo: alvo.Codigo || '', foto: String(alvo.Foto_URL || ''), op, de: 'esteira' }, esc.valor())); if(r.foraDaTela)return;
         if (!r.ok) { bOk.disabled = false; return st.diga(r.erro || 'Não consegui pedir as fotos. Tente de novo.', 'erro'); }
         fechar(); aoTerminar && aoTerminar(r.repetido ? 'Esse pedido já estava aberto para esta peça.' : 'Fotos pedidas. Quem está em Fotos vê o pedido.');
       }); bOk.id = 'pf-pedir';
@@ -1011,29 +1004,18 @@
         pintar();
         st.diga([repetidas ? (repetidas === 1 ? '1 foto repetida ficou de fora.' : repetidas + ' fotos repetidas ficaram de fora.') : '', fora ? 'Cabem 20 fotos por envio; envie as outras depois.' : ''].filter(Boolean).join(' '), repetidas || fora ? 'muted' : '');
       };
-      async function enviar() {
-        if (!sel.length || enviando) return;
-        enviando = true; bEnv.disabled = bEsc.disabled = true; const lote = novoOp('lt'), agora = Date.now();
-        try {
-          for (let k = 0; k < sel.length; k++) {
-            const s = sel[k]; if (s.guardada) continue;
-            st.diga('Preparando foto ' + (k + 1) + ' de ' + sel.length + '…');
-            const blob = await reduzirFoto(s.file);
-            await cxGuardar({ op: novoOp('cx'), lote, criado: agora + k, blob, descricao: s.descricao.trim(), descricaoLote: iDl.value.trim(), produto: peca ? String(peca.ID) : '', produtoNome: peca ? peca.Nome || '' : '', hash: s.hash });
-            s.guardada = true;
-          }
-        } catch (e) { enviando = false; bEnv.disabled = bEsc.disabled = false; return st.diga(e.message || 'Não consegui preparar as fotos.', 'erro'); }
-        const r = await cxProcessar((m) => st.diga(m));
-        enviando = false;
-        if (r.faltam || r.erro) { bEnv.disabled = false; bEnv.textContent = 'Tentar de novo'; bEnv.onclick = async () => { bEnv.disabled = true; const r2 = await cxProcessar((m) => st.diga(m)); if (!r2.faltam && !r2.erro) { fechar(); aoTerminar && aoTerminar(r2); } else { bEnv.disabled = false; st.diga(falhaCaixa(r2), 'erro'); } }; return st.diga(falhaCaixa(r), 'erro'); }
-        sel.forEach((s) => URL.revokeObjectURL(s.prev)); fechar(); aoTerminar && aoTerminar(r);
+      async function enviar(){
+        if(!sel.length||enviando)return;enviando=true;bEnv.disabled=bEsc.disabled=true;
+        try{await guardarProcesso('caixa',{fotos:sel.map(s=>({arquivo:s.file,descricao:s.descricao.trim(),hash:s.hash})),descricaoLote:iDl.value.trim(),produto:peca?String(peca.ID):'',produtoNome:peca?peca.Nome||'':''},'Enviar '+sel.length+' fotos para a caixa');
+          AVISO_FOTOS=sel.length+' fotos guardadas na fila. Pode continuar trabalhando.';sel.forEach(s=>URL.revokeObjectURL(s.prev));fechar();const atual=$('fotos-status');if(atual?.diga)atual.diga(AVISO_FOTOS,'ok');
+        }catch(e){enviando=false;bEnv.disabled=bEsc.disabled=false;st.diga(e.message||'Não consegui guardar as fotos.','erro');}
       }
       corpo.append(bEsc, arq, dica, listaSel, lDl, bLigar, busca, boxPeca, st); pe.append(bEnv); pintar();
     });
   }
   const falhaCaixa = (r) => (r.enviadas ? r.enviadas + (r.enviadas === 1 ? ' foto chegou' : ' fotos chegaram') + ' à caixa. ' : '') + (r.faltam ? (r.faltam === 1 ? '1 foto ficou guardada neste aparelho e sobe' : r.faltam + ' fotos ficaram guardadas neste aparelho e sobem') + ' quando você tocar em “Tentar de novo” ou voltar aqui. ' : '') + (r.erro || '');
   /** Coloca fotos já no servidor numa peça existente (acrescenta à galeria; capa opcional). Mesmo pacote completo do update da Gestão. */
-  async function colocarNoProduto(id, urls, capaUrl) {
+  async function colocarNoProduto(id, urls, capaUrl, processo) {
     CATALOGO = null; const x = (await catalogoCompleto()).get(String(id));
     if (!x) throw new Error('Esta peça não está no catálogo (pode ter sido excluída). Escolha outra.');
     const antes = [x.Foto_URL].concat(lista(x.Fotos_Galeria)).map((u) => String(u || '').trim()).filter(urlOk);
@@ -1046,7 +1028,7 @@
       const r = await apiPost(pacoteUpdate(x, { fotoUrlExistente: capa, fotosGaleriaExistentes: gal.join(',') }));
       if (!r || !r.ok) throw new Error(legivel(r && r.erro, 'O catálogo não aceitou as fotos. Nada foi mudado; tente de novo.'));
       x.Foto_URL = capa; x.Fotos_Galeria = gal.join(',');
-      srv('/esteira/toque', { ids: [String(x.ID)], antes, fotos: novas.map((url) => ({ url, de: '' })) });   // foto nova (vitrine/postador) e sai da conferência por uns dias
+      if(processo)await processo.worker('toque','/esteira/toque',{ids:[String(x.ID)],antes,fotos:novas.map(url=>({url,de:''}))});else void srv('/esteira/toque', { ids: [String(x.ID)], antes, fotos: novas.map((url) => ({ url, de: '' })) });   // foto nova (vitrine/postador) e sai da conferência por uns dias
     }
     return { x, novas: novas.length, ja: urls.length - novas.length };
   }
@@ -1069,16 +1051,9 @@
         }
         bOk.textContent = urls.length === 1 ? 'Colocar a foto no produto' : 'Colocar as ' + urls.length + ' fotos no produto';
       };
-      async function colocar() {
-        if (!alvo) return;
-        bOk.disabled = true;
-        try {
-          if (!usou) { st.diga('Salvando as fotos na peça…'); usou = await colocarNoProduto(String(alvo.ID), urls, capa); }
-          st.diga('Marcando na caixa…');
-          const r = await srv('/esteira/caixa/usar', { ids: itens.map((i) => i.id), uso: 'produto', produto: String(alvo.ID), produtoNome: alvo.Nome || '' });
-          if (!r.ok) { bOk.disabled = false; bOk.textContent = 'Tentar de novo'; return st.diga('As fotos já estão na peça, mas não consegui marcar na caixa: ' + (r.erro || 'tente de novo.'), 'erro'); }
-          fechar(); aoTerminar && aoTerminar((usou.novas === 1 ? '1 foto colocada' : usou.novas + ' fotos colocadas') + ' em ' + (alvo.Nome || 'peça') + '.' + (usou.ja ? ' ' + usou.ja + ' já estava(m) na peça.' : ''));
-        } catch (e) { bOk.disabled = false; st.diga(e.message || 'Não consegui colocar as fotos. Tente de novo.', 'erro'); }
+      async function colocar(){if(!alvo)return;bOk.disabled=true;
+        try{await guardarProcesso('colocar',{produto:String(alvo.ID),produtoNome:alvo.Nome||'',ids:itens.map(i=>i.id),urls,capa},'Colocar fotos em '+(alvo.Nome||alvo.ID),'colocar:'+itens.map(i=>i.id).join(','));fechar();}
+        catch(e){bOk.disabled=false;st.diga(e.message||'Não consegui guardar a solicitação.','erro');}
       }
       corpo.append(miniFotos(urls), boxAlvo, busca, st); pe.append(bOk);
       const sugerida = itens[0].produto && itens.every((i) => i.produto === itens[0].produto) ? itens[0].produto : '';
@@ -1107,6 +1082,7 @@
   /* ---- tela da aba Fotos ---- */
   let CAIXA_VER = 'novas', AVISO_FOTOS = '';
   async function telaFotos(aviso) {
+    versaoTela++;
     const vista=fluidez.preparar('fotos','Carregando as fotos…'),app=vista.app;
     // O envio já foi confirmado: avisa antes de aguardar a revalidação da lista.
     if(typeof aviso==='string'&&aviso){AVISO_FOTOS=aviso;const atual=$('fotos-status');if(atual?.diga)atual.diga(aviso,'ok');}
@@ -1125,7 +1101,7 @@
       const c = el('div', 'card aviso-cx'); c.id = 'caixa-pendente'; const st = linhaStatus();
       c.append(el('p', '', (pend.length === 1 ? '1 foto ainda não chegou' : pend.length + ' fotos ainda não chegaram') + ' à caixa. Continuando o envio…'), st);
       topo.after(c);
-      cxProcessar((m) => st.diga(m)).then((x) => { if (!x.faltam && !x.erro) telaFotos((x.enviadas === 1 ? '1 foto' : x.enviadas + ' fotos') + ' do envio interrompido ' + (x.enviadas === 1 ? 'chegou' : 'chegaram') + ' à caixa.'); else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); } });
+      cxProcessar((m) => st.diga(m)).then((x) => { if (!x.faltam && !x.erro && ABA==='fotos' && c.isConnected) telaFotos((x.enviadas === 1 ? '1 foto' : x.enviadas + ' fotos') + ' do envio interrompido ' + (x.enviadas === 1 ? 'chegou' : 'chegaram') + ' à caixa.'); else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); } });
     }
     const cp = el('div', 'card'); cp.id = 'fotos-pedidas';
     cp.append(el('h2', '', 'Fotos pedidas'));
@@ -1187,7 +1163,7 @@
           card.append(b);
         }
         if (gestor && (i.status === 'descartada' || i.status === 'cadastro')) {
-          const v = bt('Voltar para a caixa', 'discreto cx-voltar', async () => { v.disabled = true; const y = await srv('/esteira/caixa/descartar', { ids: [i.id], desfazer: true }); if (!y.ok) { v.disabled = false; return stB.diga(y.erro || 'Não consegui.', 'erro'); } depois('A foto voltou para a caixa.'); });
+          const v = bt('Voltar para a caixa', 'discreto cx-voltar', async () => { v.disabled = true; const y = await srv('/esteira/caixa/descartar', { ids: [i.id], desfazer: true }); if(y.foraDaTela)return; if (!y.ok) { v.disabled = false; return stB.diga(y.erro || 'Não consegui.', 'erro'); } depois('A foto voltou para a caixa.'); });
           card.append(v);
         }
         grade.append(card);
@@ -1199,7 +1175,7 @@
       const bN = bt('Cadastrar produto novo', 'laranja cx-novo', () => abrirCadastroNovo(escolhidas(), depois));
       const bD = bt('Descartar', 'discreto cx-descartar', async () => {
         if (!bD.dataset.confirma) { bD.dataset.confirma = '1'; bD.textContent = 'Toque de novo para descartar'; return; }
-        bD.disabled = true; const ids = [...sel]; const y = await srv('/esteira/caixa/descartar', { ids }); bD.disabled = false;
+        bD.disabled = true; const ids = [...sel]; const y = await srv('/esteira/caixa/descartar', { ids }); if(y.foraDaTela)return; bD.disabled = false;
         if (!y.ok) return stB.diga(y.erro || 'Não consegui descartar.', 'erro');
         depois((ids.length === 1 ? '1 foto descartada' : ids.length + ' fotos descartadas') + '. Elas ficam em “Descartadas” e podem voltar.');
       });
@@ -1294,7 +1270,8 @@
     const topo = el('div', 'topo'), x = el('button', 'fechar', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Fechar');
     topo.append(el('b', '', titulo), x);
     const corpo = el('div', 'corpo'), pe = el('div', 'pe'); folha.append(topo, corpo, pe); fundo.append(folha);
-    const fechar = () => { fundo.remove(); if (window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    const fechar = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (estava&&ant&&ant.isConnected) ant.focus({preventScroll:true}); };
+    fundo.esteiraFechar=fechar;
     x.onclick = fechar; fundo.onclick = (e) => { if (e.target === fundo) fechar(); };
     fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fechar(); } };
     montar({ corpo, pe, fechar }); pe.hidden = !pe.childNodes.length;
@@ -1313,18 +1290,13 @@
     const arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
     const b = bt(rotulo || 'Adicionar fotos', '', () => arq.click()); b.title = 'Câmera ou galeria';
     const pintar = () => { box.replaceChildren(miniFotos(urls, (k) => { urls.splice(k, 1); pintar(); }), b, arq, st); b.hidden = urls.length >= lim; };
-    arq.onchange = async () => {
-      const fs = [...arq.files].slice(0, lim - urls.length); arq.value = ''; if (!fs.length) return;
-      b.disabled = true; box.dataset.enviando = '1';
-      try { for (let k = 0; k < fs.length; k++) { st.diga('Enviando foto ' + (k + 1) + ' de ' + fs.length + '…'); urls.push(await enviarFoto(await reduzirFoto(fs[k]))); pintar(); } st.diga(fs.length === 1 ? 'Foto enviada.' : fs.length + ' fotos enviadas.', 'ok'); }
-      catch (e) { st.diga(e.message || 'Não consegui enviar a foto. Tente de novo.', 'erro'); }
-      b.disabled = false; delete box.dataset.enviando; pintar();
-    };
+    arq.onchange = () => {const fs=[...arq.files].slice(0,lim-urls.length);arq.value='';for(const file of fs){const u=URL.createObjectURL(file);fotosLocais.set(u,file);urls.push(u);}st.diga(fs.length===1?'Foto preparada. Será enviada ao salvar.':fs.length+' fotos preparadas. Serão enviadas ao salvar.','ok');pintar();};
     pintar(); return box;
   }
   const enviandoFoto = (raiz) => !!raiz.querySelector('.campo-fotos[data-enviando]');
 
   async function telaPedidos() {
+    versaoTela++;
     const vista=fluidez.preparar('pedidos','Carregando os pedidos…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
@@ -1359,6 +1331,7 @@
 
   /* ----- chegada: contagem cega (equipe; o Admin também pode contar por aqui) ----- */
   async function telaContagem(id) {
+    versaoTela++;
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status !== 'a_caminho') return telaPedidos();
@@ -1392,7 +1365,7 @@
     const contar = async (it, v, st, b) => {
       if (String(v).trim() === '' || !(Number(v) >= 0)) return st.diga('Digite quantas peças você contou (pode ser 0).', 'erro');
       b.disabled = true; st.diga('Conferindo…');
-      const y = await srv('/esteira/pedidos/contar', { id: ped.id, item: it.id, qtd: Math.floor(Number(v)) });
+      const y = await srv('/esteira/pedidos/contar', { id: ped.id, item: it.id, qtd: Math.floor(Number(v)) }); if(y.foraDaTela)return;
       if (!y.ok) { b.disabled = false; return st.diga(y.erro || 'Não consegui registrar a contagem. Tente de novo.', 'erro'); }
       Object.assign(it, { qtd: Math.floor(Number(v)), naoVeio: false, bateu: y.bateu, confirmado: false, recontar: false });
       pintar(it); atualizar(); focarNo(it, 'button');
@@ -1400,7 +1373,7 @@
     const recontar = (it) => { it.recontar = true; pintar(it); focarNo(it, 'input'); };
     const naoVeio = async (it, v, st) => {
       st.diga('Salvando…');
-      const y = await srv('/esteira/pedidos/nao-veio', { id: ped.id, item: it.id, naoVeio: v });
+      const y = await srv('/esteira/pedidos/nao-veio', { id: ped.id, item: it.id, naoVeio: v }); if(y.foraDaTela)return;
       if (!y.ok) return st.diga(y.erro || 'Não consegui salvar. Tente de novo.', 'erro');
       Object.assign(it, { naoVeio: v, qtd: v ? 0 : null, bateu: null, recontar: false, confirmado: false }); pintar(it); atualizar(); focarNo(it, 'button, input');
     };
@@ -1415,7 +1388,7 @@
         const l = el('div', 'prep-topo extra'); l.dataset.item = String(it.id); const t = el('div', 't'); t.append(el('b', '', it.nome), el('small', 'muted', pecas(it.qtd)));
         const tirar = bt('Tirar', 'discreto', async () => {
           if (!tirar.dataset.confirma) { tirar.dataset.confirma = '1'; tirar.textContent = 'Tirar mesmo?'; return; }
-          tirar.disabled = true; const y = await srv('/esteira/pedidos/extra-remover', { id: ped.id, item: it.id });
+          tirar.disabled = true; const y = await srv('/esteira/pedidos/extra-remover', { id: ped.id, item: it.id }); if(y.foraDaTela)return;
           if (!y.ok) { tirar.disabled = false; return stE.diga(y.erro || 'Não consegui tirar. Tente de novo.', 'erro'); }
           itens.splice(itens.indexOf(it), 1); pintarExtras();
         });
@@ -1432,7 +1405,7 @@
         if (!(Number(iQ.value) >= 1)) { st.diga('Digite quantas peças vieram (1 ou mais).', 'erro'); return iQ.focus(); }
         if (enviandoFoto(corpo)) return st.diga('Espere a foto terminar de enviar.', 'erro');
         salvar.disabled = true; st.diga('Salvando…');
-        const y = await srv('/esteira/pedidos/extra', { id: ped.id, nome: iN.value, qtd: Math.floor(Number(iQ.value)), fotos });
+        const y = await srv('/esteira/pedidos/extra', { id: ped.id, nome: iN.value, qtd: Math.floor(Number(iQ.value)), fotos }); if(y.foraDaTela)return;
         if (!y.ok) { salvar.disabled = false; return st.diga(y.erro || 'Não consegui incluir. Tente de novo.', 'erro'); }
         itens.push({ id: y.item, tipo: 'extra', nome: iN.value.trim(), fotos: fotos.slice(), qtd: Math.floor(Number(iQ.value)) });
         fechar(); pintarExtras();
@@ -1447,7 +1420,7 @@
       const semConf = normais.filter((x) => !x.naoVeio && x.bateu === false && !x.confirmado);
       if (semConf.length) { stF.diga(semConf.length === 1 ? 'Reconte ou confirme o item que não bateu: ' + semConf[0].nome + '.' : 'Reconte ou confirme os ' + semConf.length + ' itens que não bateram.', 'erro'); cartoes.get(semConf[0].id).scrollIntoView({ block: 'center' }); return; }
       bEnv.disabled = true; stF.diga('Enviando…');
-      const y = await srv('/esteira/pedidos/concluir', { id: ped.id });
+      const y = await srv('/esteira/pedidos/concluir', { id: ped.id }); if(y.foraDaTela)return;
       if (!y.ok) { bEnv.disabled = false; return stF.diga(y.erro || 'Não consegui enviar. Tente de novo.', 'erro'); }
       HOJE = null; app.replaceChildren();
       const ok = el('div', 'card'); ok.id = 'chegada-enviada'; ok.append(el('h2', '', 'Chegada enviada'), el('p', '', 'A Karla vai ver as diferenças e aprovar. Obrigada pela contagem!'), bt('Voltar aos pedidos', 'prim', telaPedidos)); app.append(ok);
@@ -1458,6 +1431,7 @@
 
   /* ----- Admin total: montar o pedido ----- */
   async function telaEditor(id) {
+    versaoTela++;
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     let ped = { id: 0, fornecedor: '', previsao: '', obs: '', fotos: [], itens: [], status: 'rascunho' };
     if (id) { const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos); ped = r.pedido; }
@@ -1486,7 +1460,7 @@
         const ruim = fones.findIndex(([, i]) => !foneValido(i.value));
         if (ruim >= 0) { st.diga('Telefone ' + (ruim + 1) + ': use o DDD e o número, com 10 ou 11 dígitos (ex.: (88) 99999-0000).', 'erro'); return fones[ruim][1].focus(); }
         salvar.disabled = true; st.diga('Salvando…');
-        const y = await srv('/esteira/fornecedores/salvar', { id: f ? f.id : undefined, nome: iN.value, endereco: iE.value, fone1: fones[0][1].value, fone2: fones[1][1].value, fone3: fones[2][1].value });
+        const y = await srv('/esteira/fornecedores/salvar', { id: f ? f.id : undefined, nome: iN.value, endereco: iE.value, fone1: fones[0][1].value, fone2: fones[1][1].value, fone3: fones[2][1].value }); if(y.foraDaTela)return;
         if (!y.ok) {
           salvar.disabled = false; st.diga(y.erro || 'Não consegui salvar o fornecedor. Tente de novo.', 'erro');
           const ex = y.existente && (FORNECEDORES || []).find((x) => x.id === y.existente);
@@ -1598,31 +1572,24 @@
     const c3 = el('div', 'card'), stF = linhaStatus();
     const fornEscolhido = () => (iF.value === 'texto' ? { fornecedorId: 0, fornecedor: legado } : { fornecedorId: Number(iF.value) || 0, fornecedor: ((FORNECEDORES || []).find((x) => String(x.id) === iF.value) || {}).nome || '' });
     const pacote = () => Object.assign({ id: ped.id || undefined }, fornEscolhido(), { previsao: iP.value, obs: iO.value, fotos: fotosPed, itens: itens.map((x) => ({ id: x.id || undefined, tipo: x.tipo, produto: x.produto || '', nome: x.nome, categoria: x.categoria || '', genero: x.genero || '', preco: x.preco || '', tamanhos: x.tamanhos || '', cores: x.cores || '', tecido: x.tecido || '', fotos: x.fotos, qtd_pedida: x.qtd_pedida, custo: x.custo })) });
-    const salvar = async () => {
-      if (!iF.value) { stF.diga('Escolha o fornecedor (ou toque em “Cadastrar fornecedor”).', 'erro'); iF.focus(); return null; }
-      if (enviandoFoto(app)) { stF.diga('Espere as fotos terminarem de enviar.', 'erro'); return null; }
-      stF.diga('Salvando…'); const y = await srv('/esteira/pedidos/salvar', pacote());
-      if (!y.ok) { stF.diga(y.erro || 'Não consegui salvar. Tente de novo.', 'erro'); return null; }
-      return y.pedido;
+    const salvar=async(enviar)=>{
+      if(!iF.value){stF.diga('Escolha o fornecedor.','erro');iF.focus();return false;}
+      if(enviandoFoto(app)){stF.diga('As fotos ainda estão sendo preparadas. Aguarde a prévia para guardar o pedido.','erro');return false;}
+      if(enviar&&!itens.length){stF.diga('Inclua pelo menos um item antes de enviar.','erro');return false;}
+      try{await guardarProcesso('pedido',{pacote:snapshotEnvio(pacote()),enviar:!!enviar},(enviar?'Enviar pedido: ':'Salvar pedido: ')+(fornEscolhido().fornecedor||'Fornecedor'));if(c3.isConnected)telaPedidos();return true;}catch(e){stF.diga(e.message,'erro');return false;}
     };
-    const bSal = bt(ped.status === 'a_caminho' ? 'Salvar mudanças' : 'Salvar rascunho', '', async () => { bSal.disabled = true; const n = await salvar(); bSal.disabled = false; if (n) desenharEditor(n, cat, ['Salvo.', 'ok']); });
+    const bSal=bt(ped.status==='a_caminho'?'Salvar mudanças':'Salvar rascunho','',async()=>{bSal.disabled=true;await salvar(false);bSal.disabled=false;});
     bSal.id = 'ped-salvar';
     c3.append(stF);
     if (ped.status === 'rascunho') {
-      const bEnv = bt('Salvar e marcar como enviado', 'laranja', async () => {
-        if (!itens.length) return stF.diga('Inclua pelo menos um item antes de enviar.', 'erro');
-        bEnv.disabled = true; const n = await salvar(); if (!n) { bEnv.disabled = false; return; }
-        const y = await srv('/esteira/pedidos/enviar', { id: n.id });
-        if (!y.ok) return desenharEditor(n, cat, [y.erro || 'Salvei, mas não consegui marcar como enviado. Tente de novo.', 'erro']);
-        HOJE = null; telaPedidos();
-      });
+      const bEnv=bt('Salvar e marcar como enviado','laranja',async()=>{bEnv.disabled=true;await salvar(true);bEnv.disabled=false;});
       bEnv.id = 'ped-enviar';
       c3.append(el('p', 'muted', 'Ao marcar como enviado, a equipe passa a ver o pedido em “Chegou mercadoria”, sem custo e sem quantidade.'), acoes(bSal, bEnv));
     } else c3.append(acoes(bSal, bt('Conferir chegada (contagem cega)', '', () => telaContagem(ped.id))));
     if (ped.id) {
       const bCan = bt('Cancelar pedido', 'discreto', async () => {
         if (!bCan.dataset.confirma) { bCan.dataset.confirma = '1'; bCan.textContent = 'Toque de novo para cancelar o pedido'; return; }
-        bCan.disabled = true; const y = await srv('/esteira/pedidos/cancelar', { id: ped.id });
+        bCan.disabled = true; const y = await srv('/esteira/pedidos/cancelar', { id: ped.id }); if(y.foraDaTela)return;
         if (!y.ok) { bCan.disabled = false; return stF.diga(y.erro || 'Não consegui cancelar.', 'erro'); }
         HOJE = null; telaPedidos();
       });
@@ -1634,6 +1601,7 @@
 
   /* ----- Admin total: aprovar a chegada (só as diferenças) ----- */
   async function telaAprovacao(id) {
+    versaoTela++;
     app.replaceChildren(el('div', 'card', 'Abrindo a chegada…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status === 'aprovado') return telaAplicacao(id); if (ped.status !== 'conferido') return telaEditor(id);
@@ -1649,7 +1617,7 @@
     const OPC = { faltou: [['aceitar', 'Aceitar o que veio'], ['cobrar', 'Cobrar fornecedor']], nao_veio: [['aceitar', 'Tudo bem, sem cobrar'], ['cobrar', 'Cobrar fornecedor']], sobrou: [['aceitar', 'Ficar com tudo'], ['devolver', 'Devolver a sobra']], extra: [['incluir', 'Incluir no estoque'], ['devolver', 'Devolver']] };
     const decidir = async (x, corpo, st, b) => {
       if (b) b.disabled = true; st.diga('Salvando…');
-      const y = await srv('/esteira/pedidos/decidir', Object.assign({ id: ped.id, item: x.id }, corpo));
+      const y = await srv('/esteira/pedidos/decidir', Object.assign({ id: ped.id, item: x.id }, corpo)); if(y.foraDaTela)return;
       if (!y.ok) { if (b) b.disabled = false; return st.diga(y.erro || 'Não consegui salvar a decisão. Tente de novo.', 'erro'); }
       Object.assign(x, y.item, { editando: false }); pintar(x, 'Decisão salva.');
     };
@@ -1692,7 +1660,7 @@
       const falta = difs.filter((x) => !x.decisao);
       if (falta.length) { stF.diga(falta.length === 1 ? 'Decida o item “' + falta[0].nome + '” antes de aprovar.' : 'Decida os ' + falta.length + ' itens com diferença antes de aprovar.', 'erro'); cartoes.get(falta[0].id).scrollIntoView({ block: 'center' }); return; }
       bAp.disabled = true; stF.diga('Aprovando…');
-      const y = await srv('/esteira/pedidos/aprovar', { id: ped.id });
+      const y = await srv('/esteira/pedidos/aprovar', { id: ped.id }); if(y.foraDaTela)return;
       if (!y.ok) { bAp.disabled = false; return stF.diga(y.erro || 'Não consegui aprovar. Tente de novo.', 'erro'); }
       HOJE = null; telaAplicacao(ped.id, true);
     });
@@ -1708,14 +1676,16 @@
     if (!temPreco) d.consultarValor = true;
     return Object.assign(autenticacao(), d);           // o custo NUNCA vai para o catálogo
   }
-  async function aplicarItem(ped, x, aviso) {
+  async function aplicarItem(ped, x, aviso, processo) {
+    const chamar=(rota,dados)=>processo?processo.worker('item-'+x.id+'-'+(dados.fase||rota.split('/').pop()),rota,dados):srv(rota,dados);
     const nome = '“' + x.nome + '”';
     if (x.tipo === 'reposicao') {
       aviso('Lendo o estoque atual…'); CATALOGO = null;
       const p = (await catalogoCompleto()).get(String(x.produto));
       if (!p) throw new Error(nome + ' não está mais no catálogo (pode ter sido excluída). Nada foi somado.');
       const atual = Number(p.Estoque) || 0;
-      const ini = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id, fase: 'inicio', antes: atual, refazer: x.refazer === true });
+      const inicio=processo?await processo.etapa('estoque-inicial-'+x.id,async()=>({antes:atual})): {antes:atual};
+      const ini = await chamar('/esteira/pedidos/aplicado', { id: ped.id, item: x.id, fase: 'inicio', antes: inicio.antes, refazer: x.refazer === true });
       if (!ini.ok) throw new Error(ini.erro || 'Não consegui começar. Nada foi somado; tente de novo.');
       if (ini.jaAplicado) return;
       const antes = ini.aplic.antes, depois = ini.aplic.depois;
@@ -1726,9 +1696,9 @@
         if (!y || !y.ok) throw new Error(legivel(y && y.erro, 'O catálogo não aceitou somar o estoque de ' + nome + '. Nada mudou; tente de novo.'));
         p.Estoque = String(depois);
       }
-      const fim = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id });
+      const fim = await chamar('/esteira/pedidos/aplicado', { id: ped.id, item: x.id });
       if (!fim.ok) throw new Error('O estoque de ' + nome + ' já está em ' + depois + ', mas não consegui registrar aqui. Toque em “Tentar de novo”: não soma duas vezes.');
-      srv('/esteira/toque', { ids: [String(p.ID)] });
+      await chamar('/esteira/toque', { ids: [String(p.ID)] });
       return;
     }
     let novoId = x.produto_criado, codigo = '';
@@ -1737,7 +1707,7 @@
       const r = await apiPost(pacoteNovo(ped, x));
       if (!r || !r.ok || !r.id) throw new Error(legivel(r && r.erro, 'O catálogo não aceitou criar ' + nome + '. Tente de novo.'));
       novoId = String(r.id); codigo = String(r.codigo || '');
-      const c = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id, fase: 'criado', produtoCriado: novoId, codigo });
+      const c = await chamar('/esteira/pedidos/aplicado', { id: ped.id, item: x.id, fase: 'criado', produtoCriado: novoId, codigo });
       if (!c.ok) throw new Error(nome + ' foi criado no catálogo (ID ' + novoId + '), mas não consegui registrar aqui. Toque em “Tentar de novo”: o catálogo reconhece este pedido e não cria outro.');
       novoId = String(c.produtoCriado || novoId); x.produto_criado = novoId;
     }
@@ -1745,13 +1715,14 @@
     const a = await apiPost(Object.assign(autenticacao(), { action: 'bulkUpdate', ids: [novoId], tipoAcao: 'arquivar', valor: true }));
     if (!a || !a.ok) throw new Error('Atenção: ' + nome + ' foi criado (ID ' + novoId + ') e pode estar aparecendo no site: o catálogo não aceitou arquivar (' + legivel(a && a.erro, 'sem resposta') + '). Toque em “Tentar de novo” ou arquive em Gestão.');
     aviso('Colocando em Preparação…');
-    const z = await srv('/esteira/preparar', { id: novoId, nome: x.nome, codigo, foto: (x.fotos || [])[0] || '' });
+    const z = await chamar('/esteira/preparar', { id: novoId, nome: x.nome, codigo, foto: (x.fotos || [])[0] || '' });
     if (!z.ok) throw new Error(nome + ' foi criado e está fora do site, mas não entrou em Preparação: ' + (z.erro || 'tente de novo') + '.');
-    const fim = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id });
+    const fim = await chamar('/esteira/pedidos/aplicado', { id: ped.id, item: x.id });
     if (!fim.ok) throw new Error(nome + ' já está no catálogo e em Preparação, mas não consegui registrar aqui. Toque em “Tentar de novo”.');
     CATALOGO = null;
   }
   async function telaAplicacao(id, auto) {
+    versaoTela++;
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status !== 'aprovado') return ped.status === 'conferido' ? telaAprovacao(id) : telaEditor(id);
@@ -1772,18 +1743,11 @@
       const st = linhaStatus(); c.append(st); if (erro) st.diga(erro.message || 'Não consegui agora. Tente de novo.', 'erro');
       if (!x.aplicado_em) { const ac = acoes(bt(erro ? 'Tentar de novo' : 'Levar este item', '', () => um(x))); if (erro && erro.refazer) ac.append(bt('Somar ' + x.qtd_aceita + ' ao estoque atual', '', () => { x.refazer = true; um(x); })); c.append(ac); }
     };
-    const um = async (x) => {
-      const c = cartoes.get(x.id); c.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-      const st = c.querySelector('[role=status]');
-      try { await aplicarItem(ped, x, (m) => st.diga(m)); x.aplicado_em = x.aplicado_em || new Date().toISOString(); x.refazer = false; pintar(x); atualizar(); return true; }
-      catch (e) { x.refazer = false; pintar(x, e); atualizar(); return false; }
+    const um=async(x)=>{const card=cartoes.get(x.id);card.querySelectorAll('button').forEach(b=>b.disabled=true);
+      try{const id=await guardarProcesso('aplicar',{id:ped.id,itens:[x.id],refazer:x.refazer===true},'Levar ao catálogo: '+x.nome,'aplicar:'+ped.id+':'+x.id);card.querySelector('[role=status]').textContent='Guardado na fila. Pode continuar trabalhando.';void processos.aguardar(id).then(r=>{if(!card.isConnected)return;if(r.ok)void telaAplicacao(ped.id,false);else{pintar(x,Error(r.erro));atualizar();}});return true;}
+      catch(e){pintar(x,e);return false;}
     };
-    const levarTudo = async () => {
-      bTudo.disabled = true; let falhou = 0;
-      for (const x of levar.filter((y) => !y.aplicado_em)) { stG.diga('Levando ao catálogo: ' + x.nome + '…'); if (!(await um(x))) falhou++; }
-      bTudo.disabled = false; atualizar();
-      if (falhou) stG.diga((falhou === 1 ? 'Ficou 1 item com aviso' : 'Ficaram ' + falhou + ' itens com aviso') + '. O que deu certo já está no catálogo; veja abaixo e toque em “Tentar de novo”.', 'erro');
-    };
+    const levarTudo=async()=>{bTudo.disabled=true;try{const ids=levar.filter(x=>!x.aplicado_em).map(x=>x.id);await guardarProcesso('aplicar',{id:ped.id,itens:ids},'Levar pedido '+ped.id+' ao catálogo','aplicar:'+ped.id);stG.diga('Pedido guardado na fila. Pode continuar trabalhando.');}catch(e){bTudo.disabled=false;stG.diga(e.message,'erro');}};
     levar.forEach((x) => { const c = el('div', 'card aplicar'); c.dataset.item = String(x.id); cartoes.set(x.id, c); app.append(c); pintar(x); });
     const cobrar = ped.itens.filter((x) => x.decisao === 'cobrar'), devolver = ped.itens.filter((x) => x.decisao === 'devolver');
     if (cobrar.length) { const c = el('div', 'card'); c.append(el('h3', '', 'Cobrar do fornecedor')); cobrar.forEach((x) => { const f = x.qtd_pedida - (x.nao_veio ? 0 : x.qtd_contada); c.append(el('p', '', x.nome + ': ' + (f === 1 ? 'faltou 1 peça' : 'faltaram ' + f + ' peças') + (x.custo != null ? ' (' + reais(x.custo) + ' cada, ' + reais(f * x.custo) + ')' : ''))); }); app.append(c); }
@@ -1803,6 +1767,7 @@
     return it;
   }
   async function telaPainel(pre) {
+    versaoTela++;
     const vista=fluidez.preparar('painel','Carregando o painel…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
@@ -1853,7 +1818,7 @@
       if (!ra.tarefas.length) c3.append(el('p', 'muted', 'Nenhuma tarefa de reativação esperando.'));
       ra.tarefas.slice(0, 8).forEach((t) => c3.append(linhaPeca({ nome: t.produtoNome }, t.titulo + ' · para Fotos')));
       if (ra.tarefas.length > 8) c3.append(el('p', 'muted', 'e mais ' + (ra.tarefas.length - 8) + ' na aba Preparação (Outras tarefas).'));
-      const dispensar = (x, lugar) => { const b = bt('Dispensar por 30 dias', 'discreto', async () => { b.disabled = true; const y = await srv('/esteira/reativacao/dispensar', { ids: x.ids }); if (!y.ok) { b.disabled = false; lugar.diga(y.erro || 'Não consegui dispensar agora.', 'erro'); return; } telaPainel(); }); b.setAttribute('aria-label', 'Dispensar ' + x.nome + ' das sugestões por 30 dias'); return b; };
+      const dispensar = (x, lugar) => { const b = bt('Dispensar por 30 dias', 'discreto', async () => { b.disabled = true; const y = await srv('/esteira/reativacao/dispensar', { ids: x.ids }); if(y.foraDaTela)return; if (!y.ok) { b.disabled = false; lugar.diga(y.erro || 'Não consegui dispensar agora.', 'erro'); return; } telaPainel(); }); b.setAttribute('aria-label', 'Dispensar ' + x.nome + ' das sugestões por 30 dias'); return b; };
       const sugestoes = (card, itens, vazio) => { const st = linhaStatus(); if (!itens.length) card.append(el('p', 'muted', vazio)); itens.forEach((x) => card.append(linhaPeca(x, [x.codigo, 'sem venda há ' + x.dias + ' dias', x.estoque + ' un.', x.familia ? x.ids.length + ' peças' : ''].filter(Boolean).join(' · '), acoes(dispensar(x, st))))); card.append(st); };
       c4.append(el('p', 'muted', 'Mais de ' + ra.degraus[1] + ' dias sem venda. Use a foto ou o vídeo novo e agende pelo painel, em Postagens. A Esteira não posta sozinha.'));
       sugestoes(c4, ra.postagens, 'Nenhuma peça para sugerir agora.');
@@ -1933,6 +1898,7 @@
   /* ---------- Configurações (Admin total) ---------- */
   const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   async function telaConfig() {
+    versaoTela++;
     const vista=fluidez.preparar('config','Carregando as configurações…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
@@ -1959,11 +1925,11 @@
     const sel = (valor, aoMudar) => { const s = el('select'); const o0 = el('option', '', '—'); o0.value = ''; s.append(o0); rodizio.forEach((e) => { const o = el('option', '', e.nome); o.value = e.whats; if (e.whats === valor) o.selected = true; s.append(o); }); s.onchange = () => aoMudar(s.value); return s; };
     // Escala de hoje
     const cHoje = el('div', 'card'); cHoje.append(el('h2', '', 'Escala de hoje (' + DIAS[new Date(r.hoje + 'T12:00:00').getDay()] + ')'), el('p', 'muted', 'Mude só hoje sem alterar o padrão da semana.'));
-    r.config.funcoes.forEach((f) => { const x = r.escalaHoje[f] || { whats: '' }; const lb = el('label', 'campo'); lb.append(document.createTextNode(f + (x.alterado ? ' · alterado hoje' : ''))); lb.append(sel(x.whats, async (w) => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, whats: w }); aviso(cHoje, y.ok ? 'Escala de hoje salva.' : y.erro, y.ok); })); cHoje.append(lb); if (x.alterado) { const v = el('button', 'bt', 'Voltar ao padrão em ' + f); v.type = 'button'; v.onclick = async () => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, voltarPadrao: true }); if (y.ok) telaConfig(); else aviso(cHoje, y.erro); }; cHoje.append(v); } });
+    r.config.funcoes.forEach((f) => { const x = r.escalaHoje[f] || { whats: '' }; const lb = el('label', 'campo'); lb.append(document.createTextNode(f + (x.alterado ? ' · alterado hoje' : ''))); lb.append(sel(x.whats, async (w) => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, whats: w }); if(y.foraDaTela)return; aviso(cHoje, y.ok ? 'Escala de hoje salva.' : y.erro, y.ok); })); cHoje.append(lb); if (x.alterado) { const v = el('button', 'bt', 'Voltar ao padrão em ' + f); v.type = 'button'; v.onclick = async () => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, voltarPadrao: true }); if(y.foraDaTela)return; if (y.ok) telaConfig(); else aviso(cHoje, y.erro); }; cHoje.append(v); } });
     // Padrão semanal
     const cPad = el('div', 'card'); cPad.append(el('h2', '', 'Padrão da semana'), el('p', 'muted', 'Repete toda semana. Só pessoas marcadas para o rodízio aparecem.'));
     const tb = el('div', 'tabela'), t = el('table'), th = el('tr'); th.append(el('th', '', 'Dia')); r.config.funcoes.forEach((f) => th.append(el('th', '', f))); t.append(th);
-    DIAS.forEach((nome, dia) => { const tr = el('tr'); tr.append(el('td', '', nome)); r.config.funcoes.forEach((f) => { const atual = (r.escalaPadrao.find((x) => x.dia === dia && x.funcao === f) || {}).whats || ''; const td = el('td'); const s = sel(atual, async (w) => { const y = await srv('/esteira/escala', { tipo: 'padrao', dia, funcao: f, whats: w }); aviso(cPad, y.ok ? 'Padrão salvo.' : y.erro, y.ok); }); s.setAttribute('aria-label', f + ' na ' + nome); td.append(s); tr.append(td); }); t.append(tr); });
+    DIAS.forEach((nome, dia) => { const tr = el('tr'); tr.append(el('td', '', nome)); r.config.funcoes.forEach((f) => { const atual = (r.escalaPadrao.find((x) => x.dia === dia && x.funcao === f) || {}).whats || ''; const td = el('td'); const s = sel(atual, async (w) => { const y = await srv('/esteira/escala', { tipo: 'padrao', dia, funcao: f, whats: w }); if(y.foraDaTela)return; aviso(cPad, y.ok ? 'Padrão salvo.' : y.erro, y.ok); }); s.setAttribute('aria-label', f + ' na ' + nome); td.append(s); tr.append(td); }); t.append(tr); });
     tb.append(t); cPad.append(tb);
     // Funções e instruções + regras
     const cReg = el('div', 'card'); cReg.append(el('h2', '', 'Funções e regras da conferência'));
@@ -1975,9 +1941,9 @@
     const pesosBox = el('div', 'pesos'), PESOS = { nunca: 'Nunca conferida', diaConf: 'Por dia sem conferência', diaCadastro: 'Por dia desde o cadastro', diaSemEdicao: 'Por dia sem atualização', estoqueBaixo: 'Estoque baixo (1–2 un.)', divergiu: 'Deu diferença antes' }, iPesos = {};
     Object.keys(PESOS).forEach((k) => { const [lb, i] = num(PESOS[k], 'cfg-peso-' + k, r.config.pesos[k], 0, 500); i.step = 'any'; iPesos[k] = i; pesosBox.append(lb); });
     const bSal = el('button', 'bt prim', 'Salvar funções e regras'); bSal.type = 'button';
-    bSal.onclick = async () => { const pesos = {}; Object.keys(iPesos).forEach((k) => { pesos[k] = Number(iPesos[k].value); }); const instrucoes = {}; Object.keys(instr).forEach((f) => { instrucoes[f] = instr[f].value; }); const y = await srv('/esteira/config', { config: { porPessoa: Number(iPP.value), diasSemRepetir: Number(iDS.value), funcoes: iF.value.split(',').map((x) => x.trim()).filter(Boolean), instrucoes, pesos } }); if (!y.ok) return aviso(cReg, y.erro); aviso(cReg, 'Salvo. As novas regras valem para as próximas listas.', true); };
+    bSal.onclick = async () => { const pesos = {}; Object.keys(iPesos).forEach((k) => { pesos[k] = Number(iPesos[k].value); }); const instrucoes = {}; Object.keys(instr).forEach((f) => { instrucoes[f] = instr[f].value; }); const y = await srv('/esteira/config', { config: { porPessoa: Number(iPP.value), diasSemRepetir: Number(iDS.value), funcoes: iF.value.split(',').map((x) => x.trim()).filter(Boolean), instrucoes, pesos } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cReg, y.erro); aviso(cReg, 'Salvo. As novas regras valem para as próximas listas.', true); };
     const bRef = el('button', 'bt', 'Refazer as listas de hoje (só as não começadas)'); bRef.type = 'button';
-    bRef.onclick = async () => { const y = await srv('/esteira/refazer-hoje', {}); aviso(cReg, y.ok ? 'Listas refeitas: ' + y.refeitas + '. Mantidas (já começadas): ' + y.mantidas + '.' : y.erro, y.ok); HOJE = null; };
+    bRef.onclick = async () => { const y = await srv('/esteira/refazer-hoje', {}); if(y.foraDaTela)return; aviso(cReg, y.ok ? 'Listas refeitas: ' + y.refeitas + '. Mantidas (já começadas): ' + y.mantidas + '.' : y.erro, y.ok); HOJE = null; };
     cReg.append(lF, boxI, lPP, lDS, el('h3', '', 'Pesos da escolha das peças'), pesosBox, bSal, bRef);
     // v7.42.0: tarefas da preparação (modelo) e quem aceita para o site
     const cMod = el('div', 'card'); cMod.id = 'cfg-preparacao'; cMod.append(el('h2', '', 'Tarefas da preparação'), el('p', 'muted', 'Criadas para cada peça colocada em preparação. Quem está na função do dia faz a tarefa.'));
@@ -2005,7 +1971,7 @@
     const bAddM = el('button', 'bt', 'Acrescentar tarefa'); bAddM.type = 'button';
     bAddM.onclick = () => { if (modelos.length >= 12) return aviso(cMod, 'O modelo aceita até 12 tarefas.'); modelos.push({ tipo: 'outro', orig: 'outro', titulo: '', instrucao: '', funcao: r.config.funcoes.includes('Fotos') ? 'Fotos' : '' }); desenharModelos(); const i = $('mod-titulo-' + (modelos.length - 1)); if (i) i.focus(); };
     const bSalM = el('button', 'bt prim', 'Salvar tarefas da preparação'); bSalM.type = 'button';
-    bSalM.onclick = async () => { const y = await srv('/esteira/config', { config: { modelosPreparacao: modelos.map((m) => ({ tipo: m.tipo, titulo: m.titulo, instrucao: m.instrucao, funcao: m.funcao })) } }); if (!y.ok) return aviso(cMod, y.erro || 'Não consegui salvar.'); aviso(cMod, 'Salvo. Vale para as próximas peças colocadas em preparação.', true); };
+    bSalM.onclick = async () => { const y = await srv('/esteira/config', { config: { modelosPreparacao: modelos.map((m) => ({ tipo: m.tipo, titulo: m.titulo, instrucao: m.instrucao, funcao: m.funcao })) } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cMod, y.erro || 'Não consegui salvar.'); aviso(cMod, 'Salvo. Vale para as próximas peças colocadas em preparação.', true); };
     cMod.append(boxM, bAddM, bSalM);
     // v7.45.0: foco por categoria (com categoria fixa por pessoa) e reativação de peças paradas
     const cFoco = el('div', 'card'); cFoco.id = 'cfg-foco'; cFoco.append(el('h2', '', 'Foco por categoria e reativação'));
@@ -2027,11 +1993,30 @@
     const [lHr, iHr] = num('Retrato diário do estoque às (hora, Fortaleza)', 'cfg-retrato-hora', r.config.retratoHora == null ? 6 : r.config.retratoHora, 0, 23);
     boxD.append(lD1, lD2, lD3, lHr);
     const bFoco = el('button', 'bt prim', 'Salvar foco e reativação'); bFoco.type = 'button';
-    bFoco.onclick = async () => { const y = await srv('/esteira/config', { config: { focoCategoria: cbF.checked, categoriasFixas: fixas, reativacao: [Number(iD1.value), Number(iD2.value), Number(iD3.value)], retratoHora: Number(iHr.value) } }); if (!y.ok) return aviso(cFoco, y.erro || 'Não consegui salvar.'); aviso(cFoco, 'Salvo. O foco vale para as próximas listas; os degraus valem no próximo retrato.', true); };
+    bFoco.onclick = async () => { const y = await srv('/esteira/config', { config: { focoCategoria: cbF.checked, categoriasFixas: fixas, reativacao: [Number(iD1.value), Number(iD2.value), Number(iD3.value)], retratoHora: Number(iHr.value) } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cFoco, y.erro || 'Não consegui salvar.'); aviso(cFoco, 'Salvo. O foco vale para as próximas listas; os degraus valem no próximo retrato.', true); };
     cFoco.append(el('h3', '', 'Categoria fixa por pessoa'), boxFx, el('h3', '', 'Reativação de peças paradas'), el('p', 'muted', 'Sem venda = o estoque não caiu no retrato diário. O sistema cria as tarefas para Fotos e mostra as sugestões no Painel; nunca muda preço.'), boxD, bFoco);
     app.append(cEq, cHoje, cPad, cReg, cMod, cFoco);
     } finally {fluidez.concluir(vista);}
   }
+
+  function resultadoOk(r,padrao){if(!r?.ok)throw Error(legivel(r?.erro,padrao));return r;}
+  async function executarAcao(d,c){const corpo=await resolverFotos(d.corpo,c);return c.worker('enviar',d.rota,corpo)}
+  async function executarConferencia(d,c){
+    if(Object.keys(d.mud||{}).length)await c.etapa('catalogo',async()=>{await c.progresso('Atualizando a peça no catálogo…');CATALOGO=null;const p=(await catalogoCompleto()).get(String(d.id));if(!p)throw Error('Esta peça não está mais no catálogo. Confira antes de repetir.');if(d.mud.estoque!=null&&String(p.Estoque||'0')!==String(d.antes||'0')&&String(p.Estoque||'0')!==String(d.mud.estoque))throw Error('O estoque mudou depois da sua conferência. Confira a peça antes de repetir.');const mud=Object.assign({},d.mud);for(const [k,campo]of [['tamanhos','Tamanhos'],['cores','Cores']])if(d.remover?.[k]?.length)mud[k]=lista(p[campo]).filter(v=>!d.remover[k].includes(v)).join(', ');c.assert();return resultadoOk(await apiPost(Object.assign(autenticacao(),{action:'update',id:d.id},mud)),'O catálogo não confirmou a conferência.')});
+    await c.progresso('Registrando a conferência…');return c.worker('conferencia','/esteira/conferir',d.registro);
+  }
+  async function executarAceite(d,c){
+    await c.etapa('reativar',async()=>{await c.progresso('Conferindo a peça no catálogo…');CATALOGO=null;const p=(await catalogoCompleto()).get(String(d.id));if(!p)throw Error('Esta peça não está mais no catálogo.');if(!ehInativo(p))return{ok:true};c.assert();return resultadoOk(await apiPost(Object.assign(autenticacao(),{action:'bulkUpdate',ids:[String(d.id)],tipoAcao:'reativar',valor:true})),'O catálogo não confirmou o aceite.')});
+    await c.progresso('Registrando o aceite…');return c.worker('aceitar','/esteira/aceitar',{id:d.id});
+  }
+  async function subirArquivos(d,c){const urls=[];for(let i=0;i<d.fotos.length;i++){await c.progresso('Enviando foto '+(i+1)+' de '+d.fotos.length+'…');const u=await c.etapa('foto-'+i,async()=>{c.assert();return enviarFoto(await reduzirFoto(d.fotos[i].arquivo||d.fotos[i]))});urls.push(u)}return urls;}
+  async function executarFotos(d,c){const urls=await subirArquivos(d,c);await c.progresso('Salvando as fotos no produto…');const r=await c.etapa('produto',()=>colocarNoProduto(d.produto,urls,'',c));if(d.tarefas?.length)await c.worker('concluir','/esteira/fotos/concluir',{ids:d.tarefas,fotos:urls.length});return{ok:true,fotos:urls.length,produto:d.produto};}
+  async function executarCaixa(d,c){const urls=await subirArquivos(d,c);await c.progresso('Registrando as fotos na caixa…');return c.worker('caixa','/esteira/caixa/enviar',{lote:c.job.id,descricaoLote:d.descricaoLote||'',produto:d.produto||'',produtoNome:d.produtoNome||'',itens:urls.map((url,i)=>({op:c.job.id+'-'+i,url,descricao:d.fotos[i].descricao||'',hash:d.fotos[i].hash||''}))});}
+  async function executarColocar(d,c){await c.progresso('Salvando as fotos no produto…');await c.etapa('produto',()=>colocarNoProduto(d.produto,d.urls,d.capa||'',c));await c.progresso('Atualizando a caixa…');return c.worker('caixa','/esteira/caixa/usar',{ids:d.ids,uso:'produto',produto:d.produto,produtoNome:d.produtoNome});}
+  async function executarPedido(d,c){await c.progresso('Salvando o pedido…');const pacote=await resolverFotos(d.pacote,c);const r=await c.worker('salvar','/esteira/pedidos/salvar',pacote);if(d.enviar){await c.progresso('Marcando o pedido como enviado…');await c.worker('enviar','/esteira/pedidos/enviar',{id:r.pedido.id})}return r;}
+  async function executarAplicacao(d,c){const r=await srvRede('/esteira/pedidos/abrir?id='+encodeURIComponent(d.id));resultadoOk(r,'Não consegui abrir o pedido.');for(const id of d.itens){const x=r.pedido.itens.find(x=>String(x.id)===String(id));if(!x||x.aplicado_em)continue;x.refazer=d.refazer===true;await aplicarItem(r.pedido,x,m=>{void c.progresso(m)},c);await c.progresso('Item '+x.nome+' concluído.')}return{ok:true,pedido:d.id};}
+  async function guardarProcesso(tipo,dados,titulo,chave){return processos.adicionar(tipo,dados,titulo,chave)}
+  function refrescarDepois(){fluidez.invalidar();CATALOGO=null;HOJE=null;setTimeout(()=>{if(fluidez.visivel()&&!['editor','contagem','aprovacao','aplicacao'].includes(app.dataset.tela)&&!document.querySelector('.fundo')&&!document.activeElement?.matches('input,textarea,select'))void abrirAba();},1700)}
 
   /* ---------- início ---------- */
   async function iniciar() {

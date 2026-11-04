@@ -564,5 +564,16 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   LISTAS_ON = false; kv.delete('est:listas:v1');
   const vaz = respostasEquipe.find((x) => vazouChave(x.j, ['custo', 'qtd_pedida']));
   chk('nenhuma resposta para quem não é Admin total contém custo ou qtd_pedida (' + respostasEquipe.length + ' respostas)', !vaz && respostasEquipe.some((x) => x.rota.includes('/pedidos')), vaz);
+  { // v7.54: resposta perdida/concorrrente consulta o mesmo recibo, nunca cria outra tarefa.
+  const recibo=async(whats,op,corpo,consulta=false)=>{const r=await w.fetch(new Request('https://ig.fake'+(consulta?'/esteira/operacoes/status?op='+op:'/esteira/preparar'),{method:consulta?'GET':'POST',headers:{'Content-Type':'application/json','X-TK-Whats':whats,'X-TK-Sessao':'tk3.sessao-'+whats,'X-TK-Operacao':op},body:consulta?undefined:JSON.stringify(corpo)}),env,ctx);return{status:r.status,j:await r.json()}};
+  const op='teste-recibo-20261104',corpo={id:'1005',nome:'Peça do recibo',codigo:'TK-5'};
+  const [r1,r2]=await Promise.all([recibo(PABLO,op,corpo),recibo(PABLO,op,corpo)]);
+  const r3=await recibo(PABLO,op,corpo),r4=await recibo(PABLO,op,null,true);
+  chk('processo simultâneo e resposta perdida mantêm confirmação original',r1.j.ok&&r3.j.ok&&r4.j.ok&&JSON.stringify(r1.j)===JSON.stringify(r3.j)&&JSON.stringify(r3.j)===JSON.stringify(r4.j),{r1,r2,r3});
+  chk('mesmo identificador com dados diferentes não executa', (await recibo(PABLO,op,{...corpo,id:'1006'})).status===409);
+  chk('outra conta não lê recibo alheio',(await recibo(IARA,op,null,true)).status===404);
+  usuarios[PABLO].permissoes=['catalogo_cadastrar'];kv.clear();cacheMem.clear();
+  chk('permissão revogada não recupera resposta administrativa',(await recibo(PABLO,op,null,true)).status===403);
+  }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });
