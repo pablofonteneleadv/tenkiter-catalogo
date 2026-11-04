@@ -9,6 +9,7 @@
   const novaBase = foto => { const f=copiar(foto);f.id=id();f.pedidoId=id();f.estado='rascunho';f.job=null;f.erro='';delete f.tentativa;f.pessoas.forEach(p=>{p.id=id()});return f; };
   const semAc = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   function tipoPeca(p){
+    if(/^\s*looks?\b/.test(semAc(p.Nome))||/\blooks?\b/.test(semAc(p.Categoria)))return 'look';
     const t=' '+semAc((p.Categoria||'')+' '+(p.Nome||''))+' ';
     if(/\b(vestido\w*|macac\w*|macaquinho\w*|conjunto\w*|fantasia\w*|biquini\w*|maio\w*|pijama\w*)\b/.test(t))return 'look';
     if(/\b(calca\w*|short\w*|saia\w*|bermuda\w*|legging\w*|pantalona\w*|jogger\w*|calcoes)\b/.test(t))return 'baixo';
