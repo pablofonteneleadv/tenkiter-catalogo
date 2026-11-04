@@ -1105,9 +1105,11 @@
     });
   }
   /* ---- tela da aba Fotos ---- */
-  let CAIXA_VER = 'novas';
+  let CAIXA_VER = 'novas', AVISO_FOTOS = '';
   async function telaFotos(aviso) {
     const vista=fluidez.preparar('fotos','Carregando as fotos…'),app=vista.app;
+    // O envio já foi confirmado: avisa antes de aguardar a revalidação da lista.
+    if(typeof aviso==='string'&&aviso){AVISO_FOTOS=aviso;const atual=$('fotos-status');if(atual?.diga)atual.diga(aviso,'ok');}
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
 
@@ -1115,7 +1117,7 @@
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren(); catalogoFundo();
     const topo = el('div', 'card'); topo.id = 'fotos-topo'; topo.append(el('h2', '', 'Fotos'));
-    const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (aviso) stTopo.diga(aviso, 'ok');
+    const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (AVISO_FOTOS) stTopo.diga(AVISO_FOTOS, 'ok');
     topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de uma peça', '', () => abrirPedirFotos(null, (m) => telaFotos(m)))), stTopo);
     app.append(topo);
     const pend = await cxTodos();                    // envio interrompido: continua sozinho e mostra o andamento
@@ -2034,7 +2036,7 @@
   /* ---------- início ---------- */
   async function iniciar() {
     if (!getSessao()) return telaLogin('');
-    usuario = null; HOJE = null; fluidez.invalidar();
+    usuario = null; HOJE = null; AVISO_FOTOS=''; fluidez.invalidar();
     await telaHoje();
   }
   setInterval(()=>{if(!document.hidden&&fluidez.visivel()&&![...document.querySelectorAll('.overlay')].some(e=>e.getClientRects().length))abrirAba();},30000);

@@ -202,10 +202,17 @@ with sync_playwright() as p:
         chk(f"{w}: envio interrompido: a 1ª chega à caixa, a outra fica guardada e a tela explica", len(f["enviar"]) == 1 and len(e1["itens"]) == 1 and "1 foto chegou à caixa" in pg.inner_text(".folha") and pg.inner_text("#cx-enviar") == "Tentar de novo", pg.inner_text(".folha")[-300:])
         chk(f"{w}: o lote leva a descrição de todas, a da foto, a peça e a impressão digital", e1["descricaoLote"] == "Chegaram hoje da Malharia Sol" and e1["itens"][0]["descricao"] == "vestido verde, falta cadastrar" and e1["produto"] == "1001" and e1["produtoNome"] == "Vestido Midi Linho" and re.match(r"^[a-f0-9]{32}$", e1["itens"][0]["hash"]) and re.match(r"^cx-", e1["itens"][0]["op"]), e1)
         shot(pg, f"caixa-envio-interrompido-{w}")
-        pg.click("#cx-enviar"); pg.wait_for_selector(".folha", state="detached", timeout=8000)
+        # A confirmação do envio não depende da leitura posterior da lista.
+        leituras_retidas = []
+        def reter_lista(route): leituras_retidas.append(route)
+        ctx.route("**/esteira/fotos", reter_lista)
+        with pg.expect_request("**/esteira/fotos", timeout=8000): pg.click("#cx-enviar")
+        pg.wait_for_selector(".folha", state="detached", timeout=8000)
         e2 = f["enviar"][-1]
         chk(f"{w}: 'Tentar de novo' envia só a que faltava, no mesmo lote", len(f["enviar"]) == 2 and len(e2["itens"]) == 1 and e2["lote"] == e1["lote"] and e2["itens"][0]["op"] != e1["itens"][0]["op"], e2)
         chk(f"{w}: aviso de sucesso", "1 foto enviada para a caixa." in pg.inner_text("#fotos-status"))
+        ctx.unroute("**/esteira/fotos", reter_lista)
+        for route in leituras_retidas: route.fallback()
         # envio interrompido com a tela fechada: retoma ao voltar para a aba Fotos
         pg.click("text=Enviar fotos para a caixa"); pg.wait_for_selector("#cx-escolher", timeout=4000)
         pg.set_input_files("#cx-arq", [foto_png((240, 200, 20))]); pg.wait_for_selector(".cx-linha", timeout=4000)
