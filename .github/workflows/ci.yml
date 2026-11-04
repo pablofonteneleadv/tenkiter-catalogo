@@ -249,7 +249,7 @@ jobs:
 
       - name: Pedido idempotente e compatibilidade com backend antigo
         if: github.event_name == 'pull_request'
-        run: python3 tests/jornada_pedido.py
+        run: python3 tests/rodar_tudo.py --suite jornada_pedido.py --json-report tests/saida/pedido-ci.json
 
       - name: Jornada de edição de tamanhos no atendimento
         if: github.event_name == 'pull_request'
