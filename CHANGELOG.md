@@ -9,6 +9,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ## [7.54.2] - 2026-11-04
 
 - Corrige pré-checagem que exigia Node indevidamente para suítes autônomas em Python.
+- Estabiliza a verificação da ordem de fotos no teste: aguarda a revalidação assíncrona, mantendo a mesma ordem exigida; base HTTP explícita para execução isolada.
 
 
 ## [7.54.1] - 2026-11-04
