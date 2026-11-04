@@ -120,6 +120,10 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_fila.py", lambda o: "FALHAS=0" in o),      # fila de Postagens com regras (pausa, intervalo por tipo, ▲▼, Próximo livre)
     ("postagens_modelo_formato.js", lambda o: "FALHAS=0" in o),
     ("postagens_colagem.py", lambda o: "FALHAS=0" in o),   # 🧩 Colagem + 🖼️ Gerar imagens
+    ("esteira_processos_ui.py", lambda o: "PASS processos:" in o),
+    ("esteira_envios_fundo_ui.py", lambda o: "PASS envio real simulado" in o),
+    ("produtos_busca_esteira_ia.py", lambda o: "PASS 4 viewports:" in o),
+    ("esteira_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_fotos_ui.py", lambda o: "FALHAS=0" in o),   # v7.51.0: aba Fotos da Esteira, caixa de fotos (envio em lote, retomada, gestor) e cadastro na Gestão com as fotos
     ("fotos_postadas_ui.py", lambda o: "FALHAS=0" in o),  # v7.49.0: foto nova sobe na vitrine/postador; fotos postadas desmarcadas com "Postada há N dias"
     ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos

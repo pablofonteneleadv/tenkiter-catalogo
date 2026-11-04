@@ -28,6 +28,8 @@ class AuditTests(unittest.TestCase):
         actual = {str(p.relative_to(output)) for p in output.rglob('*') if p.is_file()}
         self.assertEqual(actual, allowed)
         self.assertIn('index.html', actual)
+        self.assertIn('esteira-processos.js',actual)
+        self.assertIn('produtos-busca.js',actual)
         self.assertIn('android/latest.json', actual)
         self.assertFalse(any(p.endswith(('.zip', '.patch', '.gs.txt', '.md')) for p in actual))
         self.assertFalse(any(p.startswith(('tests/', 'scripts/', '.git/', 'instagram-worker/')) for p in actual))

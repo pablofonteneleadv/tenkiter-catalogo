@@ -27,9 +27,19 @@ with sync_playwright() as p:
   st['equipe'].append({'whats':'88999990004','nome':'Nova pessoa','confere':1,'rodizio':1,'atendente':1,'aceitar':0,'ativo':1})
   print('ATUALIZANDO',flush=True)
   pg.clock.fast_forward(31000);pg.wait_for_selector('text=Nova pessoa · 88999990004');assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
+  # A confirmação antiga não limpa a marca de edição de um rascunho mais novo.
+  escritos=[]
+  def reter_escrita(r):
+   if r.request.method=='POST':escritos.append(r)
+   else:r.fallback()
+  c.route('**/esteira/config',reter_escrita)
+  pg.get_by_role('button',name='Salvar funções e regras',exact=True).click();pg.wait_for_timeout(150);assert escritos
+  pg.fill('#cfg-funcoes','Fotos, Rascunho mais novo');escritos.pop(0).fallback();pg.wait_for_selector('text=Salvo. As novas regras')
+  c.unroute('**/esteira/config',reter_escrita);pg.clock.fast_forward(31000)
+  assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Rascunho mais novo'
   c.route('**/esteira/config',lambda r:r.abort())
   pg.clock.fast_forward(31000);pg.wait_for_selector('.esteira-atualizacao');assert 'informações anteriores continuam visíveis' in pg.inner_text('.esteira-atualizacao')
-  assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
+  assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Rascunho mais novo'
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   pg.evaluate('()=>{localStorage.clear();dispatchEvent(new Event("tk:sessao"))}');pg.wait_for_selector('#login-w');assert not pg.locator('#cfg-funcoes').count()
   assert not erros,erros;c.close()

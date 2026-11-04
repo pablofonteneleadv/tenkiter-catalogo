@@ -17,7 +17,9 @@ def ambiente(browser,w=390,h=844,perms=PERMS_ALL):
  pg=c.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.on('dialog',lambda d:d.accept());pg.goto(BASE+'fotos-ia.html');pg.wait_for_selector('[data-a=escolher]');alvos(pg);return c,st,pg,errors
 
 def escolher(pg,pessoa=0,papel='look',codigo='TK-0003'):
- pg.locator('.fi-pessoa').nth(pessoa).locator('[data-a=escolher][data-papel='+papel+']').click();pg.fill('#fi-busca',codigo);pg.click('[data-picker=produto]');pg.locator('[data-picker=foto]').first.click();pg.wait_for_selector('#fi-picker',state='hidden')
+ pg.locator('.fi-pessoa').nth(pessoa).locator('[data-a=escolher][data-papel='+papel+']').click();pg.fill('#fi-busca',codigo);
+ if not pg.locator('[data-picker=produto]').count():pg.click('#fi-picker-todas')
+ pg.click('[data-picker=produto]');pg.locator('[data-picker=foto]').first.click();pg.wait_for_selector('#fi-picker',state='hidden')
 def salvar(pg):pg.locator('[data-a=salvar-foto]').evaluate('e=>{e.click();e.click()}');pg.wait_for_selector('.fi-editor',state='hidden');pg.wait_for_selector('[data-a=enviar]')
 def foto(pg,n=1):
  for i in range(n):
@@ -104,7 +106,7 @@ def catalogo():
    # Zoom/reflow and short-height picker, genuine focus and close controls.
    pg.click('[data-aba=lote]');pg.locator('[data-a=base]').first.click()
    for vw,vh,zoom in [(w,h,1),(320,700,1),(390,844,1.3),(390,470,1)]:
-    pg.set_viewport_size({'width':vw,'height':vh});pg.evaluate('(z)=>document.documentElement.style.fontSize=(z*100)+"%"',zoom);assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1');pg.locator('[data-a=escolher]').first.click();pg.fill('#fi-busca','TK-0004');assert pg.locator('[data-picker=produto]').count()==1;alvos(pg);box=pg.locator('#fi-picker-fechar').bounding_box();assert box['height']>=44 and box['y']>=0 and box['y']+box['height']<=vh;pg.screenshot(path=str(OUT/f'picker-{w}-{vw}-{vh}-{zoom}.png'));pg.keyboard.press('Escape')
+    pg.set_viewport_size({'width':vw,'height':vh});pg.evaluate('(z)=>document.documentElement.style.fontSize=(z*100)+"%"',zoom);assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1');pg.locator('[data-a=escolher]').first.click();pg.click('[data-papel-filtro=cima]');pg.fill('#fi-busca','TK-0004');assert pg.locator('[data-picker=produto]').count()==1;alvos(pg);box=pg.locator('#fi-picker-fechar').bounding_box();assert box['height']>=44 and box['y']>=0 and box['y']+box['height']<=vh;pg.screenshot(path=str(OUT/f'picker-{w}-{vw}-{vh}-{zoom}.png'));pg.keyboard.press('Escape')
    pg.set_viewport_size({'width':w,'height':h});pg.evaluate('document.documentElement.style.fontSize=""');pg.evaluate('document.activeElement.blur();scrollTo(0,0)');pg.screenshot(path=str(OUT/f'pagina-editor-{w}.png'),full_page=True)
    if Path('tests/axe.min.js').exists():
     pg.add_script_tag(path='tests/axe.min.js');viol=pg.evaluate("async()=> (await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}})).violations.map(x=>({id:x.id,targets:x.nodes.map(n=>n.target)}))");assert not viol,viol
