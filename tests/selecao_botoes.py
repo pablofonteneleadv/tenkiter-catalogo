@@ -33,7 +33,7 @@ with sync_playwright() as p:
         chk("Edição em lote só para a equipe", (pg.locator("#btn-lote-menu:visible").count() == 1) == lote)
         chk("botões com fundo próprio e ≥44px", pg.evaluate("(()=>{const r=document.querySelector('#btn-limpar-sel').getBoundingClientRect(); return r.height>=44 && getComputedStyle(document.querySelector('#btn-limpar-sel')).backgroundColor!=='rgba(0, 0, 0, 0)'})()"))
         if lote:
-            pg.click("#btn-lote-menu"); chk("lista de ações abre", pg.locator("#lote-menu:visible").count() == 1 and pg.locator("#lote-menu [data-lote]").count() == 6)
+            pg.click("#btn-lote-menu"); chk("lista de ações abre com Solicitar fotos", pg.locator("#lote-menu:visible").count() == 1 and pg.locator("#lote-menu [data-lote]").count() == 7 and pg.locator('[data-lote="btn-bulk-pedir-fotos"]').is_visible())
         chk("mesma linha (tops iguais)", pg.evaluate("(()=>{const t=[...document.querySelectorAll('#btn-share-busca,#btn-limpar-sel,#btn-lote-menu')].filter(b=>b.offsetParent).map(b=>Math.round(b.getBoundingClientRect().top)); return new Set(t).size===1})()"))
         if lote:
             pg.on("dialog", lambda d: d.accept())

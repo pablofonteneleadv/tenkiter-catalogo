@@ -127,6 +127,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("produtos_busca_esteira_ia.py", lambda o: "PASS 4 viewports:" in o),
     ("esteira_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_fotos_ui.py", lambda o: "FALHAS=0" in o),   # v7.51.0: aba Fotos da Esteira, caixa de fotos (envio em lote, retomada, gestor) e cadastro na Gestão com as fotos
+    ("pedir_fotos_lote.py", lambda o: "RESULTADO" in o),  # Gestão e catálogo: observação, falha parcial e troca de conta
     ("fotos_postadas_ui.py", lambda o: "FALHAS=0" in o),  # v7.49.0: foto nova sobe na vitrine/postador; fotos postadas desmarcadas com "Postada há N dias"
     ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos
     ("video_validacao.py", lambda o: "FALHAS: 0" in o),   # v6.7: validação de vídeo no navegador (cadastro e agendamento)

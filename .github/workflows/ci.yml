@@ -293,6 +293,7 @@ jobs:
           TK_EVID=tests/saida/postagens-retomar python3 tests/postagens_retomar_limites.py
           TK_EVID=tests/saida/fotos-postadas python3 tests/fotos_postadas_ui.py
           TK_EVID=tests/saida/esteira-fotos python3 tests/esteira_fotos_ui.py
+          TK_EVID=tests/saida/pedir-fotos-lote python3 tests/pedir_fotos_lote.py
           python3 tests/mensagens_gestor_ui.py
           python3 tests/tempo_presenca_ui.py
           python3 tests/mensagens_grupos_busca_ui.py
@@ -327,6 +328,7 @@ jobs:
           path: |
             tests/saida/reparos/
             tests/saida/fotoia-catalogo/
+            tests/saida/pedir-fotos-lote/
           if-no-files-found: ignore
 
       - name: Screenshots da edição rápida

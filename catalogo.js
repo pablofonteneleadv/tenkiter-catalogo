@@ -651,6 +651,15 @@ try { tkSelExpirar_(); } catch (e) {}
     // login AQUI; com sessão, leva o token junto para o admin validar (nunca manda o link cru).
     const s = getSessao();
     if (!s || !s.sessao) { avisoEquipe_('Entre na sua conta para usar a edição em lote.'); const bc = document.getElementById('btn-conta-header'); if (bc) bc.click(); return; }
+    if (b.dataset.lote === 'btn-bulk-pedir-fotos') {
+      if (!equipe_.pode) return;
+      if (!window.TKPedirFotos) return avisoEquipe_('A solicitação de fotos ainda está carregando. Tente novamente.');
+      document.getElementById('lote-menu').hidden = true;
+      document.getElementById('btn-lote-menu').setAttribute('aria-expanded', 'false');
+      const ids = new Set(getSacola().map(String));
+      TKPedirFotos.abrir(produtos.filter(p => ids.has(String(p.ID))), 'catalogo');
+      return;
+    }
     document.getElementById('lote-menu').hidden = true;
     location.href = 'admin.html?lote=' + encodeURIComponent(getSacola().join(',')) + '&acao=' + b.dataset.lote + '&sessao=' + encodeURIComponent(s.sessao) + '&whatsapp=' + encodeURIComponent(s.whatsapp || '');
   });
