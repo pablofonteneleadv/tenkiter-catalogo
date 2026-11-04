@@ -290,6 +290,8 @@ jobs:
           python3 tests/foto_ia_lotes.py
           python3 tests/foto_ia_catalogo.py
           python3 tests/menu_selecao_ia.py
+          python3 tests/esteira_fluidez_ui.py
+          python3 tests/mensagens_canais_selecao.py
           python3 tests/gestao_unioes.py
           python3 tests/juntar_admin.py
           python3 tests/selecao_botoes.py
