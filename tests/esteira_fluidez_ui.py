@@ -27,7 +27,11 @@ with sync_playwright() as p:
   st['equipe'].append({'whats':'88999990004','nome':'Nova pessoa','confere':1,'rodizio':1,'atendente':1,'aceitar':0,'ativo':1})
   print('ATUALIZANDO',flush=True)
   pg.clock.fast_forward(31000);pg.wait_for_selector('text=Nova pessoa · 88999990004');assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
+  c.route('**/esteira/config',lambda r:r.abort())
+  pg.clock.fast_forward(31000);pg.wait_for_selector('.esteira-atualizacao');assert 'informações anteriores continuam visíveis' in pg.inner_text('.esteira-atualizacao')
+  assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  pg.evaluate('()=>{localStorage.clear();dispatchEvent(new Event("tk:sessao"))}');pg.wait_for_selector('#login-w');assert not pg.locator('#cfg-funcoes').count()
   assert not erros,erros;c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
