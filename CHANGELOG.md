@@ -11,6 +11,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Esteira: envios duráveis em segundo plano, acompanhamento e retomada por etapas, preservando a tarefa atual.
 - Buscas Esteira/IA com produtos ao abrir, fotos recentes e características; IA com Cima, Baixo e Look.
 
+## [7.53.5] - 2026-11-04
+
+- Monitor público somente leitura e proteção verificável dos arquivos internos antigos; diagnóstico preciso do cache.
+
+
 ## [7.53.4] - 2026-11-04
 
 - Confiabilidade interna: distribuição estática restrita, testes privados diretos e proteção contra repetição de pedidos

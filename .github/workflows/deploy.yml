@@ -25,8 +25,24 @@ concurrency:
   cancel-in-progress: false   # nunca cancelar um deploy em andamento
 
 jobs:
+  diagnostico_distribuicao:
+    name: Diagnóstico somente leitura da distribuição
+    if: github.event_name == 'workflow_dispatch' && inputs.motivo == 'diagnostico-distribuicao'
+    runs-on: ubuntu-24.04
+    environment: producao
+    steps:
+      - uses: actions/checkout@v6
+      - name: Conferir configuração efetiva sem imprimir credenciais
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: python3 scripts/deploy/diagnostico_distribuicao.py
+
   # Reaproveita o portão de qualidade antes de tocar em produção.
   ci:
+    if: github.event_name != 'workflow_dispatch' || inputs.motivo != 'diagnostico-distribuicao'
     name: Portão de qualidade
     uses: ./.github/workflows/ci.yml
 
@@ -65,6 +81,12 @@ jobs:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: python3 scripts/deploy/render_android_headers.py
 
+      - name: Proteger URLs internas publicadas anteriormente
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: python3 scripts/deploy/render_internal_routes.py
+
       - name: Disparar e acompanhar o deploy no Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
@@ -74,15 +96,26 @@ jobs:
         run: bash scripts/deploy/render_deploy.sh
 
       - name: Limpar o cache do Cloudflare
+        id: purge
+        continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
         run: bash scripts/deploy/cloudflare_purge.sh
 
+      # O purge tem falha explícita e continue-on-error; as provas do site são obrigatórias.
       # Roda SEMPRE, mesmo que o purge acima tenha falhado. Antes ele era pulado
       # em cascata (o purge saia com exit 1 e o job marcava o resto como skipped),
       # entao uma falha secundaria escondia o estado real de producao — nos runs
       # 38833465713, 38837548442 e 38840046234 ninguem chegou a conferir o ar.
+      - name: Conferir site publicado e impedir exposição de artefatos antigos
+        if: always() && !cancelled()
+        env:
+          COMMIT_ESPERADO: ${{ github.sha }}
+        run: |
+          python3 scripts/monitoramento/saude_publica.py --expected-commit "$COMMIT_ESPERADO"
+          python3 scripts/deploy/verificar_arquivos_internos.py
+
       - name: Conferir a versão oferecida pelo atualizador Android
         id: android_manifesto
         env:

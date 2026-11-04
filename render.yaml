@@ -56,3 +56,44 @@ services:
       - type: rewrite
         source: /feed.csv
         destination: https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv
+
+      # URLs de trabalho antigas terminam em 404; nenhuma rota da loja é alterada.
+      - type: redirect
+        source: /scripts/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /tests/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /docs/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /og-service/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /og-worker/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /midia-worker/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /instagram-worker/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /.github/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /.agents/*
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /lotes-a-c.patch
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /tenkiter-arquivos-modificadosok.zip
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /CLAUDE.md
+        destination: /__arquivo-interno-indisponivel__
+      - type: redirect
+        source: /AGENTS.md
+        destination: /__arquivo-interno-indisponivel__

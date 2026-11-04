@@ -19,6 +19,8 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(AQUI)
 SUITES = [  # (arquivo, como saber que passou)
     ("auditoria_interna.py", lambda out: True),
+    ("saude_publica.py", lambda out: True),
+    ("distribuicao_cache.py", lambda out: True),
     ("pedido_idempotencia.js", lambda out: "OK: intenção estável" in out),
     ("recuperacao_whatsapp.js", lambda out: "PASS recuperação:" in out),
     ("worker_abas_fluxo.py", lambda out: "FALHAS=0" in out),
