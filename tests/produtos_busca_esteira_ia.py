@@ -20,6 +20,6 @@ with sync_playwright() as pw:
   pg.click('[data-papel-filtro=look]');assert pg.locator('[data-picker=produto]').count()==0
   pg.fill('#fi-busca','TK-0003');assert pg.locator('[data-picker=produto]').count()==1
   pg.fill('#fi-busca','');pg.locator('#fi-filtros-extra summary').click();ia.alvos(pg);pg.screenshot(path=str(OUT/f'ia-filtros-{w}.png'));assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
-  pg.fill('#fi-busca','TK-0003');pg.click('[data-picker=produto]');pg.wait_for_selector('[data-picker=foto]');pg.locator('[data-picker=foto]').first.click();pg.wait_for_selector('#fi-picker',state='hidden');assert not errors,errors;c.close()
+  pg.fill('#fi-busca','nenhum-produto-deste-teste');pg.locator('#fi-filtros-extra select').last.focus();pg.keyboard.press('Tab');assert pg.locator('#fi-picker-fechar').evaluate('e=>e===document.activeElement');pg.fill('#fi-busca','TK-0003');pg.click('[data-picker=produto]');pg.wait_for_selector('[data-picker=foto]');pg.locator('[data-picker=foto]').first.click();pg.wait_for_selector('#fi-picker',state='hidden');assert not errors,errors;c.close()
  b.close()
 print('PASS 4 viewports: catálogo inicial, foto recente primeiro, cor e tamanho; IA Cima/Baixo/Look estritos e galeria preservada.')
