@@ -25,7 +25,7 @@ jobs:
     name: Tag + GitHub Release
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -36,7 +36,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Subir a versão (VERSION + version.json + CHANGELOG)
-        run: bash scripts/release/bump_version.sh "${{ inputs.tipo }}" "${{ inputs.descricao }}"
+        env:
+          TK_RELEASE_KIND: ${{ inputs.tipo }}
+          TK_RELEASE_DESCRIPTION: ${{ inputs.descricao }}
+        run: bash scripts/release/bump_version.sh "$TK_RELEASE_KIND" "$TK_RELEASE_DESCRIPTION"
 
       - name: Ler a versão nova
         id: versao
@@ -53,8 +56,10 @@ jobs:
       - name: Publicar o GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TK_RELEASE_DESCRIPTION: ${{ inputs.descricao }}
         run: |
+          printf '%s\n' "$TK_RELEASE_DESCRIPTION" > "$RUNNER_TEMP/release-notes.md"
           gh release create "v${{ steps.versao.outputs.valor }}" \
             --title "v${{ steps.versao.outputs.valor }}" \
-            --notes "${{ inputs.descricao }}" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
             --target "${{ github.ref_name }}"

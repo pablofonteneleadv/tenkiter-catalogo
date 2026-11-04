@@ -1,7 +1,7 @@
 // Contrato frontend/Apps Script. Backend privado fornecido via BACKEND_CATALOGO.
 'use strict';
 const fs = require('fs'), vm = require('vm'), crypto = require('crypto'), assert = require('assert');
-const file = process.env.BACKEND_CATALOGO;
+const file = process.env.BACKEND_CATALOGO || require('./backend_source.cjs').localizar('catalogo').caminho;
 if (!file) { console.error('Informe BACKEND_CATALOGO com o arquivo privado.'); process.exit(1); }
 const source = fs.readFileSync(file, 'utf8');
 const code = source.slice(source.indexOf('function assinarUploadVideo_(body)'), source.indexOf('\n/**', source.indexOf('function assinarUploadVideo_(body)')));

@@ -16,6 +16,8 @@ while IFS= read -r arq; do
 done < <(find . -name '*.js' \
   -not -path '*/node_modules/*' \
   -not -path './.git/*' \
+  -not -path './.public-site/*' \
+  -not -path './.public-site-next/*' \
   -not -name 'axe.min.js' \
   -not -name 'OneSignalSDKWorker.js' \
   | sort)

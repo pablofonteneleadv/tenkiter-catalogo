@@ -37,6 +37,45 @@ function listaDePecasTexto_(itens) {
 
 /* ---------------- dados do cliente (rascunho em memória; no aparelho só se ele pedir) ---------------- */
 var CHAVE_CLIENTE_LOCAL = 'tenkiter_cliente_dados_v1';
+// Identificação técnica da intenção: sem novos campos ou etapas para o cliente.
+var pedidoOperacao_ = null;
+async function operacaoPedido_(dados, itens) {
+  var assinatura = JSON.stringify([String(dados.nome || '').trim(), String(dados.whatsapp || '').replace(/\D/g, ''), dados.entrega, dados.endereco, dados.obs, itens.map(function (p) { return String(p.ID); }).sort()]);
+  var digest = '';
+  try {
+    if (window.crypto && window.crypto.subtle) {
+      var buffer = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(assinatura));
+      digest = Array.from(new Uint8Array(buffer)).map(function (n) { return n.toString(16).padStart(2, '0'); }).join('');
+    }
+  } catch (e) { /* sem armazenamento persistente: preserva a intenção em memória */ }
+  if (pedidoOperacao_ && pedidoOperacao_.assinatura === assinatura) return pedidoOperacao_.opId;
+  if (digest) {
+    try {
+      var anterior = JSON.parse(sessionStorage.getItem('tk_pedido_operacao_v1') || 'null');
+      if (anterior && anterior.hash === digest && /^[A-Za-z0-9_-]{6,80}$/.test(anterior.opId)) {
+        pedidoOperacao_ = { assinatura: assinatura, opId: anterior.opId };
+        return anterior.opId;
+      }
+    } catch (e) { /* armazenamento indisponível não bloqueia o pedido */ }
+  }
+  var opId = 'ped_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+  try {
+    if (window.crypto && window.crypto.getRandomValues) {
+      var bytes = window.crypto.getRandomValues(new Uint8Array(16));
+      opId = 'ped_' + Array.from(bytes).map(function (n) { return n.toString(16).padStart(2, '0'); }).join('');
+    }
+  } catch (e) { /* a identificação de contingência não depende de credencial */ }
+  pedidoOperacao_ = { assinatura: assinatura, opId: opId };
+  if (digest) {
+    try { sessionStorage.setItem('tk_pedido_operacao_v1', JSON.stringify({ hash: digest, opId: opId })); } catch (e) {}
+  }
+  return opId;
+}
+function concluirOperacaoPedido_() {
+  pedidoOperacao_ = null;
+  try { sessionStorage.removeItem('tk_pedido_operacao_v1'); } catch (e) {}
+}
+
 var rascunhoPedido_ = null;
 function lerClienteLocal_() { try { return JSON.parse(localStorage.getItem(CHAVE_CLIENTE_LOCAL) || 'null'); } catch (e) { return null; } }
 function gravarClienteLocal_(d) { try { if (d) localStorage.setItem(CHAVE_CLIENTE_LOCAL, JSON.stringify(d)); else localStorage.removeItem(CHAVE_CLIENTE_LOCAL); } catch (e) {} }
@@ -240,10 +279,11 @@ async function enviarPedido_(itens) {
   var v = await versaoServidor();
   if (v && v.pedidos) {
     var r = await criarPedidoApi({
+      opId: v.pedidoIdempotente ? await operacaoPedido_(dados, itens) : undefined,
       nome: dados.nome, whatsapp: dados.whatsapp, entrega: dados.entrega, endereco: dados.endereco, obs: dados.obs,
       itens: itens.map(function (p) { return { id: String(p.ID) }; }), origem: 'site'
     });
-    if (r && r.ok && r.codigo) { codigo = r.codigo; chaveAvisos = r.pushKey || ''; if (typeof r.total === 'number') totalServidor = r.total; }
+    if (r && r.ok && r.codigo) { concluirOperacaoPedido_(); codigo = r.codigo; chaveAvisos = r.pushKey || ''; if (typeof r.total === 'number') totalServidor = r.total; }
     else avisoServidor = (r && r.erro) ? r.erro : 'Não foi possível registrar o pedido agora.';
   }
   var texto = textoPedido_(itens, dados, codigo);

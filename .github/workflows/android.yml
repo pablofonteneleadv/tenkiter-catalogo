@@ -11,8 +11,8 @@ jobs:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -20,7 +20,7 @@ jobs:
         with:
           packages: platform-tools platforms;android-35 build-tools;35.0.0
           log-accepted-android-sdk-licenses: false
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '8.10.2'
       - name: Compilar APK de teste do PR
@@ -40,7 +40,7 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$TK_ANDROID_KEYSTORE"
           gradle -p android :app:assembleRelease --console plain
           rm -f "$TK_ANDROID_KEYSTORE"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: TENKiTER-Mensagens-Android
           path: |

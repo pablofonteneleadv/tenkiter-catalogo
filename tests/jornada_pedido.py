@@ -31,7 +31,7 @@ with sync_playwright() as p:
     # ---------------------------------------------------------------- backend NOVO (3.1)
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     ctx.add_init_script("window.TK_PEDIDOS=true;")
-    log = []; st = install(ctx, log=log)
+    log = []; st = install(ctx, log=log, pedido_idempotente=True)
     erros = []; csp = []
     pg = nova_pagina(ctx, erros, csp)
     print("== Catálogo: ordenar, cartão, rodapé ==")
@@ -100,6 +100,7 @@ with sync_playwright() as p:
     pg.fill("#ped-obs", "Preciso até sexta")
     pg.click("#btn-enviar-sacola"); pg.wait_for_timeout(1200)
     cria = [x for x in log if x.get("action") == "criarPedido"]
+    chk("pedido anuncia intenção técnica sem campos novos para o cliente", bool(cria) and bool(re.fullmatch(r"[A-Za-z0-9_-]{6,80}", cria[-1].get("opId", ""))))
     chk("enviou criarPedido ao servidor", len(cria) == 1, len(cria))
     if cria:
         c = cria[0]

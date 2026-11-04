@@ -37,7 +37,9 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/android-auto-release.yml
-    secrets: inherit
+    secrets:
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
   # ------------------------------------------------------------- Site (Render)
   deploy:
@@ -46,18 +48,18 @@ jobs:
     needs: [ci, android_release]
     environment: producao
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Sem o buildCommand certo, o Render publica o version.json do repositorio
       # (commit vazio) e a etapa 4/4 nunca consegue confirmar o commit no ar.
-      # Roda ANTES do deploy; se a API recusar, avisa e o deploy segue.
-      - name: Garantir o buildCommand do Render (gera o version.json)
+      # Roda ANTES do deploy e exige confirmação do build e diretório público.
+      - name: Confirmar build e diretório público do Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: bash scripts/deploy/render_garantir_build.sh
 
-      - name: Impedir cache do manifesto Android
+      - name: Confirmar segurança estática e cache dos manifestos
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
@@ -191,5 +193,8 @@ jobs:
     # por isso o deploy automatico nunca publicava os Workers, e o Instagram ficava
     # sem receber postagens ate alguem rodar `wrangler deploy` a mao.
     #
-    # `inherit` passa todos os secrets do repositorio para o workflow chamado.
-    secrets: inherit
+    # Repassa somente os três valores utilizados pelos Workers.
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}

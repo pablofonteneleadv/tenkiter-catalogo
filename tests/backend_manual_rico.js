@@ -5,11 +5,9 @@
  * manual novo com Doc de prova (10 questões-modelo que o leitor da prova entende) e que NÃO vão ao ar sozinhas. */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const RAIZ = path.resolve(__dirname, '..');
-const RAIZ_GS = fs.readdirSync(RAIZ).some(f => /^funcionario-codigo-\d+\.\d+\.gs\.txt$/.test(f)) ? RAIZ : path.resolve(RAIZ, '..', 'tenkiter-cofre');
-const ver = f => f.match(/(\d+)\.(\d+)/).slice(1).map(Number);
-const arqs = fs.readdirSync(RAIZ_GS).filter(f => /^funcionario-codigo-\d+\.\d+\.gs\.txt$/.test(f)).sort((a, b) => ver(a)[0] - ver(b)[0] || ver(a)[1] - ver(b)[1]);
-const ARQ = arqs[arqs.length - 1], fonte = fs.readFileSync(path.join(RAIZ_GS, ARQ), 'utf8');
+const backend = require('./backend_source.cjs').localizar('funcionario', [3, 17]);
+const RAIZ = backend.pasta, RAIZ_GS = backend.pasta, arqs = backend.arquivos;
+const ARQ = backend.nome, fonte = backend.fonte;
 let falhas = [], total = 0;
 function ok(c, n, d) { total++; if (!c) { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? '  (' + JSON.stringify(d).slice(0, 400) + ')' : '')); } else console.log('  ✔ ' + n); }
 

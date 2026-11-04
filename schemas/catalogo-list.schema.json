@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Contrato mínimo compatível de action=list",
+  "type": "object",
+  "required": ["ok", "produtos"],
+  "properties": {
+    "ok": {"const": true},
+    "produtos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ID", "Nome", "Preco", "Status"],
+        "properties": {
+          "ID": {"type": ["string", "number"]},
+          "Nome": {"type": "string"},
+          "Preco": {"type": ["string", "number"]},
+          "Status": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
