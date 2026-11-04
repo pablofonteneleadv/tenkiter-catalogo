@@ -173,6 +173,11 @@ jobs:
           node-version: '22'
       - run: node tests/worker_mobile_push.js
 
+      - name: Compartilhamento, feeds e recuperação do catálogo público
+        run: |
+          node tests/worker_og.js
+          node tests/worker_og_resiliencia.js
+
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
         run: node tests/worker_midia.js
@@ -232,6 +237,7 @@ jobs:
           npm ci --prefix instagram-worker --ignore-scripts
           node tests/mensagens_eventos_cliente.js
           node tests/worker_eventos_runtime.cjs
+          node tests/worker_og_runtime.cjs
           node tests/worker_postagens_runtime.cjs
 
       # O teste do Worker do Instagram usa node:sqlite, disponível no Node 22+.

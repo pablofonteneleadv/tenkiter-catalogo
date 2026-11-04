@@ -18,7 +18,7 @@ function carregar() {
     if (apiQuebrada) throw new Error('API fora do ar');
     if (String(u).includes('tenkiter-midia')) return { ok: !String(u).includes('semposter') };      // HEAD da miniatura do vídeo do R2
     if (!String(u).includes('?action=list')) throw new Error('chamada inesperada: ' + u);
-    return { json: async () => ({ ok: true, produtos: apiLista }) };
+    return new Response(JSON.stringify({ ok: true, produtos: apiLista }), { status: 200 });
   }, module: { exports: {} }, console, String, Number, Array, JSON, Object, RegExp, encodeURIComponent, decodeURIComponent, Math };
   vm.runInNewContext(fonteWorker.replace('export default', 'module.exports ='), ctx);
   return ctx.module.exports;
