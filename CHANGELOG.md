@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.54.1] - 2026-11-04
+
+- Corrige falhas HTTP nos feeds, evita consultas simultâneas duplicadas e amplia monitor e testes do Worker OG.
+
+
 ## [7.54.0] - 2026-11-04
 
 - Esteira: envios duráveis em segundo plano, acompanhamento e retomada por etapas, preservando a tarefa atual.

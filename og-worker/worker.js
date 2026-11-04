@@ -22,11 +22,20 @@ const SITE_URL = 'https://tenkitermodas.com.br/';
 const DESCONTO_AVISTA = 0.10;
 const PAGINAS_FIXAS = ['', 'privacidade.html', 'curriculo.html'];
 
-async function produtos() {
-  const r = await fetch(API_URL + '?action=list', { redirect: 'follow', cf: { cacheTtl: 60, cacheEverything: true } });
-  const j = await r.json();
-  if (!(j && j.ok && Array.isArray(j.produtos))) throw new Error('lista inválida');
-  return j.produtos;
+// Compartilha somente a consulta em andamento neste isolate. Não guarda resposta
+// depois de concluída nem amplia a validade do KV/cache HTTP existente.
+let consultaProdutosEmCurso = null;
+function produtos() {
+  if (!consultaProdutosEmCurso) {
+    consultaProdutosEmCurso = (async () => {
+      const r = await fetch(API_URL + '?action=list', { redirect: 'follow', cf: { cacheTtl: 60, cacheEverything: true } });
+      if (!r.ok) throw new Error('catálogo indisponível');
+      const j = await r.json();
+      if (!(j && j.ok === true && Array.isArray(j.produtos))) throw new Error('lista inválida');
+      return j.produtos;
+    })().finally(() => { consultaProdutosEmCurso = null; });
+  }
+  return consultaProdutosEmCurso;
 }
 
 /* ---- v3.10 (FE-01): cache de borda da lista no Workers KV ----
@@ -49,7 +58,8 @@ async function listaComKV(env, ctx) {
   });
   if (guardado && Array.isArray(guardado.produtos) && guardado.produtos.length) {
     // devolve o guardado na hora e grava o novo por trás (ctx.waitUntil mantém o Worker vivo até terminar)
-    if (ctx && ctx.waitUntil) ctx.waitUntil(atualizar.catch(() => {}));
+    const observado = atualizar.catch(() => {});
+    if (ctx && ctx.waitUntil) ctx.waitUntil(observado);
     return guardado.produtos;
   }
   return atualizar;                                 // primeira vez (KV vazio): espera a lista

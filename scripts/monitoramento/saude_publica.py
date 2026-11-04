@@ -1,5 +1,7 @@
 """Monitor público somente GET, sem sessão, pedidos, mensagens ou dados de clientes."""
 import argparse
+import csv
+import io
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -47,6 +49,22 @@ def validate(path, status, headers, body, expected_commit=None):
     elif path == 'pedido.js':
         if 'javascript' not in content_type or text.lstrip().startswith('<') or 'operacaoPedido_' not in text:
             raise ValueError('Script de pedidos incompatível ou substituído por HTML.')
+    elif path == 'feed.csv':
+        if 'text/csv' not in content_type:
+            raise ValueError('Feed CSV substituído por outro formato.')
+        rows = csv.reader(io.StringIO(text), strict=True)
+        columns = next(rows)
+        required = {'id', 'title', 'availability', 'price', 'link', 'image_link'}
+        if len(columns) != len(set(columns)) or not required.issubset(columns):
+            raise ValueError('Cabeçalho do feed fora do contrato.')
+        if any(len(row) != len(columns) for row in rows if row):
+            raise ValueError('Feed CSV incompleto ou com colunas inconsistentes.')
+    elif path == 'feed.xml':
+        if 'xml' not in content_type:
+            raise ValueError('Feed XML substituído por outro formato.')
+        root = ET.fromstring(text)
+        if root.tag != 'rss' or root.find('channel') is None:
+            raise ValueError('Feed XML fora do contrato RSS.')
     elif path == 'sitemap.xml':
         if 'xml' not in content_type or ET.fromstring(text).tag != '{http://www.sitemaps.org/schemas/sitemap/0.9}urlset':
             raise ValueError('Sitemap fora do contrato.')
@@ -54,7 +72,7 @@ def validate(path, status, headers, body, expected_commit=None):
 
 def check(base, fetch=read, expected_commit=None):
     results = []
-    for path in ('', 'version.json', 'pedido.js', 'sitemap.xml'):
+    for path in ('', 'version.json', 'pedido.js', 'sitemap.xml', 'feed.csv', 'feed.xml'):
         start = time.monotonic()
         try:
             validate(path, *fetch(base + path), expected_commit=expected_commit)

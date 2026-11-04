@@ -347,3 +347,20 @@ proprietário. Não comprova autenticação, pagamentos, WhatsApp ou aparelho An
 Para diagnóstico somente leitura com as credenciais existentes, executar o
 workflow Deploy com `motivo=diagnostico-distribuicao`. Esse modo não publica nem
 altera provedores. Os demais motivos mantêm o portão de CI antes de publicar.
+
+### Leitura do Worker OG (7.54.1)
+
+O Worker de compartilhamento/feeds recusa falha HTTP do catálogo mesmo quando
+o corpo contém um objeto parecido com sucesso. Essas falhas seguem as respostas
+já existentes (503 no feed, 502 na lista; sitemap preserva páginas fixas).
+Consultas simultâneas no mesmo isolate compartilham apenas o fetch em andamento;
+a referência é descartada no sucesso e no erro. Não há TTL novo, armazenamento
+adicional ou alteração da validade do KV/cache HTTP. O tratamento da atualização
+em segundo plano também observa rejeição quando não recebe waitUntil.
+
+Os 73 checks de compartilhamento/feeds/lista, antes presentes na bateria do
+runner, passam também a rodar no CI rápido, junto das regressões de falha HTTP,
+concorrência, recuperação e KV. O monitor público confere CSV e XML além dos
+quatro recursos anteriores; aceita feed vazio e rejeita HTML no lugar de feed,
+cabeçalho inválido, CSV truncado ou XML fora do contrato. Continua somente GET,
+sem autenticação, compras, WhatsApp ou escrita de dados.

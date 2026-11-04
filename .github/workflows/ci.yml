@@ -173,6 +173,11 @@ jobs:
           node-version: '22'
       - run: node tests/worker_mobile_push.js
 
+      - name: Compartilhamento, feeds e recuperação do catálogo público
+        run: |
+          node tests/worker_og.js
+          node tests/worker_og_resiliencia.js
+
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
         run: node tests/worker_midia.js
