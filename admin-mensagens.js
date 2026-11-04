@@ -169,7 +169,7 @@
     if (/^(painel|metricas|met-|equipe-)/.test(a)) return 'metricas';
     if (/^(gaveta-respostas|resp-)/.test(a)) return 'respostas';
     if (/^(leitura-cfg|ponte-|auto-|ligar|pausar|conexao|diagnostico)/.test(a)) return 'configuracoes';
-    if (/^(encaminhar|selecionar|enviar|anexar|gravar|assumir|liberar|encerrar|reabrir|atender|sel-encerrar|sel-reabrir)/.test(a)) return 'responder';
+    if (/^(encaminhar|selecionar|enviar|anexar|gravar|assumir|liberar|encerrar|reabrir|atender|sel-encerrar|sel-reabrir|sel-canais-pessoa)/.test(a)) return 'responder';
     return '';
   }
   function filtrarFerramentas_() {
@@ -1845,7 +1845,25 @@
     [['sel-lidas', 'Marcar lidas'], ['sel-naolidas', 'Não lidas'], ['sel-encerrar', (reabrir ? 'Reabrir' : 'Encerrar') + (n ? ' ' + n : '')]].forEach(([acao, txt], i) => {
       const b = botao('ms-btn' + (i === 2 ? ' prim' : ''), txt, acao); b.disabled = !n||(acao==='sel-encerrar'&&(mista||lista.some(c=>c.grupo&&selecao.has(c.id))));if(acao==='sel-encerrar'&&b.disabled&&n)b.title=mista?'Selecione apenas abertas ou apenas encerradas.':'Grupos internos não são encerrados.'; acoes.appendChild(b);
     });
-    bar.append(topo, acoes);
+    bar.append(topo);
+    if(n===1){const c=lista.find(x=>selecao.has(x.id));if(c&&!c.grupo){const sugestao=el('div','ms-sel-acoes');sugestao.append(el('span','dica','Incluir os outros canais deste cliente?'),botao('ms-btn','Selecionar canais','sel-canais-pessoa'));bar.append(sugestao);}}
+    if([...selecao].some(id=>!lista.some(c=>c.id===id)))bar.append(el('p','dica','A seleção inclui canais vinculados fora deste filtro.'));
+    bar.append(acoes);
+  }
+  async function selecionarCanaisPessoa_(botaoAtual) {
+    if(!selecao||selecao.size!==1)return;
+    const id=[...selecao][0],c=lista.find(x=>x.id===id);if(!c||c.grupo)return;
+    const conta=contaSessao_(getSessao()),encerradas=!!c.encerrada_em;
+    botaoAtual.disabled=true;
+    const r=await worker_('/msg/pessoa?conversa='+id,'GET');
+    if(botaoAtual.isConnected)botaoAtual.disabled=false;
+    if(conta!==contaSessao_(getSessao())||!selecao||selecao.size!==1||!selecao.has(id))return;
+    if(!r.ok){aviso_(r.erro||'Não foi possível conferir os canais. A seleção foi mantida.');return;}
+    const outros=(r.canais||[]).filter(x=>!x.grupo&&!!x.encerrada_em===encerradas&&x.id!==id);
+    if(!outros.length){aviso_('Este cliente não tem outros canais '+(encerradas?'encerrados':'abertos')+' disponíveis.');return;}
+    const nomes=[c,...outros].map(x=>NOME_CANAL[x.canal]||x.canal).join(', ');
+    if(!confirm('Selecionar todos os '+(outros.length+1)+' canais vinculados de '+rotuloContato(c)+'?\n'+nomes+'\nO encerramento só acontece quando você tocar em Encerrar.'))return;
+    outros.forEach(x=>selecao.add(x.id));pintarLista();desenharSelbar_();
   }
   async function marcarLote_(ids, naoLida) {
     if (!ids.length) return;
@@ -2035,7 +2053,7 @@
     const q = el('div', 'ms-ctx'), col = el('div', 'ms-ctx-txt');
     col.appendChild(el('b', '', m.direcao === 'saida' ? 'Você respondeu a um story' : 'Respondeu ao seu story'));
     if (m.ctx_legenda) col.appendChild(el('span', 'ms-ctx-leg', m.ctx_legenda));
-    const det = []; if (m.ctx_em) det.push('publicado ' + hora(m.ctx_em)); if (m.ctx_aprox) det.push('story provável (havia mais de um no ar)');
+    const det = []; if(m.ctx_confirmado&&aberta&&aberta.canal!=='instagram')det.push('Status confirmado'); if (m.ctx_em) det.push('publicado ' + hora(m.ctx_em)); if (m.ctx_aprox) det.push('referência do status ainda não confirmada');
     if (!m.ctx_midia) det.push('não encontrei a imagem deste story');
     if (det.length) col.appendChild(el('span', 'ms-ctx-det', det.join(' · ')));
     q.appendChild(col);
@@ -3717,6 +3735,7 @@
     else if (a === 'nome-salvar') { const i = $('ms-meu-nome-rapido'); await salvarNome_(i ? i.value : ''); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'nome-salvar-cfg') { const i = $('ms-meu-nome'); await salvarNome_(i ? i.value : ''); }
     else if (a === 'sel-sair') sairSelecao_();
+    else if (a === 'sel-canais-pessoa') await selecionarCanaisPessoa_(b);
     else if (a === 'sel-todas' && selecao) { const todas = lista.length && lista.every((c) => selecao.has(c.id)); selecao = new Set(todas ? [] : lista.map((c) => c.id)); pintarLista(); desenharSelbar_(); }
     else if (a === 'sel-encerrar' && selecao) { if(selecaoEncerrada_())await encerrar_(Array.from(selecao),true); else escolherMotivo_(Array.from(selecao)); }
     else if (a === 'motivo' && idsMotivo_) {

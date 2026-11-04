@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.53.3] - 2026-11-04
+
+- Status WhatsApp com referência real, seleção opcional de canais vinculados, Esteira com atualização por blocos e preparo das peças recebidas em Fotos IA preservando o lote anterior.
+
+
 ## [7.53.2] - 2026-11-03
 
 - Gestão: ações de lote sempre visíveis, Separar na grade e envio das peças selecionadas para modelo IA, sem iniciar geração.

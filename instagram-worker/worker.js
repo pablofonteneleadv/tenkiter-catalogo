@@ -109,6 +109,8 @@ async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
     await garantirEsquemaFotoIA_(env);
+    // Referências do WhatsApp são aditivas, inclusive para bancos já na versão atual.
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS postagem_status_ref (canal TEXT NOT NULL, ext_id TEXT NOT NULL, postagem_id INTEGER NOT NULL, PRIMARY KEY(canal,ext_id))').run();
     let versao;
     try { versao = await cfgGet(env,'schema_ig_version'); }
     catch(e) { if (!/no such table/i.test(String(e))) throw e; }
@@ -837,7 +839,7 @@ function estadoZapLimpo_(v) { return String(v || '').toLowerCase().replace(/[^a-
 /** Só CONSULTA o recibo daquele requestId (não baixa nem envia mídia). { estado:'aceito'|'falhou'|'desconhecido', nota } */
 async function consultarWhatsApp_(env, requestId) {
   const direto = await cfgWafly_(env, slotDoRequestId_(requestId));
-  if (direto) return await consultarWaflyDireto_(direto, requestId);
+  if (direto) return await consultarWaflyDireto_(direto, requestId, env);
   const base = String(env.API_URL || '').trim();
   if (!base) return { estado: 'desconhecido', nota: 'falta o endereço do backend (API_URL)' };
   try {
@@ -1030,17 +1032,26 @@ async function enviarWaflyDireto_(env, p, slot, cfg, tent) {
     r = await fetch(waflyUrl_(cfg, '/status-publication'), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(60000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
     try { j = await r.json(); } catch (e) { j = null; }
   } catch (e) { return { ok: false, pendente: true, requestId: requestId, erro: 'A resposta da Wafly foi interrompida.' }; }
-  if (r.ok && !(j && j.error)) return { ok: true, requestId: requestId };
+  if (r.ok && !(j && j.error)) { await guardarRefStatusWafly_(env,requestId,j); return { ok: true, requestId: requestId }; }
   if (r.status === 401 || r.status === 403) return { ok: false, erro: 'A Wafly recusou as credenciais do ' + info.nome + '. Confira a instância e os tokens em Conexões.' };
   if (r.status === 422) return { ok: false, erro: info.nome + ': vídeo ou imagem recusado pela Wafly (HTTP 422). Para Status, use MP4 de até 30 segundos e 10 MB, ou JPEG/PNG de até 5 MB. Corrija a mídia e crie uma nova publicação; repetir o mesmo ID não corrige o arquivo.' };
   if (r.status === 402) return { ok: false, erro: 'A assinatura da Wafly do ' + info.nome + ' está inadimplente ou o período de teste acabou.' };
   if (r.status === 409 || r.status === 408 || r.status === 429 || r.status >= 500) return { ok: false, pendente: true, requestId: requestId, erro: 'A Wafly respondeu HTTP ' + r.status + '.' };
   return { ok: false, erro: 'A Wafly recusou a publicação do ' + info.nome + ' (HTTP ' + r.status + ').' };
 }
-async function consultarWaflyDireto_(cfg, requestId) {
+/** O requestId do Postador não é o ID WhatsApp citado nas respostas. */
+async function guardarRefStatusWafly_(env,rid,j){
+  const m=/^tkpost(2)?-(\d+)(?:-r\d+)?$/.exec(String(rid||''));
+  if(!m||!j||typeof j!=='object')return;
+  const ids=[j.messageId,j.statusMessageId,...(Array.isArray(j.messageIds)?j.messageIds:[])].filter(x=>typeof x==='string'&&x.length>0&&x.length<=200);
+  if(!ids.length)return;
+  await env.DB.batch([...new Set(ids)].slice(0,50).map(id=>env.DB.prepare('INSERT OR IGNORE INTO postagem_status_ref(canal,ext_id,postagem_id) VALUES (?,?,?)').bind(m[1]?'whatsapp2':'whatsapp1',id,Number(m[2]))));
+}
+async function consultarWaflyDireto_(cfg, requestId, env) {
   try {
     const r = await fetch(waflyUrl_(cfg, '/status-publication/requests/' + encodeURIComponent(requestId)), { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken } });
     const j = await r.json().catch(() => null);
+    if(r.ok&&env)await guardarRefStatusWafly_(env,requestId,j);
     const st = estadoZapLimpo_(j && (typeof j.state === 'string' ? j.state : typeof j.status === 'string' ? j.status : ''));
     if (r.ok && st === 'accepted' && j.serverAcknowledged) return { estado: 'aceito', nota: '' };
     if (r.status === 404) return { estado: 'falhou', nota: 'a Wafly não encontrou este pedido (HTTP 404)' };
@@ -3165,14 +3176,14 @@ async function storiesNoAr_(env, canal, emIso) {
   const rs = await env.DB.prepare("SELECT id, legenda, midias, publicado_em FROM postagem WHERE status='publicado' AND canal IN (" + canais.map(() => '?').join(',') + ") AND publicado_em<>'' AND publicado_em<=? AND publicado_em>=? AND midias<>'[]' ORDER BY publicado_em DESC LIMIT 12").bind(...canais, emIso, desde).all();
   return (rs.results || []).map((r) => { let l = []; try { l = JSON.parse(r.midias || '[]'); } catch (e) { l = []; } return { id: r.id, publicado_em: r.publicado_em, legenda: String(r.legenda || '').slice(0, 140), tipo: l[0] && l[0].tipo === 'video' ? 'video' : 'imagem', n: l.length }; });
 }
-/** Resposta a story no WhatsApp: a Wafly não manda a imagem do story, então achamos o Status que a loja publicou nas 26 h anteriores. Se houver mais de um, usa o mais recente e marca como "provável". */
+/** Reserva quando faltam mídia e recibo exatos: sugere o Status recente, sempre como aproximação, mesmo se houver apenas um candidato. */
 async function resolverStory_(env, canal, emIso) {
   const canais = STATUS_CANAIS_[canal] || [];
   if (!canais.length) return { post: 0, aprox: 0 };
   const desde = new Date(Date.parse(emIso) - 26 * 3600000).toISOString();
   const rs = await env.DB.prepare("SELECT id FROM postagem WHERE status='publicado' AND canal IN (" + canais.map(() => '?').join(',') + ") AND publicado_em<>'' AND publicado_em<=? AND publicado_em>=? AND midias<>'[]' ORDER BY publicado_em DESC LIMIT 6").bind(...canais, emIso, desde).all();
   const l = rs.results || [];
-  return l.length ? { post: Number(l[0].id) || 0, aprox: l.length > 1 ? 1 : 0 } : { post: 0, aprox: 0 };
+  return l.length ? { post: Number(l[0].id) || 0, aprox: 1 } : { post: 0, aprox: 0 };
 }
 /* v2.11: o nome do próprio WhatsApp da loja (senderName das mensagens que ela envia) tinha virado nome de conversas ("tenkitermodas").
  * Só é tido como "nome da loja" quando o MESMO nome aparece enviando para dois contatos diferentes; aí as conversas com esse nome
@@ -3237,7 +3248,7 @@ async function gravarMensagem_(env, canal, m) {
   }
   if(m.ctxTipo==='story'&&m.ctxRef&&!m.ctxChave){const ref=await env.DB.prepare('SELECT chave FROM msg_status_ref WHERE canal=? AND ext_id=?').bind(canal,m.ctxRef).first();if(ref)m.ctxChave=ref.chave;}
   let story = { post: 0, aprox: 0 };
-  if (m.ctxTipo === 'story' && !saida && !m.ctxChave) { if (m.ctxPost) story = { post: Number(m.ctxPost) || 0, aprox: 0 }; else { try { const exato=m.ctxRef?await env.DB.prepare("SELECT p.id FROM postagem p LEFT JOIN postagem_grupo_recibo r ON r.postagem_id=p.id WHERE p.status='publicado' AND p.canal IN ("+(STATUS_CANAIS_[canal]||[]).map(()=>'?').join(',')+") AND (p.ig_id=? OR r.mensagem_id=?) LIMIT 1").bind(...(STATUS_CANAIS_[canal]||[]),m.ctxRef,m.ctxRef).first():null;story=exato?{post:Number(exato.id),aprox:0}:await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } } }
+  if (m.ctxTipo === 'story' && !saida) { if (m.ctxPost) story = { post: Number(m.ctxPost) || 0, aprox: 0 }; else { try { const exato=m.ctxRef?await env.DB.prepare("SELECT p.id FROM postagem p LEFT JOIN postagem_grupo_recibo r ON r.postagem_id=p.id WHERE p.status='publicado' AND p.canal IN ("+(STATUS_CANAIS_[canal]||[]).map(()=>'?').join(',')+") AND (p.ig_id=? OR r.mensagem_id=? OR p.id IN (SELECT postagem_id FROM postagem_status_ref WHERE canal=? AND ext_id=?)) LIMIT 1").bind(...(STATUS_CANAIS_[canal]||[]),m.ctxRef,m.ctxRef,canal,m.ctxRef).first():null;story=exato?{post:Number(exato.id),aprox:0}:(m.ctxUrl||m.ctxChave)?{post:0,aprox:0}:await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } } }
   const inserir = env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid,por,cortesia,retorno) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,(SELECT CASE WHEN encerrada_em=? AND encerrada_motivo=? THEN ? ELSE 0 END FROM msg_conversa WHERE id=?),(SELECT CASE WHEN encerrada_em=? AND encerrada_motivo=? THEN ? ELSE 0 END FROM msg_conversa WHERE id=?))').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '',String(m.por||'').slice(-4),c.encerrada_em||'',c.encerrada_motivo||'',retorno.cortesia?1:0,c.id,c.encerrada_em||'',c.encerrada_motivo||'',retorno.retomar&&!!inicioAnterior?1:0,c.id);
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
@@ -3362,11 +3373,11 @@ async function processarEntradas_(env,forcar=false) {
   await processarComplementos_(env,forcar);
 }
 async function completarMidiaEntrada_(env,canal,m) {
-  const atual=await env.DB.prepare('SELECT id,conversa_id,midia_chave,ctx_chave,ctx_post,ctx_tipo FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();
+  const atual=await env.DB.prepare('SELECT id,conversa_id,midia_chave,ctx_chave,ctx_post,ctx_tipo,ctx_aprox FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();
   if(!atual)return;
   const alteracoes=[];
   if(m.midiaUrl&&!atual.midia_chave){const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}:await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento');if(!x)throw Error('Mídia aguardando cópia.');m.midiaChave=x.chave;m.midiaMime=x.mime;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id));}
-  if(m.ctxUrl&&!atual.ctx_chave){const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'');if(!x)throw Error('Story aguardando cópia.');m.ctxChave=x.chave;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=? WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id));}
+  if(m.ctxUrl&&!atual.ctx_chave){const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'');if(!x)throw Error('Story aguardando cópia.');m.ctxChave=x.chave;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=?,ctx_post=CASE WHEN ctx_aprox=1 THEN 0 ELSE ctx_post END,ctx_aprox=0 WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id));}
   if(m.ctxPost&&!atual.ctx_post)alteracoes.push(env.DB.prepare('UPDATE msg_mensagem SET ctx_post=?,ctx_aprox=0 WHERE id=? AND ctx_post=0').bind(m.ctxPost,atual.id));
   if(m.ctxTipo==='story'&&atual.ctx_tipo!=='story')alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='story' WHERE id=? AND ctx_tipo<> 'story'").bind(atual.id));
   if(alteracoes.length){const em=agora();alteracoes.push(env.DB.prepare('UPDATE msg_mensagem SET status_em=? WHERE id=?').bind(em,atual.id),env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em,atual.conversa_id));await env.DB.batch(alteracoes);await notificarNovidade_(env,canal);}
@@ -3865,7 +3876,7 @@ const MSG_ATENDIDO_SQL_ = "(msg_conversa.grupo=1 OR msg_conversa.atendido_em<>''
 const MSG_ESPERA_SQL_="(msg_conversa.grupo=0 AND msg_conversa.encerrada_em='' AND (msg_conversa.nao_lidas>0 OR msg_conversa.ult_dir='entrada' OR EXISTS(SELECT 1 FROM msg_mensagem entrada WHERE entrada.conversa_id=msg_conversa.id AND entrada.direcao='entrada' AND entrada.cortesia=0 AND entrada.enviada_em>COALESCE((SELECT MAX(h.enviada_em) FROM msg_mensagem h WHERE h.conversa_id=msg_conversa.id AND h.direcao='saida' AND COALESCE(h.por,'')<>'auto' AND COALESCE(h.automatica,0)=0 AND COALESCE(h.status,'') NOT IN ('incerta','falhou','enviando','pendente')),'') AND entrada.enviada_em>COALESCE((SELECT MAX(f.em) FROM msg_encerramento f WHERE f.conversa_id=msg_conversa.id),''))))";
 const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, reaberta_em, retorno_em, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_ESPERA_SQL_+" AS aguarda_resposta, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, CASE WHEN grupo=1 THEN '' ELSE encerrada_em END AS encerrada_em, CASE WHEN grupo=1 THEN '' ELSE encerrada_motivo END AS encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
-const MSG_COLS_MSG_ = "cortesia,retorno,id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + "COALESCE(NULLIF(ctx_trecho,'')," + MSG_Q_('texto') + ") AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir, " + "COALESCE(NULLIF(ctx_autor,''),'')" + " AS ctx_autor";
+const MSG_COLS_MSG_ = "cortesia,retorno,id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='story' AND (ctx_chave<>'' OR (ctx_post>0 AND ctx_aprox=0 AND (canal='instagram' OR (ctx_ref<>'' AND (EXISTS(SELECT 1 FROM postagem_status_ref sr WHERE sr.canal=msg_mensagem.canal AND sr.ext_id=msg_mensagem.ctx_ref AND sr.postagem_id=msg_mensagem.ctx_post) OR EXISTS(SELECT 1 FROM postagem p WHERE p.id=msg_mensagem.ctx_post AND p.ig_id=msg_mensagem.ctx_ref) OR EXISTS(SELECT 1 FROM postagem_grupo_recibo gr WHERE gr.postagem_id=msg_mensagem.ctx_post AND gr.mensagem_id=msg_mensagem.ctx_ref)))))) THEN 1 ELSE 0 END AS ctx_confirmado, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, CASE WHEN ctx_chave<>'' THEN 0 ELSE ctx_aprox END AS ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' WHEN ctx_chave<>'' THEN 'imagem' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post AND (msg_mensagem.ctx_aprox=0 OR msg_mensagem.ctx_chave='')) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post AND (msg_mensagem.ctx_aprox=0 OR msg_mensagem.ctx_chave='')) AS ctx_legenda, " + "COALESCE(NULLIF(ctx_trecho,'')," + MSG_Q_('texto') + ") AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir, " + "COALESCE(NULLIF(ctx_autor,''),'')" + " AS ctx_autor";
 async function msgContagens_(env, canal, tipo) {
   const fields={esperando:"encerrada_em='' AND grupo=0 AND NOT "+MSG_ATENDIDO_SQL_,em_atendimento:"encerrada_em='' AND grupo=0 AND "+MSG_ATENDIDO_SQL_,conversas:"(grupo=1 OR encerrada_em='')",nao_lidas:"encerrada_em='' AND nao_lidas>0",sem_resposta:MSG_ESPERA_SQL_,grupos:"grupo=1",individuais:"encerrada_em='' AND grupo=0",encerradas:"grupo=0 AND encerrada_em<>''",ambos:"encerrada_em='' AND pessoa<>'' AND "+MSG_OUTRO_SQL_+" IS NOT NULL"};
   const key="CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";

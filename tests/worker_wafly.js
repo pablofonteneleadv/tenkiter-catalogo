@@ -174,6 +174,7 @@ function d1() {
   const e1 = waf.find((x) => x.metodo === 'POST');
   chk('Wafly 1 cadastrada: fala direto com a Wafly e não usa o Apps Script', e1 && zapPedidos.length === 0 && (await lerPost(id)).status === 'publicado');
   chk('URL da instância, Client-Token e requestId estável', e1.url === 'https://wafly.com.br/api-bridge-whats/instances/' + SEG.inst + '/token/' + SEG.tok + '/status-publication' && e1.headers.get('client-token') === SEG.cli && e1.body.requestId === 'tkpost-' + String(id).padStart(12, '0') && e1.body.type === 'image' && e1.body.caption === 'Vestido TK-0001 R$ 89,90' && typeof e1.body.content === 'string' && e1.body.content.length > 100 && e1.redirect === 'manual', e1 && e1.body && Object.keys(e1.body));
+  chk('recibo preserva ID WhatsApp distinto do requestId do Postador', (await DB.prepare("SELECT postagem_id FROM postagem_status_ref WHERE canal='whatsapp1' AND ext_id='W1'").first())?.postagem_id===id);
   // Endereço público da mídia devolve 404 para o Worker (Worker->Worker da mesma conta), mas o arquivo está no R2: tem que publicar lendo direto do bucket.
   pubMidia404 = true; objs.set('t/202610/dddddddddddddddddddd.jpg', Buffer.alloc(900, 7));
   const idR2 = await novaPostagem('whatsapp'); await DB.prepare("UPDATE postagem SET agendado_em='2020-01-01T00:00:00Z', midias=? WHERE id=?").bind(JSON.stringify([{ url: MEDIA_URL, tipo: 'imagem' }]), idR2).run();

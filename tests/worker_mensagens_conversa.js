@@ -360,7 +360,7 @@ function d1() {
   chk('a imagem do story respondido é entregue pela rota autenticada', dls.status === 200 && dls.headers.get('content-type') === 'image/jpeg' && (await dls.arrayBuffer()).byteLength === JPG.length);
   await wh('/wh/wafly/2/' + seg, msg('ST2', '5588955550000', 'Quanto é?', { momment: tM + 6000, isStatusReply: true, referenceMessageId: 'X' }));
   const st2 = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588955550000'").first()).id)).j.mensagens[0];
-  chk('no WhatsApp 2 só vale story publicado no WhatsApp 2 (exato, não "provável")', st2.ctx_legenda === 'So no 2' && st2.ctx_aprox === 0, st2);
+  chk('WhatsApp 2 usa candidato do próprio canal, mas horário sozinho não confirma', st2.ctx_legenda === 'So no 2' && st2.ctx_aprox === 1 && st2.ctx_confirmado===0, st2);
   // ---- "stories no ar": a Wafly não diz qual story foi respondido; a equipe vê os candidatos ----
   const cvS = await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588966660000'").first();
   const rS = await A('GET', '/msg/stories?conversa=' + cvS.id + '&em=' + encodeURIComponent(new Date(Date.now() + 3600000).toISOString()));
@@ -929,8 +929,19 @@ function d1() {
   chk('marcar lida sem resposta mantém atendimento pendente',(await A('GET','/msg/conversas?canal=instagram')).j.contagens.sem_resposta===beforeRead);
   // Resposta a status com referência dentro de text e vídeo do contexto.
   await wh('/wh/wafly/1/'+seg,msg('CTX-NESTED','5588989012345','',{isStatusReply:true,text:{message:'Vídeo',referenceMessageId:'STATUS-EXACT',referenceMessage:{video:{videoUrl:'https://cdn.fake/quoted-status.mp4',mimeType:'video/mp4'}}},momment:Date.now()}));
-  const exact=await DB.prepare("SELECT id,ctx_ref,ctx_chave FROM msg_mensagem WHERE ext_id='CTX-NESTED'").first();
-  chk('Wafly lê referência aninhada e preserva vídeo exato',exact.ctx_ref==='STATUS-EXACT'&&exact.ctx_chave.endsWith('.mp4'),exact);
+  const exact=await DB.prepare("SELECT id,ctx_ref,ctx_chave,ctx_aprox,ctx_post FROM msg_mensagem WHERE ext_id='CTX-NESTED'").first();
+  chk('Wafly lê referência aninhada e preserva vídeo exato',exact.ctx_ref==='STATUS-EXACT'&&exact.ctx_chave.endsWith('.mp4')&&exact.ctx_aprox===0&&exact.ctx_post===0,exact);
+  const postExato=await DB.prepare("INSERT INTO postagem(tipo,agendado_em,status,canal,midias,publicado_em) VALUES ('story',?,'publicado','whatsapp',?,?)").bind(new Date().toISOString(),JSON.stringify([{url:'https://cdn.fake/postador.jpg',tipo:'imagem'}]),new Date().toISOString()).run();
+  await DB.prepare("INSERT INTO postagem_status_ref(canal,ext_id,postagem_id) VALUES ('whatsapp1','WAF-STATUS-POSTADOR',?)").bind(postExato.meta.last_row_id).run();
+  await wh('/wh/wafly/1/'+seg,msg('CTX-POSTADOR','5588989012345','Esse',{isStatusReply:true,referenceMessageId:'WAF-STATUS-POSTADOR',momment:Date.now()}));
+  const vinculoPost=await DB.prepare("SELECT ctx_post,ctx_aprox FROM msg_mensagem WHERE ext_id='CTX-POSTADOR'").first();
+  chk('status do Postador usa ID confirmado do recibo, não o mais recente',vinculoPost.ctx_post===postExato.meta.last_row_id&&vinculoPost.ctx_aprox===0,vinculoPost);
+  const ctxPostRow=await DB.prepare("SELECT id,conversa_id FROM msg_mensagem WHERE ext_id='CTX-POSTADOR'").first();
+  const ctxPostApi=(await A('GET','/msg/mensagens?conversa='+ctxPostRow.conversa_id)).j.mensagens.find(m=>m.id===ctxPostRow.id);
+  chk('recibo exato do Postador permite confirmação sem arquivo duplicado',ctxPostApi.ctx_confirmado===1,ctxPostApi);
+  await DB.prepare("UPDATE msg_mensagem SET ctx_ref='SEM-RECIBO',ctx_aprox=0 WHERE id=?").bind(ctxPostRow.id).run();
+  const ctxLegadoApi=(await A('GET','/msg/mensagens?conversa='+ctxPostRow.conversa_id)).j.mensagens.find(m=>m.id===ctxPostRow.id);
+  chk('fallback legado único sem mídia ou recibo exato não vira confirmação',ctxLegadoApi.ctx_confirmado===0,ctxLegadoApi);
   const ctxResponse=await w.fetch(new Request('https://ig.test/msg/midia?id='+exact.id+'&ctx=1',{headers:{'X-TK-Whats':'88999990000','X-TK-Sessao':'tk2.admin'}}),env,{});
   chk('vídeo do status é servido autenticado como vídeo',ctxResponse.status===200&&ctxResponse.headers.get('content-type')==='video/mp4');
   await wh('/wh/wafly/1/'+seg,msg('OWN-STATUS-VIDEO','status@broadcast','',{fromMe:true,video:{videoUrl:'https://cdn.fake/own-status.mp4',mimeType:'video/mp4'},text:undefined,momment:Date.now()}));

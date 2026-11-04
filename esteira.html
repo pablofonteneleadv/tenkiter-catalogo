@@ -28,6 +28,7 @@
   nav.abas.curto { gap:2px; } nav.abas.curto button { padding:0 5px; min-width:44px; font-size:.86rem; }   /* v7.43.0: abas do Admin no celular (7.51.0: 6 abas com Fotos) */
   nav.abas.curto .aba-num { min-width:8px; width:8px; height:8px; padding:0; margin-left:3px; font-size:0; vertical-align:top; }   /* no celular, só um ponto (o número vai no nome acessível) */
   main { max-width:760px; margin:0 auto; padding:16px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); display:grid; gap:14px; }
+  .esteira-vista { display:grid; gap:14px; min-width:0; }
   .card { background:var(--branco); border:1px solid var(--linha); border-radius:14px; padding:14px; display:grid; gap:10px; min-width:0; }
   .card h2, .card h3 { margin:0; font-size:1.05rem; }
   .muted { color:var(--suave); font-size:.88rem; }
@@ -274,6 +275,7 @@
 <script src="common.js?v=7.48.0"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
 <script src="conta.js"></script>
+<script src="esteira-fluidez.js?v=7.53.3"></script>
 <script>
 (function () {
   'use strict';
@@ -282,10 +284,12 @@
   const app = $('app');
   let EU = null, ABA = 'hoje', HOJE = null, CATALOGO = null, usuario = null;
 
-  async function srv(rota, corpo) {
+  const fluidez=TKEsteiraFluidez(app,getSessao);
+  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),r=await srvRede(rota,corpo);if(r.ok)fluidez.invalidar(bloco);return r;}
+  async function srvRede(rota, corpo) {
     const s = getSessao(); if (!s) return { ok: false, erro: 'Entre na sua conta para continuar.', exigeLogin: true };
     try {
-      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: corpo ? JSON.stringify(corpo) : undefined });
+      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:corpo ? undefined : AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: corpo ? JSON.stringify(corpo) : undefined });
       const j = await r.json().catch(() => ({ ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' }));
       if (r.status === 401) j.exigeLogin = true;
       return j;
@@ -426,11 +430,14 @@
     abas.forEach(([id, rot, rc]) => { const b = el('button', '', curto ? rc : rot); b.type = 'button'; b.dataset.aba = id; if (curto && rc !== rot) b.setAttribute('aria-label', rot);
       if (id === 'fotos' && nFotos) { b.append(el('span', 'aba-num', String(nFotos))); b.setAttribute('aria-label', 'Fotos, ' + nFotos + (nFotos === 1 ? ' pendência' : ' pendências')); } b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(ABA === id)); b.onclick = () => { ABA = id; desenharAbas(); abrirAba(); }; nav.append(b); });
   }
-  function abrirAba() { app.dataset.tela = ABA; if (ABA === 'prep') return telaPrep(); if (ABA === 'fotos') return telaFotos(); if (ABA === 'pedidos') return telaPedidos(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
+  function abrirAba() { if (ABA === 'prep') return telaPrep(); if (ABA === 'fotos') return telaFotos(); if (ABA === 'pedidos') return telaPedidos(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
 
   /* ---------- Hoje ---------- */
   async function telaHoje(recarregar) {
-    if (!HOJE || recarregar !== false) { app.replaceChildren(el('div', 'card', 'Montando a sua lista de hoje…')); const r = await srv('/esteira/hoje'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
+    const vista=fluidez.preparar('hoje','Montando a sua lista de hoje…'),app=vista.app;
+    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    try {
+    if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
     app.replaceChildren();
     const r = HOJE;
     const pd = r.pedidos || {}, irPedidos = () => { ABA = 'pedidos'; desenharAbas(); telaPedidos(); };   // v7.43.0: pendências de pedido
@@ -505,6 +512,7 @@
       app.append(linha);
     });
     catalogoFundo();                                   // v7.48.0: galeria pronta quando a pessoa tocar numa foto
+    } finally {fluidez.concluir(vista);}
   }
   /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todas as peças conferidas (igual ao servidor). */
   function progressoHoje(lista) {
@@ -692,8 +700,11 @@
     });
   }
   async function telaPrep() {
-    app.replaceChildren(el('div', 'card', 'Carregando a preparação…'));
-    const r = await srv('/esteira/preparacao'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
+    const vista=fluidez.preparar('prep','Carregando a preparação…'),app=vista.app;
+    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    try {
+
+    const r = await srv('/esteira/preparacao'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren();
     catalogoFundo();                                  // dados e fotos de cada peça chegam logo depois
@@ -704,6 +715,7 @@
     r.produtos.forEach((pr) => app.append(cartaoPrep(pr, r)));
     if (r.outras.length) { const c = el('div', 'card'); c.id = 'outras-tarefas'; c.append(el('h2', '', 'Outras tarefas'), ...tarefasPorPeca(r.outras, telaPrep)); app.append(c); }
     if (r.fotosPedidas) { const c = el('div', 'card'); c.append(el('p', 'muted', r.fotosPedidas === 1 ? '1 peça com fotos pedidas.' : r.fotosPedidas + ' peças com fotos pedidas.'), bt('Ver na aba Fotos', 'leve', () => { ABA = 'fotos'; desenharAbas(); abrirAba(); })); app.append(c); }
+    } finally {fluidez.concluir(vista);}
   }
   const SITUACOES = { ativas: 'Ativas (no site)', esgotadas: 'Esgotadas', arquivadas: 'Arquivadas', todas: 'Todas as situações' };
   const naSituacao = (x, s) => (s === 'todas' ? true : s === 'arquivadas' ? ehInativo(x) : s === 'esgotadas' ? !ehInativo(x) && typeof estaEsgotado === 'function' && estaEsgotado(x) : !ehInativo(x));   // mesmo critério da lista da Gestão
@@ -1093,14 +1105,19 @@
     });
   }
   /* ---- tela da aba Fotos ---- */
-  let CAIXA_VER = 'novas';
+  let CAIXA_VER = 'novas', AVISO_FOTOS = '';
   async function telaFotos(aviso) {
-    app.replaceChildren(el('div', 'card', 'Carregando as fotos…'));
-    const r = await srv('/esteira/fotos'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
+    const vista=fluidez.preparar('fotos','Carregando as fotos…'),app=vista.app;
+    // O envio já foi confirmado: avisa antes de aguardar a revalidação da lista.
+    if(typeof aviso==='string'&&aviso){AVISO_FOTOS=aviso;const atual=$('fotos-status');if(atual?.diga)atual.diga(aviso,'ok');}
+    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    try {
+
+    const r = await srv('/esteira/fotos'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren(); catalogoFundo();
     const topo = el('div', 'card'); topo.id = 'fotos-topo'; topo.append(el('h2', '', 'Fotos'));
-    const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (aviso) stTopo.diga(aviso, 'ok');
+    const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (AVISO_FOTOS) stTopo.diga(AVISO_FOTOS, 'ok');
     topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de uma peça', '', () => abrirPedirFotos(null, (m) => telaFotos(m)))), stTopo);
     app.append(topo);
     const pend = await cxTodos();                    // envio interrompido: continua sozinho e mostra o andamento
@@ -1117,6 +1134,7 @@
     app.append(cp);
     const cx = el('div', 'card'); cx.id = 'caixa'; app.append(cx);
     desenharCaixa(cx);
+    } finally {fluidez.concluir(vista);}
   }
   async function desenharCaixa(cx) {
     const gestor = !!(EU && EU.gestorFotos);
@@ -1307,9 +1325,11 @@
   const enviandoFoto = (raiz) => !!raiz.querySelector('.campo-fotos[data-enviando]');
 
   async function telaPedidos() {
-    app.dataset.tela = 'pedidos';
-    app.replaceChildren(el('div', 'card', 'Carregando os pedidos…'));
-    const r = await srv('/esteira/pedidos'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
+    const vista=fluidez.preparar('pedidos','Carregando os pedidos…'),app=vista.app;
+    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    try {
+
+    const r = await srv('/esteira/pedidos'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     app.replaceChildren();
     if (!r.admin) {
       const c = el('div', 'card'); c.append(el('h2', '', 'Chegou mercadoria'), el('p', 'muted', 'Escolha o pedido que chegou e conte cada modelo. A quantidade pedida não aparece: conte com calma.'));
@@ -1326,6 +1346,7 @@
       app.append(el('p', 'grupo-tit', tit));
       l.forEach((x) => app.append(linhaPedido(x, x.status === 'conferido' ? () => telaAprovacao(x.id) : x.status === 'aprovado' ? () => telaAplicacao(x.id) : x.status === 'cancelado' ? null : () => telaEditor(x.id))));
     });
+    } finally {fluidez.concluir(vista);}
   }
   function linhaPedido(x, abrir) {
     const b = el('button', 'peca pedido'); b.type = 'button'; b.dataset.pedido = String(x.id);
@@ -1782,8 +1803,10 @@
     return it;
   }
   async function telaPainel(pre) {
-    if (!pre || !pre.ok) app.replaceChildren(el('div', 'card', 'Carregando o painel…'));
-    const r = pre && pre.ok ? pre : await srv('/esteira/painel'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPainel);
+    const vista=fluidez.preparar('painel','Carregando o painel…'),app=vista.app;
+    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    try {
+    const r = pre && pre.ok ? pre : await srv('/esteira/painel'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPainel);
     app.replaceChildren();
     // 1) conferência de hoje: lista de cada pessoa (o gestor vê e altera)
     const c1 = el('div', 'card'); c1.id = 'painel-listas'; c1.append(el('h2', '', 'Conferência de hoje'));
@@ -1854,6 +1877,7 @@
     if (r.idade) [['0 a 30 dias', r.idade.ate30], ['31 a 60 dias', r.idade.ate60], ['61 a 90 dias', r.idade.ate90], ['mais de 90 dias', r.idade.mais90]].forEach(([k, v]) => { const l = el('div', 'progresso'); l.style.justifyContent = 'space-between'; l.append(el('span', '', k), el('b', 'num', String(v))); c7.append(l); });
     else c7.append(el('p', 'muted', 'O catálogo não respondeu agora.'));
     app.append(c6, c7);
+    } finally {fluidez.concluir(vista);}
   }
   /** Lista do dia de uma pessoa numa folha: tirar, mover, colocar (busca no catálogo), trocar a categoria e refazer. Item conferido não sai. */
   function abrirListaPessoa(x, r) {
@@ -1909,8 +1933,11 @@
   /* ---------- Configurações (Admin total) ---------- */
   const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   async function telaConfig() {
-    app.replaceChildren(el('div', 'card', 'Carregando as configurações…'));
-    const r = await srv('/esteira/config'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaConfig);
+    const vista=fluidez.preparar('config','Carregando as configurações…'),app=vista.app;
+    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    try {
+
+    const r = await srv('/esteira/config'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaConfig);
     app.replaceChildren();
     const aviso = (box, txt, ok) => { let p = box.querySelector('.retorno'); if (!p) { p = el('p', 'retorno'); p.setAttribute('role', 'status'); box.append(p); } p.className = 'retorno ' + (ok ? 'ok' : 'erro'); p.textContent = txt; };
     // Equipe
@@ -2003,15 +2030,19 @@
     bFoco.onclick = async () => { const y = await srv('/esteira/config', { config: { focoCategoria: cbF.checked, categoriasFixas: fixas, reativacao: [Number(iD1.value), Number(iD2.value), Number(iD3.value)], retratoHora: Number(iHr.value) } }); if (!y.ok) return aviso(cFoco, y.erro || 'Não consegui salvar.'); aviso(cFoco, 'Salvo. O foco vale para as próximas listas; os degraus valem no próximo retrato.', true); };
     cFoco.append(el('h3', '', 'Categoria fixa por pessoa'), boxFx, el('h3', '', 'Reativação de peças paradas'), el('p', 'muted', 'Sem venda = o estoque não caiu no retrato diário. O sistema cria as tarefas para Fotos e mostra as sugestões no Painel; nunca muda preço.'), boxD, bFoco);
     app.append(cEq, cHoje, cPad, cReg, cMod, cFoco);
+    } finally {fluidez.concluir(vista);}
   }
 
   /* ---------- início ---------- */
   async function iniciar() {
     if (!getSessao()) return telaLogin('');
-    usuario = null; HOJE = null;
+    usuario = null; HOJE = null; AVISO_FOTOS=''; fluidez.invalidar();
     await telaHoje();
   }
-  window.addEventListener('pageshow', () => {});
+  setInterval(()=>{if(!document.hidden&&fluidez.visivel()&&![...document.querySelectorAll('.overlay')].some(e=>e.getClientRects().length))abrirAba();},30000);
+  window.addEventListener('online',()=>{fluidez.invalidar();if(fluidez.visivel())abrirAba();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&fluidez.visivel()){fluidez.invalidar();abrirAba();}});
+  window.addEventListener('tk:sessao',()=>{fluidez.limpar();iniciar();});
   let larguraAbas = window.innerWidth; window.addEventListener('resize', () => { if ((window.innerWidth > 560) !== (larguraAbas > 560) && EU) desenharAbas(); larguraAbas = window.innerWidth; });
   iniciar();
 })();

@@ -6,6 +6,7 @@ with sync_playwright() as p:
  b=p.chromium.launch(args=['--no-sandbox'])
  for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
   c,st,pg,errors=ambiente(b,w,h)
+  pg.evaluate('async()=>{const e=await TKFotoIAServico.recuperar();const f=TKFotoIAPlano.novaFoto();f.titulo="Lote anterior";f.job=17;f.estado="enviada";e.fotos.push(f);await TKFotoIAServico.guardar(e)}')
   pg.goto(BASE+'admin.html')
   pg.wait_for_function('typeof produtos!=="undefined" && produtos.length>0')
   ids=pg.evaluate('produtos.slice(2,4).map(p=>String(p.ID))')
@@ -20,11 +21,15 @@ with sync_playwright() as p:
   pg.locator('#btn-bulk-fotoia').scroll_into_view_if_needed()
   pg.screenshot(path=str(OUT/f'menu-selecao-{w}.png'))
   pg.click('#btn-bulk-fotoia')
-  pg.wait_for_url('**/fotos-ia.html?origem=gestao&peca=*')
+  pg.wait_for_url('**/fotos-ia.html*')
   pg.wait_for_selector('[data-a=escolher]')
-  assert pg.evaluate('new URLSearchParams(location.search).getAll("peca")')==ids
+  assert pg.locator('.fi-editor img').count(), 'A capa recebida deve estar no preparo, sem nova busca'
+  assert pg.get_by_text('Lote anterior',exact=False).count(), 'Lote antigo deve permanecer'
+  assert pg.locator('.fi-plano-item').count()==3
+  pg.reload();pg.wait_for_selector('[data-a=escolher]');assert pg.locator('.fi-plano-item').count()==3, 'Recarregar não pode importar de novo'
+  pg.screenshot(path=str(OUT/f'ia-preparada-{w}.png'),full_page=True)
+  assert pg.evaluate('async()=>{const e=await TKFotoIAServico.recuperar();return e.fotos.slice(0,2).flatMap(f=>f.pessoas.flatMap(p=>Object.values(p.roupa).map(r=>r.produto)))}')==ids
   pg.locator('[data-a=escolher]').first.click()
-  assert 'selecionadas na Gestão' in pg.inner_text('#fi-picker-lista')
   pg.locator('[data-picker=produto]').first.click()
   pg.locator('[data-picker=foto]').first.click()
   assert pg.locator('.fi-roupa img').count() or pg.locator('.fi-editor img').count()
