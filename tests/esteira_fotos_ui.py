@@ -135,6 +135,7 @@ with sync_playwright() as p:
         ok_t, ruins = alvos_ok(pg, ".folha button")
         chk(f"{w}: botões da conferência com pelo menos 44 px", ok_t, ruins)
         pg.click("text=Salvar conferência"); pg.wait_for_selector(".folha", state="detached", timeout=6000)
+        pg.wait_for_function("document.querySelector('#esteira-processos-abrir').textContent==='Processos'")
         cb = st["conf_corpos"][-1]
         chk(f"{w}: conferência leva o pedido com as opções, o 'Outro' e a observação", cb.get("fotoNova") is True and cb.get("pedidoFotos") == {"opcoes": ["pano"], "querOutro": True, "outro": "foto das costas", "obs": "com luz natural"}, cb)
         # ---- tarefa só de fotos no Hoje ----
@@ -197,32 +198,25 @@ with sync_playwright() as p:
         ok_t, ruins = alvos_ok(pg, ".folha button, .folha input[type=text], .folha textarea")
         chk(f"{w}: folha de envio com alvos de pelo menos 44 px", ok_t, ruins)
         up0 = f["uploads"]; f["falhar_upload"] = [up0 + 2]
-        pg.click("#cx-enviar"); pg.wait_for_selector(".folha >> text=ficou guardada neste aparelho", timeout=8000)
-        e1 = f["enviar"][-1]
-        chk(f"{w}: envio interrompido: a 1ª chega à caixa, a outra fica guardada e a tela explica", len(f["enviar"]) == 1 and len(e1["itens"]) == 1 and "1 foto chegou à caixa" in pg.inner_text(".folha") and pg.inner_text("#cx-enviar") == "Tentar de novo", pg.inner_text(".folha")[-300:])
-        chk(f"{w}: o lote leva a descrição de todas, a da foto, a peça e a impressão digital", e1["descricaoLote"] == "Chegaram hoje da Malharia Sol" and e1["itens"][0]["descricao"] == "vestido verde, falta cadastrar" and e1["produto"] == "1001" and e1["produtoNome"] == "Vestido Midi Linho" and re.match(r"^[a-f0-9]{32}$", e1["itens"][0]["hash"]) and re.match(r"^cx-", e1["itens"][0]["op"]), e1)
-        shot(pg, f"caixa-envio-interrompido-{w}")
-        # A confirmação do envio não depende da leitura posterior da lista.
-        leituras_retidas = []
-        def reter_lista(route): leituras_retidas.append(route)
-        ctx.route("**/esteira/fotos", reter_lista)
-        with pg.expect_request("**/esteira/fotos", timeout=8000): pg.click("#cx-enviar")
-        pg.wait_for_selector(".folha", state="detached", timeout=8000)
-        e2 = f["enviar"][-1]
-        chk(f"{w}: 'Tentar de novo' envia só a que faltava, no mesmo lote", len(f["enviar"]) == 2 and len(e2["itens"]) == 1 and e2["lote"] == e1["lote"] and e2["itens"][0]["op"] != e1["itens"][0]["op"], e2)
-        chk(f"{w}: aviso de sucesso", "1 foto enviada para a caixa." in pg.inner_text("#fotos-status"))
-        ctx.unroute("**/esteira/fotos", reter_lista)
-        for route in leituras_retidas: route.fallback()
-        # envio interrompido com a tela fechada: retoma ao voltar para a aba Fotos
-        pg.click("text=Enviar fotos para a caixa"); pg.wait_for_selector("#cx-escolher", timeout=4000)
-        pg.set_input_files("#cx-arq", [foto_png((240, 200, 20))]); pg.wait_for_selector(".cx-linha", timeout=4000)
-        f["falhar_upload"] = [f["uploads"] + 1]
-        pg.click("#cx-enviar"); pg.wait_for_selector(".folha >> text=Tentar de novo", timeout=8000)
-        pg.keyboard.press("Escape"); n_env = len(f["enviar"])
-        pg.reload(); pg.wait_for_selector(".peca", timeout=8000)
-        pg.click("nav.abas button[data-aba=fotos]")
-        pg.wait_for_selector("#fotos-status >> text=do envio interrompido chegou à caixa", timeout=10000)
-        chk(f"{w}: depois de recarregar, a foto guardada no aparelho sobe sozinha e entra na caixa", len(f["enviar"]) == n_env + 1 and len(f["enviar"][-1]["itens"]) == 1)
+        pg.click("#cx-enviar"); pg.wait_for_selector(".folha", state="detached", timeout=3000)
+        pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar novamente',timeout=8000)
+        chk(f"{w}: falha de mídia libera a tela e guarda o lote antes de registrar a caixa",len(f['enviar'])==0 and f['uploads']==up0+2)
+        shot(pg,f'caixa-envio-interrompido-{w}')
+        pg.locator('#esteira-processos button',has_text='Tentar novamente').click()
+        pg.wait_for_function("document.querySelector('#esteira-processos-abrir').textContent==='Processos'")
+        e1=f['enviar'][-1]
+        chk(f"{w}: retomada reutiliza foto já enviada e confirma duas de uma vez",len(f['enviar'])==1 and len(e1['itens'])==2 and f['uploads']==up0+3,e1)
+        chk(f"{w}: preserva descrição, peça e identificação das fotos",e1['descricaoLote']=='Chegaram hoje da Malharia Sol' and e1['produto']=='1001' and e1['itens'][0]['descricao']=='vestido verde, falta cadastrar' and len(e1['itens'][0]['hash'])==32,e1)
+        pg.get_by_role('button',name='Fechar',exact=True).click()
+        pg.wait_for_selector('#fotos-status >> text=2 fotos enviadas para a caixa.',timeout=6000)
+        pg.click("text=Enviar fotos para a caixa");pg.wait_for_selector('#cx-escolher')
+        pg.set_input_files('#cx-arq',[foto_png((240,200,20))]);pg.wait_for_selector('.cx-linha')
+        f['falhar_upload']=[f['uploads']+1];pg.click('#cx-enviar');pg.wait_for_selector('.folha',state='detached')
+        pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar novamente');n_env=len(f['enviar'])
+        pg.reload();pg.wait_for_selector('.peca');pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar novamente')
+        pg.locator('#esteira-processos button',has_text='Tentar novamente').click();pg.wait_for_function("document.querySelector('#esteira-processos-abrir').textContent==='Processos'")
+        chk(f"{w}: foto original e erro são recuperados após recarregar",len(f['enviar'])==n_env+1 and len(f['enviar'][-1]['itens'])==1)
+        pg.get_by_role('button',name='Fechar',exact=True).click();pg.click('[data-aba=fotos]')
         # ---- 2. gestor: colocar num produto, cadastrar produto novo, descartar ----
         pg.wait_for_selector("#caixa .cx-item", timeout=6000)
         cxt = pg.inner_text("#caixa")
@@ -236,6 +230,7 @@ with sync_playwright() as p:
         pg.click('.folha .cx-capa button:has-text("Capa: foto 1")')
         shot(pg, f"caixa-colocar-folha-{w}")
         n_up = len(st["updates"]); pg.click("#cx-colocar-ok"); pg.wait_for_selector(".folha", state="detached", timeout=8000)
+        pg.wait_for_function("document.querySelector('#esteira-processos-abrir').textContent==='Processos'")
         up = st["updates"][-1] if len(st["updates"]) > n_up else {}
         chk(f"{w}: foto entra na peça existente como capa (a capa antiga vai para a galeria)", up.get("id") == "1002" and up.get("fotoUrlExistente") == M + "iara1.jpg" and up.get("fotosGaleriaExistentes", "").startswith("https://midia.fake/m/1002-capa.jpg") and up.get("nome") == "Vestido Longo Floral", up)
         chk(f"{w}: a caixa marca a foto como usada naquela peça", f["usar"][-1] == {"ids": [104], "uso": "produto", "produto": "1002", "produtoNome": "Vestido Longo Floral"}, f["usar"][-1])
