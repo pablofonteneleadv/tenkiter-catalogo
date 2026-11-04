@@ -289,7 +289,7 @@
   async function srvRede(rota, corpo) {
     const s = getSessao(); if (!s) return { ok: false, erro: 'Entre na sua conta para continuar.', exigeLogin: true };
     try {
-      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: corpo ? JSON.stringify(corpo) : undefined });
+      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:corpo ? undefined : AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: corpo ? JSON.stringify(corpo) : undefined });
       const j = await r.json().catch(() => ({ ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' }));
       if (r.status === 401) j.exigeLogin = true;
       return j;
