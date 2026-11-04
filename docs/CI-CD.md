@@ -316,3 +316,34 @@ A bateria completa está agendada para 03:00 UTC (00:00 em Fortaleza). Se o agen
 ### Cabeçalhos efetivos da origem
 
 `render_headers.py` confere as regras via API e acrescenta somente as ausentes: nosniff, SAMEORIGIN, referrer-policy, HSTS sem incluir subdomínios e no-store nos dois manifestos. Regras desconhecidas são preservadas; conflito de valor interrompe antes das escritas. Não impõe Permissions-Policy por API. O blueprint conserva câmera/microfone na própria origem para não bloquear recursos existentes; o endurecimento adicional depende de teste da matriz de mídia.
+
+### Conferência pública e arquivos de trabalho (7.53.5)
+
+O site continua sendo empacotado pela lista explícita de arquivos públicos. Como
+conferências posteriores ao deploy 7.53.4 ainda encontraram respostas antigas de
+arquivos retirados, o deploy também cria, de forma aditiva, redirecionamentos de
+URLs internas para um endereço inexistente. Não altera rotas de produtos, feeds,
+páginas ou Android e não sobrescreve regras conflitantes. A confirmação exige
+404/410 após redirecionamentos, tanto no domínio da loja quanto no Render; um
+200 com página de erro também reprova. Se o provedor conservar arquivos apesar
+das regras, o deploy fica reprovado nessa conferência e exige investigação.
+
+`cloudflare_purge.sh` mantém sua interface e agora valida o identificador da zona
+antes de qualquer chamada. Identificador incompleto não pode ser reconstruído
+por tentativa. A limpeza malsucedida fica explicitamente registrada como falha
+da etapa; o workflow continua para conferir a publicação real. Disponibilidade,
+commit e ausência de arquivos internos têm verificações próprias obrigatórias.
+Não confundir publicação comprovada com limpeza de cache comprovada.
+
+O workflow **Saúde pública (somente leitura)** consulta página inicial,
+`version.json`, `pedido.js` e `sitemap.xml`, sem sessão nem operações comerciais.
+Usa o `SITE_URL` de `common.js`, limita tempo/tamanho de resposta e guarda apenas
+status/duração por sete dias. Aceita sitemap vazio. A agenda é de cinco em cinco
+minutos; GitHub Actions pode atrasar ou suspender agendas conforme suas regras,
+portanto não representa SLA nem substitui monitor externo independente. Falhas
+aparecem no Actions; destinatário/canal de alerta ainda depende da escolha do
+proprietário. Não comprova autenticação, pagamentos, WhatsApp ou aparelho Android.
+
+Para diagnóstico somente leitura com as credenciais existentes, executar o
+workflow Deploy com `motivo=diagnostico-distribuicao`. Esse modo não publica nem
+altera provedores. Os demais motivos mantêm o portão de CI antes de publicar.

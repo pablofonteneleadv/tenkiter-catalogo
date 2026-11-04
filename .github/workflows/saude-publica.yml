@@ -1,0 +1,26 @@
+name: Saúde pública (somente leitura)
+on:
+  schedule:
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: saude-publica
+  cancel-in-progress: false
+jobs:
+  conferir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Conferir site, versão, pedidos e sitemap sem gravar dados
+        run: python3 scripts/monitoramento/saude_publica.py --json-report resultado-saude.json
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: saude-publica
+          path: resultado-saude.json
+          retention-days: 7
