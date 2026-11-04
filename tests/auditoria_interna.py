@@ -139,6 +139,27 @@ class AuditTests(unittest.TestCase):
             self.assertNotIn(sentinel, result.stdout + result.stderr)
             self.assertIn('conteúdo omitido', result.stdout)
 
+    def test_render_headers_are_additive_and_idempotent(self):
+        module = load('render_headers')
+        legacy = {'path': '/legado', 'name': 'X-Legado', 'value': 'preservar'}
+        rows = [legacy.copy()]
+        def request(suffix, body=None):
+            if body: rows.append(body.copy())
+            return [{'header': r} for r in rows]
+        self.assertEqual(module.ensure(request), 6)
+        self.assertEqual(module.ensure(request), 0)
+        self.assertIn(legacy, rows)
+        self.assertFalse(any(r['name'] == 'Permissions-Policy' for r in rows))
+
+    def test_render_headers_conflict_prevents_writes(self):
+        module = load('render_headers')
+        writes = []
+        def request(suffix, body=None):
+            if body: writes.append(body)
+            return [{'header': {'path': '/*', 'name': 'X-Frame-Options', 'value': 'DENY'}}]
+        with self.assertRaises(ValueError): module.ensure(request)
+        self.assertEqual(writes, [])
+
     def test_preflight_distinguishes_missing_toolchain(self):
         with patch('run_support.shutil.which', return_value=None):
             self.assertIn('Node.js 22 ou superior', preflight(ROOT, [('backend_gs.js', None)]))

@@ -59,7 +59,7 @@ jobs:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: bash scripts/deploy/render_garantir_build.sh
 
-      - name: Impedir cache do manifesto Android
+      - name: Confirmar segurança estática e cache dos manifestos
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
