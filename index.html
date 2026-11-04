@@ -143,7 +143,7 @@ catch (e) { window.__precargaLista = null; }
       <svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span class="rot">Filtros</span><span class="badge-filtros" id="badge-filtros" hidden>0</span>
     </button>
   </div>
-  <div class="linha-share-busca" id="linha-share-busca" hidden><button type="button" id="btn-share-busca">Compartilhar seleção</button><button type="button" class="btn-add-resultados" id="btn-add-resultados-topo" hidden><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg> <span class="txt">Adicionar estes à seleção</span></button><button type="button" id="btn-limpar-filtros-topo" hidden>Limpar filtros</button><button type="button" id="btn-limpar-sel" hidden>Limpar seleção</button><button type="button" id="btn-lote-menu" hidden aria-expanded="false">🛠️ Edição em lote</button><div class="lote-menu" id="lote-menu" hidden role="menu"><button type="button" role="menuitem" data-lote="btn-bulk-preco">% Alterar preços</button><button type="button" role="menuitem" data-lote="btn-bulk-novidade">Marcar novidades</button><button type="button" role="menuitem" data-lote="btn-bulk-arquivar">🗃️ Arquivar</button><button type="button" role="menuitem" data-lote="btn-bulk-reativar">🔄 Reativar</button><button type="button" role="menuitem" data-lote="btn-bulk-postar">📸 Enviar para Postagens</button><button type="button" role="menuitem" data-lote="btn-bulk-juntar">🔗 Juntar em 1 produto</button></div></div>
+  <div class="linha-share-busca" id="linha-share-busca" hidden><button type="button" id="btn-share-busca">Compartilhar seleção</button><button type="button" class="btn-add-resultados" id="btn-add-resultados-topo" hidden><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg> <span class="txt">Adicionar estes à seleção</span></button><button type="button" id="btn-limpar-filtros-topo" hidden>Limpar filtros</button><button type="button" id="btn-limpar-sel" hidden>Limpar seleção</button><button type="button" id="btn-lote-menu" hidden aria-expanded="false">🛠️ Edição em lote</button><div class="lote-menu" id="lote-menu" hidden role="menu"><button type="button" role="menuitem" data-lote="btn-bulk-preco">% Alterar preços</button><button type="button" role="menuitem" data-lote="btn-bulk-novidade">Marcar novidades</button><button type="button" role="menuitem" data-lote="btn-bulk-arquivar">🗃️ Arquivar</button><button type="button" role="menuitem" data-lote="btn-bulk-reativar">🔄 Reativar</button><button type="button" role="menuitem" data-lote="btn-bulk-postar">📸 Enviar para Postagens</button><button type="button" role="menuitem" data-lote="btn-bulk-pedir-fotos">Solicitar fotos</button><button type="button" role="menuitem" data-lote="btn-bulk-juntar">🔗 Juntar em 1 produto</button></div></div>
   <div class="filtros-extras" id="filtros-extras">
     <div class="fx-topo"><strong>Filtros</strong><span class="fx-cont" id="fx-cont" aria-live="polite"></span><button type="button" id="fx-fechar" class="fx-fechar"><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg> Fechar</button></div>
     <div class="fx-corpo">
@@ -328,7 +328,9 @@ catch (e) { window.__precargaLista = null; }
 <script src="meta.js"></script>
 <script src="pedido.js?v=7.50.0"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
-<script src="catalogo.js?v=7.51.0"></script>
+<script src="catalogo.js?v=7.54.3"></script>
+<link rel="stylesheet" href="pedir-fotos.css?v=1">
+<script src="pedir-fotos.js?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded',function(){
  const interna=document.getElementById('fx-busca'),original=document.getElementById('busca');

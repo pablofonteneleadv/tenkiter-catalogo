@@ -1609,6 +1609,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <button type="button" id="btn-bulk-arquivar">Arquivar em Massa</button>
       <button type="button" id="btn-bulk-reativar">Reativar em Massa</button>
       <button type="button" id="btn-bulk-postar">Enviar para Postagens</button>
+      <button type="button" id="btn-bulk-pedir-fotos">Solicitar fotos</button>
       <button type="button" id="btn-bulk-juntar" hidden>Juntar em 1 produto</button>
       <button type="button" id="btn-bulk-fotoia" hidden>Enviar para modelo IA</button>
       <button type="button" id="btn-bulk-separar" hidden>✂️ Separar em peças</button>
@@ -4861,6 +4862,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     enviarParaPostagem_(ids);
     selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos();
   });
+  document.getElementById('btn-bulk-pedir-fotos').addEventListener('click', () => {
+    if (!window.TKPedirFotos) return alert('A solicitação de fotos ainda está carregando. Tente novamente em instantes.');
+    TKPedirFotos.abrir(produtos.filter(p => selecionadosBulk.has(String(p.ID))), 'gestao');
+  });
   document.getElementById('btn-cancelar-bulk').addEventListener('click', () => {
     selecionadosBulk.clear();
     atualizarBarraBulk();
@@ -6516,6 +6521,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-mensagens.js?v=7.46.0"></script>
 <script src="admin-instagram.js?v=7.52.0"></script>
 <script src="admin-caixa-fotos.js?v=7.52.0"></script>
+<link rel="stylesheet" href="pedir-fotos.css?v=1">
+<script src="pedir-fotos.js?v=1"></script>
 <script src="video-validation.js?v=7.40.41"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
 <script src="admin-postagens.js?v=7.53.1"></script>
