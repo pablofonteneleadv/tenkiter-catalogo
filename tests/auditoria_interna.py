@@ -162,6 +162,22 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError): module.ensure(request)
         self.assertEqual(writes, [])
 
+    def test_python_only_preflight_does_not_require_or_execute_node(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root / 'tests').mkdir()
+            (root / 'tests/stdlib.py').write_text('import json\nassert json.loads("true")\n')
+            with patch('run_support.shutil.which', return_value=None), patch('run_support.subprocess.run', side_effect=AssertionError('Node não deve executar')):
+                self.assertEqual(preflight(root, [('stdlib.py', None)]), [])
+
+    def test_python_that_invokes_node_keeps_runtime_requirement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root / 'tests').mkdir()
+            (root / 'tests/helper.py').write_text("import subprocess\nsubprocess.run(['node', 'teste.js'])\n")
+            with patch('run_support.shutil.which', return_value=None):
+                self.assertIn('Node.js 22 ou superior', preflight(root, [('helper.py', None)]))
+            with patch('run_support.shutil.which', return_value='/node'), patch('run_support.subprocess.run', return_value=subprocess.CompletedProcess([], 0, stdout='20\n')):
+                self.assertIn('Node.js 22 ou superior', preflight(root, [('helper.py', None)]))
+
     def test_preflight_distinguishes_missing_toolchain(self):
         with patch('run_support.shutil.which', return_value=None):
             self.assertIn('Node.js 22 ou superior', preflight(ROOT, [('backend_gs.js', None)]))
