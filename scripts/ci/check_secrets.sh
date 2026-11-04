@@ -33,7 +33,9 @@ for padrao in "${PADROES[@]}"; do
     arq="${linha%%:*}"
     if [[ "$arq" =~ $EXCECOES ]]; then continue; fi
     echo "::error file=$arq::Possível credencial em texto plano (padrão: ${padrao:0:24}...)"
-    echo "  $linha" | cut -c1-160
+    # Nunca repetir o trecho encontrado: ele pode conter uma credencial real.
+    numero="${linha#*:}"; numero="${numero%%:*}"
+    echo "  arquivo=$arq linha=$numero (conteúdo omitido)"
     falhas=$((falhas + 1))
   done < <(git grep -nIE "$padrao" -- . 2>/dev/null || true)
 done

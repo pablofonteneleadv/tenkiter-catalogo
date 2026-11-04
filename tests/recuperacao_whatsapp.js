@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('fs'),vm=require('vm'),crypto=require('crypto'),assert=require('assert');
-const file=process.env.BACKEND_CATALOGO;
+const file=process.env.BACKEND_CATALOGO || require('./backend_source.cjs').localizar('catalogo').caminho;
 if(!file)throw Error('Informe BACKEND_CATALOGO');
 const s=fs.readFileSync(file,'utf8'),code=s.slice(s.indexOf('function acZapHash_'));
 function ambiente(){

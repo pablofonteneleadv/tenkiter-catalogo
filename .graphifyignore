@@ -24,3 +24,6 @@ review/
 *.min.js
 tests/saida/
 tests/evidencias_edicao/
+
+.public-site/
+.public-site-next/

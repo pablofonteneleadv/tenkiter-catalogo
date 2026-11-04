@@ -2,10 +2,9 @@
 /* v3.16: manual só-gestor, prática validada, mínimo e certificado verificável. Planilha SIMULADA, chaves inventadas. */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const RAIZ = path.resolve(__dirname, '..');
-const RAIZ_GS = fs.existsSync(path.join(RAIZ,'funcionario-codigo-3.16.gs.txt')) ? RAIZ : path.resolve(RAIZ,'..','tenkiter-cofre');
-const arqs = fs.readdirSync(RAIZ_GS).filter(f => /^funcionario-codigo-\d+\.\d+\.gs\.txt$/.test(f)).sort((a, b) => { const p = x => x.match(/(\d+)\.(\d+)/).slice(1).map(Number); return p(a)[0] - p(b)[0] || p(a)[1] - p(b)[1]; });
-const ARQ = arqs[arqs.length - 1], fonte = fs.readFileSync(path.join(RAIZ_GS, ARQ), 'utf8');
+const backend = require('./backend_source.cjs').localizar('funcionario', [3, 16]);
+const RAIZ = backend.pasta, RAIZ_GS = backend.pasta, arqs = backend.arquivos;
+const ARQ = backend.nome, fonte = backend.fonte;
 let falhas = [], total = 0;
 function ok(c, n, d) { total++; if (!c) { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? '  (' + JSON.stringify(d) + ')' : '')); } else console.log('  ✔ ' + n); }
 class Aba {
@@ -63,7 +62,8 @@ ok(!('m900' in r.provas), 'e sem prova dele');
 como('PABLO');
 r = J(run('treinamentoConteudoAcao_({ whatsapp: "x", sessao: "x" })'));
 ok(r.manuais.find(m => m.id === 'm900').liberado && r.manuais.find(m => m.id === 'm900').parts.length === 1 && 'm900' in r.provas, 'gestor vê o manual de teste e a prova');
-ok(J(run('doGet({ parameter: { action: "manuais_lista" } })')).manuais.every(m => m.id !== 'm900'), 'lista pública de manuais não mostra o manual só-gestor');
+const publico = J(run('doGet({ parameter: { action: "manuais_lista" } })'));
+ok(publico.ok === false && !publico.manuais && !JSON.stringify(publico).includes("Módulo 0 teste"), "GET público recusa lista de manuais e não vaza conteúdo protegido");
 como('ANA');
 r = acao('resultado', { whatsapp: 'x', sessao: 'x', manualId: 'm900', nota: 9, total: 10, tentativaId: 'a1' });
 ok(r.ok === false, 'funcionária não consegue gravar nota no manual só-gestor', r);

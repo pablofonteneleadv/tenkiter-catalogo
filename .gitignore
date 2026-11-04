@@ -13,3 +13,12 @@ node_modules/
 
 # Índice de código e diagnósticos do Graphify: cache local, nunca publicado.
 graphify-out/
+
+# Saída estática permitida e resultados locais dos testes.
+.public-site/
+tests/saida/
+# Pacotes de trabalho não pertencem ao site público.
+/tenkiter-arquivos-modificadosok.zip
+/lotes-a-c.patch
+
+.public-site-next/
