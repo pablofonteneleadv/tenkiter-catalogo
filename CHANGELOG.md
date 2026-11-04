@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.54.2] - 2026-11-04
+
+- Corrige pré-checagem que exigia Node indevidamente para suítes autônomas em Python.
+
+
 ## [7.54.1] - 2026-11-04
 
 - Corrige falhas HTTP nos feeds, evita consultas simultâneas duplicadas e amplia monitor e testes do Worker OG.

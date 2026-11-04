@@ -1,6 +1,7 @@
 """Pré-requisitos e relatório do runner; importar este módulo não inicia testes."""
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,15 +9,19 @@ from pathlib import Path
 
 def preflight(root, suites):
     missing = []
-    node = shutil.which('node')
-    if not node:
-        missing.append('Node.js 22 ou superior')
-    else:
-        version = subprocess.run([node, '-p', 'process.versions.node.split(".")[0]'],
-                                 capture_output=True, text=True, check=True)
-        if int(version.stdout.strip()) < 22:
-            missing.append('Node.js 22 ou superior')
     sources = '\n'.join((root / 'tests' / name).read_text() for name, _ in suites)
+    # Python autônomo não depende de Node. Suites JS/CJS e Python que invoca
+    # Node continuam exigindo o runtime mínimo do projeto.
+    needs_node = any(name.endswith(('.js', '.cjs')) for name, _ in suites) or re.search(r"['\"]node['\"]|node:", sources)
+    if needs_node:
+        node = shutil.which('node')
+        if not node:
+            missing.append('Node.js 22 ou superior')
+        else:
+            version = subprocess.run([node, '-p', 'process.versions.node.split(".")[0]'],
+                                     capture_output=True, text=True, check=True)
+            if int(version.stdout.strip()) < 22:
+                missing.append('Node.js 22 ou superior')
     if 'playwright' in sources or 'from mock import' in sources:
         for module in ('playwright', 'PIL'):
             if importlib.util.find_spec(module) is None:
