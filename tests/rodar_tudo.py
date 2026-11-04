@@ -20,6 +20,8 @@ RAIZ = os.path.dirname(AQUI)
 SUITES = [  # (arquivo, como saber que passou)
     ("auditoria_interna.py", lambda out: True),
     ("pedido_idempotencia.js", lambda out: "OK: intenção estável" in out),
+    ("recuperacao_whatsapp.js", lambda out: "PASS recuperação:" in out),
+    ("worker_abas_fluxo.py", lambda out: "FALHAS=0" in out),
     ("assinatura_upload.js", lambda out: "PASS: contrato restrito" in out),
     ("filtros_facetas.py", lambda out: "FALHAS: []" in out),
     ("mensagens_acessos_rh.py", lambda out: "RH: ferramentas por pessoa" in out),
@@ -178,7 +180,7 @@ SUITES = [  # (arquivo, como saber que passou)
 # Testes que LEEM o .gs.txt do backend. O .gs.txt não fica no repositório público (fica no cofre privado), então no GitHub
 # (CI) eles NÃO têm o que testar: em vez de quebrar a bateria inteira, são pulados e a lista dos pulados é impressa no fim
 # (e vira aviso `::warning` no GitHub). Rode-os localmente, com o .gs.txt na raiz ou em ../tenkiter-cofre.
-PRECISA_GS = {"assinatura_upload.js": ("catalogo", (4, 24)), "backend_gs.js": ("catalogo", (0, 0)), "backend_contas.js": ("funcionario", (0, 0)),
+PRECISA_GS = {"recuperacao_whatsapp.js": ("catalogo", (4, 27)), "assinatura_upload.js": ("catalogo", (4, 24)), "backend_gs.js": ("catalogo", (0, 0)), "backend_contas.js": ("funcionario", (0, 0)),
               "backend_func.js": ("funcionario", (0, 0)), "backend_v316.js": ("funcionario", (3, 16)),
               "backend_manual_rico.js": ("funcionario", (3, 17))}   # (prefixo, versão mínima)
 PROPRIO_SERVIDOR = {"service_worker.py"}   # no teste local, esta bateria cuida do próprio servidor (precisa desligá-lo)

@@ -15,7 +15,7 @@ def inventory():
             registered.update(item.elts[0].value for item in node.value.elts)
     workflow = '\n'.join(p.read_text() for p in (ROOT / '.github/workflows').glob('*.yml'))
     ci = set(re.findall(r'tests/([\w.-]+\.(?:py|js|cjs))', workflow))
-    helpers = {'mock.py', 'run_support.py', 'backend_source.cjs', 'rodar_tudo.py'}
+    helpers = {'mock_msg.py', 'mock.py', 'run_support.py', 'backend_source.cjs', 'rodar_tudo.py'}
     results = []
     for path in sorted((ROOT / 'tests').iterdir()):
         if not path.is_file() or path.suffix not in ('.py', '.js', '.cjs'):
