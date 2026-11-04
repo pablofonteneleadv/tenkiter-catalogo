@@ -21,7 +21,7 @@ services:
     branch: main
     autoDeploy: false
     buildCommand: bash scripts/deploy/build_version.sh
-    staticPublishPath: ./
+    staticPublishPath: .public-site
     # Cabeçalhos de segurança aplicados na origem (o Cloudflare reforça na borda).
     headers:
       - path: /*

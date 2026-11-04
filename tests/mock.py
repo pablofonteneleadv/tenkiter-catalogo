@@ -12,7 +12,7 @@ def prods(n=24):
     return out
 PNG=bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc0f01f0005000201a5f645400000000049454e44ae426082")
 PERMS_ALL=["catalogo_admin","gerir_acessos","equipe_relatorio","gerir_manuais","dados_pessoais","catalogo_cadastrar","catalogo_excluir","catalogo_precos","catalogo_auditoria","catalogo_push","portal"]
-def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem_codigo=0, ia=True, protegido=False):
+def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem_codigo=0, ia=True, protegido=False, pedido_idempotente=False):
     """Simula o Apps Script. versao="3.2" (padrão) liga também apagar/renomear categoria; "3.1" tem pedidos/métricas/CSV/integrações mas não mexe em categoria; "3.0" é o backend antigo (o site tem que seguir funcionando).
     Devolve um dicionário de estado (pedidos, integrações, produtos...) para os testes conferirem."""
     P=prods()
@@ -40,6 +40,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     st["pushcfg"]={"chave":True,"web":True,"novo":True,"etapa":True}
     st["avisos"]=[]
     FLAGS={"ok":True,"versao":"catalogo-"+versao,"acessos":True,"pinAtivo":False,"pedidos":True,"config":True,"metricas":True,"importacao":True,"feed":True,"integracoes":True,"codigos":True,"pushHistorico":True,"loteCategoria":True} if novo else {"ok":True,"versao":"catalogo-3.0","acessos":True,"pinAtivo":False}
+    if novo and pedido_idempotente: FLAGS["pedidoIdempotente"] = True
     if cat_gestao: FLAGS["categoriasGestao"]=True
     if push3: FLAGS["pushCompleto"]=True
     if conex: FLAGS["conexoes"]=True

@@ -2,9 +2,9 @@
 /* Testa o BACKEND de Funcionários/Acessos (funcionario-codigo-*.gs.txt) com planilha SIMULADA: vários perfis por pessoa (v3.2) e as travas da v3.1. */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const RAIZ = path.resolve(__dirname, '..');
-const arqs = fs.readdirSync(RAIZ).filter(f => /^funcionario-codigo-\d+\.\d+\.gs\.txt$/.test(f)).sort((a, b) => { const p = x => x.match(/(\d+)\.(\d+)/).slice(1).map(Number); return p(a)[0] - p(b)[0] || p(a)[1] - p(b)[1]; });
-const ARQ = arqs[arqs.length - 1], fonte = fs.readFileSync(path.join(RAIZ, ARQ), 'utf8');
+const backend = require('./backend_source.cjs').localizar('funcionario');
+const RAIZ = backend.pasta, RAIZ_GS = backend.pasta, arqs = backend.arquivos;
+const ARQ = backend.nome, fonte = backend.fonte;
 let falhas = [], total = 0;
 function ok(c, n, d) { total++; if (!c) { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? '  (' + JSON.stringify(d) + ')' : '')); } else console.log('  ✔ ' + n); }
 class Aba {

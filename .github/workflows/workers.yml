@@ -40,6 +40,13 @@ on:
         options: [todos, instagram-worker, midia-worker, og-worker]
   # O deploy.yml já executa o portão de qualidade; skip_ci evita repetir o CI.
   workflow_call:
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      CLOUDFLARE_ZONE_ID:
+        required: true
     inputs:
       skip_ci:
         description: 'Pular CI interno quando o workflow chamador já validou o commit'
@@ -72,7 +79,7 @@ jobs:
     needs: ci
     if: ${{ always() && (inputs.skip_ci == true || needs.ci.result == 'success') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: As credenciais chegaram neste job?
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -104,9 +111,9 @@ jobs:
             script: tenkiter-og
             alvo: https://tenkiter-og.distkrpconfeccoes.workers.dev/status
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -144,7 +151,7 @@ jobs:
             esac
           done
           case "$codigo" in
-            000) echo "::error::$ALVO nao respondeu apos o deploy de ${{ matrix.script }}."; exit 1 ;;
+            000|5*|"") echo "::error::$ALVO nao ficou saudavel apos o deploy de ${{ matrix.script }} (HTTP $codigo)."; exit 1 ;;
             *)   echo "Worker ${{ matrix.script }} no ar (HTTP $codigo)." ;;
           esac
 
@@ -177,7 +184,7 @@ jobs:
     needs: publicar
     if: ${{ always() && needs.publicar.result == 'success' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Conferir que os 3 Workers foram republicados agora
         env:

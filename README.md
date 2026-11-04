@@ -23,7 +23,7 @@ Catálogo online da TENKiTER Modas (Crateús, CE), hospedado no Render:
 
 ## Backend
 
-O backend são dois Google Apps Script (Web App), um para o **catálogo** (planilha de produtos, pedidos, contas, pasta de fotos no Drive) e outro para o **RH/treinamento** (funcionários, currículos, provas). Versões no ar em 18/10/2026: catálogo `catalogo-4.21` e RH `3.16` (confira sempre por `?action=versao`). Os arquivos `.gs.txt` **não ficam neste repositório público**: a cópia de trabalho está no repositório privado `Tenkiter-cofre`, e o Claude entrega o arquivo no chat quando há versão nova (os `.gs.txt` antigos são históricos). A URL do Web App do catálogo fica em `common.js`, na constante `API_URL`.
+O backend são dois Google Apps Script (Web App), um para o **catálogo** (planilha de produtos, pedidos, contas, pasta de fotos no Drive) e outro para o **RH/treinamento** (funcionários, currículos, provas). O estado publicado deve ser conferido por `?action=versao`; números em registros datados não identificam necessariamente a versão atual. As versões de trabalho e as entregas ainda não publicadas ficam identificadas no Cofre privado. Os arquivos `.gs.txt` **não ficam neste repositório público**: a cópia de trabalho está no repositório privado `Tenkiter-cofre`, e o Claude entrega o arquivo no chat quando há versão nova (os `.gs.txt` antigos são históricos). A URL do Web App do catálogo fica em `common.js`, na constante `API_URL`.
 
 > ⚠️ **Atenção**: `index.html` e `admin.html` devem sempre usar a mesma `API_URL` (a de `common.js`). Se algum dia precisar apontar para uma nova implantação do Apps Script, troque só ali — nunca crie uma URL diferente em outro arquivo, senão o cadastro e o catálogo público passam a ler/escrever planilhas diferentes.
 >
@@ -31,7 +31,9 @@ O backend são dois Google Apps Script (Web App), um para o **catálogo** (plani
 
 ## Como editar
 
-Não há build nem dependências — é HTML/CSS/JS puro. Edite numa branch, abra o PR e, com o check **Portão de qualidade** verde, faça o merge na `main`. O deploy é automático pelo GitHub: o merge aciona `.github/workflows/deploy.yml`, que publica o site (Render) e os três Workers (Cloudflare) e confirma o commit no ar em `/version.json` (passo a passo em `CLAUDE.md` e `docs/CI-CD.md`). Antes de cada merge cria-se um ponto de restauração (`backup/pre-<tema>-<data>`). **Os backends em Apps Script não sobem sozinhos**: cole o arquivo `.gs.txt` novo no editor do Apps Script e use *Gerenciar implantações → editar → Nova versão* (guia: [operação privada](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/infra-backup-testes.md)). O CI de cada PR roda a parte rápida dos testes; a bateria completa (`python3 tests/rodar_tudo.py`, Playwright) roda à noite e sob pedido.
+Não há build nem dependências — é HTML/CSS/JS puro. Edite numa branch, abra o PR e, com o check **Portão de qualidade** verde, faça o merge na `main`. O deploy é automático pelo GitHub: o merge aciona `.github/workflows/deploy.yml`, que publica o site (Render) e os três Workers (Cloudflare) e confirma o commit no ar em `/version.json` (passo a passo em `CLAUDE.md` e `docs/CI-CD.md`). Antes de cada merge cria-se um ponto de restauração (`backup/pre-<tema>-<data>`). **O build publica somente os arquivos declarados em `scripts/deploy/public-files.json`, preparados em `.public-site/`.** Testes, ferramentas e documentos de trabalho ficam fora do site.
+
+**Os backends em Apps Script não sobem sozinhos**: cole o arquivo `.gs.txt` novo no editor do Apps Script e use *Gerenciar implantações → editar → Nova versão* (guia: [operação privada](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/infra-backup-testes.md)). O CI de cada PR roda a parte rápida dos testes; a bateria completa (`python3 tests/rodar_tudo.py`, Playwright) roda à noite e sob pedido.
 
 ## Instruções de manutenção
 

@@ -5,11 +5,9 @@
  */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm'), crypto = require('crypto');
-const RAIZ = path.resolve(__dirname, '..');
-const arquivos = fs.readdirSync(RAIZ).filter(f => /^catalogo-codigo-\d+\.\d+\.gs\.txt$/.test(f))
-  .sort((a, b) => { const p = x => x.match(/(\d+)\.(\d+)/).slice(1).map(Number); const [a1, a2] = p(a), [b1, b2] = p(b); return a1 - b1 || a2 - b2; });
-const ARQ = arquivos[arquivos.length - 1];
-const codigoFonte = fs.readFileSync(path.join(RAIZ, ARQ), 'utf8');
+const backend = require('./backend_source.cjs').localizar('catalogo');
+const RAIZ = backend.pasta, arquivos = backend.arquivos, ARQ = backend.nome;
+const codigoFonte = backend.fonte;
 
 let falhas = [], total = 0;
 function ok(cond, nome, detalhe) { total++; if (!cond) { falhas.push(nome + (detalhe !== undefined ? ' -> ' + detalhe : '')); console.log('  ✘ ' + nome + (detalhe !== undefined ? '  (' + detalhe + ')' : '')); } else console.log('  ✔ ' + nome); }
@@ -2034,6 +2032,46 @@ function servicosFalsos(amb, est) {
   ok(amb.post(adm({ action: 'updateLote', itens: muitos })).ok === false, 'mais de 60 peças por vez é recusado');
   ok(amb.post({ action: 'updateLote', itens: [{ id: '101', nome: 'Invasor' }] }).ok === false && linha('101')[1] === 'Vestido Floral Novo', 'sem login/permissão não grava nada');
   ok(/updateLote: 'catalogo_cadastrar'/.test(codigoFonte), 'mesma permissão do update (catalogo_cadastrar)');
+})();
+
+// Regressões dirigidas da auditoria: entradas inválidas e concorrência de pedidos.
+(function auditoriaEntradasEPedidos() {
+  const amb = criarAmbiente(); semear(amb);
+  for (const body of [null, [], 7, 'texto', {}, { action: '' }]) {
+    const r = amb.post(body);
+    ok(r.ok === false && r.erro === 'Requisição inválida.', 'corpo inválido é recusado com envelope consistente: ' + JSON.stringify(body));
+  }
+  const before = amb.ss.getSheetByName('Eventos')?.getLastRow() || 0;
+  for (const body of [{}, { tipo: 'qualquer' }, { tipo: 'visualizacao' }, { tipo: 'whatsapp', produtoId: ' ' }]) {
+    const r = amb.post(Object.assign({ action: 'registrarEvento' }, body));
+    ok(r.ok === false, 'evento incompleto não é aceito: ' + JSON.stringify(body));
+  }
+  ok((amb.ss.getSheetByName('Eventos')?.getLastRow() || 0) === before, 'eventos recusados não gravam linha');
+  ok(amb.post({ action: 'registrarEvento', tipo: 'visita' }).ok, 'visita sem produto continua válida');
+  const unknown = '<script>exemplo-nao-executavel</script>';
+  ok(!JSON.stringify(amb.getJson({ action: unknown })).includes(unknown), 'ação desconhecida não é refletida no GET');
+  ok(!JSON.stringify(amb.post({ action: unknown })).includes(unknown), 'ação desconhecida não é refletida no POST');
+  const pedido = { action: 'criarPedido', nome: 'Cliente Teste', whatsapp: '88999991234', itens: [{ id: '101' }] };
+  const first = amb.post(pedido), memo = new Map(amb.cacheMem);
+  const rows = amb.ss.getSheetByName('Pedidos').getLastRow();
+  amb.cacheMem.clear();
+  amb.ctx.LockService.getScriptLock = () => ({ waitLock() { for (const [k, v] of memo) amb.cacheMem.set(k, v); }, releaseLock() {} });
+  const repeated = amb.post(pedido);
+  ok(first.ok && repeated.ok && repeated.repetido && repeated.codigo === first.codigo, 'pedido gravado enquanto espera a trava é reconhecido');
+  ok(amb.ss.getSheetByName('Pedidos').getLastRow() === rows, 'concorrência não grava segunda linha');
+  const durable = criarAmbiente(); semear(durable);
+  const intent = Object.assign({}, pedido, { opId: 'pedido_teste_001' });
+  const original = durable.post(intent);
+  durable.cacheMem.clear(); // como após expiração ou perda do cache do Apps Script
+  const replay = durable.post(intent);
+  ok(original.ok && replay.ok && replay.repetido && replay.codigo === original.codigo, 'opId preservado na planilha resiste à perda do cache');
+  ok(durable.ss.getSheetByName('Pedidos').getLastRow() === 2, 'opId repetido não grava linha adicional');
+  const next = durable.post(Object.assign({}, intent, { opId: 'pedido_teste_002' }));
+  ok(next.ok && next.codigo !== original.codigo, 'duas intenções distintas podem ter o mesmo conteúdo');
+  const conflict = durable.post(Object.assign({}, intent, { itens: [{ id: '102' }] }));
+  ok(!conflict.ok && !conflict.codigo, 'chave reaproveitada com conteúdo diferente é recusada sem revelar o pedido');
+  const other = durable.post(Object.assign({}, intent, { whatsapp: '88988887777' }));
+  ok(!other.ok && !other.codigo, 'outro telefone não recupera pedido por opId');
 })();
 
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');

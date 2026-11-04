@@ -66,12 +66,61 @@ python3 tests/rodar_tudo.py
 
 ### Sobre os testes que dependem do backend
 
-`tests/backend_gs.js`, `backend_contas.js` e `backend_func.js` leem os arquivos
-`catalogo-codigo-*.gs.txt` / `funcionario-codigo-*.gs.txt`, que **não são versionados**
-(o repositório é público e eles contêm a lógica do backend; a fonte-base é o repositório privado
-`Tenkiter-cofre`). Por isso o CI **não executa** esses testes (`ci.yml` comenta isso no job de testes):
-rode-os localmente, com os `.gs.txt` do cofre ao lado do código. O portão obrigatório é o job `estatico`
-(mais segredos e escopo).
+Os runners de backend localizam a versão mais recente por ordem numérica diretamente
+no Cofre privado, sem copiar `.gs.txt` para o checkout público. Use `TK_COFRE_DIR`
+para um caminho personalizado; os diretórios irmãos `Tenkiter-cofre` e `tenkiter-cofre`
+são reconhecidos. Nenhum token deve ser escrito nos comandos ou logs.
+
+```bash
+TK_COFRE_DIR=/workspace/Tenkiter-cofre python3 tests/rodar_tudo.py \
+  --suite backend_gs.js --suite backend_contas.js --suite backend_func.js \
+  --require-backends --json-report tests/saida/backend.json
+```
+
+Sem `--suite`, o runner continua executando a bateria integral (somente sob pedido
+explícito). `--list` lista sem executar. O resumo JSON separa `passed`, `failed` e
+`skipped`, guarda o código de saída e a duração de cada execução. Dependência ausente
+retorna 2. Backend ausente é omissão visível; `--require-backends` torna essa omissão
+bloqueante. O ambiente de CI público não ganha acesso ao Cofre automaticamente.
+
+`scripts/ci/inventario_testes.py` distingue registro no runner, chamada em workflow,
+auxiliar conhecido e arquivo que precisa de classificação. Arquivo não registrado
+não é contado automaticamente como uma suíte nem como cobertura aprovada.
+
+### Distribuição estática e versão
+
+`build_version.sh` prepara `.public-site/` a partir da lista explícita
+`public-files.json`, gera o manifesto com SHA completo válido e faz cache-busting
+somente na saída. Os arquivos-fonte não são reescritos pelo build. Arquivo estático
+novo deve ser incluído conscientemente na lista. O diretório inclui
+`android/latest.json`, não o código Android ou suas chaves.
+
+Antes do deploy, `render_garantir_build.sh` confirma por leitura o `buildCommand` e
+`serviceDetails.publishPath` efetivos no Render. O blueprint usa
+`staticPublishPath: .public-site`. Se a API não confirmar a configuração, o deploy
+para; não pode publicar a raiz como alternativa silenciosa.
+
+O contrato público mínimo de `action=list` está em `schemas/catalogo-list.schema.json`:
+lista vazia é válida, campos adicionais são compatíveis e ID, Nome, Preco e Status
+são obrigatórios. `contrato_catalogo.py --live` só faz GET de versão e lista; nunca
+grava planilhas, envia mensagens ou roda em PR. A conferência agendada depende de
+acesso ao backend real e não substitui testes com serviços simulados.
+
+### Recuperação e limpeza de branches
+
+O workflow existente `limpar-branches.yml` só recebe nomes/SHAs da lista aprovada,
+confere a ponta atual, recusa branches protegidas e registra a referência removida.
+Antes de executar uma limpeza, preservar o objeto em backup recuperável fora do
+ambiente temporário. A recriação usa `git push origin <sha>:refs/heads/<nome>`, desde
+que esse objeto tenha sido preservado. Nenhuma limpeza foi executada pela auditoria.
+
+### Capacidade de Fotos IA
+
+Não há capacidade diária fixa demonstrada. Ela depende do provedor, modelo, plano
+e cota da conta. O Worker trata cota esgotada como espera e distingue plano sem
+imagens; isso não garante conclusão em prazo fixo. Conferir os limites no provedor
+e registrar a data da consulta. Testes locais devem simular cota/falha, sem consumir
+IA paga para medir capacidade.
 
 ---
 

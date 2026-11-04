@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.53.4] - 2026-11-04
+
+- Confiabilidade interna: distribuição estática restrita, testes privados diretos e proteção contra repetição de pedidos
+
+
 ## [7.53.3] - 2026-11-04
 
 - Status WhatsApp com referência real, seleção opcional de canais vinculados, Esteira com atualização por blocos e preparo das peças recebidas em Fotos IA preservando o lote anterior.

@@ -2,9 +2,9 @@
 /* Testa CPF, e-mail, login por e-mail/WhatsApp/CPF e RECUPERAR SENHA (bloco compartilhado dos dois backends) com planilha e cache SIMULADOS. */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const RAIZ = path.resolve(__dirname, '..');
-const arqs = fs.readdirSync(RAIZ).filter(f => /^funcionario-codigo-\d+\.\d+\.gs\.txt$/.test(f)).sort((a, b) => { const p = x => x.match(/(\d+)\.(\d+)/).slice(1).map(Number); return p(a)[0] - p(b)[0] || p(a)[1] - p(b)[1]; });
-const ARQ = arqs[arqs.length - 1], fonte = fs.readFileSync(path.join(RAIZ, ARQ), 'utf8');
+const backend = require('./backend_source.cjs').localizar('funcionario');
+const RAIZ = backend.pasta, RAIZ_GS = backend.pasta, arqs = backend.arquivos;
+const ARQ = backend.nome, fonte = backend.fonte;
 let falhas = [], total = 0; const CACHE = new Map();
 function ok(c, n, d) { total++; if (!c) { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? (typeof d === 'string' ? '\n' + d : '  (' + JSON.stringify(d) + ')') : '')); } else console.log('  ✔ ' + n); }
 function diffTrechos(a, b) {
@@ -138,9 +138,9 @@ ctx.__x = null;
 r = run('acRegistrar_("Outra Bia", "85992222222", "qualquer", "Aluno", {})'); ok(!r.ok && r.contaExiste === true, 'cadastro com WhatsApp existente devolve contaExiste:true (a tela oferece Entrar/Esqueci a senha)', r);
 
 console.log('\n[os dois backends têm o MESMO bloco]');
-const tira = f => { const t = fs.readFileSync(path.join(RAIZ, f), 'utf8'); const i = t.indexOf('/* ---------- v3.9: CPF, e-mail'); const j = t.indexOf('function acTodasLinhas_() {'); return t.slice(i, j).replace(/\/\* -{10} v[\d.]+ \/ PERF-01[\s\S]*?\*\//, '/* PERF-01 (comentário próprio de cada backend, ignorado na comparação) */'); };
-const cat = fs.readdirSync(RAIZ).filter(f => /^catalogo-codigo-\d+\.\d+\.gs\.txt$/.test(f)).sort().pop();
-const blocoCatalogo = tira(cat), blocoFuncionario = tira(ARQ);
+const tira = f => { const t = fs.readFileSync(f, 'utf8'); const i = t.indexOf('/* ---------- v3.9: CPF, e-mail'); const j = t.indexOf('function acTodasLinhas_() {'); return t.slice(i, j).replace(/\/\* -{10} v[\d.]+ \/ PERF-01[\s\S]*?\*\//, '/* PERF-01 (comentário próprio de cada backend, ignorado na comparação) */'); };
+const cat = require('./backend_source.cjs').localizar('catalogo').caminho;
+const blocoCatalogo = tira(cat), blocoFuncionario = tira(backend.caminho);
 ok(blocoCatalogo.length > 5000 && blocoCatalogo === blocoFuncionario, 'bloco compartilhado idêntico em ' + cat + ' e ' + ARQ,
   blocoCatalogo.length > 5000 && blocoCatalogo === blocoFuncionario ? undefined : diffTrechos(blocoCatalogo, blocoFuncionario));
 

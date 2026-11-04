@@ -94,7 +94,7 @@ echo "    $SITE_URL -> HTTP 200"
 if [ -n "${COMMIT_ESPERADO:-}" ]; then
   echo "==> 4/4 Conferindo o commit publicado em /version.json"
   for tentativa in 1 2 3 4 5 6; do
-    publicado="$(curl -sS -m 20 "$SITE_URL"version.json 2>/dev/null \
+    publicado="$(curl -sS -m 20 -H 'Cache-Control: no-cache' "${SITE_URL%/}/version.json?verificacao=$(date +%s)-$tentativa" 2>/dev/null \
       | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commit",""))' 2>/dev/null || echo '')"
     if [ "$publicado" = "$COMMIT_ESPERADO" ]; then
       echo "    commit no ar: $publicado (confere)"

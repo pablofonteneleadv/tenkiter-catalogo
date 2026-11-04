@@ -13,19 +13,16 @@ Uso:
 O Apps Script é SIMULADO (mock.py): nada aqui toca na planilha nem no WhatsApp reais.
 Sai com código 1 se algo falhar.
 """
-import os, re, subprocess, sys, time, socket
+import os, re, subprocess, sys, time
+from pathlib import Path
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(AQUI)
-BASE = os.environ.get("TK_BASE")
-srv = None
-if not BASE:
-    porta = 8765
-    s = socket.socket(); livre = s.connect_ex(("127.0.0.1", porta)) != 0; s.close()
-    if livre:
-        srv = subprocess.Popen([sys.executable, "-m", "http.server", str(porta)], cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(1)
-    os.environ["TK_BASE"] = "http://localhost:%d/" % porta
 SUITES = [  # (arquivo, como saber que passou)
+    ("auditoria_interna.py", lambda out: True),
+    ("pedido_idempotencia.js", lambda out: "OK: intenção estável" in out),
+    ("assinatura_upload.js", lambda out: "PASS: contrato restrito" in out),
+    ("filtros_facetas.py", lambda out: "FALHAS: []" in out),
+    ("mensagens_acessos_rh.py", lambda out: "RH: ferramentas por pessoa" in out),
     ("axe_telas_a.py", lambda o: o.strip() == "" or "[critical]" not in o and "[serious]" not in o and "[moderate]" not in o),
     ("axe_telas_b.py", lambda o: "TOTAL com problema: 0" in o),
     ("jornada_cliente.py", lambda o: "FALHAS=0" in o),
@@ -181,50 +178,87 @@ SUITES = [  # (arquivo, como saber que passou)
 # Testes que LEEM o .gs.txt do backend. O .gs.txt não fica no repositório público (fica no cofre privado), então no GitHub
 # (CI) eles NÃO têm o que testar: em vez de quebrar a bateria inteira, são pulados e a lista dos pulados é impressa no fim
 # (e vira aviso `::warning` no GitHub). Rode-os localmente, com o .gs.txt na raiz ou em ../tenkiter-cofre.
-PRECISA_GS = {"backend_gs.js": ("catalogo", (0, 0)), "backend_contas.js": ("funcionario", (0, 0)),
+PRECISA_GS = {"assinatura_upload.js": ("catalogo", (4, 24)), "backend_gs.js": ("catalogo", (0, 0)), "backend_contas.js": ("funcionario", (0, 0)),
               "backend_func.js": ("funcionario", (0, 0)), "backend_v316.js": ("funcionario", (3, 16)),
               "backend_manual_rico.js": ("funcionario", (3, 17))}   # (prefixo, versão mínima)
-def _tem_gs(prefixo, minimo=(0, 0)):
-    for pasta in (RAIZ, os.path.join(os.path.dirname(RAIZ), "tenkiter-cofre")):
-        if not os.path.isdir(pasta): continue
-        for f in os.listdir(pasta):
-            m = re.match(r"^%s-codigo-(\d+)\.(\d+)\.gs\.txt$" % prefixo, f)
-            if m and (int(m.group(1)), int(m.group(2))) >= minimo:
-                return True
-    return False
 PROPRIO_SERVIDOR = {"service_worker.py"}   # no teste local, esta bateria cuida do próprio servidor (precisa desligá-lo)
-falhou = []
-pulou = []
-EM_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
-def _anota(nivel, titulo, texto):
-    """No GitHub vira anotação (aparece na página da execução e na API de check-runs); fora dele não faz nada."""
-    if EM_ACTIONS:
-        t = (texto or "").replace("%", "%25").replace("\r", "").replace("\n", "%0A")[:1500]
-        print("::%s title=%s::%s" % (nivel, titulo, t))
-for arq, passou in SUITES:
-    env = dict(os.environ)
-    if arq in PRECISA_GS and not _tem_gs(*PRECISA_GS[arq]):
-        pulou.append(arq)
-        print("↷ " + arq + "  (pulado: sem o .gs.txt do backend '" + PRECISA_GS[arq][0] + "' (versão mínima %d.%d) neste ambiente)" % PRECISA_GS[arq][1])
-        continue
-    if arq in PROPRIO_SERVIDOR and not BASE: env.pop("TK_BASE", None)
-    cmd = ["node", os.path.join(AQUI, arq)] if arq.endswith((".js", ".cjs")) else [sys.executable, os.path.join(AQUI, arq)]
+def main():
+    import argparse
+    from run_support import preflight, backend_available, write_report
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--suite', action='append', help='Arquivo de uma suíte; pode repetir. Sem opção, roda a bateria completa.')
+    parser.add_argument('--list', action='store_true', help='Lista as suítes sem executá-las.')
+    parser.add_argument('--require-backends', action='store_true', help='Falha se uma suíte selecionada não encontrar o backend privado.')
+    parser.add_argument('--json-report', default=os.path.join(AQUI, 'saida', 'resumo-testes.json'))
+    args = parser.parse_args()
+    names = {name for name, _ in SUITES}
+    if args.suite and set(args.suite) - names:
+        parser.error('Suíte desconhecida: ' + ', '.join(sorted(set(args.suite) - names)))
+    selected = [s for s in SUITES if not args.suite or s[0] in args.suite]
+    if args.list:
+        print('\n'.join(name for name, _ in selected))
+        return 0
+    results = []
+    errors = preflight(Path(RAIZ), selected)
+    if errors:
+        write_report(args.json_report, results, errors)
+        print('AMBIENTE INCOMPLETO: ' + '; '.join(errors))
+        return 2
+    base = os.environ.get('TK_BASE')
+    server = None
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=env)
-        out = r.stdout + r.stderr
-        ok = r.returncode == 0 and passou(r.stdout)
-    except subprocess.TimeoutExpired as e:
-        out = "TEMPO ESGOTADO (900 s) em " + arq; ok = False
-    print(("✔ " if ok else "✘ ") + arq)
-    if not ok:
-        falhou.append(arq); print("\n".join("    " + l for l in out.strip().splitlines()[-25:]))
-        _anota("error", "Falhou: " + arq, "\n".join(out.strip().splitlines()[-12:]))
-if srv: srv.terminate()
-print("\n%d de %d baterias passaram" % (len(SUITES) - len(falhou) - len(pulou), len(SUITES) - len(pulou)))
-if pulou:
-    print("PULADAS (%d, precisam do .gs.txt; rode localmente): %s" % (len(pulou), ", ".join(pulou)))
-    _anota("warning", "Baterias puladas (sem .gs.txt)", ", ".join(pulou))
-if falhou:
-    print("FALHARAM (%d): %s" % (len(falhou), ", ".join(falhou)))
-    _anota("error", "Baterias que falharam", ", ".join(falhou))
-sys.exit(1 if falhou else 0)
+        needs_http = any('TK_BASE' in Path(AQUI, name).read_text() for name, _ in selected)
+        if not base and needs_http:
+            # HTTPServer identifica conflito/erro de bind sem usar um servidor alheio.
+            from functools import partial
+            from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+            from threading import Thread
+            handler = partial(SimpleHTTPRequestHandler, directory=RAIZ)
+            try:
+                server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
+            except OSError as error:
+                errors.append('Servidor local indisponível: ' + str(error))
+                print('AMBIENTE INCOMPLETO: ' + errors[-1])
+                return 2
+            Thread(target=server.serve_forever, daemon=True).start()
+            base = 'http://127.0.0.1:%d/' % server.server_port
+        for name, passed in selected:
+            env = dict(os.environ)
+            if base: env['TK_BASE'] = base
+            if name in PRECISA_GS and not backend_available(Path(RAIZ), *PRECISA_GS[name]):
+                results.append({'suite': name, 'status': 'skipped', 'reason': 'Backend privado ausente; configure TK_COFRE_DIR.'})
+                print('↷ ' + name + ' — backend privado ausente')
+                continue
+            if name in PROPRIO_SERVIDOR and not os.environ.get('TK_BASE'):
+                env.pop('TK_BASE', None)
+            command = ['node' if name.endswith(('.js', '.cjs')) else sys.executable, os.path.join(AQUI, name)]
+            started = time.monotonic()
+            try:
+                run = subprocess.run(command, capture_output=True, text=True, timeout=900, env=env)
+                output = run.stdout + run.stderr
+                ok = run.returncode == 0 and passed(run.stdout)
+                code = run.returncode
+            except subprocess.TimeoutExpired:
+                output = 'TEMPO ESGOTADO (900 s) em ' + name
+                ok, code = False, None
+            results.append({'suite': name, 'status': 'passed' if ok else 'failed',
+                            'exit_code': code, 'seconds': round(time.monotonic() - started, 3)})
+            print(('✔ ' if ok else '✘ ') + name)
+            if not ok:
+                print('\n'.join('    ' + line for line in output.strip().splitlines()[-25:]))
+    finally:
+        if server:
+            server.shutdown()
+            server.server_close()
+        report = write_report(args.json_report, results, errors)
+    counts = report['counts']
+    print('APROVADAS=%d FALHARAM=%d PULADAS=%d' % (counts['passed'], counts['failed'], counts['skipped']))
+    if counts['skipped']:
+        print('::%s::Suítes privadas omitidas: %d. Não representam validação do backend.' %
+              ('error' if args.require_backends else 'warning', counts['skipped']))
+    return 1 if counts['failed'] or args.require_backends and counts['skipped'] else 0
+
+
+if __name__ == '__main__':
+    from pathlib import Path
+    sys.exit(main())

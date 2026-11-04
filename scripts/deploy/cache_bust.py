@@ -19,13 +19,14 @@ O vitrine-v71.js continua sendo a fonte da verdade do CSS; o .css e gerado.
 Idempotente: rodar duas vezes nao duplica o ?v=, a tag do script nem o link.
 """
 import re
+import os
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parents[2]
-V = (RAIZ / "VERSION").read_text(encoding="utf-8").strip() or "0.0.0"
+RAIZ = Path(os.environ["TK_BUILD_ROOT"]).resolve() if os.environ.get("TK_BUILD_ROOT") else Path(__file__).resolve().parents[2]
+V = (Path(__file__).resolve().parents[2] / "VERSION").read_text(encoding="utf-8").strip() or "0.0.0"
 
 ASSETS = ["catalogo.css", "vitrine.css", "vitrine-v71.css", "common.js",
-          "catalogo.js", "nav.js", "vitrine.js", "a11y.js", "vitrine-v71.js"]
+          "catalogo.js", "pedido.js", "nav.js", "vitrine.js", "a11y.js", "vitrine-v71.js"]
 
 TAG_JS = ('<!-- v7.1: menu, pesquisa e filtros (itens 1,3,4,5,6,7,8). Camada aditiva,\n'
           '     carregada por ultimo: so age no catalogo e nao reescreve regra existente. -->\n'
