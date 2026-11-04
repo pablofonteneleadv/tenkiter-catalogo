@@ -2020,7 +2020,8 @@
   async function executarPedido(d,c){await c.progresso('Salvando o pedido…');const pacote=await resolverFotos(d.pacote,c);const r=await c.worker('salvar','/esteira/pedidos/salvar',pacote);if(d.enviar){await c.progresso('Marcando o pedido como enviado…');await c.worker('enviar','/esteira/pedidos/enviar',{id:r.pedido.id})}return r;}
   async function executarAplicacao(d,c){const r=await srvRede('/esteira/pedidos/abrir?id='+encodeURIComponent(d.id));resultadoOk(r,'Não consegui abrir o pedido.');const falhas=[];for(const id of d.itens){const x=r.pedido.itens.find(x=>String(x.id)===String(id));if(!x||x.aplicado_em)continue;x.refazer=d.refazer===true;try{await aplicarItem(r.pedido,x,m=>{void c.progresso(m)},c);await c.progresso('Item '+x.nome+' concluído.')}catch(e){if(e.conta||e.login)throw e;falhas.push({item:x.id,erro:e.message,refazer:!!e.refazer,incerto:!!e.incerto});}}if(falhas.length){const e=Object.assign(Error(falhas[0].erro),falhas[0]);e.falhas=falhas;throw e;}return{ok:true,pedido:d.id};}
 
-  async function guardarProcesso(tipo,dados,titulo,chave){return processos.adicionar(tipo,dados,titulo,chave)}
+  let guardandoProcessos=0;
+  async function guardarProcesso(tipo,dados,titulo,chave){guardandoProcessos++;document.documentElement.dataset.esteiraGuardando='1';try{return await processos.adicionar(tipo,dados,titulo,chave)}finally{guardandoProcessos--;if(!guardandoProcessos)delete document.documentElement.dataset.esteiraGuardando;}}
   function refrescarDepois(){fluidez.invalidar();CATALOGO=null;HOJE=null;const origem=versaoTela,toques=interacao;setTimeout(()=>{if(origem===versaoTela&&toques===interacao&&fluidez.visivel()&&!['editor','contagem','aprovacao','aplicacao'].includes(app.dataset.tela)&&!document.querySelector('.fundo')&&!document.activeElement?.matches('input,textarea,select'))void abrirAba();},1700)}
 
   /* ---------- início ---------- */

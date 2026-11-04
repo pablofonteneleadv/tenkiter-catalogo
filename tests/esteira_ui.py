@@ -307,7 +307,7 @@ def instalar(ctx, admin=True, familia=False):
     return st
 
 def aguardar_processos(pg):
-    pg.wait_for_function("""async()=>{const db=await new Promise(ok=>{const r=indexedDB.open('tenkiter_esteira_processos_v1');r.onsuccess=()=>ok(r.result)});return new Promise(ok=>{const r=db.transaction('processos').objectStore('processos').getAll();r.onsuccess=()=>ok(r.result.every(j=>!['fila','rodando'].includes(j.estado)))})}""")
+    pg.wait_for_function("""async()=>{if(document.documentElement.dataset.esteiraGuardando)return false;const db=await new Promise(ok=>{const r=indexedDB.open('tenkiter_esteira_processos_v1');r.onsuccess=()=>ok(r.result)});return new Promise(ok=>{const r=db.transaction('processos').objectStore('processos').getAll();r.onsuccess=()=>ok(r.result.every(j=>!['fila','rodando'].includes(j.estado)))})}""")
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])

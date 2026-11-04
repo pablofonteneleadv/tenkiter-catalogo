@@ -180,6 +180,7 @@ with sync_playwright() as p:
         chk(f"{w}: a peça escolhida aparece e a busca some", pg.is_visible(".folha .peca-escolhida") and "Saia Plissada Midi" in pg.inner_text(".folha .peca-escolhida") and not pg.is_visible("#pf-busca"))
         shot(pg, f"pedir-fotos-folha-{w}")
         pg.click("#pf-pedir"); pg.wait_for_selector(".folha", state="detached", timeout=6000)
+        _ns["aguardar_processos"](pg)
         pb = f["pedir"][-1]
         chk(f"{w}: pedido salvo com a peça, as opções e um id contra toque duplo", pb.get("produto") == "1003" and pb.get("opcoes") == ["manequim", "cores"] and re.match(r"^pf-[a-z0-9]+$", pb.get("op", "")) and pb.get("querOutro") is False, pb)
         pg.wait_for_selector('#fotos-pedidas .pedido-fotos[data-produto="1003"]', timeout=6000)
