@@ -606,8 +606,8 @@
       const mudouTam = estado.achou && novoTam.length !== estado.tamanhos.length, mudouCor = estado.achou && novaCor.length !== estado.cores.length;
       try {
         const mud={};if(mudouEst)mud.estoque=String(Number(iEst.value));if(mudouTam)mud.tamanhos=novoTam.join(', ');if(mudouCor)mud.cores=novaCor.join(', ');
-        await guardarProcesso('conferir',{id:String(p.id),antes:p.estoque,remover:{tamanhos:estado.tamanhos.filter(t=>!tamOn.has(t)),cores:estado.cores.filter(c=>!corOn.has(c))},mud,registro:{id:p.id,achou:estado.achou,estoqueAntes:p.estoque,estoqueDepois:contou?String(Number(iEst.value)):'',mudouTamanhos:mudouTam,mudouCores:mudouCor,fotoNova:pedeFotos,pedidoFotos:pedeFotos?escFotos.valor():undefined}},'Conferir '+p.nome,'conferir:'+p.id);
-        fecharTudo();
+        const origem=versaoTela,id=await guardarProcesso('conferir',{id:String(p.id),antes:p.estoque,remover:{tamanhos:estado.tamanhos.filter(t=>!tamOn.has(t)),cores:estado.cores.filter(c=>!corOn.has(c))},mud,registro:{id:p.id,achou:estado.achou,estoqueAntes:p.estoque,estoqueDepois:contou?String(Number(iEst.value)):'',mudouTamanhos:mudouTam,mudouCores:mudouCor,fotoNova:pedeFotos,pedidoFotos:pedeFotos?escFotos.valor():undefined}},'Conferir '+p.nome,'conferir:'+p.id);
+        fecharTudo();void processos.aguardar(id).then(r=>{if(!r.ok)return;p.feito=true;HOJE=null;fluidez.invalidar();if(origem===versaoTela&&!document.querySelector('.fundo'))void telaHoje();});
       } catch(e){salvar.disabled=false;status.className='erro';status.textContent=e.message||'Não consegui guardar a conferência.';}
 
     };
@@ -682,7 +682,7 @@
       const bF = el('button', 'bt', 'Adicionar fotos'); bF.type = 'button'; bF.title = 'Câmera ou galeria'; bF.onclick = () => arq.click();
       arq.onchange = async () => {
         const fs=[...arq.files].slice(0,8);if(!fs.length)return;bF.disabled=true;
-        try{await guardarProcesso('fotos',{produto:String(t.produto),fotos:fs},'Adicionar fotos: '+t.titulo).then(id=>{void processos.aguardar(id).then(r=>{if(st.isConnected)msg(r.ok?r.fotos+' foto'+(r.fotos===1?' adicionada':'s adicionadas')+' ao produto.':r.erro,r.ok?'ok':'erro')});return id;});arq.value='';msg('Fotos guardadas na fila. Pode continuar trabalhando.','ok');}
+        try{await guardarProcesso('fotos',{produto:String(t.produto),fotos:fs},'Adicionar fotos: '+t.titulo).then(id=>{void processos.aguardar(id).then(r=>{if(r.ok&&obs&&!obs.value)obs.value=r.fotos+' foto'+(r.fotos===1?' enviada':'s enviadas')+' pela Esteira';if(st.isConnected)msg(r.ok?r.fotos+' foto'+(r.fotos===1?' adicionada':'s adicionadas')+' ao produto.':r.erro,r.ok?'ok':'erro')});return id;});arq.value='';msg('Fotos guardadas na fila. Pode continuar trabalhando.','ok');}
         catch(e){msg(e.message,'erro');}finally{bF.disabled=false;}
       };
       acoes.append(bF, arq);
@@ -1724,7 +1724,7 @@
     if (!fim.ok) throw new Error(nome + ' já está no catálogo e em Preparação, mas não consegui registrar aqui. Toque em “Tentar de novo”.');
     CATALOGO = null;
   }
-  async function telaAplicacao(id, auto) {
+  async function telaAplicacao(id, auto, avisos=[]) {
     versaoTela++;
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
@@ -1737,6 +1737,7 @@
     app.append(cab);
     const atualizar = () => { const f = levar.filter((x) => x.aplicado_em).length; prog.replaceChildren(el('b', 'num', f + '/' + levar.length), el('span', 'muted', 'itens no catálogo')); bi.style.width = (levar.length ? Math.round(f / levar.length * 100) : 100) + '%'; bTudo.hidden = f >= levar.length; if (f >= levar.length) stG.diga(levar.length ? 'Tudo no catálogo. Os produtos novos estão em Preparação, fora do site até “Aceitar para o site”.' : 'Nada para levar ao catálogo.', 'ok'); };
     const pintar = (x, erro) => {
+      if(!erro){const a=avisos.find(a=>String(a.item)===String(x.id));if(a)erro=Object.assign(Error(a.erro),{refazer:!!a.refazer});}
       const c = cartoes.get(x.id); c.replaceChildren();
       const topo = el('div', 'prep-topo'), t = el('div', 't');
       t.append(el('h3', '', x.nome), el('small', 'muted', x.tipo === 'reposicao' ? 'Somar ' + x.qtd_aceita + ' ao estoque da peça' : 'Criar com ' + pecas(x.qtd_aceita) + ', fora do site, e pôr em Preparação'));
@@ -1750,12 +1751,12 @@
       try{const id=await guardarProcesso('aplicar',{id:ped.id,itens:[x.id],refazer:x.refazer===true},'Levar ao catálogo: '+x.nome,'aplicar:'+ped.id+':'+x.id);card.querySelector('[role=status]').textContent='Guardado na fila. Pode continuar trabalhando.';void processos.aguardar(id).then(r=>{if(!card.isConnected)return;if(r.ok)void telaAplicacao(ped.id,false);else{pintar(x,Object.assign(Error(r.erro),{refazer:!!r.refazer}));atualizar();}});return true;}
       catch(e){pintar(x,e);return false;}
     };
-    const levarTudo=async()=>{bTudo.disabled=true;try{const ids=levar.filter(x=>!x.aplicado_em).map(x=>x.id);const id=await guardarProcesso('aplicar',{id:ped.id,itens:ids},'Levar pedido '+ped.id+' ao catálogo','aplicar:'+ped.id);stG.diga('Pedido guardado na fila. Pode continuar trabalhando.');void processos.aguardar(id).then(r=>{if(!cab.isConnected)return;if(r.ok)void telaAplicacao(ped.id,false);else{bTudo.disabled=false;stG.diga(r.erro,'erro');const item=levar.find(x=>String(x.id)===String(r.item));if(item)pintar(item,Object.assign(Error(r.erro),{refazer:!!r.refazer}));}});}catch(e){bTudo.disabled=false;stG.diga(e.message,'erro');}};
+    const levarTudo=async()=>{bTudo.disabled=true;try{const ids=levar.filter(x=>!x.aplicado_em).map(x=>x.id);const id=await guardarProcesso('aplicar',{id:ped.id,itens:ids},'Levar pedido '+ped.id+' ao catálogo','aplicar:'+ped.id);stG.diga('Pedido guardado na fila. Pode continuar trabalhando.');void processos.aguardar(id).then(r=>{if(!cab.isConnected)return;fluidez.invalidar();void telaAplicacao(ped.id,false,r.ok?[]:r.falhas||[{item:r.item,erro:r.erro,refazer:r.refazer}]);});}catch(e){bTudo.disabled=false;stG.diga(e.message,'erro');}};
     levar.forEach((x) => { const c = el('div', 'card aplicar'); c.dataset.item = String(x.id); cartoes.set(x.id, c); app.append(c); pintar(x); });
     const cobrar = ped.itens.filter((x) => x.decisao === 'cobrar'), devolver = ped.itens.filter((x) => x.decisao === 'devolver');
     if (cobrar.length) { const c = el('div', 'card'); c.append(el('h3', '', 'Cobrar do fornecedor')); cobrar.forEach((x) => { const f = x.qtd_pedida - (x.nao_veio ? 0 : x.qtd_contada); c.append(el('p', '', x.nome + ': ' + (f === 1 ? 'faltou 1 peça' : 'faltaram ' + f + ' peças') + (x.custo != null ? ' (' + reais(x.custo) + ' cada, ' + reais(f * x.custo) + ')' : ''))); }); app.append(c); }
     if (devolver.length) { const c = el('div', 'card'); c.append(el('h3', '', 'Devolver ao fornecedor')); devolver.forEach((x) => c.append(el('p', '', x.nome + ': ' + pecas(x.tipo === 'extra' ? x.qtd_contada : x.qtd_contada - x.qtd_pedida)))); app.append(c); }
-    atualizar();
+    atualizar();if(avisos.length)stG.diga('Ficou '+avisos.length+' '+(avisos.length===1?'item':'itens')+' com aviso. Os itens concluídos foram mantidos.','erro');
     if (auto && levar.some((x) => !x.aplicado_em)) levarTudo();
   }
 
@@ -2005,7 +2006,7 @@
   function resultadoOk(r,padrao){if(!r?.ok)throw Error(legivel(r?.erro,padrao));return r;}
   async function executarAcao(d,c){const corpo=await resolverFotos(d.corpo,c);return c.worker('enviar',d.rota,corpo)}
   async function executarConferencia(d,c){
-    if(Object.keys(d.mud||{}).length)await c.etapa('catalogo',async()=>{await c.progresso('Atualizando a peça no catálogo…');CATALOGO=null;const p=(await catalogoCompleto()).get(String(d.id));if(!p)throw Error('Esta peça não está mais no catálogo. Confira antes de repetir.');if(d.mud.estoque!=null&&String(p.Estoque||'0')!==String(d.antes||'0')&&String(p.Estoque||'0')!==String(d.mud.estoque))throw Error('O estoque mudou depois da sua conferência. Confira a peça antes de repetir.');const mud=Object.assign({},d.mud);for(const [k,campo]of [['tamanhos','Tamanhos'],['cores','Cores']])if(d.remover?.[k]?.length)mud[k]=lista(p[campo]).filter(v=>!d.remover[k].includes(v)).join(', ');c.assert();return resultadoOk(await apiPost(Object.assign(autenticacao(),{action:'update',id:d.id},mud)),'O catálogo não confirmou a conferência.')});
+    if(Object.keys(d.mud||{}).length)await c.etapa('catalogo',async()=>{await c.progresso('Atualizando a peça no catálogo…');CATALOGO=null;const p=(await catalogoCompleto()).get(String(d.id));if(!p)throw Error('Esta peça não está mais no catálogo. Confira antes de repetir.');if(d.mud.estoque!=null&&String(p.Estoque||'0')!==String(d.antes||'0')&&String(p.Estoque||'0')!==String(d.mud.estoque))throw Error('O estoque mudou depois da sua conferência. Confira a peça antes de repetir.');const mud=Object.assign({},d.mud);for(const [k,campo]of [['tamanhos','Tamanhos'],['cores','Cores']])if(d.remover?.[k]?.length)mud[k]=lista(p[campo]).filter(v=>!d.remover[k].includes(v)).join(', ');c.assert();return resultadoOk(await apiPost(pacoteUpdate(p,mud)),'O catálogo não confirmou a conferência.')});
     await c.progresso('Registrando a conferência…');return c.worker('conferencia','/esteira/conferir',d.registro);
   }
   async function executarAceite(d,c){
@@ -2017,7 +2018,8 @@
   async function executarCaixa(d,c){const urls=await subirArquivos(d,c);await c.progresso('Registrando as fotos na caixa…');return c.worker('caixa','/esteira/caixa/enviar',{lote:c.job.id,descricaoLote:d.descricaoLote||'',produto:d.produto||'',produtoNome:d.produtoNome||'',itens:urls.map((url,i)=>({op:c.job.id+'-'+i,url,descricao:d.fotos[i].descricao||'',hash:d.fotos[i].hash||''}))});}
   async function executarColocar(d,c){await c.progresso('Salvando as fotos no produto…');await c.etapa('produto',()=>colocarNoProduto(d.produto,d.urls,d.capa||'',c));await c.progresso('Atualizando a caixa…');return c.worker('caixa','/esteira/caixa/usar',{ids:d.ids,uso:'produto',produto:d.produto,produtoNome:d.produtoNome});}
   async function executarPedido(d,c){await c.progresso('Salvando o pedido…');const pacote=await resolverFotos(d.pacote,c);const r=await c.worker('salvar','/esteira/pedidos/salvar',pacote);if(d.enviar){await c.progresso('Marcando o pedido como enviado…');await c.worker('enviar','/esteira/pedidos/enviar',{id:r.pedido.id})}return r;}
-  async function executarAplicacao(d,c){const r=await srvRede('/esteira/pedidos/abrir?id='+encodeURIComponent(d.id));resultadoOk(r,'Não consegui abrir o pedido.');for(const id of d.itens){const x=r.pedido.itens.find(x=>String(x.id)===String(id));if(!x||x.aplicado_em)continue;x.refazer=d.refazer===true;try{await aplicarItem(r.pedido,x,m=>{void c.progresso(m)},c)}catch(e){e.item=x.id;throw e;}await c.progresso('Item '+x.nome+' concluído.')}return{ok:true,pedido:d.id};}
+  async function executarAplicacao(d,c){const r=await srvRede('/esteira/pedidos/abrir?id='+encodeURIComponent(d.id));resultadoOk(r,'Não consegui abrir o pedido.');const falhas=[];for(const id of d.itens){const x=r.pedido.itens.find(x=>String(x.id)===String(id));if(!x||x.aplicado_em)continue;x.refazer=d.refazer===true;try{await aplicarItem(r.pedido,x,m=>{void c.progresso(m)},c);await c.progresso('Item '+x.nome+' concluído.')}catch(e){if(e.conta||e.login)throw e;falhas.push({item:x.id,erro:e.message,refazer:!!e.refazer,incerto:!!e.incerto});}}if(falhas.length){const e=Object.assign(Error(falhas[0].erro),falhas[0]);e.falhas=falhas;throw e;}return{ok:true,pedido:d.id};}
+
   async function guardarProcesso(tipo,dados,titulo,chave){return processos.adicionar(tipo,dados,titulo,chave)}
   function refrescarDepois(){fluidez.invalidar();CATALOGO=null;HOJE=null;const origem=versaoTela,toques=interacao;setTimeout(()=>{if(origem===versaoTela&&toques===interacao&&fluidez.visivel()&&!['editor','contagem','aprovacao','aplicacao'].includes(app.dataset.tela)&&!document.querySelector('.fundo')&&!document.activeElement?.matches('input,textarea,select'))void abrirAba();},1700)}
 
