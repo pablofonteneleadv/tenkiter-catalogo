@@ -360,7 +360,7 @@ function d1() {
   chk('a imagem do story respondido é entregue pela rota autenticada', dls.status === 200 && dls.headers.get('content-type') === 'image/jpeg' && (await dls.arrayBuffer()).byteLength === JPG.length);
   await wh('/wh/wafly/2/' + seg, msg('ST2', '5588955550000', 'Quanto é?', { momment: tM + 6000, isStatusReply: true, referenceMessageId: 'X' }));
   const st2 = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588955550000'").first()).id)).j.mensagens[0];
-  chk('no WhatsApp 2 só vale story publicado no WhatsApp 2 (exato, não "provável")', st2.ctx_legenda === 'So no 2' && st2.ctx_aprox === 0, st2);
+  chk('WhatsApp 2 usa candidato do próprio canal, mas horário sozinho não confirma', st2.ctx_legenda === 'So no 2' && st2.ctx_aprox === 1 && st2.ctx_confirmado===0, st2);
   // ---- "stories no ar": a Wafly não diz qual story foi respondido; a equipe vê os candidatos ----
   const cvS = await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588966660000'").first();
   const rS = await A('GET', '/msg/stories?conversa=' + cvS.id + '&em=' + encodeURIComponent(new Date(Date.now() + 3600000).toISOString()));
