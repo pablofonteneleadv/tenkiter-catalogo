@@ -94,12 +94,13 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   const pedido=new Date(Date.now()+86400000);pedido.setUTCHours(21,45,0,0);const pedidoMs=pedido.getTime(),sel=[];
   for(let i=0;i<9;i++)for(const c of ['instagram','grupo','whatsapp2'])inserir('vizinha-'+i,c,'agendado',new Date(pedidoMs+i*1200000).toISOString());
   for(let i=0;i<2;i++)for(const c of ['instagram','grupo','whatsapp2'])sel.push(inserir('selecao-'+i,c,'agendado',new Date(pedidoMs+86400000+i*1200000).toISOString()));
+  sqlite.prepare("UPDATE postagem SET intervalo_ms=1800000 WHERE origem_midia='selecao-1'").run();
   const recuperado=inserir('recuperacao','whatsapp2','agendado',new Date(pedidoMs-1500000).toISOString());sqlite.prepare('UPDATE postagem SET repostado_de=99999,intervalo_ms=120000 WHERE id=?').run(recuperado);
   const antesLote=sqlite.prepare('SELECT * FROM postagem ORDER BY id').all();
   const prev=await chamar('/post/reagendar-lote','POST',{ids:[sel[0],sel[3]],quando:pedido.toISOString(),simular:true});assert.equal(prev.status,200,JSON.stringify(prev));assert.deepEqual(sqlite.prepare('SELECT * FROM postagem ORDER BY id').all(),antesLote);
   const loteHora=await chamar('/post/reagendar-lote','POST',{ids:[sel[0],sel[3]],quando:pedido.toISOString()});assert.equal(loteHora.status,200,JSON.stringify(loteHora));assert.equal(loteHora.j.quando,pedido.toISOString());assert.equal(loteHora.j.midias,2);assert.equal(loteHora.j.destinos,6);
-  for(let i=0;i<2;i++){const xs=sqlite.prepare('SELECT agendado_em FROM postagem WHERE origem_midia=?').all('selecao-'+i);assert.equal(new Set(xs.map(x=>x.agendado_em)).size,1);assert.equal(Date.parse(xs[0].agendado_em),pedidoMs+i*1200000);}
-  let anterior=pedidoMs+1200000;for(let i=0;i<9;i++){const xs=sqlite.prepare('SELECT agendado_em FROM postagem WHERE origem_midia=?').all('vizinha-'+i);assert.equal(new Set(xs.map(x=>x.agendado_em)).size,1);assert(Date.parse(xs[0].agendado_em)>=anterior+1200000);anterior=Date.parse(xs[0].agendado_em);}
+  for(let i=0;i<2;i++){const xs=sqlite.prepare('SELECT agendado_em FROM postagem WHERE origem_midia=?').all('selecao-'+i);assert.equal(new Set(xs.map(x=>x.agendado_em)).size,1);assert.equal(Date.parse(xs[0].agendado_em),pedidoMs+i*1800000);}
+  let anterior=pedidoMs+1800000;for(let i=0;i<9;i++){const xs=sqlite.prepare('SELECT agendado_em FROM postagem WHERE origem_midia=?').all('vizinha-'+i);assert.equal(new Set(xs.map(x=>x.agendado_em)).size,1);assert(Date.parse(xs[0].agendado_em)>=anterior+1200000);anterior=Date.parse(xs[0].agendado_em);}
   assert.equal(sqlite.prepare('SELECT agendado_em FROM postagem WHERE id=?').get(recuperado).agendado_em,new Date(pedidoMs-1500000).toISOString(),'Exceção de recuperação não é deslocada');
   assert(sqlite.prepare('SELECT valor FROM cfg WHERE chave=?').get(loteHora.j.backup));
   const guarda=sqlite.prepare('SELECT * FROM postagem ORDER BY id').all();sqlite.prepare("INSERT INTO postagem_grupo_recibo(postagem_id,ordem,estado) VALUES(?,0,'enviando')").run(sel[1]);

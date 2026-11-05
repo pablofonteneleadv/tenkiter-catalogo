@@ -608,7 +608,7 @@ function d1() {
 
     // ---- horário editado, próximo livre, reorganizar
     x = await G('POST', '/post/reagendar', { id: i2, quando: new Date(BRrel(3, 14, 12)).toISOString() });
-    chk('editar o horário para perto de outro Feed: o servidor afasta (>= 5 min)', x.j.ok && x.j.ajustado === true, x.j);
+    chk('editar o horário insere no pedido e afasta o outro Feed sem reduzir os 5 min', x.j.ok && x.j.quando === new Date(BRrel(3,14,12)).toISOString() && Date.parse((await linha(i3)).agendado_em)>=Date.parse(x.j.quando)+300000, x.j);
     x = await G('POST', '/post/proximo', { id: i2 });
     chk('"próximo horário livre": vai para a frente da fila do tipo (~1 min)', x.j.ok && Date.parse(x.j.quando) - Date.now() > 30000 && Date.parse(x.j.quando) - Date.now() < 100000, x.j);
     await DB.prepare('DELETE FROM postagem').run();

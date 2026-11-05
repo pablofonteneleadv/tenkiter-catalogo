@@ -1950,7 +1950,7 @@ function esperaCotaPost_(p,cotas){
   return {motivo:'limite24h',limites:bloqueios,retomaEm:bloqueios.map(b=>b.liberaEm).filter(Boolean).sort().at(-1)||''};
 }
 async function retomarPendentesPost_(env,req,b,perms,J){
-  const ids=[...new Set((Array.isArray(b.ids)?b.ids:[]).map(Number))];
+  const ids=[...new Set((Array.isArray(b?.ids)?b.ids:[]).map(Number))];
   if(!ids.length||ids.length>200||ids.some(id=>!Number.isSafeInteger(id)||id<1))return J({ok:false,erro:'Selecione de 1 a 200 destinos pendentes.'},400);
   if(b.limitePorCanal!==undefined&&(b.limitePorCanal!==90||!perms.includes('gerir_acessos')))return J({ok:false,erro:'Somente a gestão pode ajustar o limite interno para 90.'},403);
   if(!/^[A-Za-z0-9_-]{8,64}$/.test(String(b.idLocal||'')))return J({ok:false,erro:'Atualize a fila antes de retomar.'},400);
