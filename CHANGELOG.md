@@ -12,6 +12,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.55.1] - 2026-11-05
+
+- Inclui JavaScript e CSS de permissões na lista pública do build. Omissão desses arquivos causava404 no RH após a publicação7.55.0.
+- Build passa a recusar HTML com scripts/estilos locais ausentes; monitor de produção também confere os arquivos do RH. Jornada validada a partir do diretório preparado para publicação.
+
 ## [7.55.0] - 2026-11-05
 
 - Nova aba Permissões no RH: criar, renomear e configurar acessos compartilhados, com exclusão por substituição e exceções individuais preservadas.

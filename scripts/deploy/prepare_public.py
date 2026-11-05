@@ -1,9 +1,45 @@
 """Prepara somente os arquivos explicitamente permitidos para o site estático."""
 import json
+from html.parser import HTMLParser
+import posixpath
 import shutil
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class PageAssets(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.assets = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'script' and attrs.get('src'):
+            self.assets.append(attrs['src'])
+        if tag == 'link' and 'stylesheet' in attrs.get('rel', '').split() and attrs.get('href'):
+            self.assets.append(attrs['href'])
+
+
+def verify_page_assets(output, files):
+    """Falha antes da publicação se um HTML depender de JS/CSS local não permitido."""
+    allowed, missing = set(files), []
+    for name in files:
+        if not name.endswith('.html'):
+            continue
+        page = PageAssets()
+        page.feed((output / name).read_text(encoding='utf-8'))
+        for asset in page.assets:
+            url = urlsplit(asset)
+            if url.scheme or url.netloc or not url.path:
+                continue
+            path = unquote(url.path)
+            target = posixpath.normpath(path.lstrip('/') if path.startswith('/') else posixpath.join(posixpath.dirname(name), path))
+            if target not in allowed:
+                missing.append(name + ' -> ' + target)
+    if missing:
+        raise ValueError('Dependência local ausente da publicação: ' + '; '.join(sorted(set(missing))))
 
 
 def prepare(root=ROOT):
@@ -31,6 +67,7 @@ def prepare(root=ROOT):
             target = temporary / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
+        verify_page_assets(temporary, files)
         if output.exists():
             shutil.rmtree(output)
         temporary.rename(output)

@@ -49,6 +49,15 @@ def validate(path, status, headers, body, expected_commit=None):
     elif path == 'pedido.js':
         if 'javascript' not in content_type or text.lstrip().startswith('<') or 'operacaoPedido_' not in text:
             raise ValueError('Script de pedidos incompatível ou substituído por HTML.')
+    elif path == 'treinamentos.html':
+        if 'text/html' not in content_type or 'rh-permissoes.js' not in text or 'rh-permissoes.css' not in text:
+            raise ValueError('Página do RH sem suas dependências atuais.')
+    elif path == 'rh-permissoes.js':
+        if 'javascript' not in content_type or text.lstrip().startswith('<') or 'TKPermissoes' not in text:
+            raise ValueError('Script de permissões ausente ou substituído por HTML.')
+    elif path == 'rh-permissoes.css':
+        if 'text/css' not in content_type or text.lstrip().startswith('<') or 'rh-admin' not in text:
+            raise ValueError('Estilos do RH ausentes ou substituídos por HTML.')
     elif path == 'feed.csv':
         if 'text/csv' not in content_type:
             raise ValueError('Feed CSV substituído por outro formato.')
@@ -72,7 +81,7 @@ def validate(path, status, headers, body, expected_commit=None):
 
 def check(base, fetch=read, expected_commit=None):
     results = []
-    for path in ('', 'version.json', 'pedido.js', 'sitemap.xml', 'feed.csv', 'feed.xml'):
+    for path in ('', 'version.json', 'pedido.js', 'treinamentos.html', 'rh-permissoes.js', 'rh-permissoes.css', 'sitemap.xml', 'feed.csv', 'feed.xml'):
         start = time.monotonic()
         try:
             validate(path, *fetch(base + path), expected_commit=expected_commit)

@@ -25,14 +25,41 @@ class AuditTests(unittest.TestCase):
     def test_public_allowlist_excludes_repository_and_work_artifacts(self):
         output = load('prepare_public').prepare()
         allowed = set(json.loads((ROOT / 'scripts/deploy/public-files.json').read_text()))
-        actual = {str(p.relative_to(output)) for p in output.rglob('*') if p.is_file()}
+        actual = {p.relative_to(output).as_posix() for p in output.rglob('*') if p.is_file()}
         self.assertEqual(actual, allowed)
         self.assertIn('index.html', actual)
         self.assertIn('esteira-processos.js',actual)
         self.assertIn('produtos-busca.js',actual)
+        self.assertIn('rh-permissoes.js',actual)
+        self.assertIn('rh-permissoes.css',actual)
         self.assertIn('android/latest.json', actual)
         self.assertFalse(any(p.endswith(('.zip', '.patch', '.gs.txt', '.md')) for p in actual))
         self.assertFalse(any(p.startswith(('tests/', 'scripts/', '.git/', 'instagram-worker/')) for p in actual))
+
+    def test_html_cannot_publish_without_local_scripts_or_styles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'scripts/deploy').mkdir(parents=True)
+            manifest = root / 'scripts/deploy/public-files.json'
+            manifest.write_text('["rh.html"]')
+            (root / 'rh.html').write_text('<script src="rh.js?v=1"></script><link rel="stylesheet" href="rh.css?v=1">')
+            (root / '.public-site').mkdir()
+            (root / '.public-site/previous.txt').write_text('preservar')
+            with self.assertRaisesRegex(ValueError, 'rh.js'):
+                load('prepare_public').prepare(root)
+            self.assertTrue((root / '.public-site/previous.txt').exists())
+            (root / 'rh.js').write_text('window.ready=true')
+            (root / 'rh.css').write_text('body{color:#111}')
+            manifest.write_text('["rh.html","rh.js","rh.css"]')
+            output = load('prepare_public').prepare(root)
+            self.assertTrue((output / 'rh.js').exists())
+            self.assertTrue((output / 'rh.css').exists())
+
+    def test_external_assets_do_not_enter_the_local_allowlist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'index.html').write_text('<script src="https://example.test/a.js"></script><link rel="stylesheet" href="//example.test/a.css">')
+            load('prepare_public').verify_page_assets(root, ['index.html'])
 
     def test_symlink_and_parent_traversal_cannot_publish(self):
         with tempfile.TemporaryDirectory() as tmp:
