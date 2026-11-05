@@ -12,6 +12,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.55.3] - 2026-11-05
+
+- Agendamento da mesma mídia compartilha horário e intervalo entre Story, Grupo 1 e os dois Status, respeitando a fila e os mínimos de todos os destinos selecionados.
+- Mantém partes de vídeo em ordem, recibos e gravação atômica dos destinos.
+
+
 ## [7.55.2] - 2026-11-05
 
 - Status 2 verifica disponibilidade da agenda antes de enviar. Enquanto a Wafly não confirma contatos/privacidade, preserva as postagens agendadas e os horários, sem novos envios nem IDs de tentativa.
