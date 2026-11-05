@@ -2013,7 +2013,7 @@ export function planoInsercaoMidia_(cfg,rows,ids,desejado){
   const chave=identidadeBlocoPost_;
   const mapa=new Map();for(const x of rows){const k=chave(x);if(!mapa.has(k))mapa.set(k,[]);mapa.get(k).push(x);}
   const completa=xs=>xs.every(p=>!p.serie||xs.filter(x=>x.serie===p.serie).length===p.partes&&xs.filter(x=>x.serie===p.serie).every(x=>x.status==='agendado'));
-  const grupos=[...mapa.values()].map(xs=>({xs,ps:xs.filter(x=>x.status==='agendado')})).filter(g=>g.ps.length&&!g.xs.some(x=>selecionados.has(x.id))&&g.ps.every(x=>['auto','manual'].includes(x.modo)&&!x.urgente&&!x.repostado_de&&!x.ig_id&&!x.zap_estado&&!x.zap_req&&!x.containers&&!x.recibo)&&completa(g.xs)&&!g.xs.some(x=>['processando','manual_pendente'].includes(x.status)));
+  const grupos=[...mapa.values()].map(xs=>({xs,ps:xs.filter(x=>x.status==='agendado')})).filter(g=>g.ps.length&&!g.xs.some(x=>selecionados.has(x.id))&&g.ps.every(x=>['auto','manual'].includes(x.modo)&&!x.urgente&&!x.repostado_de&&!x.ig_id&&!x.zap_estado&&!x.zap_req&&!x.containers&&!x.recibo)&&completa(g.xs)&&!g.xs.some(x=>['processando','manual_pendente','erro','convertendo','transcodificando'].includes(x.status)));
   const ed=ps=>Math.max(0,...ps.map(x=>Number(x.intervalo_ms)||0)),bs=ps=>[...new Set(ps.flatMap(x=>bucketsDoPost(x.tipo,x.canal)))];
   const mover=grupos.filter(g=>Math.max(...g.ps.map(x=>Date.parse(x.agendado_em)))+Math.max(ed(alvo),ed(g.ps),...bs(g.ps).map(b=>gapDoTipoMs(cfg,b)))>desejado).sort((a,b)=>Math.min(...a.ps.map(x=>Date.parse(x.agendado_em)))-Math.min(...b.ps.map(x=>Date.parse(x.agendado_em)))||a.ps[0].id-b.ps[0].id);
   const moveis=new Set([...ids,...mover.flatMap(g=>g.ps.map(x=>x.id))]),ocup=Object.fromEntries(CANAIS_FILA.map(b=>[b,[]])),eventos=[];
