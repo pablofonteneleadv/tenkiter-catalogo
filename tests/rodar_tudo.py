@@ -18,6 +18,9 @@ from pathlib import Path
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(AQUI)
 SUITES = [  # (arquivo, como saber que passou)
+    ("rh_modelos.py", lambda o: "OK jornada RH 320" in o),
+    ("backend_modelos.js", lambda o: "FALHAS=0" in o),
+    ("worker_acessos_modelos.js", lambda o: "0 falhas" in o),
     ("worker_credenciais.py", lambda out: True),
     ("estoque_opcional.js", lambda out: "PASS estoque opcional:" in out),
     ("worker_og_runtime.cjs", lambda out: "PASS OG runtime:" in out),
@@ -192,6 +195,7 @@ SUITES = [  # (arquivo, como saber que passou)
 # (CI) eles NÃO têm o que testar: em vez de quebrar a bateria inteira, são pulados e a lista dos pulados é impressa no fim
 # (e vira aviso `::warning` no GitHub). Rode-os localmente, com o .gs.txt na raiz ou em ../tenkiter-cofre.
 PRECISA_GS = {"recuperacao_whatsapp.js": ("catalogo", (4, 27)), "assinatura_upload.js": ("catalogo", (4, 24)), "backend_gs.js": ("catalogo", (0, 0)), "backend_contas.js": ("funcionario", (0, 0)),
+              "backend_modelos.js": ("funcionario", (3, 30)),
               "backend_func.js": ("funcionario", (0, 0)), "backend_v316.js": ("funcionario", (3, 16)),
               "backend_manual_rico.js": ("funcionario", (3, 17))}   # (prefixo, versão mínima)
 PROPRIO_SERVIDOR = {"service_worker.py"}   # no teste local, esta bateria cuida do próprio servidor (precisa desligá-lo)

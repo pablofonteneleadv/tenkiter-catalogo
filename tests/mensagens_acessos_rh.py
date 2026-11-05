@@ -14,7 +14,7 @@ with sync_playwright() as p:
     d=r.request.post_data_json;saved.append(d);rules['pessoas'].setdefault(d['alvo'],{})[d['chave']]=d['valor']
    r.fulfill(json={'ok':True,'regras':rules,'ferramentas':{'acessar':'Acessar Mensagens','notas':'Ver e editar notas da equipe','configuracoes':'Configurar conexões e automações'}})
   ctx.route('**/msg/acessos',route)
-  pg=ctx.new_page();errs=[];pg.on('pageerror',lambda e:errs.append(str(e)));pg.goto(os.environ.get('TK_BASE','http://localhost:8765/')+'treinamentos.html?painel=rh');pg.wait_for_selector('.admin-tab[data-tab=acessos]');pg.locator('.admin-tab[data-tab=acessos]').click();pg.wait_for_selector('.ac-card');pg.locator('#ac-todos').click()
+  pg=ctx.new_page();errs=[];pg.on('pageerror',lambda e:errs.append(str(e)));pg.goto(os.environ.get('TK_BASE','http://localhost:8765/')+'treinamentos.html?painel=rh');pg.wait_for_selector('.admin-tab[data-tab=acessos]');pg.locator('.admin-tab[data-tab=acessos]').click();pg.wait_for_selector('.ac-card');pg.locator('.ac-ferramentas summary').click();pg.locator('#ac-todos').click()
   card=pg.locator('.ac-card[data-whats="88988887777"]');card.locator('.ac-abrir').click();pg.wait_for_selector('[data-msg-chave=acessar]')
   card.locator('[data-msg-chave=acessar]').select_option('true');pg.wait_for_timeout(500);assert saved[-1]=={'tipo':'pessoa','alvo':'88988887777','chave':'acessar','valor':True}
   card=pg.locator('.ac-card[data-whats="88988887777"]');card.locator('[data-msg-chave=notas]').select_option('false');pg.wait_for_timeout(500);assert saved[-1]['valor'] is False

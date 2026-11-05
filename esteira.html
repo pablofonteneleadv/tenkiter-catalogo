@@ -1913,7 +1913,14 @@
     app.replaceChildren();
     const aviso = (box, txt, ok) => { let p = box.querySelector('.retorno'); if (!p) { p = el('p', 'retorno'); p.setAttribute('role', 'status'); box.append(p); } p.className = 'retorno ' + (ok ? 'ok' : 'erro'); p.textContent = txt; };
     // Equipe
-    const cEq = el('div', 'card'); cEq.append(el('h2', '', 'Equipe'), el('p', 'muted', 'Marque à mão quem confere peças, quem entra no rodízio, quem é atendente e quem pode aceitar produto para o site. O WhatsApp é o mesmo do login da pessoa.'));
+    let cEq;
+    if (r.fonteEquipe === 'acessos') {
+      cEq = el('div','card');cEq.append(el('h2','','Equipe da Esteira'),el('p','muted','As pessoas ativas com acesso à Esteira participam da conferência e do rodízio automaticamente.'));
+      const link=el('a','bt','Gerenciar em RH > Acessos');link.href='treinamentos.html?painel=rh';cEq.append(link);
+      if (!r.equipe.length) cEq.append(el('p','','Nenhuma pessoa com Esteira ativa. Atribua esse acesso no RH.'));
+      r.equipe.forEach(e => cEq.append(el('p','',e.nome+' · Rodízio ativo'+(e.aceitar?' · Aceita para o site':''))));
+    } else {
+    cEq = el('div', 'card'); cEq.append(el('h2', '', 'Equipe'), el('p', 'muted', 'Marque à mão quem confere peças, quem entra no rodízio, quem é atendente e quem pode aceitar produto para o site. O WhatsApp é o mesmo do login da pessoa.'));
     const salvarPessoa = async (dados, box) => { const x = await srv('/esteira/equipe', dados); if (!x.ok) return aviso(box, x.erro); telaConfig(); };
     r.equipe.filter((e) => e.ativo).forEach((e) => {
       const linha = el('div', 'linha-eq'); linha.append(el('b', '', e.nome + ' · ' + e.whats));
@@ -1927,16 +1934,18 @@
     const iW = el('input'); iW.type = 'tel'; iW.id = 'eq-whats'; iW.placeholder = 'WhatsApp com DDD';
     const bAdd = el('button', 'bt prim', 'Incluir na equipe'); bAdd.type = 'button'; bAdd.onclick = () => salvarPessoa({ whats: iW.value, nome: iN.value, confere: true, rodizio: true }, novo);
     novo.append(iN, iW, bAdd); cEq.append(novo);
+    }
     const rodizio = r.equipe.filter((e) => e.ativo && e.rodizio);
-    const sel = (valor, aoMudar) => { const s = el('select'); const o0 = el('option', '', '—'); o0.value = ''; s.append(o0); rodizio.forEach((e) => { const o = el('option', '', e.nome); o.value = e.whats; if (e.whats === valor) o.selected = true; s.append(o); }); s.onchange = () => aoMudar(s.value); return s; };
+    const sel = (valor, aoMudar) => { const s = el('select'); const o0 = el('option', '', r.fonteEquipe==='acessos'?'Automático':'—'); o0.value = ''; s.append(o0); rodizio.forEach((e) => { const o = el('option', '', e.nome); o.value = e.whats; if (e.whats === valor) o.selected = true; s.append(o); }); s.onchange = () => aoMudar(s.value); return s; };
     // Escala de hoje
-    const cHoje = el('div', 'card'); cHoje.append(el('h2', '', 'Escala de hoje (' + DIAS[new Date(r.hoje + 'T12:00:00').getDay()] + ')'), el('p', 'muted', 'Mude só hoje sem alterar o padrão da semana.'));
+    const cHoje = el('div', 'card'); cHoje.append(el('h2', '', 'Escala de hoje (' + DIAS[new Date(r.hoje + 'T12:00:00').getDay()] + ')'), el('p', 'muted', r.fonteEquipe === 'acessos' ? 'O rodízio é automático. Você pode ajustar a escala de hoje.' : 'Mude só hoje sem alterar o padrão da semana.'));
     r.config.funcoes.forEach((f) => { const x = r.escalaHoje[f] || { whats: '' }; const lb = el('label', 'campo'); lb.append(document.createTextNode(f + (x.alterado ? ' · alterado hoje' : ''))); lb.append(sel(x.whats, async (w) => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, whats: w }); if(y.foraDaTela)return; aviso(cHoje, y.ok ? 'Escala de hoje salva.' : y.erro, y.ok); })); cHoje.append(lb); if (x.alterado) { const v = el('button', 'bt', 'Voltar ao padrão em ' + f); v.type = 'button'; v.onclick = async () => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, voltarPadrao: true }); if(y.foraDaTela)return; if (y.ok) telaConfig(); else aviso(cHoje, y.erro); }; cHoje.append(v); } });
     // Padrão semanal
     const cPad = el('div', 'card'); cPad.append(el('h2', '', 'Padrão da semana'), el('p', 'muted', 'Repete toda semana. Só pessoas marcadas para o rodízio aparecem.'));
     const tb = el('div', 'tabela'), t = el('table'), th = el('tr'); th.append(el('th', '', 'Dia')); r.config.funcoes.forEach((f) => th.append(el('th', '', f))); t.append(th);
     DIAS.forEach((nome, dia) => { const tr = el('tr'); tr.append(el('td', '', nome)); r.config.funcoes.forEach((f) => { const atual = (r.escalaPadrao.find((x) => x.dia === dia && x.funcao === f) || {}).whats || ''; const td = el('td'); const s = sel(atual, async (w) => { const y = await srv('/esteira/escala', { tipo: 'padrao', dia, funcao: f, whats: w }); if(y.foraDaTela)return; aviso(cPad, y.ok ? 'Padrão salvo.' : y.erro, y.ok); }); s.setAttribute('aria-label', f + ' na ' + nome); td.append(s); tr.append(td); }); t.append(tr); });
     tb.append(t); cPad.append(tb);
+    if(r.fonteEquipe==='acessos'){cPad.replaceChildren(el('h2','','Rodízio automático'),el('p','muted','As funções se alternam a cada dia entre as pessoas ativas com Esteira. A escala semanal anterior fica preservada no histórico; ajuste somente o dia quando necessário.'));}
     // Funções e instruções + regras
     const cReg = el('div', 'card'); cReg.append(el('h2', '', 'Funções e regras da conferência'));
     const lF = el('label', 'campo'); lF.append(document.createTextNode('Funções do rodízio (separe por vírgula)')); const iF = el('input'); iF.type = 'text'; iF.id = 'cfg-funcoes'; iF.value = r.config.funcoes.join(', '); lF.append(iF);

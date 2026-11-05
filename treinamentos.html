@@ -510,6 +510,8 @@ details.manual-card[open]>summary::after{content:'▴';}
 .ds-ok{margin-top:4px; font-size:.8rem; color:var(--accent-txt); font-weight:600;}
 </style>
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
+<link rel="stylesheet" href="rh-permissoes.css?v=1">
+<script src="rh-permissoes.js?v=1"></script>
 </head>
 <body class="pg-treinamentos">
 
@@ -665,6 +667,7 @@ function perfilCompletude(user){
 var sessaoPrecisaAtualizar = false;
 var servidorNovo = false;
 var servidorChecado = false;
+var servidorModelos = false;
 var servidorAcessos = false; // v4: servidor com perfis e permissões (painel Acessos)
 var servidorQuizProtegido = false;
 var servidorImportarManualDoc = false;
@@ -682,6 +685,7 @@ async function detectarServidor(){
     var json = await res.json();
     servidorNovo = !!(json && json.ok && json.versao);
     servidorAcessos = !!(json && json.ok && json.acessos);
+    servidorModelos = !!(json && json.ok && json.acessosConfiguraveis);
     servidorProtegido = !!(json && json.ok && json.conteudoProtegido);
     servidorQuizProtegido = !!(json && json.ok && json.configQuizProtegida);
     servidorImportarManualDoc = !!(json && json.ok && json.importarManualDoc);
@@ -925,7 +929,7 @@ function buildQuizAttempt(level){
   return { title: quiz.title, questions: questions, id: novoIdTentativa_() };
 }
 
-var ACOES_GRAVAM_ = /^(tutorial_(salvar|excluir|publicar|resultado)|pratica_validar|certificado_(emitir|revogar)|excluir_|resetar_|salvar_|atualizar_|alterar_|criar_|acessos_(criar|excluir|status|permissao|perfil)|prova_|manual_(sincronizar|marcar)|sincronizar_|resultado$|registrar$|enviar_)/;
+var ACOES_GRAVAM_ = /^(tutorial_(salvar|excluir|publicar|resultado)|pratica_validar|certificado_(emitir|revogar)|excluir_|resetar_|salvar_|atualizar_|alterar_|criar_|acessos_(criar|excluir|status|permissao|perfil|modelos_salvar|modelos_excluir)|prova_|manual_(sincronizar|marcar)|sincronizar_|resultado$|registrar$|enviar_)/;
 var ACOES_LENTAS_ = /^(relatorio_equipe|treinamento_conteudo|manual_sincronizar_lote|sincronizar_manual|prova_sincronizar|prova_criar_doc|curriculos_foto|enviar_foto_perfil)$/;
 async function submitResult(payload){
   if (!DATA.appsScriptUrl) return;
@@ -1391,6 +1395,7 @@ function renderTopbar(){
 }
 function wireTopbar(){
   document.getElementById('brand-home').addEventListener('click', goHome);
+  var marca=document.getElementById('brand-home');marca.tabIndex=0;marca.setAttribute('role','button');marca.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();goHome();}});
   document.getElementById('btn-logout').addEventListener('click', logout);
   var btnAdmin = document.getElementById('btn-admin-rh');
   if (btnAdmin) btnAdmin.addEventListener('click', openAdminPanel);
@@ -2225,7 +2230,7 @@ async function fetchAdminData(){
 
 function renderAdminPanel(){
   var tabs = [];
-  if (servidorAcessos && temPerm('gerir_acessos')) tabs.push({ id:'acessos', label:'Acessos' });
+  if (servidorAcessos && temPerm('gerir_acessos')) { tabs.push({ id:'acessos', label:'Acessos' }); tabs.push({ id:'permissoes', label:'Permissões' }); }
   if (!servidorAcessos && temPerm('equipe_relatorio')) tabs.push({ id:'equipe', label:'Equipe & Permissões' });
   if (temPerm('equipe_relatorio')) tabs.push({ id:'desempenho', label:'Raio-X de Desempenho' });
   if (temPerm('gerir_manuais')) tabs.push({ id:'conteudo', label:'Conteúdo & Provas' });
@@ -2233,13 +2238,15 @@ function renderAdminPanel(){
   if (temPerm('dados_pessoais') || temPerm('gerir_acessos')) tabs.push({ id:'curriculos', label:'📄 Currículos' });
   if (!tabs.some(function(t){ return t.id === state.adminTab; })) state.adminTab = tabs.length ? tabs[0].id : 'equipe';
   var tabsHtml = tabs.map(function(t){
-    return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '" data-tab="' + t.id + '">' + t.label + '</button>';
+    return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '"' + (state.adminTab===t.id?' aria-current="page"':'') + ' data-tab="' + t.id + '">' + t.label + '</button>';
   }).join('');
   var body;
   if (state.adminTab === 'curriculos'){
     body = '<div class="admin-panel" style="padding:0;background:transparent;box-shadow:none"><iframe id="cv-frame" src="curriculos.html?embed=1' + (state.cvAbrir ? '&abrir=' + encodeURIComponent(state.cvAbrir) : '') + (state.cvAbrirAntigo ? '&aba=antigos' : '') + '" title="Currículos" style="width:100%;height:900px;border:0;display:block;background:transparent"></iframe></div>';
-  } else if (!state.adminData && state.adminTab !== 'acessos'){
+  } else if (!state.adminData && state.adminTab !== 'acessos' && state.adminTab !== 'permissoes'){
     body = '<div class="admin-panel">Carregando dados da equipe...</div>';
+  } else if (state.adminTab === 'permissoes'){
+    body = TKPermissoes.render();
   } else if (state.adminTab === 'acessos'){
     body = renderTabAcessos();
   } else if (state.adminTab === 'desempenho'){
@@ -2253,7 +2260,7 @@ function renderAdminPanel(){
   }
   return '<div class="admin-shell">' +
     '<div class="hero"><h1>Painel do RH / Admin</h1><p>Gestão da equipe, acompanhamento das avaliações e configuração dos manuais.</p></div>' +
-    '<div class="admin-tabs">' + tabsHtml + '</div>' +
+    '<nav class="admin-tabs" aria-label="Áreas do RH">' + tabsHtml + '</nav>' +
     body +
   '</div>';
 }
@@ -2265,10 +2272,13 @@ window.addEventListener('message', function(ev){
 function wireAdminPanel(){
   document.querySelectorAll('.admin-tab').forEach(function(btn){
     btn.addEventListener('click', function(){
+      if (state.adminTab === 'permissoes' && !TKPermissoes.podeSair()) return;
       state.adminTab = btn.getAttribute('data-tab'); if (state.adminTab === 'curriculos'){ state.cvAbrir = ''; state.cvAbrirAntigo = false; }
       render();
+      var ativo=document.querySelector('.admin-tab.active');if(ativo){ativo.focus({preventScroll:true});ativo.scrollIntoView({block:'nearest',inline:'nearest'});}
     });
   });
+  if (state.adminTab === 'permissoes'){ TKPermissoes.ligar(); return; }
   if (state.adminTab === 'curriculos') return;
   if (state.adminTab === 'acessos'){ wireTabAcessos(); return; }
   if (!state.adminData) return;
@@ -2461,7 +2471,7 @@ function renderTabDesempenho(){
       '<button type="button" class="btn" id="btn-export-csv">⬇️ Exportar relatório em CSV</button>' +
     '</div>' +
     '<div class="ds-filtros">' +
-      '<input type="search" id="ds-busca" class="ac-busca" placeholder="Buscar por nome ou WhatsApp" value="' + esc(e.busca) + '">' +
+      '<input type="search" id="ds-busca" class="ac-busca" aria-label="Buscar por nome ou WhatsApp" placeholder="Buscar por nome ou WhatsApp" value="' + esc(e.busca) + '">' +
       '<select id="ds-ordem" class="admin-sel" aria-label="Ordenar">' +
         '<option value="nome"' + (e.ordem === 'nome' ? ' selected' : '') + '>Ordem: nome (A–Z)</option>' +
         '<option value="recente"' + (e.ordem === 'recente' ? ' selected' : '') + '>Ordem: mais recentes</option>' +
@@ -2958,6 +2968,14 @@ function renderSemAcesso(){
   carregarAvisoCurriculo();
 }
 
+TKPermissoes.configurar({
+  req:function(d){return acessosReq(d);},
+  legados:function(){return msgAcessosReq_();},
+  disponivel:function(){return servidorModelos;},
+  verificar:async function(){await detectarServidor();},
+  atualizado:function(){if(state.acessos){state.acessos.carregado=false;state.acessos.filtro=null;}}
+});
+
 /* ---------------- v4: painel "Acessos" (Admin total) ---------------- */
 function acessosReq(extra){
   return submitResult(Object.assign({ whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password }, extra));
@@ -2983,6 +3001,7 @@ function msgAcessosHtml_(p){
   return '<div class="ac-grupo"><div class="ac-grupo-t">Ferramentas de Mensagens</div><p>Os acessos abaixo valem para o site e o aplicativo.</p>'+Object.keys(m.ferramentas).map(function(k){
     var def=perfis.indexOf('equipecatalogo1')!==-1&&['funil','metricas','exportar','configuracoes'].indexOf(k)===-1;
     var overrides=perfis.map(function(n){return (m.regras.perfis||{})[n];}).filter(function(r){return r&&typeof r[k]==='boolean';});if(overrides.length)def=overrides.some(function(r){return r[k];});
+    if (servidorModelos) def=!!permObj(p.permissoes)['msg_'+k];
     var valor=typeof pessoal[k]==='boolean'?String(pessoal[k]):'';
     return '<label class="ac-perm" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:48px">'+esc(m.ferramentas[k])+'<select data-msg-chave="'+esc(k)+'" style="min-height:48px;max-width:100%"'+(admin?' disabled':'')+'><option value=""'+(!valor?' selected':'')+'>Perfil: '+(admin||def?'permitido':'não permitido')+'</option><option value="true"'+(valor==='true'?' selected':'')+'>Permitir para esta pessoa</option><option value="false"'+(valor==='false'?' selected':'')+'>Não permitir para esta pessoa</option></select></label>';
   }).join('')+(admin?'<p>Admin total mantém todos os acessos.</p>':'')+'</div>';
@@ -3044,7 +3063,7 @@ function acessosCard(p){
   }).join('');
   var semPerfilConhecido = meus.length && !conhecidos.length ? '<div class="ac-sub">Perfil antigo: ' + esc(p.perfil) + '</div>' : '';
   var grupos = [], porGrupo = {};
-  a.permissoes.forEach(function(x){ if (!porGrupo[x.grupo]){ porGrupo[x.grupo] = []; grupos.push(x.grupo); } porGrupo[x.grupo].push(x); });
+  a.permissoes.filter(function(x){return !servidorModelos || x.chave.indexOf('msg_')!==0;}).forEach(function(x){ if (!porGrupo[x.grupo]){ porGrupo[x.grupo] = []; grupos.push(x.grupo); } porGrupo[x.grupo].push(x); });
   var permsHtml = aberto ? ('<div class="ac-perms">' + grupos.map(function(g){
     return '<div class="ac-grupo"><div class="ac-grupo-t">' + esc(g) + '</div>' + porGrupo[g].map(function(x){
       var muda = base && (!!mine[x.chave] !== !!base[x.chave]);
@@ -3058,8 +3077,8 @@ function acessosCard(p){
         '<div class="ac-sub">' + esc(p.whatsapp) + ' · <span class="' + (ativo ? 'badge-ativo' : 'badge-inativo') + '">' + (ativo ? 'Ativo' : 'Inativo') + '</span></div>' +
         '<div class="ac-sub">Cadastro: ' + (p.cadastro ? esc(acDataBr(p.cadastro)) : '<em>sem data (conta antiga)</em>') + (p.curriculo === 'enviado' ? ' · <span style="color:#198754;font-weight:700">📄 currículo feito</span>' : (p.curriculo === 'andamento' ? ' · 📄 currículo em andamento' : (p.curriculo === 'menor' ? ' · 📄 menor de 18' : ''))) + '</div></div>' +
       '<div class="ac-actions">' +
-        '<div class="ac-perfis" role="group" aria-label="Perfis de ' + esc(p.nome || 'esta pessoa') + '">' + chips + '</div>' + semPerfilConhecido +
-        '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
+        '<details class="ac-perfis-detalhes"><summary>Acessos: ' + esc(meus.join(', ') || 'Cliente') + '</summary><div class="ac-perfis" role="group" aria-label="Perfis de ' + esc(p.nome || 'esta pessoa') + '">' + chips + '</div></details>' + semPerfilConhecido +
+        '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Ajustes individuais (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
         (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
         (p.curriculo === 'andamento' || p.curriculo === '' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">Cobrar currículo</a>' : '') +
         (p.curriculoAntigo ? '<button type="button" class="admin-mini-btn ac-vercvantigo">📄 Currículo antigo</button>' : '') +
@@ -3162,14 +3181,14 @@ function renderTabAcessos(){
   var perfOpts = a.perfis.map(function(x){ return '<option value="' + esc(x.nome) + '">' + esc(x.nome) + '</option>'; }).join('');
   var dicas = a.perfis.length ? ('<details class="ac-dicas"><summary>O que cada perfil libera</summary>' + a.perfis.map(function(x){ return '<p><strong>' + esc(x.nome) + '</strong> — ' + esc(x.desc || '') + '</p>'; }).join('') + '</details>') : '';
   return '<div class="admin-panel">' +
-    '<details class="ajuda-rh"><summary>Como funciona? (toque para ver)</summary><p class="sub">Escolha um <strong>perfil</strong> para marcar as permissões padrão. Depois, dentro de <em>Permissões</em>, marque ou desmarque o que quiser para aquela pessoa (✱ = diferente do padrão do perfil). Vale na hora, no portal e no catálogo.</p></details>' + dicas +
+    '<details class="ajuda-rh"><summary>Como funciona? (toque para ver)</summary><p class="sub">Atribua os acessos de cada pessoa abaixo. Configure o que cada acesso permite na aba <strong>Permissões</strong>. Use <em>Ajustes individuais</em> somente para exceções desta pessoa (✱ = diferente do acesso).</p></details>' + dicas +
     '<div class="admin-toolbar">' +
-      '<input type="search" id="ac-busca" placeholder="Buscar por nome ou WhatsApp" value="' + esc(a.busca) + '" class="ac-busca">' +
+      '<input type="search" id="ac-busca" aria-label="Buscar por nome ou WhatsApp" placeholder="Buscar por nome ou WhatsApp" value="' + esc(a.busca) + '" class="ac-busca">' +
       '<span><button type="button" class="admin-mini-btn" id="ac-nova">+ Nova pessoa</button><button type="button" class="admin-mini-btn" id="ac-log">Histórico</button><button type="button" class="admin-mini-btn" id="ac-recarregar">↻ Atualizar</button></span>' +
     '</div>' +
-    '<div class="ac-filtro" id="ac-filtro">' + filtroAcessosHtml() + '</div>' +
+    '<details class="ac-ferramentas"><summary>Filtrar e ordenar pessoas</summary><div class="ac-filtro" id="ac-filtro">' + filtroAcessosHtml() + '</div>' +
     '<div class="ac-ordem"><label>Ordenar: <select id="ac-ordem" class="admin-sel"><option value="nome"' + (a.ordem === 'nome' ? ' selected' : '') + '>Nome (A–Z)</option><option value="novos"' + (a.ordem === 'novos' ? ' selected' : '') + '>Cadastro: mais recentes</option><option value="antigos"' + (a.ordem === 'antigos' ? ' selected' : '') + '>Cadastro: mais antigos</option></select></label> ' +
-      '<label>Currículo: <select id="ac-fcv" class="admin-sel"><option value="todos"' + (a.fCv === 'todos' ? ' selected' : '') + '>Todos</option><option value="com"' + (a.fCv === 'com' ? ' selected' : '') + '>Só quem já fez</option><option value="andamento"' + (a.fCv === 'andamento' ? ' selected' : '') + '>Só em andamento</option><option value="sem"' + (a.fCv === 'sem' ? ' selected' : '') + '>Só quem não fez</option></select></label></div>' +
+      '<label>Currículo: <select id="ac-fcv" class="admin-sel"><option value="todos"' + (a.fCv === 'todos' ? ' selected' : '') + '>Todos</option><option value="com"' + (a.fCv === 'com' ? ' selected' : '') + '>Só quem já fez</option><option value="andamento"' + (a.fCv === 'andamento' ? ' selected' : '') + '>Só em andamento</option><option value="sem"' + (a.fCv === 'sem' ? ' selected' : '') + '>Só quem não fez</option></select></label></div></details>' +
     '<div class="ac-form" id="ac-form-nova"' + (a.criando ? '' : ' hidden') + '>' +
       '<input id="ac-n-nome" placeholder="Nome"><input id="ac-n-whats" placeholder="WhatsApp com DDD" inputmode="tel"><input id="ac-n-senha" placeholder="Senha (mín. 4)">' +
       '<select id="ac-n-perfil" class="admin-sel">' + perfOpts + '</select>' +
@@ -3332,6 +3351,7 @@ function sincNav(){
 
 /* ---------------- root render ---------------- */
 function render(){
+  document.body.classList.toggle('rh-admin', state.view === 'admin');
   sincNav();
   if (state.view === 'login' || !state.user){ renderLogin(); return; }
   if (state.view === 'home'){ goHome(); return; }

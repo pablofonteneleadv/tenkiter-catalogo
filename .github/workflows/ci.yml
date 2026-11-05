@@ -222,6 +222,7 @@ jobs:
           node tests/worker_esteira.js
           # v7.51.0: pedido de fotos, caixa de fotos da equipe e preparação sem tarefa duplicada
           node tests/worker_esteira_fotos.js
+          node tests/worker_acessos_modelos.js
           node tests/worker_familias.js
           # v7.49.0: fotos postadas (por foto, inclusive colagem) e mapa público de fotos novas
           node tests/worker_fotos_postadas.js
@@ -260,6 +261,10 @@ jobs:
       - name: Pedido idempotente e compatibilidade com backend antigo
         if: github.event_name == 'pull_request'
         run: python3 tests/rodar_tudo.py --suite jornada_pedido.py --json-report tests/saida/pedido-ci.json
+
+      - name: Permissões do RH e herança dos acessos
+        if: github.event_name == 'pull_request'
+        run: python3 tests/rodar_tudo.py --suite rh_modelos.py --suite acessos_perfis.py --suite mensagens_acessos_rh.py --json-report tests/saida/rh-ci.json
 
       - name: Jornada de edição de tamanhos no atendimento
         if: github.event_name == 'pull_request'

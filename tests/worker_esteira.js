@@ -12,7 +12,7 @@ function d1() {
 }
 const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
 (async () => {
-  const W = await import(tmp), w = W.default;
+  const W = await import(require('url').pathToFileURL(tmp).href), w = W.default;
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const kv = new Map();
@@ -47,7 +47,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   // acesso
   chk('sem sessão é recusado', (await w.fetch(new Request('https://ig.fake/esteira/hoje'), env, ctx)).status === 401);
   const v = await A(VISITA, 'GET', '/esteira/hoje');
-  chk('quem não está na equipe recebe aviso em português', v.r.status === 403 && /equipe da Esteira/.test(v.j.erro), v.j);
+  chk('quem não está na equipe recebe aviso em português', v.r.status === 403 && /Esteira/.test(v.j.erro), v.j);
   chk('funcionária não abre configurações', (await A(IARA, 'GET', '/esteira/config')).r.status === 403);
 
   // configurações (Admin total)
