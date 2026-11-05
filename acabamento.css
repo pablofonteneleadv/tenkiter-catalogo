@@ -243,7 +243,7 @@ body .btn-secundario-cta { border-radius: var(--tk-raio); }
   body .filtros details.selecao-expansivel summary { font-size: 0.95rem; font-weight: 600; }
   body .filtros details.selecao-expansivel .chip { border-radius: var(--tk-raio-p); box-shadow: none; font-weight: 500; }
   body .filtros details.selecao-expansivel .chip.selecionado { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; box-shadow: none; }
-  body .filtros .btn-compartilhar-filtros { border-radius: var(--tk-raio-p); display: inline-flex; align-items: center; gap: 6px; }
+  body .filtros .btn-compartilhar-filtros { min-height: 44px; font-size: 0.875rem; border-radius: var(--tk-raio-p); display: inline-flex; align-items: center; gap: 6px; }
   body .filtros .fx-ver { background: var(--laranja); border-radius: var(--tk-raio); font-size: 1rem; font-weight: 700; min-height: 52px; }
 }
 body .btn-compartilhar-filtros { min-height: 44px; font-size: 0.875rem; }

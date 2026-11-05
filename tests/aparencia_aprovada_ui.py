@@ -53,11 +53,18 @@ try:
         share=pg.locator('#btn-share-busca');expect(share).to_be_visible();fits(pg)
         shares=touch_targets(pg,'.btn-compartilhar-filtros,.linha-share-busca button');assert shares and all(t['h']>=44 and t['w']>=44 for t in shares),shares
         pg.screenshot(path=str(OUT/f'loja-{w}.png'));share.click();expect(pg.locator('#sel-link')).to_have_value(re.compile(r'^https://tenkitermodas\.com\.br/'));pg.locator('#sel-nativo').click();pg.wait_for_function('()=>window.__links.length>0');assert 'https://tenkitermodas.com.br/' in pg.evaluate('window.__links[0]');pg.locator('#btn-fechar-selecao').click();expect(pg.locator('#sel-link')).to_be_hidden()
+        drawer=pg.locator('#btn-share-filtros')
+        if w<600:pg.locator('#btn-filtros-toggle').click()
+        expect(drawer).to_be_visible()
+        drawer_targets=touch_targets(pg,'.btn-compartilhar-filtros');assert drawer_targets and all(t['h']>=44 and t['w']>=44 for t in drawer_targets),drawer_targets
+        assert drawer.evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')>=14
+        drawer.click();expect(pg.locator('#sel-link')).to_be_visible();pg.locator('#btn-fechar-selecao').click()
+        if w<600:pg.locator('#fx-fechar').click()
         pg.screenshot(path=str(OUT/f'loja-{w}.png'));pg.locator('#btn-limpar-filtros-topo').click();expect(pg.locator('#busca')).to_have_value('');fits(pg)
         assert not errs,errs;c.close()
         # O acabamento não pode revelar ferramentas de gestão ao perfil simplificado.
         c=context(b,w,h,['catalogo_admin','catalogo_cadastrar','painel_simples','cliente']);pg=c.new_page();pg.goto(os.environ['TK_BASE']+'admin.html');pg.wait_for_selector('#lista-produtos .produto');expect(pg.locator('[data-atalho="ferramentas"]')).to_be_hidden();fits(pg);c.close()
-        measurements.append({'largura':w,'altura':h,'ferramentas':targets,'compartilhar':shares,'overflow':False,'csv':True,'teclado':True,'compartilhar_busca':True,'perfil_simples_preservado':True})
+        measurements.append({'largura':w,'altura':h,'ferramentas':targets,'compartilhar':shares,'compartilhar_painel_filtros':drawer_targets,'overflow':False,'csv':True,'teclado':True,'compartilhar_busca':True,'perfil_simples_preservado':True})
     b.close()
 finally:
  server.shutdown();server.server_close()
