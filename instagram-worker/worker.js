@@ -2214,7 +2214,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       const ajuste = proximoLivreMulti(cfg, bs, ocup, fimDaSequencia_(cfg, bs, ocup, Date.now() + 60000));
       const quando = new Date(ajuste.t).toISOString(), em = agora();
       await env.DB.batch([
-        env.DB.prepare("INSERT OR IGNORE INTO postagem (tipo,modo,legenda,midias,produto,template,link,agendado_em,status,criado_por,criado_em,atualizado_em,grupo,seq,canal,urgente,repostado_de,fotos_origem) SELECT tipo,modo,legenda,midias,produto,template,link,?,'agendado',?,?,?,grupo,1,?,0,id,fotos_origem FROM postagem WHERE id=? AND status IN ('erro','publicado')").bind(quando, String(b.por || 'Repostagem').slice(0,60), em, em, canalNovo, id),
+        env.DB.prepare("INSERT OR IGNORE INTO postagem (tipo,modo,legenda,midias,produto,template,link,agendado_em,status,criado_por,criado_em,atualizado_em,grupo,seq,canal,urgente,repostado_de,fotos_origem,origem_midia,intervalo_ms) SELECT tipo,modo,legenda,midias,produto,template,link,?,'agendado',?,?,?,grupo,1,?,0,id,fotos_origem,origem_midia,intervalo_ms FROM postagem WHERE id=? AND status IN ('erro','publicado')").bind(quando, String(b.por || 'Repostagem').slice(0,60), em, em, canalNovo, id),
         env.DB.prepare("UPDATE postagem SET status='cancelado',atualizado_em=? WHERE id=? AND status='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id),
         env.DB.prepare("UPDATE postagem SET zap_estado='repostado',atualizado_em=? WHERE id=? AND status='publicado' AND zap_estado='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id)
       ]);

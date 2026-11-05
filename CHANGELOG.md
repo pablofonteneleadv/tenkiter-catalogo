@@ -12,6 +12,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.55.6] - 2026-11-05
+
+- Repostagem preserva a origem da mídia e o intervalo editorial, mantendo o vínculo do destino recuperado com o bloco original.
+
+
 ## [7.55.5] - 2026-11-05
 
 - Recibos Wafly ausentes (404/REQUEST_NOT_FOUND) preservam a incerteza e o identificador original, sem liberar reenvio automático por ausência de recibo.
