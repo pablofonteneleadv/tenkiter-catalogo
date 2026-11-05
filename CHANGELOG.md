@@ -12,6 +12,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.55.5] - 2026-11-05
+
+- Recibos Wafly ausentes (404/REQUEST_NOT_FOUND) preservam a incerteza e o identificador original, sem liberar reenvio automático por ausência de recibo.
+
+
 ## [7.55.4] - 2026-11-05
 
 - Alterar Horário ou Próximo livre calcula e grava um horário comum para todos os destinos pendentes da mesma mídia, incluindo registros antigos identificáveis. Evita que um canal fique16:00 e outro16:33 por ajustes separados.
