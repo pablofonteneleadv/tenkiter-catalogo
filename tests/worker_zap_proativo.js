@@ -129,7 +129,9 @@ function d1() {
   const longe = await nova('whatsapp', 'agendado', { agendado_em: iso(3 * 24 * 60) });
   const outro = await nova('instagram', 'agendado', { agendado_em: iso(2) });
   const semConf = await nova('whatsapp', 'publicado', { zap_estado: 'sem_confirmacao', ig_id: 'tkpost-x', publicado_em: iso(-20) });
+  await DB.prepare("UPDATE postagem SET origem_midia='original-preservado',intervalo_ms=1200000 WHERE id=?").bind(semConf).run();
   let rp = await A('POST', '/post/repostar', { id: semConf, confirmarRisco: true });
+  chk('repostagem preserva vínculo com a mídia e intervalo editorial', rp.j.ok && (await L(rp.j.id)).origem_midia==='original-preservado' && (await L(rp.j.id)).intervalo_ms===1200000, await L(rp.j.id));
   const tRep = Date.parse(rp.j.quando), tUlt = Date.parse((await L(leva[4])).agendado_em);
   chk('"Publicado sem confirmação" pode ser repostado e vai para DEPOIS da leva já agendada do canal', rp.j.ok && tRep >= tUlt + 300000 - 1000 && tRep < Date.parse((await L(longe)).agendado_em), [rp.j, new Date(tUlt).toISOString()]);
   chk('repostagem não mexe na ordem das agendadas nem na origem publicada', (await Promise.all(leva.map(L))).every((x, i) => Math.abs(Date.parse(x.agendado_em) - (Date.now() + 5 * (i + 1) * 60000)) < 5000) && (await L(semConf)).status === 'publicado', null);

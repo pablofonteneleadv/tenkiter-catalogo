@@ -56,7 +56,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   const repetido=await chamar('/post/reagendar','POST',{id:linhas[1].id,quando:novo});
   assert.equal(repetido.j.quando,novo,'Clientes antigos repetindo por destino não adiam os próprios irmãos');
   const conflito=await chamar('/post/reagendar','POST',{id:alvo.id,quando:linhas[4].agendado_em});
-  assert.equal(conflito.status,200);assert.notEqual(conflito.j.quando,linhas[4].agendado_em);
+  assert.equal(conflito.status,200);assert.equal(conflito.j.quando,linhas[4].agendado_em,'Antecipar insere o bloco no horário pedido e desloca os seguintes');
   assert.equal(new Set(sqlite.prepare('SELECT agendado_em FROM postagem WHERE origem_midia=?').all(origem).map(x=>x.agendado_em)).size,1,'Conflito de um canal ajusta todos juntos');
   sqlite.prepare("UPDATE postagem SET status='publicado',publicado_em=? WHERE id=?").run(novo,linhas[0].id);
   const parcial=await chamar('/post/reagendar','POST',{id:linhas[1].id,quando:novo});assert.equal(parcial.status,200);
@@ -89,6 +89,25 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert.equal(sqlite.prepare('SELECT agendado_em FROM postagem WHERE id=?').get(incerto).agendado_em,tarde);
   assert(sqlite.prepare('SELECT valor FROM cfg WHERE chave=?').get(aplicado.j.backup),'Backup privado recuperável antes da escrita');
   sqlite.prepare('DELETE FROM postagem').run();
+  // Seleção de mídias entra no meio da fila cheia; não pula para amanhã.
+  await chamar('/post/config','POST',{config:{pausaAtiva:true,pausaDe:'22:00',pausaAte:'06:30'}});
+  const pedido=new Date(Date.now()+86400000);pedido.setUTCHours(21,45,0,0);const pedidoMs=pedido.getTime(),sel=[];
+  for(let i=0;i<9;i++)for(const c of ['instagram','grupo','whatsapp2'])inserir('vizinha-'+i,c,'agendado',new Date(pedidoMs+i*1200000).toISOString());
+  for(let i=0;i<2;i++)for(const c of ['instagram','grupo','whatsapp2'])sel.push(inserir('selecao-'+i,c,'agendado',new Date(pedidoMs+86400000+i*1200000).toISOString()));
+  sqlite.prepare("UPDATE postagem SET intervalo_ms=1800000 WHERE origem_midia='selecao-1'").run();
+  const recuperado=inserir('recuperacao','whatsapp2','agendado',new Date(pedidoMs-1500000).toISOString());sqlite.prepare('UPDATE postagem SET repostado_de=99999,intervalo_ms=120000 WHERE id=?').run(recuperado);
+  const antesLote=sqlite.prepare('SELECT * FROM postagem ORDER BY id').all();
+  const prev=await chamar('/post/reagendar-lote','POST',{ids:[sel[0],sel[3]],quando:pedido.toISOString(),simular:true});assert.equal(prev.status,200,JSON.stringify(prev));assert.deepEqual(sqlite.prepare('SELECT * FROM postagem ORDER BY id').all(),antesLote);
+  const loteHora=await chamar('/post/reagendar-lote','POST',{ids:[sel[0],sel[3]],quando:pedido.toISOString()});assert.equal(loteHora.status,200,JSON.stringify(loteHora));assert.equal(loteHora.j.quando,pedido.toISOString());assert.equal(loteHora.j.midias,2);assert.equal(loteHora.j.destinos,6);
+  for(let i=0;i<2;i++){const xs=sqlite.prepare('SELECT agendado_em FROM postagem WHERE origem_midia=?').all('selecao-'+i);assert.equal(new Set(xs.map(x=>x.agendado_em)).size,1);assert.equal(Date.parse(xs[0].agendado_em),pedidoMs+i*1800000);}
+  let anterior=pedidoMs+1800000;for(let i=0;i<9;i++){const xs=sqlite.prepare('SELECT agendado_em FROM postagem WHERE origem_midia=?').all('vizinha-'+i);assert.equal(new Set(xs.map(x=>x.agendado_em)).size,1);assert(Date.parse(xs[0].agendado_em)>=anterior+1200000);anterior=Date.parse(xs[0].agendado_em);}
+  assert.equal(sqlite.prepare('SELECT agendado_em FROM postagem WHERE id=?').get(recuperado).agendado_em,new Date(pedidoMs-1500000).toISOString(),'Exceção de recuperação não é deslocada');
+  assert(sqlite.prepare('SELECT valor FROM cfg WHERE chave=?').get(loteHora.j.backup));
+  const guarda=sqlite.prepare('SELECT * FROM postagem ORDER BY id').all();sqlite.prepare("INSERT INTO postagem_grupo_recibo(postagem_id,ordem,estado) VALUES(?,0,'enviando')").run(sel[1]);
+  assert.equal((await chamar('/post/reagendar-lote','POST',{ids:[sel[0],sel[3]],quando:new Date(pedidoMs+600000).toISOString()})).status,409);assert.deepEqual(sqlite.prepare('SELECT * FROM postagem ORDER BY id').all(),guarda);
+  sqlite.prepare('DELETE FROM postagem_grupo_recibo').run();const originalBatch=DB.batch;DB.batch=async xs=>{sqlite.prepare("UPDATE postagem SET atualizado_em='concorrente' WHERE origem_midia='vizinha-0'").run();return originalBatch(xs)};
+  const antesCorrida=sqlite.prepare('SELECT id,agendado_em FROM postagem ORDER BY id').all();assert.equal((await chamar('/post/reagendar-lote','POST',{ids:[sel[0]],quando:new Date(pedidoMs+600000).toISOString()})).status,409);DB.batch=originalBatch;assert.deepEqual(sqlite.prepare('SELECT id,agendado_em FROM postagem ORDER BY id').all(),antesCorrida);
+  sqlite.prepare('DELETE FROM postagem').run();await chamar('/post/config','POST',{config:{pausaAtiva:false}});
   const legado1=inserir('','instagram','agendado',cedo),legado2=inserir('','whatsapp2','agendado',tarde);
   sqlite.prepare("UPDATE postagem SET criado_em='2026-11-05T12:01:00Z',midias=? WHERE id IN (?,?)").run(JSON.stringify([{url:'https://midia.test/legado.jpg',tipo:'imagem'}]),legado1,legado2);
   const legacy=await chamar('/post/reagendar','POST',{id:legado1,quando:novo});assert.equal(legacy.status,200,JSON.stringify(legacy));
