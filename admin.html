@@ -608,7 +608,7 @@
   /* o menu ⋯ saía cortado: content-visibility recorta o que passa da borda do cartão; com o menu aberto o cartão deixa de recortar */
   .produto:has(details.mais[open]) { content-visibility: visible; z-index: 20; position: relative; }
   #btn-bulk-postar { background: #c13584; color: #fff; }
-  .sem-cadastrar #btn-bulk-postar, .sem-cadastrar .btn-postar { display: none !important; }
+  .sem-postador #btn-bulk-postar, .sem-postador .btn-postar { display: none !important; }
   details.mais { position: absolute; top: 10px; right: 10px; z-index: 5; }
   .produto-info .codigo, .produto-info .nome { padding-right: 38px; }
   details.mais > summary { list-style: none; cursor: pointer; width: 34px; height: 31px; border-radius: 9px; background: #eee; color: #333; font-weight: 800; display: flex; align-items: center; justify-content: center; }
@@ -633,7 +633,7 @@
   /* v7.50.0: logado pelo guardado do aparelho, até o servidor confirmar: ações sensíveis ficam escondidas (o servidor confere toda chamada de qualquer jeito) */
   body.sessao-conferindo .btn-excluir, body.sessao-conferindo #btn-abrir-conexoes, body.sessao-conferindo #btn-importar-csv, body.sessao-conferindo #details-config, body.sessao-conferindo #btn-abrir-push { display: none !important; }
   .sem-auditoria #btn-abrir-metricas, .sem-precos #btn-importar-csv, .sem-gerir #btn-abrir-conexoes, .sem-gerir #btn-abrir-mensagens { display: none !important; }
-  .sem-cadastrar #btn-abrir-postagens, .sem-cadastrar #btn-abrir-fotoia { display: none !important; }
+  .sem-postador #btn-abrir-postagens, .sem-fotoia #btn-abrir-fotoia { display: none !important; }
   /* Ferramentas do gestor: cada bloco só para quem tem a permissão dele (o servidor já barra; aqui some da tela) */
   .sem-auditoria #stats-panel, .sem-auditoria #btn-exportar-csv, .sem-gerir #details-config, .sem-gerir #details-log-debug { display: none !important; }
   /* v4.9 — "Painel simplificado" (perfil Equipe catálogo 1): fica só cadastro, lista e Postagens. Nada é apagado: quem tem outra permissão (Encarregado, Admin…) não cai aqui (ver aplicarPermissoes). */
@@ -1784,6 +1784,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   ];
 
   function aplicarPermissoes(usuario) {
+    ['postador','fotoia'].forEach(k => document.body.classList.toggle('sem-'+k, !temPermissao(usuario,'gerir_acessos') && !(usuario && usuario.acessosConfiguraveis ? temPermissao(usuario,k) : temPermissao(usuario,'catalogo_cadastrar'))));
     NOMES_PERMISSOES.forEach(([classe, chave]) => document.body.classList.toggle(classe, !temPermissao(usuario, chave)));
     // Painel simplificado: só quem tem a permissão E nenhuma de gestão (quem soma outro perfil maior continua vendo tudo)
     document.body.classList.toggle('painel-simples', temPermissao(usuario, 'painel_simples') && !['catalogo_excluir', 'catalogo_precos', 'catalogo_auditoria', 'catalogo_push', 'gerir_acessos', 'equipe_relatorio', 'dados_pessoais', 'gerir_manuais'].some(k => temPermissao(usuario, k)));

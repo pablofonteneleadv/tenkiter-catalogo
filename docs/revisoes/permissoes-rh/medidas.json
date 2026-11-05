@@ -1,0 +1,95 @@
+[
+  {
+    "viewport": [
+      390,
+      844
+    ],
+    "cabecalho": 64,
+    "barra_inferior": 51.25,
+    "primeira_pessoa_y": 578.796875,
+    "alvos_permissoes": [
+      {
+        "nome": "← Todos os acessos",
+        "w": 182.109375,
+        "h": 48
+      },
+      {
+        "nome": "Salvar acesso",
+        "w": 134.078125,
+        "h": 48
+      },
+      {
+        "nome": "Cancelar",
+        "w": 97.375,
+        "h": 48
+      },
+      {
+        "nome": "Excluir acesso",
+        "w": 139.078125,
+        "h": 48
+      }
+    ]
+  },
+  {
+    "viewport": [
+      412,
+      915
+    ],
+    "cabecalho": 64,
+    "barra_inferior": 51.25,
+    "primeira_pessoa_y": 578.796875,
+    "alvos_permissoes": [
+      {
+        "nome": "← Todos os acessos",
+        "w": 182.109375,
+        "h": 48
+      },
+      {
+        "nome": "Salvar acesso",
+        "w": 134.078125,
+        "h": 48
+      },
+      {
+        "nome": "Cancelar",
+        "w": 97.375,
+        "h": 48
+      },
+      {
+        "nome": "Excluir acesso",
+        "w": 139.078125,
+        "h": 48
+      }
+    ]
+  },
+  {
+    "viewport": [
+      1440,
+      900
+    ],
+    "cabecalho": 64,
+    "barra_inferior": 51.25,
+    "primeira_pessoa_y": 544.390625,
+    "alvos_permissoes": [
+      {
+        "nome": "← Todos os acessos",
+        "w": 182.109375,
+        "h": 48
+      },
+      {
+        "nome": "Salvar acesso",
+        "w": 134.078125,
+        "h": 48
+      },
+      {
+        "nome": "Cancelar",
+        "w": 97.375,
+        "h": 48
+      },
+      {
+        "nome": "Excluir acesso",
+        "w": 139.078125,
+        "h": 48
+      }
+    ]
+  }
+]

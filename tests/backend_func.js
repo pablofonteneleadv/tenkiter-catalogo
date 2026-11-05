@@ -65,6 +65,7 @@ const L = perfilDe('85993333333'); aba.d[L.__row - 1][5] = 'Cliente, Aluno, Equi
 p = permsDe('85993333333');
 ok(p.portal && p.catalogo_cadastrar, 'linha com perfil "A, B" e caixinhas vazias: vale a soma', p);
 aba.d[L.__row - 1][6 + chaves.indexOf('portal')] = false;
+aba.d[L.__row - 1][aba.d[0].indexOf('ajustes_acesso')] = ''; // linha legada sem ajustes JSON
 ok(permsDe('85993333333').portal === false && permsDe('85993333333').catalogo_cadastrar === true, 'caixinha desmarcada à mão ainda vale por cima do perfil');
 
 console.log('\n[travas continuam]');

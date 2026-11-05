@@ -18,7 +18,7 @@ function localizar(prefixo, minimo = [0, 0]) {
     });
     if (arquivos.length) {
       const nome = arquivos.at(-1), caminho = path.join(pasta, nome);
-      return { pasta, arquivos, nome, caminho, fonte: fs.readFileSync(caminho, 'utf8') };
+      return { pasta, arquivos, nome, caminho, fonte: fs.readFileSync(caminho, 'utf8').replace(/\r\n/g, '\n') };
     }
   }
   throw new Error('Backend privado ' + prefixo + ' ausente. Configure TK_COFRE_DIR para o Cofre; não copie .gs.txt para o repositório público.');

@@ -1,0 +1,82 @@
+/* RH/Admin: escopo local; mantém os tokens e componentes da equipe. */
+body.rh-admin{font-family:Inter,system-ui,sans-serif;--bg:#f5f1e8;--surface:#fff;--surface-2:#f1eee7;--text:#1c1b18;--muted:#5f5b53;--border:#d5d0c6;color:#1c1b18;background:#f5f1e8;color-scheme:light}
+body.rh-admin #btn-admin-rh{display:none}
+body.rh-admin .topbar{flex-wrap:nowrap}
+body.rh-admin .topbar .brand{font-size:clamp(15px,4vw,18px);min-width:0}
+body.rh-admin #brand-home{min-height:48px}
+body.rh-admin #brand-home:focus-visible{outline:3px solid #e67e22;outline-offset:3px}
+body.rh-admin .avatar-menu-btn{min-width:48px;min-height:48px}
+body.rh-admin .admin-shell{max-width:1120px;margin:auto;padding:24px 24px calc(104px + env(safe-area-inset-bottom))}
+body.rh-admin .hero{margin:0 0 20px;padding:0;text-align:left}
+body.rh-admin .hero h1{font-size:clamp(24px,3vw,32px);line-height:1.2;margin:0 0 8px}
+body.rh-admin .hero p{font-size:16px;line-height:1.5;margin:0;color:#5f5b53;max-width:65ch}
+body.rh-admin .admin-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:8px;padding:0 0 8px;margin:0 0 20px;border-bottom:1px solid #d5d0c6;scrollbar-width:thin}
+body.rh-admin .admin-tab{flex:0 0 auto;min-height:48px;padding:10px 16px;border:1px solid transparent;border-radius:8px;font:600 15px Inter,sans-serif;color:#524f48;background:transparent;white-space:nowrap}
+body.rh-admin .admin-tab.active{background:#171612;color:#fff;border-color:#171612}
+body.rh-admin .admin-panel{padding:24px;border:1px solid #d5d0c6;border-radius:12px;box-shadow:none;background:#fff;min-width:0}
+body.rh-admin :is(button,input,select,textarea,a,summary):focus-visible{outline:3px solid #a64d00;outline-offset:3px}
+body.rh-admin :is(button,.admin-mini-btn,select,summary){min-height:44px}
+body.rh-admin :is(input:not([type=checkbox]),select,textarea){max-width:100%;box-sizing:border-box;font-size:16px}
+body.rh-admin .admin-toolbar{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0}
+body.rh-admin .admin-toolbar>input{flex:1 1 260px;min-width:0;margin:0}
+body.rh-admin .admin-toolbar>span{display:flex;flex-wrap:wrap;gap:8px}
+body.rh-admin .ac-ordem{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+body.rh-admin .ac-ordem label{display:flex;align-items:center;gap:8px;flex:1 1 240px}
+body.rh-admin .ac-ordem select{flex:1;min-width:0;width:auto}
+body.rh-admin .ac-card{box-shadow:none;border:1px solid #dedad1;padding:16px;border-radius:8px;margin-top:12px}
+body.rh-admin .ac-head{align-items:flex-start;gap:12px}
+body.rh-admin .ac-id{min-width:0;overflow-wrap:anywhere}
+body.rh-admin .ac-actions{gap:8px;min-width:0;flex-basis:100%;width:100%}
+body.rh-admin .ac-id{flex:1 1 180px}
+body.rh-admin .ac-chip{min-height:44px;display:inline-flex;align-items:center;padding:8px;gap:8px;box-sizing:border-box}
+body.rh-admin .ac-chip input,body.rh-admin .ac-perm input{width:20px;height:20px;flex-shrink:0;accent-color:#a64d00}
+body.rh-admin .ac-perm{min-height:44px;line-height:1.5;display:flex;align-items:center;gap:8px;padding:8px 0}
+body.rh-admin .ac-perfis-detalhes{flex-basis:100%;width:100%;border-block:1px solid #e7e2d9;padding:4px 0}
+body.rh-admin .ac-perfis-detalhes summary{display:flex;align-items:center;cursor:pointer;font-weight:600;line-height:1.5}
+body.rh-admin .ac-perfis-detalhes summary::after{content:'+';margin-left:auto;padding-left:8px}
+body.rh-admin .ac-perfis-detalhes[open] summary::after{content:'−'}
+body.rh-admin .ac-grupo-t{font-size:14px;color:#5f5b53}
+body.rh-admin .ac-ferramentas{margin:16px 0}
+body.rh-admin .ac-ferramentas summary{cursor:pointer;min-height:48px;line-height:48px;font-weight:600}
+body.rh-admin .ac-filtro{gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px}
+body.rh-admin .ac-filtro>*{flex-shrink:0}
+body.rh-admin :is(.ajuda-rh,.ac-dicas) summary{display:flex;align-items:center;box-sizing:border-box}
+body.rh-admin :is(.ajuda-rh,.ac-dicas) summary::after{content:'+';margin-left:auto;padding-left:12px}
+body.rh-admin :is(.ajuda-rh,.ac-dicas)[open] summary::after{content:'−'}
+body.rh-admin .ajuda-rh{padding:0 12px;margin-bottom:8px}
+body.rh-admin .ac-dicas{margin-bottom:8px}
+#rh-modelos{font-size:16px;line-height:1.5}
+#rh-modelos button{cursor:pointer;border:1px solid #c8c2b7;background:#fff;color:#24221d;border-radius:8px;padding:10px 16px;font:600 15px Inter,sans-serif;min-height:48px}
+#rh-modelos .rp-prim{background:#e67e22;border-color:#e67e22;color:#171612}
+#rh-modelos button:disabled{cursor:wait;opacity:.7}
+#rh-modelos h2{font:700 23px Poppins,sans-serif;margin:0 0 8px;color:#24221d;overflow-wrap:anywhere}
+#rh-modelos p{margin:0 0 16px;color:#5f5b53}
+#rh-modelos .rp-cab{display:flex;align-items:flex-start;gap:16px;justify-content:space-between;margin:16px 0 24px}
+#rh-modelos .rp-cab>div{max-width:66ch;min-width:0}
+#rh-modelos .rp-cab>button{flex-shrink:0}
+#rh-modelos label{display:grid;gap:8px;font-weight:600}
+#rh-modelos :is(input:not([type=checkbox]),select,textarea){width:100%;border:1px solid #b5afa3;border-radius:8px;padding:12px;min-height:48px;color:#24221d;background:#fff;font-family:Inter,sans-serif}
+#rh-modelos .rp-busca{max-width:520px;margin:16px 0}
+#rh-modelos .rp-linha{display:flex;gap:16px;align-items:center;justify-content:space-between;text-align:left;width:100%;border:0;border-radius:0;border-bottom:1px solid #dedad1;padding:16px 8px}
+#rh-modelos .rp-linha:hover{background:#faf7f1}
+#rh-modelos .rp-linha>span{min-width:0;overflow-wrap:anywhere}
+#rh-modelos .rp-linha strong{display:block;font-size:17px;color:#24221d}
+#rh-modelos .rp-linha small{display:block;font:400 14px/1.5 Inter,sans-serif;color:#5f5b53;margin-top:4px}
+#rh-modelos .rp-meta{font:400 14px/1.5 Inter,sans-serif;color:#5f5b53;flex-shrink:0}
+#rh-modelos fieldset{border:0;margin:0;padding:0;min-width:0}
+#rh-modelos .rp-ident{display:grid;grid-template-columns:1fr 1.5fr;gap:16px;margin-bottom:20px}
+#rh-modelos .rp-nota{font-size:14px;max-width:76ch}
+#rh-modelos .rp-grupo{border-top:1px solid #dedad1}
+#rh-modelos .rp-grupo summary{cursor:pointer;min-height:56px;padding:12px 4px;font-weight:700;box-sizing:border-box}
+#rh-modelos .rp-grupo summary span{float:right;font-weight:400;font-size:14px;color:#5f5b53;margin-left:12px}
+#rh-modelos .rp-grupo>div{padding:0 8px 16px;display:grid;grid-template-columns:1fr 1fr;column-gap:24px}
+#rh-modelos .rp-perm{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 0;font-weight:400;box-sizing:border-box}
+#rh-modelos .rp-perm input{width:20px;height:20px;accent-color:#a64d00;flex-shrink:0}
+#rh-modelos .rp-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px;border-top:1px solid #dedad1;padding-top:16px}
+#rh-modelos .rp-excluir{margin-top:32px;border-top:1px solid #dedad1;padding-top:16px}
+#rh-modelos .rp-excluir summary{color:#a12222;cursor:pointer;display:flex;align-items:center;font-weight:600}
+#rh-modelos .rp-excluir label{max-width:480px;margin:16px 0}
+#rh-modelos #rp-excluir{color:#a12222;border-color:#a12222}
+#rh-modelos .rp-erro{padding:12px;border-left:4px solid #a12222;color:#891b1b;background:#fff3f1}
+#rh-modelos .rp-sucesso{padding:12px;border-left:4px solid #176b42;color:#145632;background:#f0faf4}
+@media(max-width:640px){body.rh-admin .admin-shell{padding:20px 16px calc(104px + env(safe-area-inset-bottom))}body.rh-admin .admin-panel{padding:16px}body.rh-admin .ac-head{flex-wrap:wrap}body.rh-admin .ac-actions{width:100%}#rh-modelos .rp-cab{display:block}#rh-modelos .rp-cab>button{margin-top:0}#rh-modelos .rp-ident,#rh-modelos .rp-grupo>div{grid-template-columns:1fr}#rh-modelos .rp-linha{display:block}#rh-modelos .rp-meta{display:block;margin-top:8px}#rh-modelos h2{font-size:21px}}

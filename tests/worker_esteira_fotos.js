@@ -13,7 +13,7 @@ function d1() {
 }
 const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
 (async () => {
-  const w = (await import(tmp)).default;
+  const w = (await import(require('url').pathToFileURL(tmp).href)).default;
   const kv = new Map();
   const KV = { async get(k) { return kv.has(k) ? kv.get(k) : null; }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   globalThis.caches = { default: { async match() { return undefined; }, async put() {} } };
