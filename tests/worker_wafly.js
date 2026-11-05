@@ -13,7 +13,7 @@ function d1() {
 }
 
 (async () => {
-  const W = await import(tmp), w = W.default;
+  const W = await import(require('url').pathToFileURL(tmp).href), w = W.default;
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
@@ -103,7 +103,7 @@ function d1() {
   const MEDIA_URL = 'https://tenkiter-midia.fake/m/t/202610/dddddddddddddddddddd.jpg';
   const SEG = { inst: 'INST_TESTE_001', tok: 'TOKEN_SECRETO_ABC123', cli: 'CLIENT_SECRETO_XYZ789' };
   const SEG2 = { inst: 'INST_TESTE_002', tok: 'TOKEN_SECRETO_DEF456', cli: 'CLIENT_SECRETO_UVW000' };
-  let pubMidia404 = false, waf = [], wmodo = 'ok', recibo = { state: 'accepted', serverAcknowledged: true }, wameChamado = 0;
+  let agendaPronta = true, pubMidia404 = false, waf = [], wmodo = 'ok', recibo = { state: 'accepted', serverAcknowledged: true }, wameChamado = 0;
   const fAnt = globalThis.fetch;
   globalThis.fetch = async (u, init) => {
     u = String(u);
@@ -114,13 +114,14 @@ function d1() {
       const metodo = (init && init.method) || 'GET';
       waf.push({ url: u, metodo, body: init && init.body ? JSON.parse(init.body) : null, headers: new Headers((init && init.headers) || {}), redirect: init && init.redirect });
       if (metodo === 'GET' && u.endsWith('/status')) return new Response(JSON.stringify({ value: 'CONNECTED' }));
-      if (metodo === 'GET' && u.endsWith('/status-publication')) return new Response(JSON.stringify({ supported: true, connected: true }));
+      if (metodo === 'GET' && u.endsWith('/status-publication')) return new Response(JSON.stringify({ supported: true, connected: true, contactsReady: agendaPronta }));
       if (metodo === 'GET') return new Response(JSON.stringify(recibo));
       if (wmodo === 'timeout') throw new Error('timeout');
+      if (wmodo === 'agenda') return new Response(JSON.stringify({ code: 'AUDIENCE_UNAVAILABLE' }), { status: 409 });
       if (wmodo === '409') return new Response(JSON.stringify({ error: 'ainda processando' }), { status: 409 });
       if (wmodo === '401') return new Response(JSON.stringify({ error: 'invalid ' + SEG.tok }), { status: 401 });
       if (wmodo === '422') return new Response(JSON.stringify({ error: 'x' }), { status: 422 });
-      return new Response(JSON.stringify({ state: 'accepted', messageId: 'W1' }));
+      return new Response(JSON.stringify({ state: 'accepted', messageId: 'W-' + JSON.parse(init.body).requestId }));
     }
     return fAnt(u, init);
   };
@@ -167,6 +168,27 @@ function d1() {
   chk('teste sem mexer na fila', (await snap()) === antes);
 
   // ---- Wafly 1 direto ----
+  agendaPronta = false;
+  waf = [];
+  const tAgenda = await A('POST', '/post/wafly/teste', { slot: 2 });
+  chk('conexão ativa com agenda indisponível não é anunciada como saudável', !tAgenda.j.ok && tAgenda.j.itens[1].texto.includes('agenda'));
+  const bloqueada = await novaPostagem('whatsapp2');
+  const outroCanal = await novaPostagem('whatsapp');
+  await DB.prepare("UPDATE postagem SET agendado_em='2020-01-01T00:00:00Z' WHERE id=?").bind(bloqueada).run();
+  await DB.prepare("UPDATE postagem SET agendado_em='2020-01-01T00:00:00Z' WHERE id=?").bind(outroCanal).run();
+  waf = []; await W.processarPostagens(env);
+  const guardada = await lerPost(bloqueada);
+  chk('agenda indisponível preserva item, horário e requestId vazio, sem enviar mídia', guardada.status === 'agendado' && guardada.agendado_em === '2020-01-01T00:00:00Z' && !guardada.ig_id && guardada.erro.includes('agenda') && !waf.some(x => x.metodo === 'POST' && x.url.includes(SEG2.inst)));
+  chk('falha da agenda do Status 2 não impede envio do Status 1', (await lerPost(outroCanal)).status === 'publicado');
+  agendaPronta = true; waf = []; await W.processarPostagens(env);
+  chk('agenda recuperada retoma uma única vez o mesmo item', (await lerPost(bloqueada)).status === 'publicado' && waf.filter(x => x.metodo === 'POST').length === 1);
+  const corridaAgenda = await novaPostagem('whatsapp2');
+  await DB.prepare("UPDATE postagem SET agendado_em='2020-01-01T00:00:00Z' WHERE id=?").bind(corridaAgenda).run();
+  wmodo = 'agenda'; waf = []; await W.processarPostagens(env);
+  const recusadaAgenda = await lerPost(corridaAgenda);
+  chk('agenda perdida entre sondagem e envio não cria consulta nem reenvio com novo ID', recusadaAgenda.status === 'agendado' && !recusadaAgenda.ig_id && !recusadaAgenda.zap_req && recusadaAgenda.erro.includes('agenda') && waf.filter(x => x.metodo === 'POST').length === 1);
+  wmodo = 'ok'; await W.processarPostagens(env);
+
   id = await novaPostagem('whatsapp');
   await DB.prepare("UPDATE postagem SET agendado_em='2020-01-01T00:00:00Z' WHERE id=?").bind(id).run();
   waf = []; zapPedidos = [];
@@ -174,7 +196,7 @@ function d1() {
   const e1 = waf.find((x) => x.metodo === 'POST');
   chk('Wafly 1 cadastrada: fala direto com a Wafly e não usa o Apps Script', e1 && zapPedidos.length === 0 && (await lerPost(id)).status === 'publicado');
   chk('URL da instância, Client-Token e requestId estável', e1.url === 'https://wafly.com.br/api-bridge-whats/instances/' + SEG.inst + '/token/' + SEG.tok + '/status-publication' && e1.headers.get('client-token') === SEG.cli && e1.body.requestId === 'tkpost-' + String(id).padStart(12, '0') && e1.body.type === 'image' && e1.body.caption === 'Vestido TK-0001 R$ 89,90' && typeof e1.body.content === 'string' && e1.body.content.length > 100 && e1.redirect === 'manual', e1 && e1.body && Object.keys(e1.body));
-  chk('recibo preserva ID WhatsApp distinto do requestId do Postador', (await DB.prepare("SELECT postagem_id FROM postagem_status_ref WHERE canal='whatsapp1' AND ext_id='W1'").first())?.postagem_id===id);
+  chk('recibo preserva ID WhatsApp distinto do requestId do Postador', (await DB.prepare("SELECT postagem_id FROM postagem_status_ref WHERE canal='whatsapp1' AND ext_id=?").bind('W-' + e1.body.requestId).first())?.postagem_id===id);
   // Endereço público da mídia devolve 404 para o Worker (Worker->Worker da mesma conta), mas o arquivo está no R2: tem que publicar lendo direto do bucket.
   pubMidia404 = true; objs.set('t/202610/dddddddddddddddddddd.jpg', Buffer.alloc(900, 7));
   const idR2 = await novaPostagem('whatsapp'); await DB.prepare("UPDATE postagem SET agendado_em='2020-01-01T00:00:00Z', midias=? WHERE id=?").bind(JSON.stringify([{ url: MEDIA_URL, tipo: 'imagem' }]), idR2).run();

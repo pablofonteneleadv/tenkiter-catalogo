@@ -12,6 +12,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.55.2] - 2026-11-05
+
+- Status 2 verifica disponibilidade da agenda antes de enviar. Enquanto a Wafly não confirma contatos/privacidade, preserva as postagens agendadas e os horários, sem novos envios nem IDs de tentativa.
+- Recusa `AUDIENCE_UNAVAILABLE` deixa de virar espera por recibo e erro 404; o teste de conexão informa a indisponibilidade da agenda mesmo com WhatsApp conectado.
+- Instagram, grupo, Status 1 e comprovantes existentes preservados. Recuperação da agenda depende da Wafly; não significa que publicações reais foram retomadas.
+
 ## [7.55.1] - 2026-11-05
 
 - Inclui JavaScript e CSS de permissões na lista pública do build. Omissão desses arquivos causava404 no RH após a publicação7.55.0.

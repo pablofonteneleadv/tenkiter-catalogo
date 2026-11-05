@@ -1043,6 +1043,7 @@ async function enviarWaflyDireto_(env, p, slot, cfg, tent) {
     try { j = await r.json(); } catch (e) { j = null; }
   } catch (e) { return { ok: false, pendente: true, requestId: requestId, erro: 'A resposta da Wafly foi interrompida.' }; }
   if (r.ok && !(j && j.error)) { await guardarRefStatusWafly_(env,requestId,j); return { ok: true, requestId: requestId }; }
+  if (slot === 2 && r.status === 409 && j && (j.code === 'AUDIENCE_UNAVAILABLE' || j.error === 'AUDIENCE_UNAVAILABLE')) return { ok: false, agendaIndisponivel: true, erro: 'WhatsApp Status ' + slot + ': a Wafly não confirmou a agenda e a privacidade dos contatos. A postagem continua agendada; a fila retoma quando a agenda estiver disponível. Confira a sincronização de contatos na Wafly.' };
   if (r.status === 401 || r.status === 403) return { ok: false, erro: 'A Wafly recusou as credenciais do ' + info.nome + '. Confira a instância e os tokens em Conexões.' };
   if (r.status === 422) return { ok: false, erro: info.nome + ': vídeo ou imagem recusado pela Wafly (HTTP 422). Para Status, use MP4 de até 30 segundos e 10 MB, ou JPEG/PNG de até 5 MB. Corrija a mídia e crie uma nova publicação; repetir o mesmo ID não corrige o arquivo.' };
   if (r.status === 402) return { ok: false, erro: 'A assinatura da Wafly do ' + info.nome + ' está inadimplente ou o período de teste acabou.' };
@@ -1083,13 +1084,24 @@ async function testarWafly_(env, slot) {
       if (r.status === 401 || r.status === 403) texto = 'credenciais recusadas';
       else if (!r.ok) texto = 'HTTP ' + r.status;
       else if (caminho === '/status') { ok = !!(j && (j.value === 'CONNECTED' || j.connected === true)); texto = ok ? 'conectada' : 'não está conectada (leia o QR na Wafly)'; }
-      else { ok = !!(j && j.supported !== false && j.connected !== false); texto = ok ? 'disponível' : 'indisponível agora'; }
+      else { ok = !!(j && j.supported !== false && j.connected !== false && j.contactsReady !== false); texto = j && j.contactsReady === false ? 'agenda e privacidade dos contatos indisponíveis; sincronize os contatos na Wafly' : ok ? 'disponível' : 'indisponível agora'; }
       out.itens.push({ nome: nome, ok: ok, texto: texto });
       if (!ok) out.ok = false;
     } catch (e) { out.itens.push({ nome: nome, ok: false, texto: 'sem resposta' }); out.ok = false; }
   }
   try { await cfgSet(env, 'wafly_ultimo_teste_' + slot, JSON.stringify({ em: out.verificadoEm, ok: out.ok })); } catch (e) { /* diagnóstico */ }
   return out;
+}
+/** Uma sondagem por passagem da fila. Não envia mídia, não muda horário nem cria requestId. */
+async function impedimentoStatus2_(cfg) {
+  try {
+    const r = await fetch(waflyUrl_(cfg, '/status-publication'), { headers: { 'Client-Token': cfg.clientToken }, redirect: 'manual', signal: AbortSignal.timeout(12000) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j) return 'WhatsApp Status 2: não foi possível verificar a disponibilidade na Wafly. A postagem continua agendada.';
+    if (j.contactsReady === false) return 'WhatsApp Status 2: agenda e privacidade dos contatos indisponíveis na Wafly. Sincronize os contatos na Wafly; a postagem continua agendada e será retomada quando a agenda estiver disponível.';
+    if (j.connected === false || j.supported === false) return 'WhatsApp Status 2: publicação indisponível na Wafly. Confira a conexão; a postagem continua agendada.';
+    return '';
+  } catch (e) { return 'WhatsApp Status 2: sem resposta da Wafly ao verificar a disponibilidade. A postagem continua agendada.'; }
 }
 /** Status 2: Wafly 2 (Gestão) tem prioridade; sem ele, o Wame de antes. { ok, provedor, motivo } */
 async function status2Info_(env) {
@@ -1106,6 +1118,10 @@ async function enviarStatusWafly2_(env, p) {
     return rz.r === 'aceito' ? { ok: true, canal: 'whatsapp2' } : undefined;
   }
   const r = await enviarWhatsAppSo_(env, p, 2);
+  if (r.agendaIndisponivel) {
+    await env.DB.prepare("UPDATE postagem SET erro=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(r.erro, agora(), p.id).run();
+    return { ok: false, aguardandoAgenda: true };
+  }
   if (r.pendente) return await marcarAguardaZap_(env, p, r.requestId);
   if (!r.ok) return marcarErroPost_(env, p, r.erro);
   await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', zap_estado='confirmado', zap_req=?, publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, r.requestId, agora(), agora(), p.id).run();
@@ -1513,9 +1529,15 @@ export async function processarPostagens(env) {
     const recentes=(await env.DB.prepare("SELECT id,serie,origem_midia,tipo,canal,publicado_em FROM postagem WHERE status IN ('publicado','manual_feito') AND publicado_em>? ORDER BY publicado_em DESC LIMIT 1000").bind(new Date(Date.now()-86400000).toISOString()).all()).results||[];
     const estados=new Map(lin.filter(p=>p.serie).map(p=>[p.serie+':'+p.parte,p])),anteriores=lin.filter(p=>p.serie&&p.parte>1);
     for(let i=0;i<anteriores.length;i+=40){const parte=anteriores.slice(i,i+40),rs=(await env.DB.prepare('SELECT serie,parte,status,publicado_em FROM postagem WHERE '+parte.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...parte.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
+    const cfgStatus2 = lin.some(p => p.canal === 'whatsapp2' && p.status === 'agendado') ? await cfgWafly_(env, 2) : null;
+    const impedimentoStatus2 = cfgStatus2 ? await impedimentoStatus2_(cfgStatus2) : '';
     let feitas = 0, novas = usados, tentadas = 0;
     for (const p of lin) {
       if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
+      if (p.canal === 'whatsapp2' && p.status === 'agendado' && impedimentoStatus2 && !(await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(p.id).first())) {
+        if (p.erro !== impedimentoStatus2) await env.DB.prepare("UPDATE postagem SET erro=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(impedimentoStatus2, agora(), p.id).run();
+        continue;
+      }
       let anterior=null;
       if(p.serie&&p.parte>1){
         anterior=estados.get(p.serie+':'+(p.parte-1));
