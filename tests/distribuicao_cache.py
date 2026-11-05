@@ -1,6 +1,8 @@
 """Regressões de cache, rotas e comprovação negativa, sem provedores reais."""
 import importlib.util
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 import urllib.error
 
@@ -15,6 +17,50 @@ def load(name):
 
 
 class DistributionTests(unittest.TestCase):
+    def recovery_step(self):
+        # Extrai o bloco shell que o Actions executa, sem dependência de parser YAML.
+        text = (ROOT / '.github/workflows/deploy.yml').read_text()
+        block = text.split('      - name: Recuperar publicação do manifesto Android na borda\n', 1)[1].split('\n      - ', 1)[0]
+        config, command = block.split('        run: |\n', 1)
+        return {'run': '\n'.join(line[10:] for line in command.splitlines() if line.strip()),
+                'if': next(line.strip()[4:] for line in config.splitlines() if line.strip().startswith('if: ')),
+                'continue-on-error': 'continue-on-error: true' in config,
+                'env': config}
+
+    def run_recovery(self, exit_code):
+        step = self.recovery_step()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            checker = folder / 'python3'
+            checker.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_LOG"\nexit "$SIM_VERIFIER_EXIT"\n')
+            checker.chmod(0o755)
+            log = folder / 'calls'
+            env = {'PATH': tmp, 'TEST_LOG': str(log), 'SIM_VERIFIER_EXIT': str(exit_code)}
+            result = subprocess.run(['/bin/bash', '-e', '-c', step['run']], cwd=ROOT, env=env, capture_output=True)
+            return result.returncode, log.read_text().splitlines() if log.exists() else []
+
+    def test_android_recovery_rechecks_without_cloudflare_credentials(self):
+        status, calls = self.run_recovery(0)
+        self.assertEqual(status, 0)
+        self.assertEqual(calls, ['scripts/deploy/verificar_android_manifesto.py --attempts 12 --delay 5'])
+        step = self.recovery_step()
+        self.assertEqual(step['if'], "steps.android_manifesto.outcome == 'failure'")
+        self.assertFalse(step.get('continue-on-error', False))
+        self.assertNotIn('CLOUDFLARE_ZONE_ID', step.get('env', {}))
+
+    def test_android_recovery_keeps_failure_blocking(self):
+        status, calls = self.run_recovery(1)
+        self.assertNotEqual(status, 0)
+        self.assertEqual(len(calls), 1)
+
+    def test_site_deploy_does_not_call_inapplicable_purge(self):
+        text = (ROOT / '.github/workflows/deploy.yml').read_text()
+        deploy = text.split('\n  deploy:\n', 1)[1].split('\n  workers:', 1)[0]
+        self.assertIn('scripts/monitoramento/saude_publica.py', deploy)
+        self.assertIn('scripts/deploy/verificar_arquivos_internos.py', deploy)
+        self.assertNotIn('cloudflare_purge.sh', deploy)
+        self.assertNotIn('CLOUDFLARE_ZONE_ID', deploy)
+
     def test_invalid_zone_cannot_reach_api_or_echo_secrets(self):
         calls = []
         token = 'nao-imprimir-token'

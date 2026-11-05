@@ -1,7 +1,7 @@
 name: Deploy
 
 # Deploy confiável: só depois do CI verde, com trigger explícito na API do Render,
-# acompanhamento até "live", limpeza de cache no Cloudflare, publicação dos Workers
+# acompanhamento até "live", invalidação do CDN pelo Render, publicação dos Workers
 # e verificação no ar.
 #
 # Por que não usar o autoDeploy do Render: ele depende de webhook e falha em silêncio
@@ -60,7 +60,7 @@ jobs:
 
   # ------------------------------------------------------------- Site (Render)
   deploy:
-    name: Publicar no Render + Cloudflare
+    name: Publicar no Render
     runs-on: ubuntu-24.04
     needs: [ci, android_release]
     environment: producao
@@ -96,19 +96,8 @@ jobs:
           COMMIT_ESPERADO: ${{ github.sha }}
         run: bash scripts/deploy/render_deploy.sh
 
-      - name: Limpar o cache do Cloudflare
-        id: purge
-        continue-on-error: true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-        run: bash scripts/deploy/cloudflare_purge.sh
-
-      # O purge tem falha explícita e continue-on-error; as provas do site são obrigatórias.
-      # Roda SEMPRE, mesmo que o purge acima tenha falhado. Antes ele era pulado
-      # em cascata (o purge saia com exit 1 e o job marcava o resto como skipped),
-      # entao uma falha secundaria escondia o estado real de producao — nos runs
-      # 38833465713, 38837548442 e 38840046234 ninguem chegou a conferir o ar.
+      # DNS externo e CDN do Render: não há zona própria aplicável ao purge.
+      # O Render invalida seu CDN no deploy; as provas do conteúdo continuam obrigatórias.
       - name: Conferir site publicado e impedir exposição de artefatos antigos
         if: always() && !cancelled()
         env:
@@ -124,17 +113,13 @@ jobs:
         continue-on-error: true
         run: python3 scripts/deploy/verificar_android_manifesto.py --attempts 6 --delay 5
 
-      # Se a borda ainda oferecer uma versão antiga, limpa só o manifesto,
-      # confere novamente e falha de verdade caso continue desatualizado.
+      # Se a borda ainda oferecer uma versão antiga, confere novamente com prazo
+      # limitado. Falha real continua bloqueando; não depende de purge de zona alheia.
       - name: Recuperar publicação do manifesto Android na borda
         if: steps.android_manifesto.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          PURGE_ALVO: https://tenkitermodas.com.br/android/latest.json
         run: |
-          bash scripts/deploy/cloudflare_purge.sh
           python3 scripts/deploy/verificar_android_manifesto.py --attempts 12 --delay 5
 
       - name: Verificação final no ar
@@ -227,7 +212,31 @@ jobs:
     # por isso o deploy automatico nunca publicava os Workers, e o Instagram ficava
     # sem receber postagens ate alguem rodar `wrangler deploy` a mao.
     #
-    # Repassa somente os três valores utilizados pelos Workers.
+    # Repassa somente os dois valores utilizados pelos Workers.
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  resumo_publicacao:
+    name: Resumo dos componentes publicados
+    runs-on: ubuntu-24.04
+    needs: [deploy, workers, android_release]
+    if: always()
+    env:
+      SITE_RESULTADO: ${{ needs.deploy.result }}
+      WORKERS_RESULTADO: ${{ needs.workers.result }}
+      ANDROID_RESULTADO: ${{ needs.android_release.result }}
+    steps:
+      - name: Registrar resultados sem confundir deploy com purge
+        run: |
+          {
+            echo "### Componentes da publicação"
+            echo "| Componente | Resultado do job |"
+            echo "|---|---|"
+            echo "| Site Render e verificações públicas | $SITE_RESULTADO |"
+            echo "| Três Workers e suas verificações | $WORKERS_RESULTADO |"
+            echo "| Distribuição Android | $ANDROID_RESULTADO |"
+            echo "| Purge Cloudflare do domínio | Não executado: nenhuma zona própria aplicável identificada |"
+            echo ""
+            echo "A invalidação do CDN do site é feita pelo Render no deploy. O resultado acima não é comprovação de purge Cloudflare."
+          } >> "$GITHUB_STEP_SUMMARY"

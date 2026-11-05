@@ -1,3 +1,5 @@
+> Revisão vigente em05/11/2026: DNS externo, CDN Render e Workers em workers.dev. O purge foi retirado do deploy em7.54.5; referências históricas ao purge abaixo não são requisitos atuais.
+
 # Relatório — INFRA-01, INFRA-02 e INFRA-08
 
 **Projeto:** TENKiTER Modas — `pablofonteneleadv/tenkiter-catalogo`
@@ -62,9 +64,16 @@ Run: https://github.com/pablofonteneleadv/tenkiter-catalogo/actions/runs/3879129
 
 Antes, um erro de sintaxe em `admin-postagens.js` (261 KB) só aparecia quando o lojista abria o painel. Agora o push é reprovado em segundos. O mesmo vale para uma chave colada por engano: o repositório é público, então uma credencial vazada era comprometimento imediato — hoje o job `Scan de segredos` barra antes do merge.
 
-### Pendência (ação do dono)
+### Configuração vigente — revisada em05/11/2026
 
-Ativar a **proteção de branch** na `main` (`Settings → Branches`): exigir PR + o status check `Portão de qualidade`. Sem isso o CI roda mas não bloqueia. Passo a passo em `docs/CI-CD.md`.
+O site usa RENDER_API_KEY e RENDER_SERVICE_ID. Os três Workers usam
+CLOUDFLARE_API_TOKEN (Workers Scripts: Edit) e CLOUDFLARE_ACCOUNT_ID.
+As publicações já foram comprovadas; não é necessário recriar esses Secrets.
+CLOUDFLARE_ZONE_ID e Cache Purge não são pré-requisitos do deploy atual:
+DNS está no Registro.br, o site usa CDN do Render e nenhuma zona própria
+aplicável foi identificada. Em7.54.5, a recuperação do manifesto Android
+mantém suas provas e repetições sem chamar purge de uma zona inexistente
+no acesso atual. O script de purge fica fora da publicação automática.
 
 ---
 

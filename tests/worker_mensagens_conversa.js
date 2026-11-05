@@ -998,11 +998,11 @@ function d1() {
     rs = (await A('GET', '/msg/config')).j.respostas;
     chk('atalhos: não semeia de novo depois que a equipe salvou', rs.length === 1 && rs[0].t === 'Só esta', rs);
 
-    // respostas automáticas
+    // Respostas automáticas: contatos próprios, sem histórico de outros cenários.
     let a0 = await A('GET', '/msg/auto');
     chk('automáticas: desligadas por padrão, com os textos padrão e sem feriados', a0.j.ok && a0.j.auto.boasVindas.ligado === false && a0.j.auto.foraHorario.ligado === false && a0.j.auto.boasVindas.texto.startsWith('Oi! Que bom ter você aqui') && a0.j.auto.foraHorario.texto.includes('{abertura}') && a0.j.auto.feriados.length === 0, a0.j);
     let autoEnvios = [], autoModo = 'ok';
-    const fAuto = globalThis.fetch, realNow = Date.now;
+    const fAuto = globalThis.fetch, DataReal = globalThis.Date;
     globalThis.fetch = async (u, init) => {
       const U = String(u);
       if (U.startsWith('https://wafly.com.br/') && U.endsWith('/send-text')) {
@@ -1015,72 +1015,77 @@ function d1() {
     };
     await cfg('wafly_1', JSON.stringify({ instance: 'INST_1', token: 'TOKEN_1', clientToken: 'CLIENT_1' }));
     let FIX = Date.parse('2026-11-04T13:00:00Z');            // quarta 10h em Fortaleza
-    Date.now = () => FIX;
+    // Date.now e new Date() precisam do mesmo relógio. Misturar a hora real com
+    // o fixture fazia as janelas de12h dependerem do dia/hora em que o CI rodava.
+    globalThis.Date = class extends DataReal {
+      constructor(...args) { super(...(args.length ? args : [FIX])); }
+      static now() { return FIX; }
+    };
     try {
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-D1', '5588911110001', 'Oi, bom dia', { momment: FIX }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-D1', '5588911990001', 'Oi, bom dia', { momment: FIX }));
       chk('automáticas: desligadas não enviam nada', autoEnvios.length === 0);
       const sv = await A('POST', '/msg/auto', { boasVindas: { ligado: true }, foraHorario: { ligado: true }, feriados: ['2026-11-16', 'lixo', '2026-02-30', '2026-11-16'] });
       chk('automáticas: liga e limpa a lista de feriados', sv.j.ok && sv.j.auto.boasVindas.ligado && sv.j.auto.foraHorario.ligado && JSON.stringify(sv.j.auto.feriados) === '["2026-11-16"]', sv.j);
       // boas-vindas
-      FIX += 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-B1', '5588911110002', 'Oi, tem vestido?', { momment: FIX }));
-      chk('boas-vindas: sai uma vez para cliente novo dentro do horário', autoEnvios.length === 1 && autoEnvios[0].phone === '5588911110002' && autoEnvios[0].message === a0.j.auto.boasVindas.texto, autoEnvios);
-      const cB = await DB.prepare("SELECT id, dono, ult_dir, nao_lidas, previa FROM msg_conversa WHERE contato='5588911110002'").first();
+      FIX += 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-B1', '5588911990002', 'Oi, tem vestido?', { momment: FIX }));
+      chk('boas-vindas: sai uma vez para cliente novo dentro do horário', autoEnvios.length === 1 && autoEnvios[0].phone === '5588911990002' && autoEnvios[0].message === a0.j.auto.boasVindas.texto, autoEnvios);
+      const cB = await DB.prepare("SELECT id, dono, ult_dir, nao_lidas, previa FROM msg_conversa WHERE contato='5588911990002'").first();
       const mB = await DB.prepare("SELECT por, direcao, texto FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND por='auto'").bind(cB.id).first();
       chk('boas-vindas: aparece na conversa marcada como automática', mB && mB.por === 'auto' && mB.texto === a0.j.auto.boasVindas.texto, mB);
       chk('boas-vindas: não vira dono e a conversa continua em "falta responder"', !cB.dono && cB.ult_dir === 'entrada' && cB.nao_lidas === 1 && cB.previa === 'Oi, tem vestido?', cB);
-      FIX += 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-B2', '5588911110002', 'Alô?', { momment: FIX }));
+      FIX += 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-B2', '5588911990002', 'Alô?', { momment: FIX }));
       chk('boas-vindas: não repete na mesma conversa', autoEnvios.length === 1);
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-B1', '5588911110002', 'Oi, tem vestido?', { momment: FIX - 120000 }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-B1', '5588911990002', 'Oi, tem vestido?', { momment: FIX - 120000 }));
       chk('boas-vindas: webhook repetido não reenvia', autoEnvios.length === 1);
       FIX += 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-G1', '120363999-group', 'oi grupo', { isGroup: true, chatName: 'Grupo X', momment: FIX }));
       chk('automáticas: grupos ignorados', autoEnvios.length === 1);
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-M1', '5588911110003', 'mensagem da loja', { fromMe: true, momment: FIX }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-M1', '5588911990003', 'mensagem da loja', { fromMe: true, momment: FIX }));
       chk('automáticas: mensagens nossas (fromMe) ignoradas', autoEnvios.length === 1);
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-S1', '5588911110004', '', { isStatusReply: true, text: { message: '' }, momment: FIX }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-S1', '5588911990004', '', { isStatusReply: true, text: { message: '' }, momment: FIX }));
       chk('automáticas: resposta a status sem texto ignorada', autoEnvios.length === 1);
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-V1', '5588911110005', 'oi antigo', { momment: FIX - 3600000 }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-V1', '5588911990005', 'oi antigo', { momment: FIX - 3600000 }));
       chk('automáticas: mensagem antiga (reenvio de histórico) ignorada', autoEnvios.length === 1);
       // 12 h: conversa com mensagem recente não recebe boas-vindas; depois de 12 h recebe de novo
       FIX = Date.parse('2026-11-05T14:00:00Z');               // quinta 11h (mais de 12 h depois)
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-B3', '5588911110002', 'Voltei', { momment: FIX }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-B3', '5588911990002', 'Voltei', { momment: FIX }));
       chk('boas-vindas: volta a sair depois de 12 h sem conversa', autoEnvios.length === 2);
       // fora do horário
       FIX = Date.parse('2026-11-07T17:00:00Z');               // sábado 14h
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-F1', '5588911110006', 'Ainda tá aberto?', { momment: FIX }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-F1', '5588911990006', 'Ainda tá aberto?', { momment: FIX }));
       chk('fora do horário: sábado 14h já responde com "segunda às 7h30"', autoEnvios.length === 3 && autoEnvios[2].message.includes('A gente volta segunda às 7h30 e te responde'), autoEnvios[2]);
-      FIX += 5 * 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-F2', '5588911110006', 'Oi?', { momment: FIX }));
-      FIX = Date.parse('2026-11-08T13:00:00Z'); await wh('/wh/wafly/1/' + seg, msg('AUTO-F3', '5588911110006', 'Bom dia', { momment: FIX }));
+      FIX += 5 * 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-F2', '5588911990006', 'Oi?', { momment: FIX }));
+      FIX = Date.parse('2026-11-08T13:00:00Z'); await wh('/wh/wafly/1/' + seg, msg('AUTO-F3', '5588911990006', 'Bom dia', { momment: FIX }));
       chk('fora do horário: no máximo 1 vez por período fechado (sábado → domingo)', autoEnvios.length === 3);
-      const cF = await DB.prepare("SELECT ult_dir, nao_lidas FROM msg_conversa WHERE contato='5588911110006'").first();
+      const cF = await DB.prepare("SELECT ult_dir, nao_lidas FROM msg_conversa WHERE contato='5588911990006'").first();
       chk('fora do horário: conversa segue esperando resposta', cF.ult_dir === 'entrada' && cF.nao_lidas === 3, cF);
       FIX = Date.parse('2026-11-15T23:00:00Z');                // domingo 20h, feriado na segunda 16/11
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-F4', '5588911110006', 'Abre amanhã?', { momment: FIX }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-F4', '5588911990006', 'Abre amanhã?', { momment: FIX }));
       chk('fora do horário: novo período fechado responde de novo, com feriado = "amanhã às 8h"', autoEnvios.length === 4 && autoEnvios[3].message.includes('volta amanhã às 8h'), autoEnvios[3]);
       // equipe conversando fora do horário: não interrompe
       FIX = Date.parse('2026-11-04T22:00:00Z');                // quarta 19h
-      const cE = await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588911110002'").first();
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-E1', '5588911110002', 'Pode sim, já separo', { fromMe: true, momment: FIX - 5 * 60000 }));
-      await wh('/wh/wafly/1/' + seg, msg('AUTO-E2', '5588911110002', 'Obrigada!', { momment: FIX }));
+      const cE = await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588911990002'").first();
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-E1', '5588911990002', 'Pode sim, já separo', { fromMe: true, momment: FIX - 5 * 60000 }));
+      await wh('/wh/wafly/1/' + seg, msg('AUTO-E2', '5588911990002', 'Obrigada!', { momment: FIX }));
       chk('fora do horário: não sai se alguém da equipe respondeu nos últimos 30 min', autoEnvios.length === 4 && cE);
       // falha de envio não derruba o webhook e fica no diagnóstico
       autoModo = '500'; FIX = Date.parse('2026-11-08T14:00:00Z');
-      const wf = await wh('/wh/wafly/1/' + seg, msg('AUTO-X1', '5588911110007', 'Oi', { momment: FIX }));
+      const wf = await wh('/wh/wafly/1/' + seg, msg('AUTO-X1', '5588911990007', 'Oi', { momment: FIX }));
       chk('automáticas: falha de envio não quebra o webhook', wf.r.status === 200 && wf.j.ok && wf.j.nova === true && autoEnvios.length === 5, wf.j);
       const dg = (await A('GET', '/msg/auto')).j.ultimo;
       chk('automáticas: falha anotada no diagnóstico (sem JSON cru)', dg && dg.ok === false && dg.tipo === 'fora_horario' && /Wafly/.test(dg.erro), dg);
       autoModo = 'erro'; FIX += 60000;
-      const wf2 = await wh('/wh/wafly/1/' + seg, msg('AUTO-X2', '5588911110008', 'Oi', { momment: FIX }));
+      const wf2 = await wh('/wh/wafly/1/' + seg, msg('AUTO-X2', '5588911990008', 'Oi', { momment: FIX }));
       chk('automáticas: erro de rede no envio também não quebra o webhook', wf2.r.status === 200 && wf2.j.ok);
       autoModo = 'ok';
       // desligar volta a não enviar
       await A('POST', '/msg/auto', { boasVindas: { ligado: false }, foraHorario: { ligado: false } });
-      FIX += 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-D2', '5588911110009', 'Oi', { momment: FIX }));
+      FIX += 60000; await wh('/wh/wafly/1/' + seg, msg('AUTO-D2', '5588911990009', 'Oi', { momment: FIX }));
       chk('automáticas: desligar para tudo', autoEnvios.length === 6, autoEnvios.length);
       const tx = await A('POST', '/msg/auto', { boasVindas: { texto: '  ' }, foraHorario: { texto: 'Fechado. Volto {abertura}.' } });
       chk('automáticas: texto vazio volta ao padrão e texto editado é salvo', tx.j.auto.boasVindas.texto === a0.j.auto.boasVindas.texto && tx.j.auto.foraHorario.texto === 'Fechado. Volto {abertura}.');
       const met = (await A('GET', '/msg/metricas?dias=90')).j;
       chk('métricas: resposta automática não conta como resposta da equipe', met.ok);
-    } finally { Date.now = realNow; globalThis.fetch = fAuto; }
+    } finally { globalThis.Date = DataReal; globalThis.fetch = fAuto; }
     // relógio real (sem simular a hora): a resposta que vale agora sai e a conversa continua esperando a equipe
     const hAgora = W.horarioLoja_(Date.now(), []);
     await A('POST', '/msg/auto', { boasVindas: { ligado: hAgora.aberta }, foraHorario: { ligado: !hAgora.aberta }, feriados: [] });

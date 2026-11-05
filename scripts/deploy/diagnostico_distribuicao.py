@@ -23,12 +23,19 @@ def main():
     print(json.dumps({'render': {k: data.get(k) for k in ('type', 'branch', 'rootDir')},
                       'staticSite': {k: details.get(k) for k in ('buildCommand', 'publishPath', 'url')}}, ensure_ascii=False))
     print(json.dumps({'routes': get(base + '/routes?limit=100', key)}, ensure_ascii=False))
+    headers = get(base + '/headers?limit=100', key)
+    print(json.dumps({'renderCacheHeaders': [
+        {k: row.get('header', row).get(k) for k in ('path', 'name', 'value')}
+        for row in headers if str(row.get('header', row).get('name', '')).lower() == 'cache-control'
+    ]}, ensure_ascii=False))
     for host in ('https://tenkitermodas.com.br/', 'https://tenkiter-catalogo.onrender.com/'):
         for path in ('version.json', 'scripts/deploy/build_version.sh', 'tests/mock.py', 'tenkiter-arquivos-modificadosok.zip'):
             try:
                 with urllib.request.urlopen(urllib.request.Request(host + path, headers={'Cache-Control': 'no-cache'}), timeout=25) as response:
                     body = response.read(4 * 1024 * 1024)
-                    print(json.dumps({'url': host + path, 'status': response.status, 'contentType': response.headers.get('Content-Type'), 'sha256': hashlib.sha256(body).hexdigest()}))
+                    print(json.dumps({'url': host + path, 'status': response.status, 'contentType': response.headers.get('Content-Type'),
+                                      'cacheControl': response.headers.get('Cache-Control'), 'cacheStatus': response.headers.get('CF-Cache-Status'),
+                                      'age': response.headers.get('Age'), 'sha256': hashlib.sha256(body).hexdigest()}))
             except urllib.error.HTTPError as error:
                 print(json.dumps({'url': host + path, 'status': error.code}))
     import importlib.util
