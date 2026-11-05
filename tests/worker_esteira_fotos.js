@@ -189,8 +189,12 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const detalhe=JSON.parse(depoisPedido.j.registro.campos.detalhe);
   chk('observação do pedido muda sem perder opções e instruções',depoisPedido.j.ok&&detalhe.obs==='Pedido revisado'&&JSON.stringify(detalhe.opcoes)===JSON.stringify(antesPedido.opcoes)&&detalhe.outro===antesPedido.outro);
   chk('tipo não permitido é recusado',(await A(BIA,'POST','/esteira/registro-editar',{tipo:'est_equipe',id:1,versao:''})).r.status===400);
+  chk('nomes de propriedades internas não viram tipos de registro',(await A(BIA,'GET','/esteira/registros?tipo=__proto__')).r.status===400&&(await A(BIA,'POST','/esteira/registro-editar',{tipo:'constructor',id:1})).r.status===400);
   const auditoria=(await env.DB.prepare('SELECT * FROM est_registro_edicao ORDER BY id').all()).results;
   chk('histórico guarda autoria e antes/depois apenas das edições aceitas',auditoria.length===5&&auditoria[0].por===BIA&&JSON.parse(auditoria[0].depois).descricao==='Foto corrigida',auditoria.length);
+  await env.DB.batch(Array.from({length:41},(_,i)=>env.DB.prepare("INSERT INTO est_caixa(op,url,enviada_por,enviada_em) VALUES(?,?,?,?)").bind('pagina-'+i,U(100+i),BIA,agoraIso)));
+  const pagina1=await registros(BIA,'foto'),pagina2=(await A(BIA,'GET','/esteira/registros?tipo=foto&antes='+pagina1.proximo)).j;
+  chk('paginação mantém acesso aos registros antigos sem repetir',pagina1.itens.length===40&&pagina2.itens.length===4&&!pagina2.itens.some(x=>pagina1.itens.some(y=>x.id===y.id)));
   }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); console.log('FALHAS=' + falhas.length); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

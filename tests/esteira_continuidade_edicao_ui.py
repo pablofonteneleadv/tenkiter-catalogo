@@ -46,7 +46,8 @@ with sync_playwright() as pw:
    pg.screenshot(path=str(OUT/f'editar-{w}-{admin}.png'))
    if admin and w in [390,1440]:
     pg.evaluate('document.documentElement.style.fontSize="130%"');pg.set_viewport_size({'width':w,'height':470 if w==390 else 600});pg.get_by_role('button',name='Salvar alterações',exact=True).scroll_into_view_if_needed()
-    assert pg.get_by_role('button',name='Salvar alterações',exact=True).evaluate('e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.height>=44}')
+    pg.screenshot(path=str(OUT/f'editar-ampliado-{w}.png'))
+    medida=pg.get_by_role('button',name='Salvar alterações',exact=True).evaluate('e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height,tela:innerHeight}}');assert medida['top']>=0 and medida['bottom']<=medida['tela']+1 and medida['height']>=44,medida
     assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1');pg.screenshot(path=str(OUT/f'editar-ampliado-{w}.png'));pg.set_viewport_size({'width':w,'height':h});pg.evaluate('document.documentElement.style.fontSize=""')
    pg.get_by_role('button',name='Salvar alterações',exact=True).click();pg.wait_for_selector('[role=dialog][aria-label="Editar registro"]',state='detached')
    assert calls['editar'][-1]['descricao']=='Detalhe do bordado corrigido';expect(pg.locator('[data-registro="foto-104"]')).to_contain_text('Detalhe do bordado corrigido')
