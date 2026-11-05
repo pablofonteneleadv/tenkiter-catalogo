@@ -33,6 +33,7 @@ with sync_playwright() as pw:
     pg.locator('[data-caixa="101"] .cx-sel').click();pg.click('.cx-colocar');pg.wait_for_selector('#cx-colocar-busca');expect(pg.locator('.f-situacao')).to_have_value('ativas')
     pg.locator('.busca-cat summary').click();pg.get_by_label('Preço mínimo (R$)',exact=True).fill('140,00');pg.get_by_label('Preço máximo (R$)',exact=True).fill('150')
     expect(pg.locator('.busca-res [data-escolher="1002"]')).to_be_visible();assert pg.locator('.busca-res [data-escolher]').count()==1
+    expect(pg.locator('.busca-res [data-escolher="1002"]')).to_contain_text('R$ 149,90');expect(pg.locator('.busca-res [data-escolher="1002"]')).to_contain_text('à vista')
     pg.get_by_label('Preço máximo (R$)',exact=True).scroll_into_view_if_needed()
     assert pg.get_by_label('Preço máximo (R$)',exact=True).evaluate('e=>{const r=e.getBoundingClientRect(),b=e.closest(".corpo").getBoundingClientRect();return r.height>=44&&r.top>=b.top&&r.bottom<=b.bottom+1}')
     pg.screenshot(path=str(OUT/f'faixa-preco-{w}.png'))

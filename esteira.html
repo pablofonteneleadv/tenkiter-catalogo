@@ -762,7 +762,7 @@
         return;
       }
       if (achados.length > max) st.diga('Mostrando ' + max + ' de ' + achados.length + '. Escreva mais do nome ou use os filtros.');
-      achados.slice(0,max).forEach(x=>{const row=o.linha(x,st),t=row.querySelector('.t');if(t){const detalhes=[TKProdutosBusca.tecido(x)&&'Tecido: '+TKProdutosBusca.tecido(x),x.Tamanhos&&'Tamanhos: '+x.Tamanhos,x.Cores&&'Cores: '+x.Cores];const preco=Number(x.Preco)>0?'R$ '+(Number(x.Preco)*0.9).toFixed(2).replace('.',',')+' à vista':'Consulte valor';t.append(el('small','',preco));detalhes.filter(Boolean).forEach(v=>t.append(el('small','muted',v)));}res.append(row)});
+      achados.slice(0,max).forEach(x=>{const row=o.linha(x,st),t=row.querySelector('.t');if(t){const detalhes=[TKProdutosBusca.tecido(x)&&'Tecido: '+TKProdutosBusca.tecido(x),x.Tamanhos&&'Tamanhos: '+x.Tamanhos,x.Cores&&'Cores: '+x.Cores];const preco=Number(x.Preco)>0?precoTxt(x)+' · R$ '+(Number(x.Preco)*0.9).toFixed(2).replace('.',',')+' à vista':'Consulte valor';t.append(el('small','',preco));detalhes.filter(Boolean).forEach(v=>t.append(el('small','muted',v)));}res.append(row)});
       if(achados.length>max){const mais=el('button','bt','Mostrar mais 40');mais.type='button';mais.onclick=()=>{limite+=40;buscar();};res.append(mais);}
     };
     inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
