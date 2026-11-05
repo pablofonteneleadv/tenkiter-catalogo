@@ -281,7 +281,7 @@
 <script src="esteira-fluidez.js?v=7.53.3"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script src="fotos-novas.js"></script>
-<script src="produtos-busca.js?v=7.54.0"></script>
+<script src="produtos-busca.js?v=7.55.6"></script>
 <script>
 (function () {
   'use strict';
@@ -295,12 +295,12 @@
   async function resolverFotos(v,c,caminho='anexo'){if(v?.fotoLocal&&v.arquivo instanceof Blob){const url=await c.etapa(caminho,async()=>{const blob=await reduzirFoto(v.arquivo);c.assert();return enviarFoto(blob)});if(v.urlLocal){fotosLocais.set(v.urlLocal,url);document.querySelectorAll('img').forEach(i=>{if(i.src===v.urlLocal)i.src=url});URL.revokeObjectURL(v.urlLocal);}return url;}if(Array.isArray(v)){const a=[];for(let i=0;i<v.length;i++)a.push(await resolverFotos(v[i],c,caminho+'-'+i));return a;}if(v&&typeof v==='object'&&!(v instanceof Blob)){const a={};for(const[k,x]of Object.entries(v))a[k]=await resolverFotos(x,c,caminho+'-'+k);return a;}return v;}
 
   const fluidez=TKEsteiraFluidez(app,getSessao);
-  let ultimoClique=null,interacao=0;document.addEventListener('click',e=>{interacao++;ultimoClique=e.target.closest('button')},true);
+  let ultimoClique=null,interacao=0;document.addEventListener('click',e=>{interacao++;ultimoClique=e.target.closest('button')},true);document.addEventListener('input',()=>{interacao++;},true);document.addEventListener('change',()=>{interacao++;},true);
   const processos=TKEsteiraProcessos({dono:()=>getSessao()?.whatsapp,worker:workerProcesso,executores:{acao:executarAcao,conferir:executarConferencia,aceitar:executarAceite,fotos:executarFotos,caixa:executarCaixa,colocar:executarColocar,pedido:executarPedido,aplicar:executarAplicacao},aoConcluir:j=>{if(j.tipo==='acao'){fluidez.invalidar();return;}if(j.tipo==='fotos'&&j.dados.tarefas?.length){fluidez.invalidar($('fotos-pedidas'));fluidez.invalidar($('fotos-pedidas-hoje'));document.querySelectorAll('.pedido-fotos[data-produto="'+CSS.escape(j.dados.produto)+'"] [role=status]').forEach(st=>{st.hidden=false;st.textContent=j.resultado.fotos+' fotos adicionadas ao produto. Pedido concluído.'})}if(j.tipo==='colocar'){AVISO_FOTOS=j.dados.urls.length+' foto'+(j.dados.urls.length===1?' colocada':'s colocadas')+' em '+j.dados.produtoNome+'.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}if(j.tipo==='caixa'){AVISO_FOTOS=j.dados.fotos.length+(j.dados.fotos.length===1?' foto enviada':' fotos enviadas')+' para a caixa.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}refrescarDepois();},aoErro:m=>{const e=$('esteira-processos-abrir');if(e)e.title=m}});
   const camposDoBloco=b=>b?JSON.stringify([...b.querySelectorAll('input,textarea,select')].map(e=>[e.id,e.value,e.checked])):'';
-  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,acionador=ultimoClique,campos=camposDoBloco(bloco);let id;try{id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));}catch(e){return{ok:false,erro:e.message||'Não consegui guardar o processo. Tente novamente.'}}
+  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,acionador=ultimoClique,campos=camposDoBloco(bloco),toques=interacao;let id;try{id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));}catch(e){return{ok:false,erro:e.message||'Não consegui guardar o processo. Tente novamente.'}}
     const fundo=acionador?.closest('.fundo');if(fundo&&acionador.closest('.pe')&&fundo.esteiraFechar)fundo.esteiraFechar();
-    const r=await processos.aguardar(id);if(r.ok)fluidez.invalidar(campos===camposDoBloco(bloco)?bloco:null);return Object.assign({},r,{foraDaTela:origem!==ABA||tela!==app.dataset.tela||versao!==versaoTela});}
+    const r=await processos.aguardar(id);if(r.ok)fluidez.invalidar(campos===camposDoBloco(bloco)?bloco:null);return Object.assign({},r,{foraDaTela:origem!==ABA||tela!==app.dataset.tela||versao!==versaoTela||(origem==='fotos'&&toques!==interacao)});}
   async function workerProcesso(rota,corpo,op){let r=await srvRede(rota,corpo,op);for(let i=0;r.aguardando&&i<20;i++){await new Promise(ok=>setTimeout(ok,1000));r=await srvRede('/esteira/operacoes/status?op='+encodeURIComponent(op))}if(r.aguardando)return{ok:false,incerto:true,erro:'O processo ainda está em confirmação. Pode continuar trabalhando e conferir em Processos.'};return r;}
   async function srvRede(rota, corpo, op) {
     const s = getSessao(); if (!s) return { ok: false, erro: 'Entre na sua conta para continuar.', exigeLogin: true };
@@ -463,7 +463,7 @@
       if (pd.aprovar) avisoPed('Chegada esperando aprovação', pd.aprovar === 1 ? 'A equipe conferiu 1 pedido. Veja as diferenças e aprove.' : 'A equipe conferiu ' + pd.aprovar + ' pedidos. Veja as diferenças e aprove.', 'Ver pedidos');
       if (pd.aplicar) avisoPed('Pedido aprovado com itens fora do catálogo', 'Falta levar ao catálogo parte do que foi aprovado. Abra o pedido e toque em “Tentar de novo”.', 'Ver pedidos');
     } else if (pd.conferir) avisoPed('Chegou pedido para conferir', pd.conferir === 1 ? '1 pedido do fornecedor está para chegar ou já chegou. Conte as peças quando ele estiver na loja.' : pd.conferir + ' pedidos do fornecedor estão para chegar ou já chegaram. Conte as peças quando estiverem na loja.', 'Conferir chegada');
-    const prog = el('div', 'card'); prog.append(el('h2', '', 'Minha conferência'));
+    const prog = el('div', 'card'); prog.append(el('h2', '', 'Minha conferência'), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros()));
     if (!r.total) prog.append(el('p', 'muted', EU.confere ? 'Nenhuma peça para conferir hoje: tudo foi conferido ou atualizado nos últimos dias.' : 'Você não está marcada para conferir peças. O administrador muda isso em Configurações.'));
     else {
       const pl = el('div', 'progresso'); pl.append(el('b', 'num', r.feitas + '/' + r.total), el('span', 'muted', r.feitas >= r.total ? 'Tudo conferido hoje. Obrigada!' : (r.pecas && r.pecas > r.total ? 'itens ao longo do dia · família conta como 1' : 'peças ao longo do dia, em qualquer ordem')));
@@ -746,7 +746,7 @@
       if (sGen.options.length === 1) vals('Genero').forEach((v) => { const op = el('option', '', v); op.value = v; sGen.append(op); });
     };
     let faceta=()=>true;
-    catalogoFundo().then((c) => { if(c){encher(c);faceta=TKProdutosBusca.filtros(box,[...c.values()],buscar);box.insertBefore(box.lastElementChild,st);buscar();} });
+    catalogoFundo().then((c) => { if(c){encher(c);faceta=TKProdutosBusca.filtros(box,[...c.values()],buscar,{precos:true});box.insertBefore(box.lastElementChild,st);buscar();} });
     TKFotosNovas.carregar(()=>buscar());
     const temCat = (x, v) => !v || String(x.Categoria || '').split(',').map((t) => t.trim()).includes(v), temGen = (x, v) => !v || String(x.Genero || '').split(',').map((t) => t.trim()).includes(v);
     let espera = null, vez = 0, limite=40;
@@ -762,7 +762,7 @@
         return;
       }
       if (achados.length > max) st.diga('Mostrando ' + max + ' de ' + achados.length + '. Escreva mais do nome ou use os filtros.');
-      achados.slice(0,max).forEach(x=>{const row=o.linha(x,st),t=row.querySelector('.t');if(t){const detalhes=[TKProdutosBusca.tecido(x)&&'Tecido: '+TKProdutosBusca.tecido(x),x.Tamanhos&&'Tamanhos: '+x.Tamanhos,x.Cores&&'Cores: '+x.Cores];const preco=Number(x.Preco)>0?'R$ '+(Number(x.Preco)*0.9).toFixed(2).replace('.',',')+' à vista':'Consulte valor';t.append(el('small','',preco));detalhes.filter(Boolean).forEach(v=>t.append(el('small','muted',v)));}res.append(row)});
+      achados.slice(0,max).forEach(x=>{const row=o.linha(x,st),t=row.querySelector('.t');if(t){const detalhes=[TKProdutosBusca.tecido(x)&&'Tecido: '+TKProdutosBusca.tecido(x),x.Tamanhos&&'Tamanhos: '+x.Tamanhos,x.Cores&&'Cores: '+x.Cores];const preco=Number(x.Preco)>0?precoTxt(x)+' · R$ '+(Number(x.Preco)*0.9).toFixed(2).replace('.',',')+' à vista':'Consulte valor';t.append(el('small','',preco));detalhes.filter(Boolean).forEach(v=>t.append(el('small','muted',v)));}res.append(row)});
       if(achados.length>max){const mais=el('button','bt','Mostrar mais 40');mais.type='button';mais.onclick=()=>{limite+=40;buscar();};res.append(mais);}
     };
     inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
@@ -776,7 +776,7 @@
     const b = el('button', 'bt prim', 'Colocar peça em preparação'); b.type = 'button'; b.setAttribute('aria-expanded', 'false');
     const caixa = el('div'); caixa.hidden = true; caixa.style.cssText = 'display:grid;gap:8px';
     const ja = new Set(r.produtos.map((x) => x.id));
-    const busca = buscaCatalogo({ id: 'prep-busca', rotulo: 'Qual peça vai ser preparada?', padrao: 'todas', fora: (x) => ja.has(String(x.ID)), linha: (x, st) => {
+    const busca = buscaCatalogo({ id: 'prep-busca', rotulo: 'Qual peça vai ser preparada?', padrao: 'ativas', fora: (x) => ja.has(String(x.ID)), linha: (x, st) => {
       const it = el('button', 'peca'); it.type = 'button';
       const t = el('div', 't'); t.append(el('b', '', x.Nome || 'Peça ' + x.ID), el('small', 'muted', [x.Codigo, x.Categoria, situacaoTxt(x)].filter(Boolean).join(' · ')));
       it.append(foto(x.Foto_URL), t, el('span', 'chip al', 'Preparar')); it.setAttribute('aria-label', 'Colocar ' + (x.Nome || 'peça') + ' em preparação');
@@ -880,7 +880,7 @@
     const bAdd = bt('Adicionar fotos', 'laranja add-fotos', () => arq.click()); bAdd.title = 'Câmera ou galeria';
     const bOk = bt('Feito', 'feito-fotos');
     const ac = acoes(bAdd, bOk);
-    const pronto = (txt) => { ac.replaceChildren(); st.diga(txt, 'ok'); c.classList.add('feito'); setTimeout(() => { if (c.isConnected) aoMudar(); }, 1600); };
+    const pronto = (txt) => { ac.replaceChildren(); st.diga(txt, 'ok'); c.classList.add('feito'); setTimeout(() => { if (c.isConnected&&ABA!=='fotos') aoMudar(); }, 1600); };
     arq.onchange=async()=>{const fs=[...arq.files].slice(0,8);if(!fs.length)return;bAdd.disabled=true;bOk.disabled=true;
       try{const id=await guardarProcesso('fotos',{produto:String(pd.produto),fotos:fs,tarefas:ids},'Fotos pedidas: '+(pd.nome||pd.produto));arq.value='';void processos.aguardar(id).then(r=>{if(!r.ok&&st.isConnected){bAdd.disabled=bOk.disabled=false;st.diga(r.erro,'erro')}});st.diga('Fotos guardadas na fila. Pode continuar trabalhando.','ok');}
       catch(e){bAdd.disabled=bOk.disabled=false;st.diga(e.message,'erro');}
@@ -934,7 +934,7 @@
   }
   /** Escolher peça do catálogo (busca com filtros) dentro de uma folha: devolve o produto escolhido em aoEscolher(x). */
   function escolherPeca(id, rotulo, aoEscolher) {
-    return buscaCatalogo({ id, rotulo, padrao: 'todas', linha: (x) => {
+    return buscaCatalogo({ id, rotulo, padrao: 'ativas', linha: (x) => {
       const it = el('button', 'peca'); it.type = 'button'; it.dataset.escolher = String(x.ID);
       const t = el('div', 't'); t.append(el('b', '', x.Nome || 'Peça ' + x.ID), el('small', 'muted', [x.Codigo, x.Categoria, situacaoTxt(x)].filter(Boolean).join(' · ')));
       it.append(foto(x.Foto_URL), t, el('span', 'chip al', 'Escolher')); it.setAttribute('aria-label', 'Escolher ' + (x.Nome || 'peça'));
@@ -1056,7 +1056,7 @@
         bOk.textContent = urls.length === 1 ? 'Colocar a foto no produto' : 'Colocar as ' + urls.length + ' fotos no produto';
       };
       async function colocar(){if(!alvo)return;bOk.disabled=true;
-        try{const id=await guardarProcesso('colocar',{produto:String(alvo.ID),produtoNome:alvo.Nome||'',ids:itens.map(i=>i.id),urls,capa},'Colocar fotos em '+(alvo.Nome||alvo.ID),'colocar:'+itens.map(i=>i.id).join(','));fechar();aoTerminar?.('Fotos guardadas na fila.',itens.map(i=>i.id));const origem=versaoTela;void processos.aguardar(id).then(r=>{if(r.ok&&origem===versaoTela)aoTerminar?.(itens.length+' foto'+(itens.length===1?' colocada':'s colocadas')+' em '+alvo.Nome+'.')});}
+        try{const id=await guardarProcesso('colocar',{produto:String(alvo.ID),produtoNome:alvo.Nome||'',ids:itens.map(i=>i.id),urls,capa},'Colocar fotos em '+(alvo.Nome||alvo.ID),'colocar:'+itens.map(i=>i.id).join(','));fechar();aoTerminar?.('Fotos guardadas na fila.',itens.map(i=>i.id));const origem=versaoTela;void processos.aguardar(id).then(r=>{if(r.ok&&origem===versaoTela){const st=document.getElementById('fotos-status');if(st?.diga)st.diga(itens.length+' foto'+(itens.length===1?' colocada':'s colocadas')+' em '+alvo.Nome+'. Use “Atualizar fotos” para rever a lista.','ok');}});}
         catch(e){bOk.disabled=false;st.diga(e.message||'Não consegui guardar a solicitação.','erro');}
       }
       corpo.append(miniFotos(urls), boxAlvo, busca, st); pe.append(bOk);
@@ -1079,7 +1079,7 @@
         });
         a.href = 'admin.html?caixaFotos=' + ids + '&modo=' + modo;
       };
-      a.onclick = () => { srv('/esteira/caixa/usar', { ids: itens.map((i) => i.id), uso: 'cadastro' }).then(() => aoTerminar && aoTerminar('O cadastro abriu em outra aba. As fotos ficam marcadas “em cadastro” até o produto ser salvo.')); setTimeout(fechar, 0); };
+      a.onclick = () => { srv('/esteira/caixa/usar', { ids: itens.map((i) => i.id), uso: 'cadastro' }).then(r => {if(r.foraDaTela||!r.ok){const st=document.getElementById('fotos-status');if(st?.diga)st.diga(r.ok?'O cadastro abriu. Use “Atualizar fotos” para rever a lista.':r.erro||'Não consegui confirmar a caixa.','muted');return;}aoTerminar?.('O cadastro abriu em outra aba. As fotos ficam marcadas “em cadastro” até o produto ser salvo.');}); setTimeout(fechar, 0); };
       corpo.append(miniFotos(urls), opc, el('p', 'muted dica', 'Abre a Gestão em outra aba já com as fotos. Lá você confere os dados e cadastra.')); pe.append(a); pintar();
     });
   }
@@ -1098,14 +1098,14 @@
     app.replaceChildren(); catalogoFundo();
     const topo = el('div', 'card'); topo.id = 'fotos-topo'; topo.append(el('h2', '', 'Fotos'));
     const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (AVISO_FOTOS) stTopo.diga(AVISO_FOTOS, 'ok');
-    topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de uma peça', '', () => abrirPedirFotos(null, (m) => telaFotos(m)))), stTopo);
+    topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de uma peça', '', () => abrirPedirFotos(null, (m) => telaFotos(m))), bt('Atualizar fotos', 'leve', () => {fluidez.invalidar();telaFotos();}), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros())), stTopo);
     app.append(topo);
     const pend = await cxTodos();                    // envio interrompido: continua sozinho e mostra o andamento
     if (pend.length) {
       const c = el('div', 'card aviso-cx'); c.id = 'caixa-pendente'; const st = linhaStatus();
       c.append(el('p', '', (pend.length === 1 ? '1 foto ainda não chegou' : pend.length + ' fotos ainda não chegaram') + ' à caixa. Continuando o envio…'), st);
       topo.after(c);
-      cxProcessar((m) => st.diga(m)).then((x) => { if (!x.faltam && !x.erro && ABA==='fotos' && c.isConnected) telaFotos((x.enviadas === 1 ? '1 foto' : x.enviadas + ' fotos') + ' do envio interrompido ' + (x.enviadas === 1 ? 'chegou' : 'chegaram') + ' à caixa.'); else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); } });
+      cxProcessar((m) => st.diga(m)).then((x) => { if (!x.faltam && !x.erro && ABA==='fotos' && c.isConnected) st.diga('Envio concluído. Use “Atualizar fotos” quando terminar o que está fazendo.', 'ok'); else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); } });
     }
     const cp = el('div', 'card'); cp.id = 'fotos-pedidas';
     cp.append(el('h2', '', 'Fotos pedidas'));
@@ -1151,6 +1151,7 @@
         const info = el('div', 'cx-info');
         if (i.descricao) info.append(el('span', 'cx-desc', i.descricao));
         else if (!i0.descricaoLote) info.append(el('span', 'muted', 'Sem descrição'));
+        if(i.descricaoLote&&i.descricaoLote!==i0.descricaoLote)info.append(el('span','cx-desc','“'+i.descricaoLote+'”'));
         const chips = el('div', 'cx-chips');
         if (i.status === 'cadastro') chips.append(el('span', 'chip al', 'Em cadastro'));
         if (i.status === 'usada') chips.append(el('span', 'chip ok', '✓ Usada'));
@@ -1161,6 +1162,7 @@
         if (i.status === 'usada') info.append(el('small', 'muted', 'Em ' + (i.usoNome || 'Peça ' + i.usoProduto) + (i.usadaPor ? ', por ' + i.usadaPor : '') + ' em ' + dataBR(i.usadaEm) + '.'));
         if (i.status === 'cadastro') info.append(el('small', 'muted', 'Aberto' + (i.usadaPor ? ' por ' + i.usadaPor : '') + ' em ' + dataBR(i.usadaEm) + '.'));
         card.append(info);
+        if(i.minha||EU?.admin)card.append(bt('Editar descrição','leve',()=>abrirRegistros('foto',i.id)));
         if (gestor && (i.status === 'nova' || i.status === 'cadastro')) {
           const b = el('button', 'cx-sel', 'Escolher'); b.type = 'button'; b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Escolher a foto ' + (r.itens.indexOf(i) + 1));
           b.onclick = () => { if (sel.has(i.id)) sel.delete(i.id); else sel.add(i.id); b.setAttribute('aria-pressed', String(sel.has(i.id))); b.textContent = sel.has(i.id) ? '✓ Escolhida' : 'Escolher'; card.classList.toggle('sel', sel.has(i.id)); atualizarBarra(); };
@@ -1268,6 +1270,50 @@
     const nomes = campos.filter(([, c]) => c && c.foraDaLista && c.foraDaLista()).map(([n]) => n);
     return nomes.length ? 'Escolha ' + nomes.join(', ') + ' da lista da Gestão (o que está marcado “fora da lista” não pode ser salvo).' : '';
   }
+  function abrirRegistros(tipo='foto',id=0){
+    abrirFolha('esteira-registros',EU?.admin?'Registros da equipe':'Meus registros',({corpo})=>{
+      const filtro=el('label','campo');filtro.append(document.createTextNode('Tipo de registro'));
+      const select=el('select');select.setAttribute('aria-label','Tipo de registro');
+      for(const [v,t]of [['foto','Fotos enviadas'],['pedido_fotos','Pedidos de fotos'],['conferencia','Conferências'],['tarefa','Tarefas concluídas']]){const op=el('option','',t);op.value=v;select.append(op);}select.value=tipo;filtro.append(select);
+      const lista=el('div'),st=linhaStatus();corpo.append(filtro,st,lista);let vez=0;
+      const resumo=r=>r.tipo==='foto'?[r.campos.descricao,r.campos.descricao_lote].filter(Boolean).join(' · '):r.tipo==='pedido_fotos'?(()=>{try{return JSON.parse(r.campos.detalhe).obs||'';}catch(_){return '';}})():r.campos.obs;
+      const carregar=async(antes=0)=>{
+        const v=++vez,t=select.value;st.diga('Carregando registros…');
+        if(!antes)lista.replaceChildren();
+        const r=await srv('/esteira/registros?tipo='+t+(antes?'&antes='+antes:'')+(id?'&id='+id:''));
+        if(v!==vez||!corpo.isConnected)return;if(!r.ok)return st.diga(r.erro||'Não consegui carregar.','erro');st.diga('');
+        if(!r.itens.length&&!antes)st.diga('Nenhum registro deste tipo.');
+        for(const registro of r.itens){
+          const linha=el('div','card'),texto=el('p','',resumo(registro)||'Sem observação');linha.dataset.registro=registro.tipo+'-'+registro.id;
+          linha.append(el('b','',registro.titulo+(registro.produto?' · Peça '+registro.produto:'')),el('small','muted',registro.por+' · '+dataBR(registro.em)),texto,bt('Editar','leve',()=>editarRegistro(registro,novo=>{Object.assign(registro,novo);texto.textContent=resumo(novo)||'Sem observação';})));
+          lista.append(linha);
+        }
+        if(r.proximo){const mais=bt('Mais registros','leve',()=>{mais.remove();carregar(r.proximo);});lista.append(mais);}
+      };
+      select.onchange=()=>{id=0;carregar();};void carregar();
+    });
+  }
+  function editarRegistro(registro,aoSalvar){
+    abrirFolha('esteira-registro-editar','Editar registro',({corpo,fechar})=>{
+      corpo.append(el('p','muted',registro.titulo+' · '+registro.por));const campos={};
+      const adicionar=(chave,rotulo,valor)=>{const [l,i]=campoTexto(rotulo,valor,{area:true,max:300});i.setAttribute('aria-label',rotulo);campos[chave]=i;corpo.append(l);};
+      if(registro.tipo==='foto'){adicionar('descricao','Descrição da foto',registro.campos.descricao);adicionar('descricao_lote','Observação desta foto no envio',registro.campos.descricao_lote);}
+      else if(registro.tipo==='pedido_fotos'){let d={};try{d=JSON.parse(registro.campos.detalhe);}catch(_){}adicionar('obs','Observação do pedido',d.obs||'');}
+      else adicionar('obs','Observação',registro.campos.obs);
+      const st=linhaStatus(),salvar=bt('Salvar alterações','laranja',async()=>{
+        salvar.disabled=true;st.diga('Salvando…');
+        const dados=Object.fromEntries(Object.entries(campos).map(([k,i])=>[k,i.value]));
+        const r=await srv('/esteira/registro-editar',{tipo:registro.tipo,id:registro.id,versao:registro.versao,...dados});
+        salvar.disabled=false;if(!r.ok){fluidez.invalidar();st.diga(r.erro||'Não consegui salvar. Seu texto foi mantido.','erro');if(corpo.isConnected&&document.activeElement===document.body)Object.values(campos)[0]?.focus({preventScroll:true});return;}
+        const novoTexto=Object.entries(campos).some(([k,i])=>i.value!==dados[k]);
+        Object.assign(registro,r.registro);aoSalvar(r.registro);
+        if(novoTexto&&corpo.isConnected){st.diga('Alteração enviada salva. Há texto novo ainda não salvo.','ok');return;}
+        fechar();const aviso=$('fotos-status');if(aviso?.diga)aviso.diga('Alteração salva. Use “Atualizar fotos” para rever a lista.','ok');
+      });
+      // Dentro do corpo: a fila não fecha o editor antes da confirmação do servidor.
+      corpo.append(st,acoes(salvar,bt('Cancelar','leve',fechar)));
+    });
+  }
   function abrirFolha(chave, titulo, montar) {
     const ant = document.activeElement;
     const fundo = el('div', 'fundo'), folha = el('div', 'folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-label', titulo);
@@ -1276,6 +1322,7 @@
     const corpo = el('div', 'corpo'), pe = el('div', 'pe'); folha.append(topo, corpo, pe); fundo.append(folha);
     const fechar = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (estava&&ant&&ant.isConnected) ant.focus({preventScroll:true}); };
     fundo.esteiraFechar=fechar;
+    fundo.esteiraDono=String(getSessao()?.whatsapp||'');
     x.onclick = fechar; fundo.onclick = (e) => { if (e.target === fundo) fechar(); };
     fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fechar(); } };
     montar({ corpo, pe, fechar }); pe.hidden = !pe.childNodes.length;
@@ -2033,7 +2080,7 @@
 
   let guardandoProcessos=0;
   async function guardarProcesso(tipo,dados,titulo,chave){guardandoProcessos++;document.documentElement.dataset.esteiraGuardando='1';try{return await processos.adicionar(tipo,dados,titulo,chave)}finally{guardandoProcessos--;if(!guardandoProcessos)delete document.documentElement.dataset.esteiraGuardando;}}
-  function refrescarDepois(){fluidez.invalidar();CATALOGO=null;HOJE=null;const origem=versaoTela,toques=interacao;setTimeout(()=>{if(origem===versaoTela&&toques===interacao&&fluidez.visivel()&&!['editor','contagem','aprovacao','aplicacao'].includes(app.dataset.tela)&&!document.querySelector('.fundo')&&!document.activeElement?.matches('input,textarea,select'))void abrirAba();},1700)}
+  function refrescarDepois(){fluidez.invalidar();CATALOGO=null;HOJE=null;const origem=versaoTela,toques=interacao;setTimeout(()=>{if(ABA!=='fotos'&&origem===versaoTela&&toques===interacao&&fluidez.visivel()&&!['editor','contagem','aprovacao','aplicacao'].includes(app.dataset.tela)&&!document.querySelector('.fundo')&&!document.activeElement?.matches('input,textarea,select'))void abrirAba();},1700)}
 
   /* ---------- início ---------- */
   async function iniciar() {
@@ -2041,10 +2088,10 @@
     fotosLocais.forEach((v,k)=>URL.revokeObjectURL(k));fotosLocais.clear();usuario = null; HOJE = null; AVISO_FOTOS=''; fluidez.invalidar();
     await telaHoje();
   }
-  setInterval(()=>{if(!document.hidden&&fluidez.visivel()&&!document.querySelector('.fundo,.cx-sel[aria-pressed=true]')&&![...document.querySelectorAll('.overlay')].some(e=>e.getClientRects().length))abrirAba();},30000);
-  window.addEventListener('online',()=>{fluidez.invalidar();if(fluidez.visivel())abrirAba();});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&fluidez.visivel()){fluidez.invalidar();abrirAba();}});
-  window.addEventListener('tk:sessao',()=>{fluidez.limpar();iniciar();});
+  setInterval(()=>{if(ABA!=='fotos'&&!document.hidden&&fluidez.visivel()&&!document.querySelector('.fundo,.cx-sel[aria-pressed=true]')&&![...document.querySelectorAll('.overlay')].some(e=>e.getClientRects().length))abrirAba();},30000);
+  window.addEventListener('online',()=>{fluidez.invalidar();if(ABA!=='fotos'&&fluidez.visivel())abrirAba();});
+  document.addEventListener('visibilitychange',()=>{if(ABA!=='fotos'&&!document.hidden&&fluidez.visivel()){fluidez.invalidar();abrirAba();}});
+  window.addEventListener('tk:sessao',()=>{document.querySelectorAll('.fundo').forEach(f=>{if(f.esteiraDono!==String(getSessao()?.whatsapp||''))f.esteiraFechar?.();});fluidez.limpar();iniciar();});
   let larguraAbas = window.innerWidth; window.addEventListener('resize', () => { if ((window.innerWidth > 560) !== (larguraAbas > 560) && EU) desenharAbas(); larguraAbas = window.innerWidth; });
   iniciar();
 })();

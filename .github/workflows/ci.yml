@@ -152,7 +152,7 @@ jobs:
       - name: Preparação de vídeo sem envio
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y --no-install-recommends ffmpeg
           python3 tests/transcode_profiles.py
           python3 tests/android_manifest_release.py
           python3 tests/video_processor_http.py
@@ -300,6 +300,7 @@ jobs:
           TK_EVID=tests/saida/postagens-retomar python3 tests/postagens_retomar_limites.py
           TK_EVID=tests/saida/fotos-postadas python3 tests/fotos_postadas_ui.py
           TK_EVID=tests/saida/esteira-fotos python3 tests/esteira_fotos_ui.py
+          TK_EVID=tests/saida/esteira-fotos/continuidade python3 tests/esteira_continuidade_edicao_ui.py
           TK_EVID=tests/saida/pedir-fotos-lote python3 tests/pedir_fotos_lote.py
           python3 tests/mensagens_gestor_ui.py
           python3 tests/tempo_presenca_ui.py
