@@ -1737,11 +1737,16 @@ export function fimDaSequencia_(cfg, buckets, ocupMap, desdeMs) {
 export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) { return proximoLivreMulti(cfg, [tipo], { [tipo]: ocupadosMs }, desdeMs, sorteio); }
 async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGet(env, 'po_cfg')) || 'null'); } catch (e) { j = null; } return normalizarCfgPost(j); }
 /** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
-async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas, excluirSerie) {
+async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas, excluirSerie, excluirOrigem, excluirIds) {
   const desde = new Date(Date.now() - janelaMs - 60000).toISOString();
   const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status2' ? "canal='whatsapp2'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
   const bind = bucket === 'status' || bucket === 'grupo' || bucket === 'status2' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
-  const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=?"+(excluirSerie?" AND COALESCE(serie,'')<>?":'')+" AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...(excluirSerie?[...bind.slice(0,-1),excluirSerie,bind.at(-1)]:bind)).all()).results || [];
+  const filtros=[],valores=bind.slice(0,-1);
+  if(excluirSerie){filtros.push(" AND COALESCE(serie,'')<>?");valores.push(excluirSerie);}
+  if(excluirOrigem){filtros.push(" AND COALESCE(origem_midia,'')<>?");valores.push(excluirOrigem);}
+  if(excluirIds){filtros.push(" AND id NOT IN(SELECT value FROM json_each(?))");valores.push(JSON.stringify(excluirIds));}
+  valores.push(bind.at(-1));
+  const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=?"+filtros.join('')+" AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...valores).all()).results || [];
   return q.map((r) => Date.parse(r.status === 'publicado' || r.status === 'manual_feito' ? r.publicado_em : r.agendado_em)).filter((x) => isFinite(x));
 }
 /** Ocupados de VÁRIOS canais de uma vez: { story: [...], status: [...] }. */
@@ -1998,6 +2003,40 @@ async function validarSeriesPost_(env,req,lista,vs){
   }
   for(const g of grupos.values())if(g.refs.length!==g.total||g.refs[0].parte!==1)throw Error('Inclua todas as partes do mesmo vídeo, na ordem original.');
 }
+async function reagendarMidiaOriginal_(env,ctx,linha,quando,J){
+  // Legado usa a mesma identidade do card (tipo, grupo, minuto e URLs), nunca só uma URL solta.
+  let todos;
+  if(linha.origem_midia)todos=(await env.DB.prepare("SELECT * FROM postagem WHERE origem_midia=? AND status<>'cancelado' ORDER BY id").bind(linha.origem_midia).all()).results||[];
+  else {
+    const candidatos=(await env.DB.prepare("SELECT * FROM postagem WHERE COALESCE(origem_midia,'')='' AND tipo=? AND COALESCE(grupo,'')=? AND substr(criado_em,1,16)=? AND status<>'cancelado' ORDER BY id").bind(linha.tipo,linha.grupo||'',String(linha.criado_em).slice(0,16)).all()).results||[];
+    const urls=x=>JSON.parse(x.midias||'[]').map(m=>m.url).join('|');todos=candidatos.filter(x=>!x.serie&&urls(x)===urls(linha));
+  }
+  const ids=todos.map(x=>x.id),escopo="id IN(SELECT value FROM json_each(?))",idsJson=JSON.stringify(ids);
+  const ps=todos.filter(x=>['agendado','manual_pendente'].includes(x.status)||x.status==='erro'&&(linha.status==='erro'||!!linha.serie));
+  if(!ps.length||!ps.some(x=>x.id===linha.id)||ps.length>200)return J({ok:false,erro:'Essa mídia mudou. Atualize a fila antes de alterar o horário.'},409);
+  // Um comprovante incerto nunca vira uma nova tentativa por uma troca de horário.
+  if(todos.some(x=>x.status==='processando')||ps.some(x=>x.ig_id||x.zap_estado)||await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo r JOIN postagem p ON p.id=r.postagem_id WHERE p."+escopo+" AND r.estado<>'recusado' AND p.status IN ('agendado','erro','manual_pendente')").bind(idsJson).first())return J({ok:false,erro:'Há envio aguardando confirmação nesta mídia. Confira o resultado antes de mudar seus horários.'},409);
+  for(const p of ps){
+    if(p.serie){const partes=todos.filter(x=>x.serie===p.serie);if(partes.length!==p.partes||partes.some(x=>!ps.includes(x)))return J({ok:false,erro:'Este vídeo já começou. As partes confirmadas não serão repetidas.'},409);}
+    if(p.canal==='grupo'){const erro=await erroVideoGrupo_(env,JSON.parse(p.midias||'[]'));if(erro)return J({ok:false,erro},400);}
+  }
+  const v=validarPostagem({...linhaPostagem(linha),quando});if(v.erro)return J({ok:false,erro:v.erro},400);
+  const cfg=await lerCfgPost(env),bs=[...new Set(ps.flatMap(x=>bucketsDoPost(x.tipo,x.canal)))],ocup={};
+  const editorial=Math.max(...ps.map(x=>Number(x.intervalo_ms)||0));
+  const ajustada={...cfg,canais:{...cfg.canais}};
+  for(const b of bs){ocup[b]=await ocupadosDoTipo_(env,b,0,Math.max(gapMaxDoTipoMs(cfg,b),editorial),false,null,linha.origem_midia,ids);ajustada.canais[b]={...cfg.canais[b],gapMin:Math.max(cfg.canais[b].gapMin,editorial/1000)};}
+  const ajuste=v.v.urgente&&cfg.agoraIgnora?{t:Date.now()}:v.v.sequencia?proximoLivreMulti(ajustada,bs,ocup,Date.now()+60000):ajustarHorarioMulti(ajustada,bs,Math.max(Date.parse(v.v.quando),Date.now()),ocup);
+  const em=new Date(ajuste.t).toISOString(),atualizado=agora();
+  const snapshot=JSON.stringify(ps.map(x=>({id:x.id,status:x.status,horario:x.agendado_em,atualizado:x.atualizado_em||'',ig:x.ig_id||'',zap:x.zap_estado||''})));
+  // Uma única escrita, com comparação do snapshot completo dentro da mesma transação.
+  const r=await env.DB.batch([
+    env.DB.prepare("UPDATE postagem SET status='agendado',agendado_em=?,tentativas=0,erro='',containers='',urgente=?,atualizado_em=? WHERE id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND (SELECT COUNT(*) FROM json_each(?) s JOIN postagem q ON q.id=json_extract(s.value,'$.id') WHERE q.status=json_extract(s.value,'$.status') AND q.agendado_em=json_extract(s.value,'$.horario') AND COALESCE(q.atualizado_em,'')=json_extract(s.value,'$.atualizado') AND COALESCE(q.ig_id,'')=json_extract(s.value,'$.ig') AND COALESCE(q.zap_estado,'')=json_extract(s.value,'$.zap'))=? AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo g JOIN postagem q ON q.id=g.postagem_id WHERE q."+escopo+" AND q.status IN ('agendado','erro','manual_pendente') AND g.estado<>'recusado') AND NOT EXISTS(SELECT 1 FROM postagem q WHERE q."+escopo+" AND q.status='processando')").bind(em,v.v.urgente?1:0,atualizado,snapshot,snapshot,ps.length,idsJson,idsJson),
+    env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE estado='recusado' AND postagem_id IN(SELECT id FROM postagem WHERE "+escopo+" AND atualizado_em=? AND agendado_em=?) AND changes()>0").bind(idsJson,atualizado,em)
+  ]);
+  if(r[0].meta?.changes!==ps.length)return J({ok:false,erro:'A mídia mudou durante o ajuste. Nenhum horário foi alterado; atualize a fila.'},409);
+  if(ajuste.t<=Date.now()+1000&&ctx?.waitUntil)ctx.waitUntil(dispararPostagens_(env));
+  return J({ok:true,quando:em,destinos:ps.length,partes:linha.serie?ps.filter(x=>x.serie===linha.serie).length:undefined,ajustado:!!ajuste.ajustado,motivo:ajuste.motivo||''});
+}
 async function reagendarVideoOriginal_(env,ctx,linha,quando,J){
   const ps=(await env.DB.prepare('SELECT * FROM postagem WHERE serie=? ORDER BY parte').bind(linha.serie).all()).results||[];
   if(linha.parte!==1||ps.length!==linha.partes||ps.some((x,i)=>x.parte!==i+1||!['agendado','erro'].includes(x.status)))return J({ok:false,erro:'Este vídeo já começou ou contém partes indisponíveis. As partes confirmadas não serão repetidas; consulte ou tente novamente apenas a parte com erro.'},409);
@@ -2102,22 +2141,41 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   if (p === '/post/reorganizar' && req.method === 'POST') {
     /* Ajusta as postagens JÁ agendadas às regras atuais (depois de o gestor mudar a pausa ou os intervalos). `simular:true` só conta. */
     if ((perms || []).indexOf('gerir_acessos') === -1) return J({ ok: false, erro: 'Só o gestor (Admin total) reorganiza a fila.' }, 403);
-    const cfg = await lerCfgPost(env), limite = Date.now() + 60000;
-    let mudaram = 0; const detalhes = [], ocup = {};
-    for (const b of CANAIS_FILA) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b), true);
-    const lst = (await env.DB.prepare("SELECT id, tipo, canal, agendado_em FROM postagem WHERE status='agendado' AND urgente=0 AND serie='' ORDER BY agendado_em, id").all()).results || [];
-    for (const x of lst) {                                                   // em ordem de horário; uma postagem "ambos" é ajustada para servir aos dois canais de uma vez
-      const bs = bucketsDoPost(x.tipo, x.canal), atual = Date.parse(x.agendado_em);
-      if (!isFinite(atual) || atual <= limite) { if (isFinite(atual)) bs.forEach((b) => ocup[b].push(atual)); continue; }     // o que já vai sair em instantes não se mexe
-      const r = ajustarHorarioMulti(cfg, bs, atual, ocup); bs.forEach((b) => ocup[b].push(r.t));
-      if (r.t !== atual) { mudaram++; detalhes.push({ id: x.id, tipo: x.tipo, de: x.agendado_em, para: new Date(r.t).toISOString() }); if (!(b && b.simular)) await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), x.id).run(); }
+    const cfg=await lerCfgPost(env),inicio=Date.now()+60000,ocup={};
+    const rows=(await env.DB.prepare("SELECT p.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=p.id AND g.estado<>'recusado') AS recibo FROM postagem p WHERE p.status='agendado' OR p.origem_midia IN (SELECT origem_midia FROM postagem WHERE status='agendado' AND origem_midia<>'') ORDER BY p.agendado_em,p.id").all()).results||[];
+    const grupos=new Map();
+    for(const x of rows){const k=x.origem_midia||(!x.serie&&x.criado_em&&JSON.parse(x.midias||'[]').length?'legado:'+x.tipo+':'+(x.grupo||'')+':'+String(x.criado_em).slice(0,16)+':'+JSON.parse(x.midias).map(m=>m.url).join('|'):'id:'+x.id);if(!grupos.has(k))grupos.set(k,[]);grupos.get(k).push(x);}
+    const aptos=[...grupos.values()].map(xs=>({xs,ps:xs.filter(x=>x.status==='agendado'),parcial:xs.some(x=>['publicado','manual_feito'].includes(x.status))})).filter(g=>g.ps.length&&g.ps.every(x=>x.modo==='auto'&&!x.urgente&&!x.ig_id&&!x.zap_estado&&!x.recibo)&&!g.xs.some(x=>x.status==='processando')&&!g.xs.some(x=>x.serie&&(!x.origem_midia||x.status!=='agendado')));
+    const selecionados=new Set(aptos.flatMap(g=>g.ps.map(x=>x.id)));
+    for(const bucket of CANAIS_FILA)ocup[bucket]=await ocupadosDoTipo_(env,bucket,0,gapMaxDoTipoMs(cfg,bucket),true);
+    for(const x of rows)if(x.status==='agendado'&&!selecionados.has(x.id))for(const bucket of bucketsDoPost(x.tipo,x.canal))ocup[bucket].push(Date.parse(x.agendado_em));
+    aptos.sort((a,c)=>(b?.priorizarPendentes?Number(c.parcial)-Number(a.parcial):0)||Math.min(...a.ps.map(x=>Date.parse(x.agendado_em)))-Math.min(...c.ps.map(x=>Date.parse(x.agendado_em)))||a.ps[0].id-c.ps[0].id);
+    const plano=[];let cursor=inicio;
+    for(const g of aptos){
+      const bs=[...new Set(g.ps.flatMap(x=>bucketsDoPost(x.tipo,x.canal)))],editorial=Math.max(...g.ps.map(x=>Number(x.intervalo_ms)||0)),ajustada={...cfg,canais:{...cfg.canais}};
+      for(const bucket of bs)ajustada.canais[bucket]={...cfg.canais[bucket],gapMin:Math.max(cfg.canais[bucket].gapMin,editorial/1000)};
+      const desejado=b?.priorizarPendentes?cursor:Math.max(inicio,...g.ps.map(x=>Date.parse(x.agendado_em)));
+      const r=ajustarHorarioMulti(ajustada,bs,desejado,ocup),para=new Date(r.t).toISOString();
+      for(const bucket of bs)ocup[bucket].push(r.t);
+      cursor=r.t+Math.max(editorial,...bs.map(bucket=>gapDoTipoMs(cfg,bucket)));
+      for(const x of g.ps)plano.push({id:x.id,status:x.status,horario:x.agendado_em,atualizado:x.atualizado_em||'',para});
     }
-    return J({ ok: true, mudaram: mudaram, simulado: !!(b && b.simular), detalhes: detalhes.slice(0, 30) });
+    if(plano.length>200)return J({ok:false,erro:'A fila tem mais de 200 destinos. Nenhum horário foi alterado; revise em lotes.'},409);
+    const mudam=plano.filter(x=>x.horario!==x.para),detalhes=mudam.map(x=>({id:x.id,de:x.horario,para:x.para}));
+    if(b?.simular||!mudam.length)return J({ok:true,mudaram:mudam.length,simulado:!!b?.simular,detalhes,preservados:rows.filter(x=>x.status==='agendado'&&!selecionados.has(x.id)).length});
+    const em=agora(),json=JSON.stringify(plano),backup='backup-alinhar-horarios-'+crypto.randomUUID();
+    const resultados=await env.DB.batch([
+      env.DB.prepare('INSERT INTO cfg(chave,valor) VALUES(?,?)').bind(backup,JSON.stringify({em,priorizarPendentes:!!b?.priorizarPendentes,antes:plano})),
+      env.DB.prepare("UPDATE postagem SET agendado_em=(SELECT json_extract(value,'$.para') FROM json_each(?) WHERE json_extract(value,'$.id')=postagem.id),atualizado_em=? WHERE id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND (SELECT COUNT(*) FROM json_each(?) s JOIN postagem q ON q.id=json_extract(s.value,'$.id') WHERE q.status=json_extract(s.value,'$.status') AND q.agendado_em=json_extract(s.value,'$.horario') AND COALESCE(q.atualizado_em,'')=json_extract(s.value,'$.atualizado') AND COALESCE(q.ig_id,'')='' AND COALESCE(q.zap_estado,'')='')=? AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND g.estado<>'recusado')").bind(json,em,json,json,plano.length,json)
+    ]);
+    if(resultados[1].meta?.changes!==plano.length)return J({ok:false,erro:'A fila mudou durante a revisão. Nenhum horário foi alterado; simule novamente.'},409);
+    return J({ok:true,mudaram:mudam.length,simulado:false,detalhes,backup,preservados:rows.filter(x=>x.status==='agendado'&&!selecionados.has(x.id)).length});
   }
   const id = Number(b.id) || 0;
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
   if (p.indexOf('/post/') === 0 && req.method === 'POST') {
     if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
+    if((linha.origem_midia||!linha.serie&&linha.criado_em&&JSON.parse(linha.midias||'[]').length)&&['/post/reagendar','/post/proximo'].includes(p))return reagendarMidiaOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
     if(linha.serie&&(p==='/post/proximo'||p==='/post/reagendar'&&linha.parte===1))return reagendarVideoOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
     if(linha.serie&&['/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
 

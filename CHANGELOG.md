@@ -12,6 +12,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.55.4] - 2026-11-05
+
+- Alterar Horário ou Próximo livre calcula e grava um horário comum para todos os destinos pendentes da mesma mídia, incluindo registros antigos identificáveis. Evita que um canal fique16:00 e outro16:33 por ajustes separados.
+- Reorganização da fila alinha os canais por origem; modo explícito de prioridade atende mídias parcialmente pendentes antes das ainda não iniciadas, com simulação e backup privado recuperável.
+- Preserva publicados, envios em confirmação, pausas e intervalos; concorrência recusa a alteração inteira em vez de mover só alguns destinos. Nenhuma recuperação automática de erros históricos.
+
+
 ## [7.55.3] - 2026-11-05
 
 - Agendamento da mesma mídia compartilha horário e intervalo entre Story, Grupo 1 e os dois Status, respeitando a fila e os mínimos de todos os destinos selecionados.
