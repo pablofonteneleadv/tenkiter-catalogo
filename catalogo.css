@@ -261,7 +261,7 @@
   .linha-share-busca button[hidden] { display: none; }
   .linha-share-busca #btn-share-busca { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
   .linha-share-busca #btn-lote-menu { background: #0d0d0d; color: #fff; }
-  .lote-menu { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border: 2px solid #0d0d0d; border-radius: 14px; background: #fff; }
+  .lote-menu { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border: 2px solid #0d0d0d; border-radius: 14px; background: #fff; max-height: min(50dvh, 360px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; }
   .lote-menu[hidden] { display: none; }
   .lote-menu button { box-shadow: none; font-size: .85rem; flex: 1 1 45%; }
   .barra-filtros-flut button { width: auto; flex: none; min-height: 36px; padding: 4px 12px; border-radius: 9px; border: 0; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: .76rem; cursor: pointer; white-space: nowrap; }

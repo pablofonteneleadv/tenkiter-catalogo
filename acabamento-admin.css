@@ -90,7 +90,7 @@ body .atalhos-linha button {
   display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px;
   min-height: 44px; padding: 8px 12px; border-radius: var(--tk-raio-p);
   background: var(--tk-superficie); border: 1px solid var(--tk-borda); color: var(--tk-texto);
-  font-size: 0.86rem; font-weight: 600; text-align: left; line-height: 1.2;
+  font-size: 0.86rem; font-weight: 600; text-align: left; line-height: 1.2; white-space: normal;
 }
 body .atalhos-linha button:hover { background: #f3efe8; }
 body .atalhos-linha button[hidden] { display: none; }
@@ -100,7 +100,7 @@ body .atalhos-linha button[hidden] { display: none; }
 body details.ferramentas { border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: var(--tk-superficie); padding: 0 12px; }
 body details.ferramentas > summary {
   display: flex; align-items: center; gap: 8px; min-height: 48px;
-  font-size: 0.86rem; font-weight: 600; color: var(--tk-texto);
+  font-size: 1rem; font-weight: 600; color: var(--tk-texto); box-sizing: border-box;
 }
 body details.ferramentas[open] { padding-bottom: 12px; }
 body details.extra:not(.ferramentas) > summary { min-height: 44px; display: flex; align-items: center; }
@@ -261,7 +261,7 @@ body .ferr-lista { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8p
 @media (min-width: 600px) { body .ferr-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 900px) { body .ferr-lista { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 body .ferr-tile {
-  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 12px; margin: 0;
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 12px; margin: 0;
   background: var(--tk-superficie); border: 1px solid var(--tk-borda); border-radius: var(--tk-raio);
   color: var(--tk-texto); text-align: left; text-decoration: none; font-weight: 400; cursor: pointer; box-sizing: border-box;
 }
@@ -273,8 +273,8 @@ body .ferr-ic {
 }
 body .ferr-ic .tk-ico { width: 22px; height: 22px; }
 body .ferr-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-body .ferr-txt b { font-size: 0.92rem; font-weight: 700; line-height: 1.2; }
-body .ferr-txt small { font-size: 0.78rem; color: var(--tk-texto-2); line-height: 1.3; }
+body .ferr-txt b { font-size: 1rem; font-weight: 700; line-height: 1.35; }
+body .ferr-txt small { font-size: 0.875rem; color: #53534d; line-height: 1.45; margin-top: 4px; }
 body .ferr-badge {
   flex: none; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--laranja); color: #0d0d0d;
   font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
@@ -284,6 +284,7 @@ body .ferr-badge[hidden] { display: none; }
 /* Configurações avançadas e Log: mesmo cartão das outras seções (antes, borda tracejada) */
 body details.extra:not(.ferramentas) { border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: var(--tk-superficie); padding: 0 12px; margin-top: 12px; }
 body details.extra:not(.ferramentas) > summary { gap: 8px; font-size: 0.9rem; font-weight: 600; color: var(--tk-texto); min-height: 52px; }
+body #details-ferramentas details.extra > summary { font-size: 1rem; box-sizing: border-box; }
 body details.extra:not(.ferramentas)[open] { padding-bottom: 12px; }
 body details.extra:not(.ferramentas)[open] > summary { border-bottom: 1px solid var(--tk-borda); margin-bottom: 10px; }
 

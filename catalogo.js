@@ -644,7 +644,21 @@ try { tkSelExpirar_(); } catch (e) {}
   document.getElementById('btn-share-busca').addEventListener('click', () => { const bf = document.getElementById('badge-filtros'), q = document.getElementById('busca').value.trim(); const filtrando = (bf && !bf.hidden && (parseInt(bf.textContent, 10) || 0) > 0) || q || selecaoFixa || apenasFavoritos || apenasNovidades; if (!filtrando && getSacola().length) abrirSelecao(true); else document.getElementById('btn-share-filtros').click(); });
   document.getElementById('btn-limpar-filtros-topo').addEventListener('click', () => { document.getElementById('btn-limpar').click(); atualizarBarraFiltros_(); });
   document.getElementById('btn-limpar-sel').addEventListener('click', () => { if (getSacola().length) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); } atualizarBarraFiltros_(); });
-  document.getElementById('btn-lote-menu').addEventListener('click', (e) => { const m = document.getElementById('lote-menu'); m.hidden = !m.hidden; e.currentTarget.setAttribute('aria-expanded', String(!m.hidden)); });
+  document.getElementById('btn-lote-menu').addEventListener('click', (e) => {
+    const m = document.getElementById('lote-menu');
+    m.hidden = !m.hidden;
+    e.currentTarget.setAttribute('aria-expanded', String(!m.hidden));
+    if (!m.hidden) {
+      const r = m.getBoundingClientRect();
+      const nav = document.querySelector('.tk-nav');
+      const n = nav && nav.getBoundingClientRect();
+      const header = document.querySelector('body > header');
+      const h = header && header.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const bottom = Math.min(innerHeight, viewport ? viewport.offsetTop + viewport.height : innerHeight, n && n.height ? n.top : innerHeight) - 8;
+      if (r.bottom > bottom || r.top < (h ? h.bottom : 0)) m.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  });
   document.getElementById('lote-menu').addEventListener('click', (e) => { const b = e.target.closest('[data-lote]'); if (!b) return; if (b.dataset.lote === 'btn-bulk-juntar') { document.getElementById('lote-menu').hidden = true; abrirJuntarCatalogo_(); return; }
     // v4.10 (FE-06): "Enviar para postagem" (e as demais ações em lote) exigem a MESMA sessão compartilhada.
     // Antes, o catálogo mandava direto pro admin.html e o admin pedia login de novo. Agora: sem sessão, abre o

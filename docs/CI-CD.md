@@ -23,7 +23,7 @@ Documentação operacional do pipeline. Cobre os itens **INFRA-01** (pipeline de
         ├─ 1. reaproveita o portão de qualidade
         ├─ 2. publica o site                     (trigger explícito)
         ├─ 3. acompanha até o status "live"      (polling)
-        ├─ 4. limpa o cache do Cloudflare        (purge)
+        ├─ 4. Render invalida seu próprio CDN; sem purge de zona externa
         └─ 5. confirma o commit no ar            (curl /version.json)
 ```
 
@@ -148,14 +148,13 @@ publicação (não há deploy manual). Ele tem código de saída: se falhar, o w
 |---|---|---|
 | `RENDER_API_KEY` | Render → Account Settings → API Keys | (a chave do Render não tem granularidade por serviço) |
 | `RENDER_SERVICE_ID` | Painel do serviço, ou `GET /v1/services` | — |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Custom Token | Account → **Workers Scripts: Edit** + Zone → **Cache Purge** (na zona `tenkitermodas.com.br`) |
-| `CLOUDFLARE_ZONE_ID` | Visão geral da zona, ou `GET /zones` | — |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Custom Token | Conta → **Workers Scripts: Edit**, para os Workers existentes |
+| `CLOUDFLARE_ZONE_ID` | Não é necessário no deploy atual | Sem zona própria aplicável identificada; não inventar valor |
 | `CLOUDFLARE_ACCOUNT_ID` | `GET /accounts` (ou a URL do painel) | — |
 
-> O mesmo `CLOUDFLARE_API_TOKEN` serve para o purge do cache **e** para publicar os
-> Workers. Ele precisa das duas permissões: *Workers Scripts: Edit* (conta) e
-> *Cache Purge* (zona). Se o token não enxergar a zona, o purge falha — ver a
-> seção 5.
+> Workers usam conta e token, sem exigência de zona DNS ou Cache Purge. O DNS
+> é externo e o CDN do site é administrado pelo Render. Purge manual permanece
+> como ferramenta para uma eventual zona própria aplicável, fora do deploy atual.
 
 > **Nunca** cole esses valores no chat, em issue, em PR ou em arquivo do repositório.
 > Só no cofre de segredos do GitHub (ou nas variáveis de ambiente do Render).
@@ -204,7 +203,7 @@ curl -s https://tenkitermodas.com.br/version.json
 | Componente | Como publica | Automatizável? |
 |---|---|---|
 | Site estático (Render) | `deploy.yml` → job `deploy` | ✅ sim |
-| Cache/headers (Cloudflare) | `cloudflare_purge.sh` | ✅ sim |
+| Cache/headers do site | Render; purge de zona própria fora do fluxo atual | Sem purge automático |
 | Workers (`og-worker/`, `midia-worker/`, `instagram-worker/`) | `deploy.yml` → job `workers` (wrangler-action) | ✅ **sim** |
 | Backend Apps Script (`.gs`) | colar no editor + "Nova versão" | ❌ manual (item INFRA-03) |
 
@@ -221,7 +220,7 @@ e que o `tenkiter-og` responde.
         ▼
   CI (ci.yml) ──► portão de qualidade
         │
-        ├──► deploy      (Render + purge do Cloudflare)
+        ├──► deploy      (Render + invalidação do CDN pelo provedor)
         └──► workers     (wrangler deploy × 3, em paralelo)
                   │
                   ▼
@@ -369,11 +368,18 @@ sem autenticação, compras, WhatsApp ou escrita de dados.
 
 Os três Workers deste projeto publicam em workers.dev, sem routes/zone_id nos
 wrangler.toml. Sua pré-checagem exige token ativo e acesso à conta de Workers;
-CLOUDFLARE_ZONE_ID deixa de ser requisito dessa publicação. O purge do domínio
-continua separado e mantém validação da zona. HTTP200 com success=false não é
+CLOUDFLARE_ZONE_ID deixa de ser requisito dessa publicação. Desde7.54.5, o purge
+não é executado automaticamente: não há zona própria aplicável identificada. A
+ferramenta manual continua validando zona e sucesso explícito da API. HTTP200 com success=false não é
 aceito como credencial válida. O diagnóstico somente leitura consulta a conta
 e mostra apenas os Workers esperados, sem imprimir IDs/tokens ou outros projetos.
 
 Decisão do proprietário: estoque permanece opcional; vazio/null/ausente não
 vira zero, quantidade fictícia ou indisponibilidade. Contrato registrado em
 estoque_opcional.js, sem alterar a interface nem a política de cadastro.
+
+### Diagnóstico Cloudflare recebido em05/11 e correção7.54.5
+
+O relatório externo, preservado no Cofre, confirmou Registro.br DNS, site Render com CDN de terceiro e três Workers na conta esperada. Nenhuma zona própria ficou visível. O deploy deixa de chamar purge e a recuperação Android repete sua verificação12vezes sem depender de Cloudflare. Falha persistente continua reprovando a publicação. O resumo separa resultados do site, Workers, Android e purge não executado. DNS, tokens, bindings, TTLs operacionais e dados são preservados.
+
+O HIT/Age observado junto de no-store em version.json é uma inconsistência de cabeçalhos, sem conteúdo antigo comprovado. Não justifica adivinhar regras ou alterar DNS; a prova de commit e de manifesto permanece obrigatória. Regras internas do CDN Render e expiração do token exato permanecem limites de diagnóstico, sem nova pergunta indispensável ao proprietário para este reparo.
