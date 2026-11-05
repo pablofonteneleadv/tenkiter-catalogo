@@ -284,6 +284,7 @@ body .ferr-badge[hidden] { display: none; }
 /* Configurações avançadas e Log: mesmo cartão das outras seções (antes, borda tracejada) */
 body details.extra:not(.ferramentas) { border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: var(--tk-superficie); padding: 0 12px; margin-top: 12px; }
 body details.extra:not(.ferramentas) > summary { gap: 8px; font-size: 0.9rem; font-weight: 600; color: var(--tk-texto); min-height: 52px; }
+body #details-ferramentas details.extra > summary { font-size: 1rem; box-sizing: border-box; }
 body details.extra:not(.ferramentas)[open] { padding-bottom: 12px; }
 body details.extra:not(.ferramentas)[open] > summary { border-bottom: 1px solid var(--tk-borda); margin-bottom: 10px; }
 

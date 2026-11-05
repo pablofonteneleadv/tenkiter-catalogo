@@ -3,6 +3,7 @@
 ## 7.54.5 — aparência aprovada na auditoria
 
 - Aplica o comparativo aprovado: ferramentas mais legíveis, descrições de14px, alvos de toque de44px e atalho Ferramentas do gestor.
+- Retira purge inaplicável ao domínio e desacopla a recuperação Android; mantém verificações obrigatórias e resume os componentes publicados.
 - Preserva destinos, permissões, estoque opcional e comportamento das tarefas. Alteração somente no conteúdo remoto; sem novo código Android.
 
 Todas as mudanças relevantes do site TENKiTER Modas.
