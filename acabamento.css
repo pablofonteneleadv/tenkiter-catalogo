@@ -246,7 +246,8 @@ body .btn-secundario-cta { border-radius: var(--tk-raio); }
   body .filtros .btn-compartilhar-filtros { border-radius: var(--tk-raio-p); display: inline-flex; align-items: center; gap: 6px; }
   body .filtros .fx-ver { background: var(--laranja); border-radius: var(--tk-raio); font-size: 1rem; font-weight: 700; min-height: 52px; }
 }
-body .linha-share-busca button { border-radius: var(--tk-raio-p); border-width: 1px; font-weight: 600; }
+body .btn-compartilhar-filtros { min-height: 44px; font-size: 0.875rem; }
+body .linha-share-busca button, body .linha-share-busca .btn-add-resultados { min-height: 44px; font-size: 0.875rem; border-radius: var(--tk-raio-p); border-width: 1px; font-weight: 600; }
 body .linha-share-busca #btn-limpar-filtros-topo, body .linha-share-busca #btn-limpar-sel { background: var(--tk-superficie); border-color: var(--tk-borda); color: var(--tk-texto); }
 @media (max-width: 767px) {
   /* os botões dividem a linha por igual (a equipe tem 3) e o texto pode quebrar dentro do botão de 44 px */

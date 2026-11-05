@@ -319,6 +319,7 @@ jobs:
           python3 tests/produtos_busca_esteira_ia.py
           python3 tests/mensagens_canais_selecao.py
           python3 tests/gestao_unioes.py
+          python3 tests/aparencia_aprovada_ui.py
           python3 tests/juntar_admin.py
           python3 tests/selecao_botoes.py
 
@@ -328,6 +329,7 @@ jobs:
         with:
           name: evidencias-reparos-integrados
           path: |
+            tests/saida/aparencia-aprovada/
             tests/saida/reparos/
             tests/saida/fotoia-catalogo/
             tests/saida/pedir-fotos-lote/

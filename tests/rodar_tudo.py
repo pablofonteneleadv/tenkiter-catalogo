@@ -49,6 +49,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("admin_categorias.py", lambda o: "FALHAS=0" in o),    # criar categoria, ✎/× só Admin total, sugestões de nome
     ("juntar_admin.py", lambda o: "FALHAS=0" in o),   # juntar produtos repetidos na lista do admin (v7.50.0: em segundo plano, retomável)
     ("gestao_unioes.py", lambda o: "FALHAS=0" in o),  # v7.50.0: uniões no cadastro, Separar, sessão rápida loja↔Gestão, seleção abre a peça, selo de fotos
+    ("aparencia_aprovada_ui.py", lambda o: "PASS aparência aprovada" in o),
     ("x_equipe.py", lambda o: "FALHAS=0" in o),   # X de arquivar na loja (Equipe do site)
     ("botao_voltar.py", lambda o: "FALHAS=0" in o),   # botão voltar fecha só a janela de cima
     ("selecao_link.py", lambda o: "RESULTADO:" in o and " 0 falhas" in o),   # compartilhar seleção leva as PEÇAS (?sel=…), não só a loja

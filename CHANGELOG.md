@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.54.5 — aparência aprovada na auditoria
+
+- Aplica o comparativo aprovado: ferramentas mais legíveis, descrições de14px, alvos de toque de44px e atalho Ferramentas do gestor.
+- Preserva destinos, permissões, estoque opcional e comportamento das tarefas. Alteração somente no conteúdo remoto; sem novo código Android.
+
 Todas as mudanças relevantes do site TENKiTER Modas.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
