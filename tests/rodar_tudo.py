@@ -18,6 +18,8 @@ from pathlib import Path
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(AQUI)
 SUITES = [  # (arquivo, como saber que passou)
+    ("worker_credenciais.py", lambda out: True),
+    ("estoque_opcional.js", lambda out: "PASS estoque opcional:" in out),
     ("worker_og_runtime.cjs", lambda out: "PASS OG runtime:" in out),
     ("worker_og_resiliencia.js", lambda out: "PASS OG resiliente:" in out),
     ("auditoria_interna.py", lambda out: True),

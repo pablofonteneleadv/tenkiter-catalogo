@@ -364,3 +364,16 @@ concorrência, recuperação e KV. O monitor público confere CSV e XML além do
 quatro recursos anteriores; aceita feed vazio e rejeita HTML no lugar de feed,
 cabeçalho inválido, CSV truncado ou XML fora do contrato. Continua somente GET,
 sem autenticação, compras, WhatsApp ou escrita de dados.
+
+### Conta dos Workers e zona DNS (7.54.4)
+
+Os três Workers deste projeto publicam em workers.dev, sem routes/zone_id nos
+wrangler.toml. Sua pré-checagem exige token ativo e acesso à conta de Workers;
+CLOUDFLARE_ZONE_ID deixa de ser requisito dessa publicação. O purge do domínio
+continua separado e mantém validação da zona. HTTP200 com success=false não é
+aceito como credencial válida. O diagnóstico somente leitura consulta a conta
+e mostra apenas os Workers esperados, sem imprimir IDs/tokens ou outros projetos.
+
+Decisão do proprietário: estoque permanece opcional; vazio/null/ausente não
+vira zero, quantidade fictícia ou indisponibilidade. Contrato registrado em
+estoque_opcional.js, sem alterar a interface nem a política de cadastro.

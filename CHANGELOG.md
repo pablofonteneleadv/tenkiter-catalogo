@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.54.4] - 2026-11-05
+
+- Separa credenciais dos Workers da zona DNS; confere decisões de estoque e mantém o funcionamento atual.
+
+
 ## [7.54.2] - 2026-11-04
 
 - Corrige pré-checagem que exigia Node indevidamente para suítes autônomas em Python.
