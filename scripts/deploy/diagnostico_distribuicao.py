@@ -31,6 +31,16 @@ def main():
                     print(json.dumps({'url': host + path, 'status': response.status, 'contentType': response.headers.get('Content-Type'), 'sha256': hashlib.sha256(body).hexdigest()}))
             except urllib.error.HTTPError as error:
                 print(json.dumps({'url': host + path, 'status': error.code}))
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location('worker_credentials', Path(__file__).resolve().parents[1] / 'ci/check_worker_credentials.py')
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    try:
+        result = module.validate(module.clean(os.environ.get('CLOUDFLARE_API_TOKEN', '')),
+                                 module.clean(os.environ.get('CLOUDFLARE_ACCOUNT_ID', '')), get)
+        print(json.dumps({'contaWorkers': result}, ensure_ascii=False))
+    except Exception as error:
+        print('Conta Workers não confirmada (' + type(error).__name__ + ').')
     zone = os.environ.get('CLOUDFLARE_ZONE_ID', '').strip()
     print(json.dumps({'zoneIdValido': bool(re.fullmatch(r'[a-fA-F0-9]{32}', zone))}))
     try:

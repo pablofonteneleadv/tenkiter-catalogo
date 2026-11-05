@@ -118,6 +118,8 @@ jobs:
       - name: Regressões internas de distribuição e contratos
         run: |
           python3 tests/auditoria_interna.py
+          python3 tests/worker_credenciais.py
+          node tests/estoque_opcional.js
           python3 tests/saude_publica.py
           python3 tests/distribuicao_cache.py
           node tests/pedido_idempotencia.js
