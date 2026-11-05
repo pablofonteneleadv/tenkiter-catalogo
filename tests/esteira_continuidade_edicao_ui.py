@@ -13,14 +13,16 @@ with sync_playwright() as pw:
    print('INICIO',w,admin,flush=True)
    c=b.new_context(viewport={'width':w,'height':h},has_touch=w<600,service_workers='block');st=ns['instalar'](c,admin=admin);ns['fotos_srv'](c,st,admin=admin)
    ns['_TODOS'][:]=ns['_ns']['PRODUTOS']+[ns['_ns']['ARQUIVADA'],ns['_ns']['ARQUIVADA2']]
-   calls={'fotos':0,'editar':[],'falhar':False}
+   calls={'fotos':0,'editar':[],'falhar':False,'segurar':False,'segurar_edicao':False};retidas=[];edicoes_retidas=[]
    records={t:{'tipo':t,'id':104,'produto':'1002','titulo':'Vestido Longo Floral','por':'Iara','em':'2026-11-05T10:00:00Z','campos':({'descricao':'costas do floral','descricao_lote':'Descrição do envio'} if t=='foto' else {'detalhe':json.dumps({'opcoes':['pano'],'obs':'luz natural'})} if t=='pedido_fotos' else {'obs':'Observação anterior'}),'versao':'versao-1'} for t in ['foto','pedido_fotos','conferencia','tarefa']}
    def rotas(route):
     req=route.request;u=urlparse(req.url)
     if u.path=='/esteira/fotos':calls['fotos']+=1;return route.fallback()
+    if u.path=='/esteira/caixa/descartar' and calls['segurar']:retidas.append(route);return
     if u.path=='/esteira/registros':return route.fulfill(json={'ok':True,'admin':admin,'itens':[records[parse_qs(u.query).get('tipo',['foto'])[0]]],'proximo':None})
     if u.path=='/esteira/registro-editar':
      d=json.loads(req.post_data);calls['editar'].append(d)
+     if calls['segurar_edicao']:edicoes_retidas.append((route,d));return
      if calls['falhar']:return route.fulfill(status=409,json={'ok':False,'erro':'O registro mudou. Abra novamente para conferir.'})
      r=records[d['tipo']];r['campos']={k:d.get(k,v) for k,v in r['campos'].items()};r['versao']='versao-2';return route.fulfill(json={'ok':True,'registro':r})
     return route.fallback()
@@ -52,11 +54,26 @@ with sync_playwright() as pw:
     assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1');pg.screenshot(path=str(OUT/f'editar-ampliado-{w}.png'));pg.set_viewport_size({'width':w,'height':h});pg.evaluate('document.documentElement.style.fontSize=""')
    pg.get_by_role('button',name='Salvar alterações',exact=True).click();pg.wait_for_selector('[role=dialog][aria-label="Editar registro"]',state='detached')
    assert calls['editar'][-1]['descricao']=='Detalhe do bordado corrigido';expect(pg.locator('[data-registro="foto-104"]')).to_contain_text('Detalhe do bordado corrigido')
+   if admin and w==390:
+    pg.locator('[data-registro="foto-104"]').get_by_role('button',name='Editar',exact=True).click();pg.get_by_label('Descrição da foto',exact=True).fill('Correção enviada');calls['segurar_edicao']=True;pg.get_by_role('button',name='Salvar alterações',exact=True).click()
+    for tentativa in range(50):
+     if edicoes_retidas:break
+     pg.wait_for_timeout(100)
+    assert edicoes_retidas;pg.get_by_label('Descrição da foto',exact=True).fill('Texto digitado enquanto salvava');route,d=edicoes_retidas.pop();r=records['foto'];r['campos']={k:d.get(k,v) for k,v in r['campos'].items()};r['versao']='versao-lenta';route.fulfill(json={'ok':True,'registro':r});calls['segurar_edicao']=False
+    pg.wait_for_selector('text=Há texto novo ainda não salvo.',strict=False);assert pg.get_by_label('Descrição da foto',exact=True).input_value()=='Texto digitado enquanto salvava';pg.get_by_role('button',name='Salvar alterações',exact=True).click();pg.wait_for_selector('[role=dialog][aria-label="Editar registro"]',state='detached');assert calls['editar'][-1]['versao']=='versao-lenta'
    for tipo in ['pedido_fotos','conferencia','tarefa']:
     pg.get_by_label('Tipo de registro',exact=True).select_option(tipo);pg.wait_for_selector(f'[data-registro="{tipo}-104"]');pg.locator(f'[data-registro="{tipo}-104"]').get_by_role('button',name='Editar',exact=True).click()
     label='Observação do pedido' if tipo=='pedido_fotos' else 'Observação';pg.get_by_label(label,exact=True).fill('Rascunho preservado');calls['falhar']=True;pg.get_by_role('button',name='Salvar alterações',exact=True).click();pg.wait_for_selector('text=O registro mudou. Abra novamente para conferir.');assert pg.get_by_label(label,exact=True).input_value()=='Rascunho preservado';pg.keyboard.press('Escape');calls['falhar']=False
    assert not errors,errors
-   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1');pg.keyboard.press('Escape');pg.get_by_role('button',name='Atualizar fotos',exact=True).click();pg.wait_for_timeout(150);assert calls['fotos']>first
+   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1');pg.keyboard.press('Escape')
+   if admin and w==390:
+    calls['segurar']=True;pg.click('.cx-descartar');pg.click('.cx-descartar')
+    for tentativa in range(50):
+     if retidas:break
+     pg.wait_for_timeout(100)
+    assert retidas;pg.locator('[data-caixa="104"] .cx-sel').click();calls['segurar']=False;retidas.pop().fallback();pg.wait_for_timeout(500)
+    expect(pg.locator('[data-caixa="104"] .cx-sel')).to_have_attribute('aria-pressed','true')
+   pg.get_by_role('button',name='Atualizar fotos',exact=True).click();pg.wait_for_timeout(150);assert calls['fotos']>first
    pg.get_by_role('button',name='Registros da equipe' if admin else 'Meus registros',exact=True).click();pg.wait_for_selector('[data-registro="foto-104"]');pg.evaluate('()=>{localStorage.clear();dispatchEvent(new Event("tk:sessao"));}');pg.wait_for_selector('#login-w');assert not pg.locator('[role=dialog]').count();c.close()
  b.close()
 print('PASS: 4 viewports, admin/equipe, trabalho preservado, filtros ativos/preço e edição com erro sem perder rascunho.')

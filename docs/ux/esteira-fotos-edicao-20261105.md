@@ -9,10 +9,12 @@ Referência: a aba Fotos, o seletor de produto e as imagens fornecidas pelo prop
 ## Mudanças
 
 - Fotos não é reconstruída pelo timer de30s, retorno à janela, retorno da rede ou conclusão de processos em segundo plano. Os processos continuam; o status informa a confirmação. O botão Atualizar fotos permite reler a lista quando a pessoa decidir. Atualizações das demais abas permanecem.
+- Uma resposta lenta de ação anterior não reconstrói Fotos após nova interação. Digitar enquanto uma observação é salva mantém o editor aberto com o texto novo e a versão confirmada, permitindo salvar novamente sem perder o rascunho.
 - Meus registros / Registros da equipe em Hoje e Fotos: fotos enviadas, pedidos de fotos, conferências e tarefas concluídas, com paginação. Edita descrições e observações; preserva arquivos, autoria, datas, resultados de estoque e conclusões. Pedidos preservam suas opções e instruções. A foto também tem Editar descrição.
 - Autorização no Worker pela autoria original; somente gerir_acessos permite editar registros de outras pessoas. Tarefas concluídas também recebem proteção na rota antiga. Versão do texto é conferida no salvamento, com recusa de conflito sem perder o rascunho. A tabela aditiva est_registro_edicao guarda antes/depois, autor e data da correção. O editor fica aberto até confirmar sucesso; erro restaura o foco quando necessário. Troca de conta fecha suas folhas.
 - Os seletores de Preparação e de associação/solicitação de fotos deixam de iniciar em Todas; todos usam Ativas como padrão. As situações disponíveis continuam selecionáveis dentro do escopo da lista.
 - Faixa de preço na função compartilhada de busca da Esteira: mínimo/máximo em reais, vírgula aceita, limites inclusivos, sem limite quando vazio. Peças sem preço continuam visíveis sem faixa e ficam fora de uma faixa numérica. Faixa invertida/inválida mostra mensagem e aria-invalid. Outros consumidores de TKProdutosBusca mantêm o comportamento anterior.
+- Resultados da Esteira mostram o preço normal usado na faixa e o preço à vista, evitando aparente divergência entre filtro e valor mostrado.
 
 ## Validação
 

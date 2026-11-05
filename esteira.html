@@ -295,12 +295,12 @@
   async function resolverFotos(v,c,caminho='anexo'){if(v?.fotoLocal&&v.arquivo instanceof Blob){const url=await c.etapa(caminho,async()=>{const blob=await reduzirFoto(v.arquivo);c.assert();return enviarFoto(blob)});if(v.urlLocal){fotosLocais.set(v.urlLocal,url);document.querySelectorAll('img').forEach(i=>{if(i.src===v.urlLocal)i.src=url});URL.revokeObjectURL(v.urlLocal);}return url;}if(Array.isArray(v)){const a=[];for(let i=0;i<v.length;i++)a.push(await resolverFotos(v[i],c,caminho+'-'+i));return a;}if(v&&typeof v==='object'&&!(v instanceof Blob)){const a={};for(const[k,x]of Object.entries(v))a[k]=await resolverFotos(x,c,caminho+'-'+k);return a;}return v;}
 
   const fluidez=TKEsteiraFluidez(app,getSessao);
-  let ultimoClique=null,interacao=0;document.addEventListener('click',e=>{interacao++;ultimoClique=e.target.closest('button')},true);
+  let ultimoClique=null,interacao=0;document.addEventListener('click',e=>{interacao++;ultimoClique=e.target.closest('button')},true);document.addEventListener('input',()=>{interacao++;},true);document.addEventListener('change',()=>{interacao++;},true);
   const processos=TKEsteiraProcessos({dono:()=>getSessao()?.whatsapp,worker:workerProcesso,executores:{acao:executarAcao,conferir:executarConferencia,aceitar:executarAceite,fotos:executarFotos,caixa:executarCaixa,colocar:executarColocar,pedido:executarPedido,aplicar:executarAplicacao},aoConcluir:j=>{if(j.tipo==='acao'){fluidez.invalidar();return;}if(j.tipo==='fotos'&&j.dados.tarefas?.length){fluidez.invalidar($('fotos-pedidas'));fluidez.invalidar($('fotos-pedidas-hoje'));document.querySelectorAll('.pedido-fotos[data-produto="'+CSS.escape(j.dados.produto)+'"] [role=status]').forEach(st=>{st.hidden=false;st.textContent=j.resultado.fotos+' fotos adicionadas ao produto. Pedido concluído.'})}if(j.tipo==='colocar'){AVISO_FOTOS=j.dados.urls.length+' foto'+(j.dados.urls.length===1?' colocada':'s colocadas')+' em '+j.dados.produtoNome+'.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}if(j.tipo==='caixa'){AVISO_FOTOS=j.dados.fotos.length+(j.dados.fotos.length===1?' foto enviada':' fotos enviadas')+' para a caixa.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}refrescarDepois();},aoErro:m=>{const e=$('esteira-processos-abrir');if(e)e.title=m}});
   const camposDoBloco=b=>b?JSON.stringify([...b.querySelectorAll('input,textarea,select')].map(e=>[e.id,e.value,e.checked])):'';
-  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,acionador=ultimoClique,campos=camposDoBloco(bloco);let id;try{id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));}catch(e){return{ok:false,erro:e.message||'Não consegui guardar o processo. Tente novamente.'}}
+  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,acionador=ultimoClique,campos=camposDoBloco(bloco),toques=interacao;let id;try{id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));}catch(e){return{ok:false,erro:e.message||'Não consegui guardar o processo. Tente novamente.'}}
     const fundo=acionador?.closest('.fundo');if(fundo&&acionador.closest('.pe')&&fundo.esteiraFechar)fundo.esteiraFechar();
-    const r=await processos.aguardar(id);if(r.ok)fluidez.invalidar(campos===camposDoBloco(bloco)?bloco:null);return Object.assign({},r,{foraDaTela:origem!==ABA||tela!==app.dataset.tela||versao!==versaoTela});}
+    const r=await processos.aguardar(id);if(r.ok)fluidez.invalidar(campos===camposDoBloco(bloco)?bloco:null);return Object.assign({},r,{foraDaTela:origem!==ABA||tela!==app.dataset.tela||versao!==versaoTela||(origem==='fotos'&&toques!==interacao)});}
   async function workerProcesso(rota,corpo,op){let r=await srvRede(rota,corpo,op);for(let i=0;r.aguardando&&i<20;i++){await new Promise(ok=>setTimeout(ok,1000));r=await srvRede('/esteira/operacoes/status?op='+encodeURIComponent(op))}if(r.aguardando)return{ok:false,incerto:true,erro:'O processo ainda está em confirmação. Pode continuar trabalhando e conferir em Processos.'};return r;}
   async function srvRede(rota, corpo, op) {
     const s = getSessao(); if (!s) return { ok: false, erro: 'Entre na sua conta para continuar.', exigeLogin: true };
@@ -1079,7 +1079,7 @@
         });
         a.href = 'admin.html?caixaFotos=' + ids + '&modo=' + modo;
       };
-      a.onclick = () => { srv('/esteira/caixa/usar', { ids: itens.map((i) => i.id), uso: 'cadastro' }).then(() => aoTerminar && aoTerminar('O cadastro abriu em outra aba. As fotos ficam marcadas “em cadastro” até o produto ser salvo.')); setTimeout(fechar, 0); };
+      a.onclick = () => { srv('/esteira/caixa/usar', { ids: itens.map((i) => i.id), uso: 'cadastro' }).then(r => {if(r.foraDaTela||!r.ok){const st=document.getElementById('fotos-status');if(st?.diga)st.diga(r.ok?'O cadastro abriu. Use “Atualizar fotos” para rever a lista.':r.erro||'Não consegui confirmar a caixa.','muted');return;}aoTerminar?.('O cadastro abriu em outra aba. As fotos ficam marcadas “em cadastro” até o produto ser salvo.');}); setTimeout(fechar, 0); };
       corpo.append(miniFotos(urls), opc, el('p', 'muted dica', 'Abre a Gestão em outra aba já com as fotos. Lá você confere os dados e cadastra.')); pe.append(a); pintar();
     });
   }
@@ -1304,8 +1304,11 @@
         salvar.disabled=true;st.diga('Salvando…');
         const dados=Object.fromEntries(Object.entries(campos).map(([k,i])=>[k,i.value]));
         const r=await srv('/esteira/registro-editar',{tipo:registro.tipo,id:registro.id,versao:registro.versao,...dados});
-        salvar.disabled=false;if(!r.ok){st.diga(r.erro||'Não consegui salvar. Seu texto foi mantido.','erro');if(corpo.isConnected&&document.activeElement===document.body)Object.values(campos)[0]?.focus({preventScroll:true});return;}
-        aoSalvar(r.registro);fechar();const aviso=$('fotos-status');if(aviso?.diga)aviso.diga('Alteração salva. Use “Atualizar fotos” para rever a lista.','ok');
+        salvar.disabled=false;if(!r.ok){fluidez.invalidar();st.diga(r.erro||'Não consegui salvar. Seu texto foi mantido.','erro');if(corpo.isConnected&&document.activeElement===document.body)Object.values(campos)[0]?.focus({preventScroll:true});return;}
+        const novoTexto=Object.entries(campos).some(([k,i])=>i.value!==dados[k]);
+        Object.assign(registro,r.registro);aoSalvar(r.registro);
+        if(novoTexto&&corpo.isConnected){st.diga('Alteração enviada salva. Há texto novo ainda não salvo.','ok');return;}
+        fechar();const aviso=$('fotos-status');if(aviso?.diga)aviso.diga('Alteração salva. Use “Atualizar fotos” para rever a lista.','ok');
       });
       // Dentro do corpo: a fila não fecha o editor antes da confirmação do servidor.
       corpo.append(st,acoes(salvar,bt('Cancelar','leve',fechar)));
