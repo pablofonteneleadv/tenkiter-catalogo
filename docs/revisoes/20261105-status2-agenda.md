@@ -14,10 +14,11 @@ Erros históricos não são reagendados automaticamente: podem conter envios inc
 
 ## Validação
 
-- worker_wafly:38verificações, incluindo bloqueio, retomada única, corrida da agenda e40agendados preservados.
+- worker_wafly:39verificações, incluindo bloqueio, retomada única, corrida da agenda e40agendados preservados.
 - worker_zap_proativo:27; worker_canal:11; worker_postagens_limites: aprovado. Serviços simulados, sem publicação real de teste.
 - Conferência de fila em390×844,412×915 e1440×900; componentes existentes preservados, sem CSS/HTML alterados. Evidência local em outputs/status2. Não é validação Android físico.
 - Graphify start/query falharam no Windows por árvore recursiva de processos/timeout; nenhuma relação de cache antigo usada como prova. Verificação por fontes e testes diretamente.
 - Base pública36eb19e e privada4f76260 conferidas antes da edição. Backup local catalogo-pre-status2.zip e branch backup/pre-status2-20261105.
 
 Publicação e condição final do provedor devem ser registradas após CI/deploy. RH/AppsScript não são alterados neste reparo.
+
