@@ -13,3 +13,7 @@ Referência anterior: comparativo aprovado preservado no Cofre, lote20261104-dec
 Resultado: APROVADO COM LIMITAÇÃO — jornadas web simuladas; sem homologação em aparelho físico ou envios reais. Os caminhos de erro existentes não foram redesenhados. Não houve mudança nativa: `WebKeeper.HOME` e `MainActivity` carregam o HTML remoto de tenkitermodas.com.br/admin.html. HTML/CSS desta rodada dispensam novo APK; a distribuição existente segue o workflow oficial.
 
 Graphify preparado/atualizado e consultado por`ferr-tile details-ferramentas btn-compartilhar-filtros` e`filtrarFerramentas_ compartilhar filtro`. O parser tem cobertura parcial; fontes e testes foram usados como prova. O Cofre não foi indexado nem copiado para o repositório público.
+
+## Correção encontrada pelo CI
+
+A jornada existente pedir_fotos_lote.py revelou sobreposição do menu de lote pela navegação inferior em390×470 com texto130%. Mantidos botões44px, o menu em fluxo passou a limitar sua altura a metade da viewport (teto360px), com rolagem interna; ao abrir, é trazido ao centro somente se extrapolar a área entre cabeçalho e navegação. Nenhuma ação foi removida e o teste não foi relaxado. A jornada completa passou em75verificações simuladas, incluindo duas telas baixas, texto ampliado, teclado, retry e troca de conta.
