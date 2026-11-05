@@ -2007,6 +2007,42 @@ async function validarSeriesPost_(env,req,lista,vs){
   }
   for(const g of grupos.values())if(g.refs.length!==g.total||g.refs[0].parte!==1)throw Error('Inclua todas as partes do mesmo vídeo, na ordem original.');
 }
+function identidadeBlocoPost_(x){if(x.origem_midia)return x.origem_midia;const ms=JSON.parse(x.midias||'[]');return x.criado_em&&ms.length&&!x.serie?'legado:'+x.tipo+':'+(x.grupo||'')+':'+String(x.criado_em).slice(0,16)+':'+ms.map(m=>m.url).join('|'):'id:'+x.id;}
+export function planoInsercaoMidia_(cfg,rows,ids,desejado){
+  const selecionados=new Set(ids),alvo=rows.filter(x=>selecionados.has(x.id));
+  const chave=identidadeBlocoPost_;
+  const mapa=new Map();for(const x of rows){const k=chave(x);if(!mapa.has(k))mapa.set(k,[]);mapa.get(k).push(x);}
+  const completa=xs=>xs.every(p=>!p.serie||xs.filter(x=>x.serie===p.serie).length===p.partes&&xs.filter(x=>x.serie===p.serie).every(x=>x.status==='agendado'));
+  const grupos=[...mapa.values()].map(xs=>({xs,ps:xs.filter(x=>x.status==='agendado')})).filter(g=>g.ps.length&&!g.xs.some(x=>selecionados.has(x.id))&&g.ps.every(x=>['auto','manual'].includes(x.modo)&&!x.urgente&&!x.repostado_de&&!x.ig_id&&!x.zap_estado&&!x.zap_req&&!x.containers&&!x.recibo)&&completa(g.xs)&&!g.xs.some(x=>['processando','manual_pendente'].includes(x.status)));
+  const ed=ps=>Math.max(0,...ps.map(x=>Number(x.intervalo_ms)||0)),bs=ps=>[...new Set(ps.flatMap(x=>bucketsDoPost(x.tipo,x.canal)))];
+  const mover=grupos.filter(g=>Math.max(...g.ps.map(x=>Date.parse(x.agendado_em)))+Math.max(ed(alvo),ed(g.ps),...bs(g.ps).map(b=>gapDoTipoMs(cfg,b)))>desejado).sort((a,b)=>Math.min(...a.ps.map(x=>Date.parse(x.agendado_em)))-Math.min(...b.ps.map(x=>Date.parse(x.agendado_em)))||a.ps[0].id-b.ps[0].id);
+  const moveis=new Set([...ids,...mover.flatMap(g=>g.ps.map(x=>x.id))]),ocup=Object.fromEntries(CANAIS_FILA.map(b=>[b,[]])),eventos=[];
+  for(const p of rows){if(moveis.has(p.id))continue;const t=Date.parse(['publicado','manual_feito'].includes(p.status)?p.publicado_em:p.agendado_em);if(!Number.isFinite(t))continue;const canais=bs([p]);for(const b of canais)ocup[b].push(t);eventos.push({t,canais});}
+  function reservar(ps,desde){const canais=bs(ps),editorial=ed(ps),ajustada={...cfg,canais:{...cfg.canais}};for(const b of canais)ajustada.canais[b]={...cfg.canais[b],gapMin:Math.max(cfg.canais[b].gapMin,editorial/1000)};
+    let t=ajustarHorarioMulti(ajustada,canais,desde,ocup).t;
+    for(let i=0;i<2000;i++){const limites=[];for(const b of canais){const xs=eventos.filter(e=>e.canais.includes(b)&&e.t>t-86400000&&e.t<=t).map(e=>e.t).sort((a,b)=>a-b),limite=limiteDoTipo(cfg,b);const entram=ps.filter(p=>bs([p]).includes(b)).length;if(entram>limite)throw Error('Esta sequência excede a cota diária do canal.');if(xs.length+entram>limite)limites.push(xs[xs.length+entram-limite-1]+86400000+1000);}if(canais.some(b=>TIPOS_FILA.includes(b))){const xs=eventos.filter(e=>e.canais.some(b=>TIPOS_FILA.includes(b))&&e.t>t-86400000&&e.t<=t).map(e=>e.t).sort((a,b)=>a-b);const entram=ps.filter(p=>bs([p]).some(b=>TIPOS_FILA.includes(b))).length;if(entram>cfg.max24h)throw Error('Esta sequência excede a cota diária do Instagram.');if(xs.length+entram>cfg.max24h)limites.push(xs[xs.length+entram-cfg.max24h-1]+86400000+1000);}if(!limites.length)break;t=ajustarHorarioMulti(ajustada,canais,Math.max(...limites),ocup).t;if(i===1999)throw Error('Não foi possível encontrar um horário comum dentro das regras.');}
+    for(const p of ps){const canaisPost=bs([p]);for(const b of canaisPost)ocup[b].push(t);eventos.push({t,canais:canaisPost});}return t;
+  }
+  const selecionadas=[...mapa.values()].map(xs=>xs.filter(x=>selecionados.has(x.id))).filter(xs=>xs.length).sort((a,b)=>Math.min(...a.map(x=>Date.parse(x.agendado_em)))-Math.min(...b.map(x=>Date.parse(x.agendado_em)))||a[0].id-b[0].id);const plano=[];let cursor=desejado,t=null;for(const ps of selecionadas){const n=reservar(ps,cursor);if(t===null)t=n;for(const x of ps)plano.push({id:x.id,antes:x.agendado_em,para:new Date(n).toISOString()});cursor=n+Math.max(ed(ps),...bs(ps).map(b=>gapDoTipoMs(cfg,b)));}
+  for(const g of mover){const n=reservar(g.ps,Math.max(cursor,...g.ps.map(x=>Date.parse(x.agendado_em))));for(const x of g.ps)if(Date.parse(x.agendado_em)!==n)plano.push({id:x.id,antes:x.agendado_em,para:new Date(n).toISOString()});cursor=n+Math.max(ed(g.ps),...bs(g.ps).map(b=>gapDoTipoMs(cfg,b)));}
+  return {t,plano,midias:selecionadas.length,deslocadas:mover.filter(g=>g.ps.some(x=>plano.some(p=>p.id===x.id))).length};
+}
+async function inserirMidiaAntes_(env,ps,desejado,J,simular=false){
+  const raw=await cfgGet(env,'po_cfg'),cfg=normalizarCfgPost(JSON.parse(raw||'null')),desde=new Date(Date.now()-86400000).toISOString();
+  const cond="status IN ('agendado','processando','manual_pendente') OR (status IN ('publicado','manual_feito') AND publicado_em>=?)";
+  const rows=(await env.DB.prepare("SELECT p.*,EXISTS(SELECT 1 FROM postagem_grupo_recibo r WHERE r.postagem_id=p.id AND r.estado<>'recusado') recibo FROM postagem p WHERE "+cond+' ORDER BY id').bind(desde).all()).results||[];
+  const campos=['id','status','modo','tipo','canal','origem_midia','agendado_em','atualizado_em','ig_id','zap_estado','zap_req','containers','urgente','serie','parte','partes','intervalo_ms','repostado_de','criado_em','grupo'];
+  if(rows.some(x=>ps.some(p=>p.id===x.id)&&x.recibo))return J({ok:false,erro:'Há envio aguardando confirmação na seleção. Nenhum horário foi alterado.'},409);
+  if(!ps.every(p=>{const x=rows.find(x=>x.id===p.id);return x&&!x.recibo&&campos.every(k=>x[k]===p[k]);}))return J({ok:false,erro:'A mídia mudou durante a revisão. Atualize a fila.'},409);
+  const ids=ps.map(x=>x.id);let r;try{r=planoInsercaoMidia_(cfg,rows,ids,desejado);}catch(e){return J({ok:false,erro:e.message},409);}const json=JSON.stringify(r.plano),snapshot=JSON.stringify(rows.map(x=>Object.fromEntries(campos.map(k=>[k,x[k]??null])))),em=agora(),backup='backup-insercao-midia-'+crypto.randomUUID();
+  if(simular)return J({ok:true,simulado:true,quando:new Date(r.t).toISOString(),plano:r.plano,midias:r.midias,deslocadas:r.deslocadas});
+  if(r.plano.length>200)return J({ok:false,erro:'Há mais de 200 destinos envolvidos. Nenhum horário foi alterado.'},409);
+  const igual=campos.map(k=>'q.'+k+" IS json_extract(s.value,'$."+k+"')").join(' AND ');
+  const sql="WITH guard AS MATERIALIZED(SELECT (SELECT COUNT(*) FROM json_each(?) s JOIN postagem q ON q.id=json_extract(s.value,'$.id') WHERE "+igual+")=? AND (SELECT COUNT(*) FROM postagem WHERE "+cond+")=? AND (SELECT valor FROM cfg WHERE chave='po_cfg') IS ? AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND g.estado<>'recusado') ok) UPDATE postagem SET agendado_em=(SELECT json_extract(value,'$.para') FROM json_each(?) WHERE json_extract(value,'$.id')=postagem.id),atualizado_em=?,urgente=CASE WHEN id IN(SELECT value FROM json_each(?)) THEN 0 ELSE urgente END WHERE id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND (SELECT ok FROM guard)";
+  const out=await env.DB.batch([env.DB.prepare('INSERT INTO cfg(chave,valor) VALUES(?,?)').bind(backup,JSON.stringify({em,antes:r.plano,snapshot:JSON.parse(snapshot)})),env.DB.prepare(sql).bind(snapshot,rows.length,desde,rows.length,raw,json,json,em,JSON.stringify(ids),json)]);
+  if(out[1].meta?.changes!==r.plano.length)return J({ok:false,erro:'A fila mudou durante o ajuste. Nenhum horário foi alterado; atualize e tente novamente.'},409);
+  return J({ok:true,quando:new Date(r.t).toISOString(),destinos:ps.length,midias:r.midias,deslocadas:r.deslocadas,deslocados:r.plano.length-ps.length,backup,ajustado:r.t!==desejado,motivo:r.t!==desejado?'intervalo':'insercao'});
+}
 async function reagendarMidiaOriginal_(env,ctx,linha,quando,J){
   // Legado usa a mesma identidade do card (tipo, grupo, minuto e URLs), nunca só uma URL solta.
   let todos;
@@ -2025,6 +2061,7 @@ async function reagendarMidiaOriginal_(env,ctx,linha,quando,J){
     if(p.canal==='grupo'){const erro=await erroVideoGrupo_(env,JSON.parse(p.midias||'[]'));if(erro)return J({ok:false,erro},400);}
   }
   const v=validarPostagem({...linhaPostagem(linha),quando});if(v.erro)return J({ok:false,erro:v.erro},400);
+  if(!v.v.urgente&&!v.v.sequencia&&ps.every(x=>x.status==='agendado'&&!x.serie))return inserirMidiaAntes_(env,ps,Math.max(Date.parse(v.v.quando),Date.now()+60000),J);
   const cfg=await lerCfgPost(env),bs=[...new Set(ps.flatMap(x=>bucketsDoPost(x.tipo,x.canal)))],ocup={};
   const editorial=Math.max(...ps.map(x=>Number(x.intervalo_ms)||0));
   const ajustada={...cfg,canais:{...cfg.canais}};
@@ -2174,6 +2211,18 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     ]);
     if(resultados[1].meta?.changes!==plano.length)return J({ok:false,erro:'A fila mudou durante a revisão. Nenhum horário foi alterado; simule novamente.'},409);
     return J({ok:true,mudaram:mudam.length,simulado:false,detalhes,backup,preservados:rows.filter(x=>x.status==='agendado'&&!selecionados.has(x.id)).length});
+  }
+  if(p==='/post/reagendar-lote'&&req.method==='POST'){
+    const ids=[...new Set(Array.isArray(b.ids)?b.ids:[])];if(!ids.length||ids.length>200||ids.some(x=>!Number.isSafeInteger(x)||x<1))return J({ok:false,erro:'Selecione de 1 a 200 destinos.'},400);
+    const rows=(await env.DB.prepare("SELECT * FROM postagem WHERE status<>'cancelado' ORDER BY id").all()).results||[];
+    const chave=identidadeBlocoPost_;
+    const alvos=ids.map(id=>rows.find(x=>x.id===id));if(alvos.some(x=>!x||x.status!=='agendado'))return J({ok:false,erro:'Uma mídia mudou ou não está agendada. Atualize a seleção.'},409);
+    const chaves=new Set(alvos.map(chave)),todos=rows.filter(x=>chaves.has(chave(x))),ps=todos.filter(x=>x.status==='agendado');
+    if(todos.some(x=>['processando','manual_pendente','erro','convertendo','transcodificando'].includes(x.status))||ps.some(x=>x.ig_id||x.zap_estado||x.zap_req||x.containers)||todos.some(x=>x.serie&&x.status!=='agendado'))return J({ok:false,erro:'Há destino em verificação ou sequência já iniciada na seleção. Nenhum horário foi alterado.'},409);
+    for(const x of ps)if(x.serie){const partes=todos.filter(y=>y.serie===x.serie);if(partes.length!==x.partes||!partes.some(y=>y.parte===1))return J({ok:false,erro:'Inclua a sequência completa para mudar o horário.'},409);}
+    for(const x of ps)if(x.canal==='grupo'){const erro=await erroVideoGrupo_(env,JSON.parse(x.midias||'[]'));if(erro)return J({ok:false,erro},400);}
+    const t=Date.parse(b.quando);if(!Number.isFinite(t)||t<Date.now()+60000||t>Date.now()+60*86400000)return J({ok:false,erro:'Escolha um horário futuro, até 60 dias à frente.'},400);
+    return inserirMidiaAntes_(env,ps,t,J,b.simular===true);
   }
   const id = Number(b.id) || 0;
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;

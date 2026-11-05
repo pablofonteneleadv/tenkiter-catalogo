@@ -14,7 +14,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [7.55.7] - 2026-11-05
 
-- Repostagem preserva a origem da mídia e o intervalo editorial, mantendo o vínculo do destino recuperado com o bloco original.
+- Seleção de mídias inteiras permite escolher o início do lote e reestruturar a fila seguinte, mantendo canais juntos, ordem e intervalos, com comparação atômica e backup privado.
+- Antecipar uma mídia insere seu bloco no horário viável escolhido, afastando os seguintes em vez de saltar para amanhã por falta de espaço.
+- Repostagem preserva a origem da mídia e o intervalo editorial. Seletor de horários e chips acomodam telas estreitas com texto ampliado.
 
 
 ## [7.55.6] - 2026-11-05
