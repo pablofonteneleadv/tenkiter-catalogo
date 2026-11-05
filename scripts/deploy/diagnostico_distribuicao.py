@@ -107,6 +107,13 @@ def diagnostico_postagens_somente_leitura():
     except Exception as error:
         # Nunca imprime URL do provedor, corpo de erro ou credenciais.
         result['limite_diagnostico'] = type(error).__name__
+        if isinstance(error, urllib.error.HTTPError):
+            result['http'] = error.code
+            try:
+                body = json.loads(error.read(4096))
+                result['codigos_cloudflare'] = [e.get('code') for e in body.get('errors', [])]
+            except Exception:
+                pass
     print(json.dumps({'diagnosticoPostagens': result},ensure_ascii=False))
 
 
