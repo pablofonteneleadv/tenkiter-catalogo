@@ -172,6 +172,8 @@ with sync_playwright() as p:
         up = st["updates"][-1] if len(st["updates"]) > n_up else {}
         chk(f"{w}: 'Adicionar fotos' sobe ao servidor de fotos e acrescenta à galeria da peça", up.get("id") == "1001" and (M + "up001.jpg") in up.get("fotosGaleriaExistentes", "") and (M + "up002.jpg") in up.get("fotosGaleriaExistentes", "") and up.get("fotoUrlExistente") == "https://midia.fake/m/1001-capa.jpg", up)
         chk(f"{w}: adicionar fotos conclui os 2 pedidos de uma vez", f["concluir"][-1] == {"ids": [51, 52], "fotos": 2}, f["concluir"][-1])
+        # Conclusão em segundo plano não reconstrói a lista enquanto se trabalha.
+        pg.get_by_role('button',name='Atualizar fotos',exact=True).click()
         pg.wait_for_selector("#fotos-pedidas >> text=Nenhum pedido de fotos aberto.", timeout=6000)
         # pedir fotos numa tela própria (escolhendo a peça)
         pg.click("text=Pedir fotos de uma peça"); pg.wait_for_selector("#pf-busca", timeout=4000)

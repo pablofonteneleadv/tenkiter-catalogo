@@ -12,9 +12,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## [7.55.6] - 2026-11-05
+## [7.55.7] - 2026-11-05
 
 - Repostagem preserva a origem da mídia e o intervalo editorial, mantendo o vínculo do destino recuperado com o bloco original.
+
+
+## [7.55.6] - 2026-11-05
+
+- Fotos da Esteira preserva o contexto de trabalho: atualização explícita, sem reconstrução por timer, retomada ou conclusão em segundo plano.
+- Pessoas editam descrições e observações dos próprios registros; Admin total edita todos, com histórico e proteção contra conflitos.
+- Buscadores da Esteira iniciam em Ativas, permitem mudar a situação e filtrar por preço mínimo e máximo.
 
 
 ## [7.55.5] - 2026-11-05

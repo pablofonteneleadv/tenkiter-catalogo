@@ -6624,6 +6624,7 @@ async function estIniciar_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_produto (id TEXT PRIMARY KEY, atualizado_em TEXT, atualizado_por TEXT, conferido_em TEXT, conferido_por TEXT, divergiu INTEGER NOT NULL DEFAULT 0)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_conf (id INTEGER PRIMARY KEY AUTOINCREMENT, produto TEXT NOT NULL, data TEXT NOT NULL, por TEXT NOT NULL, achou INTEGER NOT NULL, estoque_antes TEXT, estoque_depois TEXT, divergiu INTEGER NOT NULL DEFAULT 0, foto_nova INTEGER NOT NULL DEFAULT 0, obs TEXT DEFAULT '', em TEXT NOT NULL)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_conf_data ON est_conf (data, por)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_registro_edicao (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, registro INTEGER NOT NULL, por TEXT NOT NULL, em TEXT NOT NULL, antes TEXT NOT NULL, depois TEXT NOT NULL)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_lista (data TEXT NOT NULL, whats TEXT NOT NULL, produto TEXT NOT NULL, pos INTEGER NOT NULL, grupo TEXT DEFAULT '', feito_em TEXT, PRIMARY KEY (data, whats, produto))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_tarefa (id INTEGER PRIMARY KEY AUTOINCREMENT, produto TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'outro', titulo TEXT NOT NULL, instrucao TEXT DEFAULT '', funcao TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', origem TEXT DEFAULT '', criada_em TEXT, criada_por TEXT, feita_em TEXT, feita_por TEXT, obs TEXT DEFAULT '')"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_tarefa_prod ON est_tarefa (produto, status)"),
@@ -7165,6 +7166,46 @@ async function rotasEsteira_(env, req, url, J, perms) {
   const podeAceitar = admin || !!(membro && membro.aceitar);
   let escalaHojeCache = null; const escalaHoje = async () => (escalaHojeCache = escalaHojeCache || await estEscalaDoDia_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined));
 
+  // Correções de texto preservam o fato registrado e sua autoria. Permissão
+  // conferida novamente no UPDATE; o retrato impede sobrescrever outra edição.
+  const registros = {
+    foto:{tabela:'est_caixa',dono:'enviada_por',em:'enviada_em',filtro:'1=1',campos:['descricao','descricao_lote']},
+    pedido_fotos:{tabela:'est_tarefa',dono:'criada_por',em:'criada_em',filtro:"origem='pedido_fotos'",campos:['detalhe']},
+    conferencia:{tabela:'est_conf',dono:'por',em:'em',filtro:'1=1',campos:['obs']},
+    tarefa:{tabela:'est_tarefa',dono:'feita_por',em:'feita_em',filtro:"status='feita'",campos:['obs']},
+  };
+  const registroSaida=(tipo,r)=>{
+    const s=registros[tipo],campos={};s.campos.forEach(k=>campos[k]=String(r[k]||''));
+    return {tipo,id:r.id,produto:r.produto||'',titulo:tipo==='foto'?(r.produto_nome||'Foto enviada'):tipo==='conferencia'?'Conferência':r.titulo||'Pedido de fotos',por:nomeDe(r[s.dono])||r.enviada_nome||'Pessoa da equipe',em:r[s.em]||'',campos,versao:JSON.stringify(campos)};
+  };
+  if(p==='/esteira/registros'&&req.method==='GET'){
+    const tipo=url.searchParams.get('tipo')||'foto',s=Object.prototype.hasOwnProperty.call(registros,tipo)?registros[tipo]:null;
+    if(!s)return J({ok:false,erro:'Escolha um tipo de registro válido.'},400);
+    const antes=Number(url.searchParams.get('antes'))||Number.MAX_SAFE_INTEGER,alvo=Number(url.searchParams.get('id'))||0;
+    const rows=(await env.DB.prepare('SELECT * FROM '+s.tabela+' WHERE '+s.filtro+(admin?'':' AND '+s.dono+'=?')+' AND id<?'+(alvo?' AND id=?':'')+' ORDER BY id DESC LIMIT 41').bind(...(admin?[]:[eu]),antes,...(alvo?[alvo]:[])).all()).results||[];
+    return J({ok:true,admin,itens:rows.slice(0,40).map(r=>registroSaida(tipo,r)),proximo:rows.length>40?rows[39].id:null});
+  }
+  if(p==='/esteira/registro-editar'&&req.method==='POST'){
+    const d=await req.json().catch(()=>({})),s=Object.prototype.hasOwnProperty.call(registros,d.tipo)?registros[d.tipo]:null,id=Number(d.id);
+    if(!s||!Number.isSafeInteger(id)||id<1)return J({ok:false,erro:'Registro inválido.'},400);
+    const r=await env.DB.prepare('SELECT * FROM '+s.tabela+' WHERE id=? AND '+s.filtro).bind(id).first();
+    if(!r)return J({ok:false,erro:'Este registro não está mais disponível.'},404);
+    if(!admin&&estFone_(r[s.dono])!==eu)return J({ok:false,erro:'Você só pode editar os próprios registros.'},403);
+    const atual=registroSaida(d.tipo,r);
+    if(d.versao!==atual.versao)return J({ok:false,erro:'Este registro foi alterado por outra pessoa. Feche e abra novamente para conferir.'},409);
+    const novos={};
+    if(d.tipo==='pedido_fotos'){
+      const detalhe=estDetalhe_(r);detalhe.obs=String(d.obs??'').trim().slice(0,300);novos.detalhe=JSON.stringify(detalhe);
+    }else for(const k of s.campos)novos[k]=String(d[k]??'').trim().slice(0,300);
+    const cond=s.campos.map(k=>'COALESCE('+k+",'')=?").join(' AND ');
+    const resultado=await env.DB.batch([
+      env.DB.prepare('UPDATE '+s.tabela+' SET '+s.campos.map(k=>k+'=?').join(',')+' WHERE id=? AND '+s.filtro+' AND '+s.dono+' IS ? AND '+cond).bind(...s.campos.map(k=>novos[k]),id,r[s.dono],...s.campos.map(k=>atual.campos[k])),
+      env.DB.prepare('INSERT INTO est_registro_edicao(tipo,registro,por,em,antes,depois) SELECT ?,?,?,?,?,? WHERE changes()=1').bind(d.tipo,id,eu,agora,atual.versao,JSON.stringify(novos)),
+    ]);
+    if(!resultado[0].meta?.changes)return J({ok:false,erro:'O registro mudou enquanto você salvava. Abra novamente para conferir.'},409);
+    return J({ok:true,registro:registroSaida(d.tipo,{...r,...novos})});
+  }
+
   if (p === '/esteira/hoje' && req.method === 'GET') {
     try { await estGarantirListas_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined); } catch (e) { return J({ ok: false, erro: e.message || 'Não consegui montar a lista de hoje. Tente de novo.' }, 503); }
     let catalogo = []; try { catalogo = await estCatalogo_(env); } catch (e) { return J({ ok: false, erro: e.message }, 503); }
@@ -7244,6 +7285,7 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const t = id > 0 ? await env.DB.prepare('SELECT * FROM est_tarefa WHERE id=?').bind(id).first() : null;
     if (!t) return J({ ok: false, erro: 'Esta tarefa não existe mais. Atualize a tela.' }, 404);
     if (t.status === 'dispensada') return J({ ok: false, erro: 'Esta tarefa foi dispensada quando a peça foi aceita para o site.' }, 400);
+    if(t.status==='feita'&&!admin&&estFone_(t.feita_por)!==eu)return J({ok:false,erro:'Só quem concluiu a tarefa ou o administrador pode alterar este registro.'},403);
     const v = estVestirTarefa_(t, await escalaHoje(), eu, podeAceitar, nomeDe);
     if (!v.posso) return J({ ok: false, erro: 'Esta tarefa é de quem está em ' + t.funcao + ' hoje' + (v.quem ? ' (' + v.quem + ')' : '') + '.' }, 403);
     const obs = d.obs == null ? String(t.obs || '') : String(d.obs).trim().slice(0, 300);
