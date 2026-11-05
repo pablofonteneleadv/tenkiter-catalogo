@@ -841,7 +841,11 @@ const ZAP_CONSULTA_GAP_MS = 50000;          // o cron roda a cada minuto: consul
 const FRASE_AGUARDA_ZAP = 'Aguardando a confirmação do WhatsApp. O sistema consulta a Wafly a cada minuto por até 10 min, sem reenviar; a fila segue na ordem.';
 const FRASE_REENVIO_ZAP = 'A Wafly informou que o primeiro envio não saiu: reenviado uma vez com novo ID. Aguardando a confirmação (até 10 min).';
 const FRASE_IG_PRESO_ = 'Instagram: não saiu no horário porque esperava a confirmação do WhatsApp (regra anterior à 7.48.3). Nada é publicado fora da vez: toque em “Repostar” para colocar no próximo horário livre.';
-const ZAP_FALHA_ESTADOS_ = ['failed', 'failure', 'rejected', 'error', 'expired', 'cancelled', 'canceled', 'not_found', 'notfound'];
+const ZAP_FALHA_ESTADOS_ = ['failed', 'failure', 'rejected', 'error', 'expired', 'cancelled', 'canceled'];
+// Ausência do recibo não prova ausência de publicação. Nunca libera outro requestId por 404.
+function reciboZapAusente_(http,j,st) {
+  return Number(http)===404 || j?.naoEncontrado===true || ['not_found','notfound','request_not_found'].includes(st) || [j?.code,j?.error,j?.error?.code].some(v=>['not_found','notfound','request_not_found'].includes(estadoZapLimpo_(v)));
+}
 function requestIdZap_(slot, id, tent) { return (slot === 2 ? 'tkpost2-' : 'tkpost-') + String(id).padStart(12, '0') + (Number(tent) > 0 ? '-r' + Number(tent) : ''); }
 function nomeZapRid_(rid) { return slotDoRequestId_(rid) === 2 ? 'WhatsApp Status 2' : 'WhatsApp Status 1'; }
 function horaLocal_(v) { const n = typeof v === 'number' ? v : Date.parse(v); const d = new Date((isFinite(n) ? n : Date.now()) - 180 * 60000); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }
@@ -857,7 +861,7 @@ async function consultarWhatsApp_(env, requestId) {
     const j = await r.json();
     const st = estadoZapLimpo_(j && j.estado);
     if (j && j.ok && st === 'accepted' && j.confirmado) return { estado: 'aceito', nota: '' };
-    if (j && (Number(j.http) === 404 || Number(j.status) === 404 || j.naoEncontrado === true)) return { estado: 'falhou', nota: 'a Wafly não encontrou este pedido (HTTP 404)' };
+    if (reciboZapAusente_(r.status,j,st) || reciboZapAusente_(j?.http,j,st) || Number(j?.status)===404) return { estado: 'desconhecido', nota: 'a Wafly não encontrou o recibo; isso não comprova que o pedido não foi publicado' };
     if (j && j.ok && ZAP_FALHA_ESTADOS_.indexOf(st) !== -1) return { estado: 'falhou', nota: 'a Wafly marcou o pedido como “' + st + '”' };
     if (j && j.ok) return { estado: 'desconhecido', nota: st && st !== 'unknown' ? 'pedido em “' + st + '”' : 'sem resultado ainda' };
     return { estado: 'desconhecido', nota: 'o servidor do WhatsApp não respondeu a consulta' };
@@ -1065,7 +1069,7 @@ async function consultarWaflyDireto_(cfg, requestId, env) {
     if(r.ok&&env)await guardarRefStatusWafly_(env,requestId,j);
     const st = estadoZapLimpo_(j && (typeof j.state === 'string' ? j.state : typeof j.status === 'string' ? j.status : ''));
     if (r.ok && st === 'accepted' && j.serverAcknowledged) return { estado: 'aceito', nota: '' };
-    if (r.status === 404) return { estado: 'falhou', nota: 'a Wafly não encontrou este pedido (HTTP 404)' };
+    if (reciboZapAusente_(r.status,j,st)) return { estado: 'desconhecido', nota: 'a Wafly não encontrou o recibo; isso não comprova que o pedido não foi publicado' };
     if (r.ok && ZAP_FALHA_ESTADOS_.indexOf(st) !== -1) return { estado: 'falhou', nota: 'a Wafly marcou o pedido como “' + st + '”' };
     if (r.ok) return { estado: 'desconhecido', nota: st ? 'pedido em “' + st + '”' : 'sem resultado ainda' };
     return { estado: 'desconhecido', nota: 'a Wafly respondeu HTTP ' + r.status };

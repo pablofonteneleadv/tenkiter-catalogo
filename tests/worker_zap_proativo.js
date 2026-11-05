@@ -13,17 +13,17 @@ function d1() {
   return { prepare: prep, async batch(l) { db.exec('BEGIN'); const results = []; try { for (const st of l) results.push(st._run()); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } return results; }, _db: db };
 }
 (async () => {
-  const W = await import(tmp), w = W.default;
+  const W = await import(require('node:url').pathToFileURL(tmp).href), w = W.default;
   const cacheMem = new Map(), kv = new Map(), objs = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const R2 = { async get(k) { const v = objs.get(k); return v ? { size: v.length, async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async put(k, b) { objs.set(k, Buffer.from(b)); }, async delete(k) { objs.delete(k); }, async list() { return { objects: [], truncated: false }; } };
   const KV = { async get(k) { return kv.has(k) ? kv.get(k) : null; }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Wafly falsa: POST /status-publication e GET /status-publication/requests/<id> ----
-  let waf = [], postModo = 'ok', recibos = {}, reciboPadrao = { status: 200, body: { state: 'pending' } }, publicadosIG = [], seqC = 0;
+  let waf = [], postModo = 'ok', recibos = {}, reciboPadrao = { status: 200, body: { state: 'pending' } }, ponteRecibo = null, publicadosIG = [], seqC = 0;
   globalThis.fetch = async (u, init) => {
     u = String(u); const metodo = (init && init.method) || 'GET';
-    if (u.startsWith('https://api.fake')) { return new Response(JSON.stringify({ ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'], nome: 'Gestor' } })); }
+    if (u.startsWith('https://api.fake')) { if(ponteRecibo&&init?.body&&JSON.parse(init.body).consultar)return new Response(JSON.stringify(ponteRecibo)); return new Response(JSON.stringify({ ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'], nome: 'Gestor' } })); }
     if (u.startsWith('https://tenkiter-midia.fake/')) return new Response(Buffer.alloc(900, 7), { headers: { 'content-type': 'image/jpeg' } });
     if (u.startsWith('https://wafly.com.br/api-bridge-whats/')) {
       const body = init && init.body ? JSON.parse(init.body) : null;
@@ -86,14 +86,15 @@ function d1() {
   const vb = (await A('GET', '/posts')).j.posts.find((x) => x.id === b);
   chk('/posts entrega o marcador para o aviso discreto da tela', vb.zap && vb.zap.estado === 'sem_confirmacao' && !JSON.stringify(vb.zap).includes('tkpost'), vb.zap);
 
-  console.log('== falha definitiva / 404: reenvio único com requestId novo ==');
+  console.log('== recibo ausente: incerteza sem reenvio ==');
   let c = await nova('whatsapp2'); postModo = '409'; await P();
   recibos[rid(2, c)] = { status: 404, body: { error: 'not found' } }; postModo = 'ok'; await passar(c, 1); waf = []; await P();
   let lc = await L(c), pc = posts_(waf)[0];
-  chk('recibo 404 = não publicado: reenvia UMA vez logo em seguida com requestId novo (-r1) na mesma instância', pc && pc.body.requestId === rid(2, c, '-r1') && pc.url.includes('/instances/INST_TESTE_002/') && posts_(waf).length === 1, pc && pc.body.requestId);
-  chk('reenvio aceito = publicado e a tentativa fica registrada', lc.status === 'publicado' && lc.zap_estado === 'confirmado' && lc.zap_tent === 1 && lc.ig_id === rid(2, c, '-r1'), [lc.status, lc.zap_tent, lc.ig_id]);
+  chk('recibo 404 não comprova falha: consulta o mesmo ID sem criar -r1', posts_(waf).length === 0 && lc.status === 'processando' && lc.zap_req === rid(2,c) && lc.zap_tent === 0, [lc.status,lc.zap_tent]);
+  await envelhecer(c,11); waf=[]; await P(); lc=await L(c);
+  chk('404 após a janela fica sem confirmação e preserva o ID da tentativa', lc.zap_estado === 'sem_confirmacao' && lc.zap_req === rid(2,c) && posts_(waf).length === 0, lc.zap_estado);
   let c2 = await nova('whatsapp2'); postModo = '409'; await P();
-  recibos[rid(2, c2)] = { status: 404, body: {} }; await passar(c2, 1); await P();
+  recibos[rid(2, c2)] = { status: 200, body: {state:'failed'} }; await passar(c2, 1); await P();
   await passar(c2, 1); waf = []; await P();
   chk('slotDoRequestId_ com sufixo: a consulta do -r1 vai para a instância 2', waf.length === 1 && waf[0].metodo === 'GET' && waf[0].url.includes('/instances/INST_TESTE_002/') && waf[0].url.endsWith('/requests/' + rid(2, c2, '-r1')), waf.map((x) => x.url));
 
@@ -153,7 +154,22 @@ function d1() {
   chk('916: Repostar leva só o Instagram (o WhatsApp já saiu) ao próximo horário livre do Story', rp.j.ok && (await L(rp.j.id)).canal === 'instagram' && Date.parse(rp.j.quando) > Date.now(), rp.j);
   recibos['tkpost2-000000009927'] = { status: 404, body: {} }; waf = [];
   k = await A('POST', '/post/consultar', { id: old927 });
-  chk('927: falha definitiva no antigo NÃO reenvia sozinho; erro claro com Repostar', k.j.ok && k.j.resultado === 'falhou' && /não publicou/.test(k.j.mensagem) && posts_(waf).length === 0 && (await L(old927)).status === 'erro' && /Repostar/.test((await L(old927)).erro), k.j);
+  chk('927: 404 antigo continua incerto, sem alegar falha nem reenviar', k.j.ok && k.j.resultado === 'sem_confirmacao' && /não confirmou/.test(k.j.mensagem) && posts_(waf).length === 0 && (await L(old927)).zap_estado === 'sem_confirmacao', k.j);
+  console.log('== recibo ausente em respostas 200 e ponte legada ==');
+  for(const body of [{state:'not_found'},{state:'error',code:'REQUEST_NOT_FOUND'},{state:'error',error:{code:'REQUEST_NOT_FOUND'}}]) {
+    const id=await nova('whatsapp2','processando');const requestId=rid(2,id);
+    await DB.prepare("UPDATE postagem SET ig_id=?,zap_req=?,zap_estado='aguardando',zap_desde=?,inicio_proc=? WHERE id=?").bind('zapq:'+requestId,requestId,iso(-1),iso(-1),id).run();
+    recibos[requestId]={status:200,body};waf=[];const r=await A('POST','/post/consultar',{id});
+    chk('recibo ausente com HTTP 200 mantém o ID e não reenvia: '+JSON.stringify(body),r.j.resultado==='esperando'&&(await L(id)).zap_tent===0&&posts_(waf).length===0,r.j);
+    await DB.prepare("UPDATE postagem SET status='cancelado' WHERE id=?").bind(id).run();
+  }
+  const bridge=await nova('whatsapp','processando'),bridgeRid=rid(1,bridge);
+  await DB.prepare("UPDATE postagem SET ig_id=?,zap_req=?,zap_estado='aguardando',zap_desde=?,inicio_proc=? WHERE id=?").bind('zapq:'+bridgeRid,bridgeRid,iso(-1),iso(-1),bridge).run();
+  await DB.prepare("DELETE FROM cfg WHERE chave='wafly_1'").run();
+  for(const body of [{ok:false,http:404},{ok:true,estado:'error',code:'REQUEST_NOT_FOUND'},{ok:true,estado:'not_found'},{ok:false,naoEncontrado:true}]) {
+    ponteRecibo=body;waf=[];const r=await A('POST','/post/consultar',{id:bridge});
+    chk('ponte mantém a incerteza sem reenvio: '+JSON.stringify(body),r.j.resultado==='esperando'&&(await L(bridge)).zap_tent===0&&posts_(waf).length===0,r.j);
+  }
   const s = JSON.stringify((await DB.prepare('SELECT erro, zap_erro FROM postagem').all()).results);
   chk('nenhuma mensagem gravada expõe token ou Client-Token', !s.includes('TOKEN_TESTE') && !s.includes('CLIENT_TESTE'));
   console.log('\nOK=' + ok + ' FALHAS=' + falhas.length); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
