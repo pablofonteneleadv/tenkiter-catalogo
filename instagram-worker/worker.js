@@ -2057,15 +2057,20 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     for (const v of vs) if (v.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.midias); if (erro) return J({ ok: false, erro }, 400); }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
-    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], inicioSeries={}, intervaloMs = intervaloPedidoMs_(b.intervalo);
+    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], inicioSeries={}, horariosOriginais=new Map(), intervaloMs = intervaloPedidoMs_(b.intervalo);
     try{await validarSeriesPost_(env,req,lista,vs);}catch(e){return J({ok:false,erro:e.message},400);}
     for (let i = 0; i < vs.length; i++) {
-      const v = vs[i], bs = bucketsDoPost(v.tipo, v.canal), ck = bs.join('+');
+      const v = vs[i], origem=lista[i].origemMidia;
+      // O original tem um único horário, calculado com as restrições de TODOS
+      // os destinos. Sortear/calcular por canal fazia o grupo adiantar a fila.
+      const bs = [...new Set(vs.flatMap((destino,j)=>lista[j].origemMidia===origem?bucketsDoPost(destino.tipo,destino.canal):[]))].sort(), ck = bs.join('+');
       const continuacao=!!(v.serie&&v.parte>1);
-      const editorial=continuacao?0:intervaloEditorialMs_(cfg,bs,intervaloMs);
+      const anteriorOriginal=horariosOriginais.get(origem);
+      const editorial=continuacao?0:anteriorOriginal?anteriorOriginal.editorial:intervaloEditorialMs_(cfg,bs,intervaloMs);
       for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
       let t;
-      if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
+      if(anteriorOriginal)t=anteriorOriginal.t;
+      else if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
       else if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
       else if (v.sequencia && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], editorial);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
       else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
@@ -2074,7 +2079,8 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
         t = aj.t; if (aj.ajustado) ajustes.push({ i: i, tipo: v.tipo, de: new Date(pedido).toISOString(), para: new Date(t).toISOString(), motivo: aj.motivo });
       }
       if(v.serie&&v.parte===1)inicioSeries[v.serie]=t;
-      cursores[ck] = t; bs.forEach((b) => ocup[b].push(t)); v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
+      if(!anteriorOriginal){horariosOriginais.set(origem,{t,editorial});cursores[ck] = t; bs.forEach((b) => ocup[b].push(t));}
+      v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
       quandos.push(v.quando);
 
 

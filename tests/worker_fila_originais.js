@@ -7,7 +7,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
 (async () => {
   const tmp = path.join(os.tmpdir(), 'tk-fila-originais.mjs');
   fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '../instagram-worker/worker.js')) + '\nexport {videoClaims_,videoUsuario_,videoRunner_,autorizarVideoRunner_};export function simularAvanco_(f){avancarPostagem=f;}');
-  const W = await import(tmp);
+  const W = await import(require('node:url').pathToFileURL(tmp).href);
   const cache = new Map(), kv = new Map();
   global.caches = { default: { async match(r) { return cache.has(r.url) ? Response.json(cache.get(r.url)) : undefined; }, async put(r, v) { cache.set(r.url, await v.json()); } } };
   let envios = [];
@@ -29,6 +29,24 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   for(let i=0;i<3;i++){const a=createdRows[2*i],b=createdRows[2*i+1];assert.equal(a.origem_midia,b.origem_midia,'Mesma mídia ligada aos dois destinos');assert.notEqual(a.origem_midia,'forjada');assert.equal(a.intervalo_ms,1200000);assert.equal(b.intervalo_ms,1200000);}
   assert.equal(new Set(createdRows.map(x=>x.origem_midia)).size,3);
   const listed=(await chamar('/posts?limite=250')).j.posts;assert.equal(listed[0].origemMidia,createdRows[0].origem_midia);assert.equal(listed[0].intervaloMs,1200000);
+  sqlite.prepare('DELETE FROM postagem').run();
+  // Cada original deve compartilhar o horário mesmo com filas e mínimos diferentes.
+  env.WAFLY_GRUPO_CLIENTES=JSON.stringify({instance:'teste',token:'teste',clientToken:'teste',phone:'123-group'});
+  await DB.prepare("INSERT OR REPLACE INTO cfg(chave,valor) VALUES('wafly_2',?)").bind(JSON.stringify({instance:'teste-simulado',token:'teste-simulado',clientToken:'teste-simulado'})).run();
+  await chamar('/post/config','POST',{config:{canais:{story:{gapMin:900,gapMax:900},status:{gapMin:900,gapMax:900},grupo:{gapMin:120,gapMax:120},status2:{gapMin:120,gapMax:120}}}});
+  const ocupado=new Date(Date.now()+60000).toISOString();
+  sqlite.prepare("INSERT INTO postagem(tipo,modo,midias,agendado_em,status,canal) VALUES('story','auto','[]',?,'agendado','whatsapp')").run(ocupado);
+  const lote=posts.map(p=>({...p,grupoClientes:true,status2:true}));
+  const juntos=await chamar('/post','POST',{posts:lote,intervalo:20});assert.equal(juntos.status,200,JSON.stringify(juntos));
+  const linhas=sqlite.prepare("SELECT * FROM postagem WHERE origem_midia<>'' ORDER BY id").all();
+  assert.equal(linhas.length,12);
+  assert(Date.parse(linhas[0].agendado_em)>=Date.parse(ocupado)+900000,'A fila ocupada do Status 1 também adia Grupo 1 e Status 2');
+  for(let i=0;i<3;i++){
+    const destinos=linhas.slice(i*4,i*4+4);
+    assert.equal(new Set(destinos.map(p=>p.agendado_em)).size,1,'Story, Grupo 1 e dois Status no mesmo horário');
+    assert.equal(new Set(destinos.map(p=>p.intervalo_ms)).size,1,'Intervalo editorial único por original');
+    if(i)assert(Date.parse(destinos[0].agendado_em)-Date.parse(linhas[(i-1)*4].agendado_em)>=1200000);
+  }
   sqlite.prepare('DELETE FROM postagem').run();
   const RealDate=Date;let time=RealDate.now();global.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[time]));}static now(){return time;}};
   const seed=(serie,origem,part,interval=1200000)=>Number(sqlite.prepare("INSERT INTO postagem(tipo,modo,midias,agendado_em,status,canal,serie,parte,partes,origem_midia,intervalo_ms) VALUES('story','auto',?,?,'agendado','whatsapp',?, ?,2,?,?)").run(JSON.stringify([{url:'https://midia.test/video.mp4',tipo:'video'}]),new Date(time-3600000).toISOString(),serie,part,origem,part===1?interval:0).lastInsertRowid);
