@@ -36,4 +36,10 @@ Medições: cabeçalho64px, navegação inferior51,25px e reserva inferior104px 
 
 ## Ativação
 
+### Correção de distribuição7.55.1
+
+A checagem independente posterior ao deploy7.55.0 encontrou404 em `rh-permissoes.js` e `.css`: os arquivos estavam no checkout usado pelos testes, mas não em `scripts/deploy/public-files.json`. O frontend7.54.5 foi restaurado temporariamente pelo workflow já validado enquanto a correção era preparada; nenhum dado ou Apps Script foi revertido.
+
+Os dois assets agora estão na lista pública. O build inspeciona cada HTML copiado e recusa scripts/estilos locais não incluídos antes de substituir o diretório público anterior. O monitor do deploy valida também HTML, tipo e conteúdo dos assets do RH. Testes negativos reproduzem a omissão e preservam a publicação anterior. A jornada de permissões é executada contra `.public-site`, além dos testes no checkout. Conteúdo, estilos e permissões da interface permanecem os mesmos da revisão acima.
+
 Frontend e Worker são compatíveis com as versões anteriores e seguem o deploy normal após CI verde. A aba informa a necessidade da atualização enquanto o RH antigo estiver publicado. A publicação dos dois Apps Scripts é manual pelo proprietário. O procedimento e a preservação da equipe antes da troca estão no lote privado `20261105-permissoes-rh`.

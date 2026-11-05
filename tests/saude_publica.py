@@ -14,6 +14,9 @@ def fixture(path):
     bodies = {'': ('text/html', b'<html>TENKiTER</html>'),
               'version.json': ('application/json', json.dumps({'versao': '7.53.5', 'commit': 'a' * 40}).encode()),
               'pedido.js': ('text/javascript', b'function operacaoPedido_(){}'),
+              'treinamentos.html': ('text/html', b'<html><script src="rh-permissoes.js"></script><link rel="stylesheet" href="rh-permissoes.css"></html>'),
+              'rh-permissoes.js': ('text/javascript', b'window.TKPermissoes={}'),
+              'rh-permissoes.css': ('text/css', b'body.rh-admin{color:#111}'),
               'feed.csv': ('text/csv', b'id,title,availability,price,link,image_link\r\n'),
               'feed.xml': ('application/xml', b'<rss version="2.0"><channel/></rss>'),
               'sitemap.xml': ('application/xml', b'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"/>')}
@@ -30,10 +33,10 @@ class MonitorTests(unittest.TestCase):
     def test_all_resources_and_empty_sitemap_are_valid(self):
         result = m.check('https://exemplo.com/', lambda url: fixture(url.removeprefix('https://exemplo.com/')), 'a' * 40)
         self.assertTrue(result['ok'])
-        self.assertEqual(len(result['verificacoes']), 6)
+        self.assertEqual(len(result['verificacoes']), 9)
 
     def test_html_fallback_is_rejected_for_each_asset(self):
-        for path in ('version.json', 'pedido.js', 'sitemap.xml', 'feed.csv', 'feed.xml'):
+        for path in ('version.json', 'pedido.js', 'rh-permissoes.js', 'rh-permissoes.css', 'sitemap.xml', 'feed.csv', 'feed.xml'):
             with self.subTest(path=path), self.assertRaises((ValueError, json.JSONDecodeError)):
                 m.validate(path, *fixture(''))
 
@@ -71,7 +74,7 @@ class MonitorTests(unittest.TestCase):
             raise TimeoutError('conteudo-privado')
         result = m.check('https://exemplo.com/', fail)
         self.assertFalse(result['ok'])
-        self.assertEqual(len(calls), 6)
+        self.assertEqual(len(calls), 9)
         self.assertNotIn('conteudo-privado', json.dumps(result))
 
     def test_wrong_sitemap_namespace_and_unbranded_page_fail(self):
