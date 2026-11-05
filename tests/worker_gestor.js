@@ -7,7 +7,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
 (async () => {
   const tmp = path.join(os.tmpdir(), 'tk-gestor-teste.mjs');
   fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '../instagram-worker/worker.js')) + '\nexport {videoClaims_,videoUsuario_,videoRunner_,autorizarVideoRunner_};export function simularAvanco_(f){avancarPostagem=f;}');
-  const W = await import(tmp);
+  const W = await import(require('url').pathToFileURL(tmp).href);
   const expediente={semana:{0:[],1:[[480,720],[780,1080]],2:[[480,720],[780,1080]],3:[[480,720],[780,1080]],4:[[480,720],[780,1080]],5:[[480,720],[780,1080]],6:[[480,720]]},excecoes:{'2026-11-02':[]}};
   const util=W.calendarioGestor_(Date.parse('2026-10-30T00:00:00Z'),Date.parse('2026-11-04T00:00:00Z'),expediente,[]);
   assert.equal(util(Date.parse('2026-10-30T20:30:00Z'),Date.parse('2026-11-03T11:30:00Z')),300,'Noite, sábado, domingo e exceção sem contar como atraso');

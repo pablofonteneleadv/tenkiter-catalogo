@@ -510,8 +510,8 @@ details.manual-card[open]>summary::after{content:'▴';}
 .ds-ok{margin-top:4px; font-size:.8rem; color:var(--accent-txt); font-weight:600;}
 </style>
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
-<link rel="stylesheet" href="rh-permissoes.css?v=1">
-<script src="rh-permissoes.js?v=1"></script>
+<link rel="stylesheet" href="rh-permissoes.css?v=7.55.0">
+<script src="rh-permissoes.js?v=7.55.0"></script>
 </head>
 <body class="pg-treinamentos">
 
@@ -2985,7 +2985,7 @@ function permObj(x){
   return x || {};
 }
 function acessosEstado(){
-  if (!state.acessos) state.acessos = { pessoas: [], perfis: [], permissoes: [], busca: '', ordem: 'nome', fCv: 'todos', filtro: null, contagem: {}, truncado: false, abertos: {}, carregado: false, erro: '', totalClientes: 0, criando: false, log: null, eu: '' };
+  if (!state.acessos) state.acessos = { pessoas: [], perfis: [], permissoes: [], busca: '', ordem: 'nome', fCv: 'todos', filtro: null, contagem: {}, truncado: false, abertos: {}, perfisAbertos:{}, carregado: false, erro: '', totalClientes: 0, criando: false, log: null, eu: '' };
   return state.acessos;
 }
 async function msgAcessosReq_(method, body){
@@ -3077,7 +3077,7 @@ function acessosCard(p){
         '<div class="ac-sub">' + esc(p.whatsapp) + ' · <span class="' + (ativo ? 'badge-ativo' : 'badge-inativo') + '">' + (ativo ? 'Ativo' : 'Inativo') + '</span></div>' +
         '<div class="ac-sub">Cadastro: ' + (p.cadastro ? esc(acDataBr(p.cadastro)) : '<em>sem data (conta antiga)</em>') + (p.curriculo === 'enviado' ? ' · <span style="color:#198754;font-weight:700">📄 currículo feito</span>' : (p.curriculo === 'andamento' ? ' · 📄 currículo em andamento' : (p.curriculo === 'menor' ? ' · 📄 menor de 18' : ''))) + '</div></div>' +
       '<div class="ac-actions">' +
-        '<details class="ac-perfis-detalhes"><summary>Acessos: ' + esc(meus.join(', ') || 'Cliente') + '</summary><div class="ac-perfis" role="group" aria-label="Perfis de ' + esc(p.nome || 'esta pessoa') + '">' + chips + '</div></details>' + semPerfilConhecido +
+        '<details class="ac-perfis-detalhes"' + (a.perfisAbertos[p.whatsapp]?' open':'') + '><summary>Acessos: ' + esc(meus.join(', ') || 'Cliente') + '</summary><div class="ac-perfis" role="group" aria-label="Perfis de ' + esc(p.nome || 'esta pessoa') + '">' + chips + '</div></details>' + semPerfilConhecido +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Ajustes individuais (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
         (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
         (p.curriculo === 'andamento' || p.curriculo === '' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">Cobrar currículo</a>' : '') +
@@ -3267,6 +3267,7 @@ function wireTabAcessos(){
       if (!temGestao()){ goHome(); } else if (state.view === 'admin') { render(); }
     }
   }
+  lista.addEventListener('toggle',function(e){if(e.target.matches('.ac-perfis-detalhes')&&e.target.isConnected){var card=e.target.closest('.ac-card');a.perfisAbertos[card.dataset.whats]=e.target.open;}},true);
   lista.addEventListener('click', async function(e){
     var p = pessoaDe(e.target); if (!p) return;
     var btn = e.target.closest('button'); if (!btn) return;

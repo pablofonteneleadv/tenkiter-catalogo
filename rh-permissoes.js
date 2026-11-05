@@ -6,8 +6,9 @@
   function sair() { return !s.busy && (!s.dirty || window.confirm('Descartar as alterações deste acesso?')); }
   function redesenhar(foco) { var root=document.getElementById('rh-modelos');if(!root)return;root.innerHTML=conteudo();ligar();if(foco){var el=document.getElementById(foco);if(el)el.focus();} }
   function mesclarLegados() {
-    if(!s.legado)return;
+    if(!s.legado){if(s.legado===null)s.modelos.forEach(function(m){if(!m.configurado&&!m.protegido)m.indisponivel=true;});return;}
     s.modelos.forEach(function(m){
+      delete m.indisponivel;
       if(m.configurado||m.protegido)return;
       var nome=m.nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
       var regras=(s.legado.regras.perfis||{})[nome]||{};
@@ -31,7 +32,7 @@
   function conteudo() {
     if(!api.disponivel())return '<div class="rp-estado"><h2>Permissões por acesso</h2><p>Esta configuração precisa da atualização do servidor de acessos. As permissões atuais continuam disponíveis em Acessos.</p><button type="button" id="rp-atualizar">Verificar novamente</button></div>';
     if(!s.carregado)return '<div class="rp-estado" role="status"><p>'+esc(s.erro||'Carregando os acessos…')+'</p>'+(!s.busy?'<button id="rp-atualizar">Tentar novamente</button>':'')+'</div>';
-    var feedback=(s.erro?'<p class="rp-erro" role="alert">'+esc(s.erro)+'</p><button type="button" id="rp-recarregar">Atualizar a lista</button>':'')+(s.aviso?'<p class="rp-sucesso" role="status">'+esc(s.aviso)+'</p>':'');
+    var feedback=(s.erro?'<p class="rp-erro" role="alert">'+esc(s.erro)+'</p>'+(s.draft?'<button type="button" id="rp-recarregar">Atualizar a lista</button>':''):'')+(s.aviso?'<p class="rp-sucesso" role="status">'+esc(s.aviso)+'</p>':'');
     if(!s.draft)return '<div class="rp-cab"><div><h2>Permissões por acesso</h2><p>Configure o que cada acesso permite. As pessoas recebem a soma dos seus acessos, com os ajustes individuais preservados.</p></div><button type="button" class="rp-prim" id="rp-novo"'+(s.busy?' disabled':'')+'>+ Novo acesso</button></div><button type="button" id="rp-recarregar">Atualizar lista</button>'+feedback+'<label class="rp-busca">Buscar acesso<input type="search" id="rp-busca" value="'+esc(s.busca)+'" placeholder="Nome ou descrição"></label><div id="rp-lista">'+lista()+'</div>';
     var d=s.draft, grupos={};s.permissoes.forEach(function(p){(grupos[p.grupo]||(grupos[p.grupo]=[])).push(p);});
     var campos=Object.keys(grupos).map(function(g){var itens=grupos[g],q=itens.filter(function(p){return d.permissoes[p.chave];}).length;return '<details class="rp-grupo"><summary>'+esc(g)+' <span>'+q+' de '+itens.length+'</span></summary><div>'+itens.map(function(p){return '<label class="rp-perm"><input type="checkbox" data-rp-chave="'+esc(p.chave)+'"'+(d.permissoes[p.chave]?' checked':'')+(d.protegido||p.chave==='gerir_acessos'||p.chave==='cliente'?' disabled':'')+'><span>'+esc(p.rotulo)+'</span></label>';}).join('')+'</div></details>';}).join('');

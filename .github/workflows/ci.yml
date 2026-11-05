@@ -334,6 +334,7 @@ jobs:
         with:
           name: evidencias-reparos-integrados
           path: |
+            tests/saida/rh-permissoes/
             tests/saida/aparencia-aprovada/
             tests/saida/reparos/
             tests/saida/fotoia-catalogo/

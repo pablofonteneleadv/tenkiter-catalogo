@@ -3,7 +3,7 @@ import os,json,pathlib
 from mock import install,SESSION,PERMS_ALL
 from playwright.sync_api import sync_playwright
 BASE=os.environ.get('TK_BASE','http://localhost:8765/')
-OUT=pathlib.Path(os.environ.get('TK_EVID','test-results/rh-permissoes'));OUT.mkdir(parents=True,exist_ok=True)
+OUT=pathlib.Path(os.environ.get('TK_EVID','tests/saida/rh-permissoes'));OUT.mkdir(parents=True,exist_ok=True)
 novas=[('esteira','Esteira','Acessar a Esteira e participar do rodízio'),('esteira_aceitar','Esteira','Aceitar peças preparadas para o site'),('postador','Postador','Preparar e publicar postagens'),('fotoia','Geração de fotos com IA','Gerar fotos com IA')]+[('msg_'+k,'Mensageiro',r) for k,r in [('acessar','Acessar o Mensageiro'),('responder','Responder atendimentos'),('produtos','Selecionar produtos'),('arquivos','Baixar arquivos'),('contatos','Editar contatos'),('etiquetas','Alterar etapas'),('notas','Editar notas'),('agenda','Agendar mensagens'),('respostas','Respostas rápidas'),('funil','Ver o funil'),('metricas','Ver métricas'),('exportar','Exportar atendimentos'),('configuracoes','Configurar Mensageiro')]]
 def fixture(c):
  st=install(c,perms=PERMS_ALL+['avaliacoes','manual_1'],versao='3.7')
@@ -29,6 +29,7 @@ def fixture(c):
    return r.fulfill(json=data)
   return r.fallback()
  c.route('**/script.google.com/**',route)
+ c.route('**/msg/acessos',lambda r:r.fulfill(json={'ok':True,'regras':{'pessoas':{},'perfis':{'equipedosite':{'acessar':True,'responder':True}}},'ferramentas':{}}))
  return calls,fail
 with sync_playwright() as p:
  b=p.chromium.launch()
@@ -37,6 +38,7 @@ with sync_playwright() as p:
   pg=c.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.on('dialog',lambda d:d.accept())
   pg.goto(BASE+'treinamentos.html?painel=rh');pg.wait_for_selector('.ac-card');pg.screenshot(path=str(OUT/f'rh-acessos-{w}.png'))
   pg.click('[data-tab="permissoes"]');pg.wait_for_selector('.rp-linha');pg.screenshot(path=str(OUT/f'rh-permissoes-{w}.png'))
+  pg.locator('.rp-linha').filter(has_text='Equipe do site').click();pg.locator('.rp-grupo').filter(has=pg.locator('summary',has_text='Mensageiro')).locator('summary').click();assert pg.locator('[data-rp-chave="msg_responder"]').is_checked();pg.click('#rp-cancelar')
   pg.get_by_role('button',name='+ Novo acesso').click();pg.locator('#rp-nome').fill('Equipe de fotografia');pg.locator('#rp-desc').fill('Responsáveis pelas fotos e pelo rodízio da loja')
   pg.locator('.rp-grupo').filter(has=pg.locator('summary',has_text='Esteira')).locator('summary').click()
   pg.locator('[data-rp-chave="esteira"]').check();pg.screenshot(path=str(OUT/f'rh-editor-{w}.png'))
@@ -53,7 +55,8 @@ with sync_playwright() as p:
   pg.click('#rp-voltar');pg.locator('#rp-busca').fill('não existe');assert 'Nenhum acesso encontrado' in pg.inner_text('#rp-lista');pg.locator('#rp-busca').fill('Esteira')
   # Teclado: abrir com Enter, editar, cancelar e devolver foco.
   pg.locator('.rp-linha').focus();pg.keyboard.press('Enter');pg.wait_for_selector('#rp-nome');pg.locator('#rp-nome').focus();pg.keyboard.press('End');pg.keyboard.type(' da loja');pg.click('#rp-cancelar');assert pg.locator('#rp-novo').evaluate('(e)=>e===document.activeElement')
-  pg.add_style_tag(content='html{font-size:130%}');assert pg.evaluate('() => document.documentElement.scrollWidth <= innerWidth')
+  pg.add_style_tag(content='body.rh-admin :is(p,button,input,select,textarea,label,summary,strong,small){font-size:20.8px!important}');assert pg.evaluate('() => document.documentElement.scrollWidth <= innerWidth')
+  pg.screenshot(path=str(OUT/f'rh-texto130-{w}.png'))
   assert not errors,errors
   print('OK jornada RH',w,flush=True);c.close()
  b.close()

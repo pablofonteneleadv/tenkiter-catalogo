@@ -12,6 +12,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.55.0] - 2026-11-05
+
+- Nova aba Permissões no RH: criar, renomear e configurar acessos compartilhados, com exclusão por substituição e exceções individuais preservadas.
+- Esteira passa a usar pessoas ativas com acesso à área para conferência e rodízio diário; Postador e Fotos IA recebem permissões próprias.
+- RH mais compacto, com navegação, filtros e perfis expansíveis. Ativação completa depende da publicação manual de RH3.31 e catálogo4.30.
+
+
 ## [7.54.4] - 2026-11-05
 
 - Separa credenciais dos Workers da zona DNS; confere decisões de estoque e mantém o funcionamento atual.
