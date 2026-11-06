@@ -295,6 +295,7 @@ const $=id=>document.getElementById(id),esc=v=>escaparHtml(v),TIPOS=[["feed","ðŸ
       .po-sheet textarea, .po-sheet input[type=datetime-local], .po-sheet input[type=search] { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
       .po-sheet textarea { min-height: 150px; font-family: inherit; }
       .po-ajuda { font-size: 0.8rem; color: #444; margin: 6px 0 0; }
+      .po-ajuda > button[data-a="retoma-abrir"] { min-height: 48px; }
       .po-aviso { border-radius: 10px; padding: 9px 12px; margin: 0 0 10px; font-size: 0.9rem; background: #e8f5e9; border: 1px solid #a5d6a7; color: #1b4d1f; }
       .po-aviso.erro { background: #fde3e3; border-color: #f5b5b5; color: #8a1c1c; }
       .po-enviar { width: 100%; padding: 14px; border-radius: 10px; border: 0; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 1rem; cursor: pointer; min-height: 52px; }
