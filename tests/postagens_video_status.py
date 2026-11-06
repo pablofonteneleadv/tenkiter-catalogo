@@ -45,6 +45,7 @@ with tempfile.TemporaryDirectory() as tmp:
    pg.locator('#po-leg').fill('Legenda preservada na biblioteca')
    pg.get_by_role('tab',name='Vídeos',exact=True).click()
    assert pg.locator('.po-video-item').count()==2
+   assert pg.locator('#po-videos-arq').evaluate('(e)=>e.getBoundingClientRect().height>=44')
    pg.screenshot(path=str(OUT/f'videos-debug-{width}.png'))
    assert pg.locator('.po-video-item progress').count()==2
    pg.screenshot(path=str(OUT/f'videos-biblioteca-enviando-{width}.png'))
