@@ -151,6 +151,11 @@ jobs:
 
       - name: Preparação de vídeo sem envio
         run: |
+          # O mirror HTTP do Azure levou mais de 30 min para baixar 59 MB.
+          # Preserva pacotes, versões e assinaturas do Ubuntu, usando seu espelho HTTPS.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           python3 tests/transcode_profiles.py
