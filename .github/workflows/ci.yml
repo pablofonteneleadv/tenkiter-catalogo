@@ -214,6 +214,7 @@ jobs:
           node tests/worker_citar_mensagem.js
           node tests/worker_equipe_inicio.js
           node tests/worker_solicitacoes.js
+          node tests/worker_video_disparo.js
           node tests/worker_video_preparo.js
           node tests/worker_video_partes.js
           node tests/worker_fila_originais.js

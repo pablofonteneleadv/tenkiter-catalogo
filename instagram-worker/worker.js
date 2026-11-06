@@ -5848,6 +5848,13 @@ async function limparVideoPreparo_(env){
     for(const row of rows){if(!/^[a-f0-9-]{36}$/.test(row.id))continue;const l=await env.MIDIA.list({prefix:'video-preparo/'+row.id+'/',limit:100});for(const o of l.objects)await env.MIDIA.delete(o.key);if(l.truncated)continue;await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(row.id).run();await env.DB.prepare('DELETE FROM video_preparo WHERE id=? AND criado<?').bind(row.id,Date.now()-86400000).run();}
   }catch(e){if(!/no such table/.test(String(e)))throw e;}
 }
+async function acordarVideoPreparo_(env){
+  if(!env.GITHUB_DISPATCH_TOKEN)return {ok:false,configurado:false};
+  const ms=Date.now();await env.DB.prepare("INSERT OR IGNORE INTO cfg(chave,valor) VALUES('video_disparo_ate','0')").run();
+  const claim=await env.DB.prepare("UPDATE cfg SET valor=? WHERE chave='video_disparo_ate' AND CAST(valor AS INTEGER)<=?").bind(String(ms+60000),ms).run();if(!claim.meta.changes)return {ok:true,aguardando:true};
+  let cod=0,ok=false;try{const r=await fetch('https://api.github.com/repos/pablofonteneleadv/tenkiter-catalogo/actions/workflows/wafly-transcode.yml/dispatches',{method:'POST',headers:{'Authorization':'Bearer '+env.GITHUB_DISPATCH_TOKEN,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2026-03-10','User-Agent':UA,'Content-Type':'application/json'},body:JSON.stringify({ref:'main'}),signal:AbortSignal.timeout(8000)});cod=r.status;ok=r.ok;}catch(_){}
+  await cfgSet(env,'video_disparo_status',JSON.stringify({em:agora(),ok,cod}));return {ok,configurado:true};
+}
 async function videoUsuario_(env,req,url,J){
   await env.DB.prepare(VIDEO_TABELA_).run();await iniciarPartesVideo_(env);
   const dono=await sha(req.headers.get('X-TK-Whats')||''),perfil=url.pathname.startsWith('/msg/')?'mensageiro':url.searchParams.get('partes')==='1'?'postagens-partes':'postagens';
@@ -5894,7 +5901,7 @@ async function videoUsuario_(env,req,url,J){
     let id=hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32);
     let existente=await env.DB.prepare('SELECT estado,origem FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();
     if(existente?.origem===''){id=crypto.randomUUID();existente=null;}
-    if(existente&&existente.estado!=='erro')return J({ok:true,id,estado:existente.estado});
+    if(existente&&existente.estado!=='erro'){if(existente.estado==='fila')await acordarVideoPreparo_(env);return J({ok:true,id,estado:existente.estado});}
     if(existente){const antigos=await env.MIDIA.list({prefix:'video-preparo/'+id+'/',limit:100});for(const o of antigos.objects)if(o.key!=='video-preparo/'+id+'/original')await env.MIDIA.delete(o.key);if(antigos.truncated)return J({ok:false,erro:'Limpando resultados da tentativa anterior. Tente novamente em instantes; o original foi preservado.'},409);await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id).run();await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
     // Reserva atômica: limita temporários e respeita o orçamento de armazenamento existente.
     const uso=await lerUso(env),reserva=buf.byteLength+(perfil==='postagens-partes'?(duracao>0?Math.min(256*1048576,planoPartes(duracao,inicio).length*9961472):256*1048576):VIDEO_PERFIS_[perfil].bytes);
@@ -5907,11 +5914,12 @@ async function videoUsuario_(env,req,url,J){
       await env.MIDIA.put(origem,buf,{httpMetadata:{contentType:'application/octet-stream'}});
       await env.DB.prepare("UPDATE video_preparo SET estado='fila' WHERE id=? AND estado='recebendo'").bind(id).run();
     }catch(e){await env.MIDIA.delete(origem);await env.DB.prepare("DELETE FROM video_preparo WHERE id=? AND estado='recebendo'").bind(id).run();throw e;}
-    return J({ok:true,id,estado:'fila'});
+    await acordarVideoPreparo_(env);return J({ok:true,id,estado:'fila'});
   }
   const id=url.searchParams.get('id')||'';
   const job=await env.DB.prepare('SELECT * FROM video_preparo WHERE id=? AND dono=? AND perfil=?').bind(id,dono,perfil).first();
   if(!job||job.criado<Date.now()-86400000)return J({ok:false,erro:'Preparação expirada. Selecione novamente o original.'},404);
+  if(job.estado==='fila')await acordarVideoPreparo_(env);
   if(url.searchParams.get('arquivo')==='1'){
     if(job.estado!=='pronto')return J({ok:false,erro:'Vídeo ainda não está pronto.'},409);
     let chave=job.resultado;if(job.perfil==='postagens-partes'){const pt=await env.DB.prepare('SELECT chave FROM video_parte WHERE preparo=? AND ordem=?').bind(id,Number(url.searchParams.get('parte'))).first();if(!pt)return J({ok:false},404);chave=pt.chave;}
