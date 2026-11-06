@@ -2172,7 +2172,7 @@ async function carregarBibliotecaVideos_(){
   const db=await abrirDbRascunho_();
   try{videosBiblioteca_=await new Promise((ok,erro)=>{const tx=db.transaction('rascunhos','readonly'),store=tx.objectStore('rascunhos'),a=store.getAll(),k=store.getAllKeys();tx.oncomplete=()=>ok(a.result.filter((v,i)=>String(k.result[i]).startsWith('video:'+conta+':')));tx.onerror=()=>erro(tx.error);});}finally{db.close();}
   const remotos=await ig('/post/video-preparar?partes=1&biblioteca=1');
-  if(remotos.ok)for(const job of remotos.videos||[])if(!videosBiblioteca_.some(v=>v.preparacao.id===job.id||v.remotoId===job.id)){
+  if(remotos.ok)for(const job of remotos.videos||[])if(!videosBiblioteca_.some(v=>v.preparacao.id===job.id||v.remotoId===job.id)&&![...(nova?.livre||[]),...(nova?.midias||[])].some(m=>m.preparacao?.id===job.id)){
     const v={id:job.id,remotoId:job.id,nome:job.nome||'Vídeo recebido',file:new File([],job.nome||'video.mp4',{type:'video/mp4'}),criado:job.criado,preparacao:{local:job.id,conta,id:job.id,maxParte:job.inicio,duracao:job.duracao,fase:job.estado==='erro'?'erro':'fila',texto:job.estado==='erro'?job.erro:'Original recebido · consultando preparo',pct:null}};await videoLocal_(v.id,v);videosBiblioteca_.push(v);
   }
   videosBiblioteca_.sort((a,b)=>a.criado-b.criado);videosCarregando_=false;
@@ -2211,7 +2211,7 @@ async function adicionarBibliotecaVideos_(arquivos){
       if(!(/^video\//.test(f.type)||/\.(mp4|mov|webm)$/i.test(f.name))||!f.size||f.size>40*1048576){erros.push(f.name+': escolha um vídeo de até 40 MiB.');continue;}
       if(videosBiblioteca_.some(v=>v.file?.name===f.name&&v.file?.size===f.size&&v.file?.lastModified===f.lastModified))continue;
       const maxParte=Number($('po-video-duracao')?.value)||Number(nova?.duracaoPartes)||30;
-      if(maxParte<3||maxParte>30){erros.push('Escolha partes de3 a30 segundos.');break;}
+      if(maxParte<3||maxParte>30){erros.push('Escolha partes de 3 a 30 segundos.');break;}
       const id=crypto.randomUUID(),v={id,nome:f.name,file:f,criado:Date.now(),preparacao:{local:id,conta:videosConta_,maxParte,fase:'aguardando',texto:'Aguardando envio…',pct:null}};
       await videoLocal_(id,v);videosBiblioteca_.push(v);iniciarVideoBiblioteca_(v);
     }
@@ -2220,7 +2220,7 @@ async function adicionarBibliotecaVideos_(arquivos){
 }
 function htmlBibliotecaVideos_(embutido=false){
   const lista=videosBiblioteca_,prontos=lista.filter(v=>v.partes),pendentes=lista.length-prontos.length;
-  let h=embutido?'<section aria-label="Recuperar vídeos" class="po-video-recuperar">':'<section class="po-passo"><h4>Vídeos</h4><p class="po-ajuda">Envie os originais aqui. Quando estiverem prontos, use Recuperar vídeos em Nova postagem.</p><label for="po-video-duracao" class="po-ajuda">Máximo por parte (segundos)</label><input id="po-video-duracao" type="number" min="3" max="30" value="30" style="display:block;width:96px;min-height:48px;margin-bottom:8px"><label for="po-videos-arq" style="display:block;font-weight:700">Adicionar vídeos</label><input id="po-videos-arq" type="file" accept="video/mp4,video/webm,video/quicktime" multiple style="max-width:100%"><p class="po-ajuda">Mantenha a página aberta até aparecer “Original recebido”. Depois disso, o servidor continua preparando mesmo com o painel fechado. Os originais recebidos podem ser recuperados nesta conta por até24h. As cópias prontas também ficam neste aparelho até você excluir.</p>';
+  let h=embutido?'<section aria-label="Recuperar vídeos" class="po-video-recuperar">':'<section class="po-passo"><h4>Vídeos</h4><p class="po-ajuda">Envie os originais aqui. Quando estiverem prontos, use Recuperar vídeos em Nova postagem.</p><label for="po-video-duracao" class="po-ajuda">Máximo por parte (segundos)</label><input id="po-video-duracao" type="number" min="3" max="30" value="30" style="display:block;width:96px;min-height:48px;margin-bottom:8px"><label for="po-videos-arq" style="display:block;font-weight:700">Adicionar vídeos</label><input id="po-videos-arq" type="file" accept="video/mp4,video/webm,video/quicktime" multiple style="max-width:100%"><p class="po-ajuda">Mantenha a página aberta até aparecer “Original recebido”. Depois disso, o servidor continua preparando mesmo com o painel fechado. Os originais recebidos podem ser recuperados nesta conta por até 24 horas. As cópias prontas também ficam neste aparelho até você excluir.</p>';
   h+='<p class="po-ajuda" role="status">'+(videosCarregando_?'Carregando vídeos…':prontos.length+' pronto(s) · '+pendentes+' em preparação ou com ação pendente')+'</p>';
   if(!lista.length&&!videosCarregando_)h+='<p class="po-ajuda">Nenhum vídeo na biblioteca. Adicione os originais na aba Vídeos.</p>';
   h+=lista.map(v=>'<div class="po-video-item"><div style="min-width:0;flex:1"><b style="overflow-wrap:anywhere">'+esc(v.nome)+'</b><p class="po-ajuda" data-vlib-status="'+v.id+'">'+esc(v.partes?'Pronto · '+v.partes.length+' parte(s)':v.preparacao.texto)+'</p><progress data-vlib-progresso="'+v.id+'" max="100" aria-label="Envio de '+esc(v.nome)+'" '+(v.preparacao.pct==null?'hidden':'value="'+v.preparacao.pct+'"')+' style="width:100%"></progress>'+previaBiblioteca_(v)+(v.usado?'<small>Incluído em um rascunho. Pode excluir a cópia da biblioteca.</small>':'')+(v.partes&&embutido?'<label class="po-video-selecao"><input type="checkbox" data-vlib-sel="'+v.id+'" '+(videosSelecionados_.has(v.id)?'checked':'')+'> Selecionar vídeo'+(v.partes.length>1?' com todas as partes':'')+'</label>':'')+(v.preparacao.fase==='erro'&&!v.partes?'<button type="button" data-vlib-repetir="'+v.id+'">Tentar novamente</button>':'')+'</div><button type="button" data-vlib-excluir="'+v.id+'" aria-label="Excluir '+esc(v.nome)+'">Excluir</button></div>').join('');
@@ -2233,7 +2233,7 @@ async function incluirVideosBiblioteca_(){
   const n=nova,livre=!!n.modoLivre,lista=livre?n.livre:n.midias,selecionados=videosBiblioteca_.filter(v=>videosSelecionados_.has(v.id)&&v.partes),novos=selecionados.filter(v=>!lista.some(m=>m.preparoOrigem===v.id));
   try{
     if(!selecionados.length)return msg('Selecione pelo menos um vídeo pronto.',true);
-    if(lista.length+novos.reduce((q,v)=>q+v.partes.length,0)>60)throw Error('As partes ultrapassam60 mídias. Retire algumas mídias antes de incluir.');
+    if(lista.length+novos.reduce((q,v)=>q+v.partes.length,0)>60)throw Error('As partes ultrapassam 60 mídias. Retire algumas mídias antes de incluir.');
     const antes=lista.slice(),tipo=n.tipo;
     if(n.tipo==='feed'||novos.some(v=>v.partes.length>1)||novos.length>1)n.tipo='story';
     for(const v of novos)for(const p of v.partes){const f=new File([p.file],p.file.name||v.nome,{type:'video/mp4'});lista.push({file:f,tipo:'video',url:URL.createObjectURL(f),nome:f.name,hora:'',avulsa:!livre,sel:true,videoValidado:true,serie:p.serie,preparoOrigem:v.id});}

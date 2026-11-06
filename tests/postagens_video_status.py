@@ -1,5 +1,5 @@
 """Lote de vídeos em segundo plano: concorrência, retomada, ordem e nenhuma publicação implícita."""
-import os,sys,tempfile,subprocess
+import os,sys,tempfile,subprocess,time
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).parent))
 from mock import install,SESSION,PERMS_ALL,PNG
@@ -14,9 +14,11 @@ with tempfile.TemporaryDirectory() as tmp:
   browser=p.chromium.launch(args=['--no-sandbox'])
   for width,height in [(390,844),(412,915),(1440,900),(320,700)]:
    ctx=browser.new_context(viewport={'width':width,'height':height});ctx.add_init_script(SESSION);st=install(ctx,perms=PERMS_ALL,versao='7.40.41');st['ig']['regras']=True;st['midia']['modo']='ok'
-   jobs=[];held=[];ready=set();fail=set();errors=[]
+   jobs=[];held=[];ready=set();fail=set();errors=[];expor_remotos=False
    def preparation(route):
     req=route.request;url=req.url
+    if 'biblioteca=1' in url:
+     route.fulfill(json={'ok':True,'videos':[{'id':ident,'nome':ident+'.mp4','estado':'pronto','duracao':75 if ident=='primeiro' else 58,'inicio':30,'criado':int(time.time()*1000)} for ident in ['primeiro','segundo']] if expor_remotos else []});return
     if req.method=='POST' and 'excluir=1' in url:route.fulfill(json={'ok':True});return
     if req.method=='POST':
      ident='primeiro' if 'duracao=75' in url else 'segundo';jobs.append(ident);held.append((ident,route));return
@@ -93,5 +95,7 @@ with tempfile.TemporaryDirectory() as tmp:
    assert len(jobs)==2 and not [x for x in st['ig']['post_chamadas'] if x['path']=='/post']
    assert not errors,errors
    print('OK',width,'biblioteca, retomada, seleção de todas as partes e exclusão sem apagar rascunho')
+   if width==390:
+    expor_remotos=True;ctx2=browser.new_context(viewport={'width':390,'height':844});ctx2.add_init_script(SESSION);st2=install(ctx2,perms=PERMS_ALL);st2['ig']['regras']=True;ctx2.route('**/post/video-preparar*',preparation);p2=ctx2.new_page();p2.goto(os.environ.get('TK_BASE','http://localhost:8773/')+'admin.html');p2.wait_for_timeout(1500);p2.click('#details-ferramentas > summary');p2.click('#btn-abrir-postagens');p2.get_by_role('tab',name='Vídeos',exact=True).click();p2.wait_for_function("document.querySelectorAll('[data-vlib-status]').length===2&&[...document.querySelectorAll('[data-vlib-status]')].every(e=>e.textContent.startsWith('Pronto'))",timeout=15000);assert len(jobs)==2,'Outro aparelho reenviou o original em vez de recuperar por ID';p2.screenshot(path=str(OUT/'videos-recuperados-outra-sessao.png'));ctx2.close()
    ctx.close()
   browser.close()

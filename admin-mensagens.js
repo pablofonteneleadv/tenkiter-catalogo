@@ -2541,7 +2541,7 @@
     const input=el('input');input.type='file';input.multiple=true;input.accept='image/jpeg,image/png,image/webp';input.id='ms-registro-fotos';input.style.maxWidth='100%';
     const label=el('label','ms-ficha-rot','Fotos'),lista=el('div'),st=el('p','ms-auto-exp');label.htmlFor=input.id;st.setAttribute('role','status');
     const pintar=()=>{lista.replaceChildren();for(const f of r.fotos){const linha=el('div','ms-solicitacao-arquivo');linha.append(el('span','',f.nome+(f.salva?' · Guardada':'')));const tirar=el('button','ms-btn','Retirar');tirar.type='button';tirar.disabled=!!f.salva;tirar.onclick=()=>{r.fotos=r.fotos.filter(x=>x!==f);pintar();};linha.append(tirar);lista.append(linha);}};
-    input.onchange=()=>{for(const f of Array.from(input.files||[])){if(r.fotos.length>=20){st.textContent='Cada registro aceita até20 fotos.';break;}if(!/^image\/(jpeg|png|webp)$/.test(f.type)){st.textContent='Use fotos JPG, PNG ou WebP.';continue;}r.fotos.push({id:crypto.randomUUID(),file:f,nome:f.name});}input.value='';pintar();};
+    input.onchange=()=>{for(const f of Array.from(input.files||[])){if(r.fotos.length>=20){st.textContent='Cada registro aceita até 20 fotos.';break;}if(!/^image\/(jpeg|png|webp)$/.test(f.type)){st.textContent='Use fotos JPG, PNG ou WebP.';continue;}r.fotos.push({id:crypto.randomUUID(),file:f,nome:f.name});}input.value='';pintar();};
     const salvar=el('button','ms-btn prim',modo==='foto'?'Guardar fotos do cliente':'Registrar pedido');salvar.type='button';
     salvar.onclick=async()=>{
       if(salvar.disabled)return;if(!r.fotos.length&&modo==='foto'){st.textContent='Escolha as fotos do cliente.';return;}if(modo!=='foto'&&!r.descricao.trim()){st.textContent='Escreva a descrição geral do pedido.';ta.focus();return;}

@@ -153,6 +153,11 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert(!(await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim,'Story publicado com Status pendente não libera a próxima mídia');
   sqlite.prepare("UPDATE postagem SET zap_estado='confirmado' WHERE id=?").run(protegido);assert((await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim);
   sqlite.prepare("UPDATE postagem SET status='erro' WHERE id=?").run(protegido);assert(!(await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim,'Erro protege a sequência sem nova cópia');
+  sqlite.prepare('DELETE FROM postagem').run();
+  const comRef=ins('com-referencia',time+3600000),sRef=sqlite.prepare('SELECT agendado_em FROM postagem WHERE id=?').get(comRef).agendado_em;
+  sqlite.prepare("INSERT INTO postagem_status_ref(canal,ext_id,postagem_id) VALUES('whatsapp','aceite-preservado',?)").run(comRef);
+  assert.equal((await chamar('/post/reagendar-lote','POST',{ids:[comRef],agora:true})).status,409,'Identificador aceito protege o destino mesmo antes da atualização da linha');
+  assert.equal(sqlite.prepare('SELECT agendado_em FROM postagem WHERE id=?').get(comRef).agendado_em,sRef);
   global.Date=RealDate;
   console.log('OK: três originais, seis partes, intervalo completo entre originais, origens entre canais, reagendamento comum (incluindo legado), prioridade de pendentes, concorrência atômica e envio incerto preservado.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
