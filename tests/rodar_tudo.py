@@ -171,6 +171,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_tempo_atendimento.js", lambda o: "OK: tempos por sinais" in o),
     ("worker_gestor.js", lambda o: "OK: gestor Admin total" in o),
     ("worker_fila_originais.js", lambda o: "OK: três originais" in o),
+    ("worker_postagens_prova_falhas.js", lambda o: "FALHAS=0" in o),   # v7.56: pausa do Instagram com backoff, vigia de 20 min, série parada, token, enviando preso
     ("mensagens_relacionamento_ui.py", lambda o: "OK 1440" in o),
     ("mensagens_grupos_busca_ui.py", lambda o: "OK 1440" in o),
     ("mensagens_layout_compacto.py", lambda o: "OK 1440" in o),
@@ -180,6 +181,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_fila_midia.py", lambda o: "OK 320" in o),
     ("postagens_fila_midia_cards.py", lambda o: "FALHAS=0" in o),   # v7.48.2: Por mídia em cards recolhidos, miniatura real/placeholder, estado preservado
     ("postagens_zap_proativo_ui.py", lambda o: "FALHAS=0" in o),    # v7.48.3: Por canal por perna, barra de ações da mídia, sem confirmação, Já postadas com filtros
+    ("postagens_prova_falhas_ui.py", lambda o: "FALHAS=0" in o),   # v7.56: faixa Saúde das postagens, aguardando pausa do Instagram, Repostar só o Story, Retomar Instagram agora
     ("mensagens_camera_menu.py", lambda o: "OK 1440" in o),
     ("video_camera_90s.py", lambda o: "OK: 90 s completos" in o),
     ("video_partes_encoder.py", lambda o: "OK: partes 59/75/90s" in o),

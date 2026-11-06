@@ -12,6 +12,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.56.0] - 2026-11-06
+
+- Postagens à prova de falhas bobas: uma falha nunca trava a fila dos outros. Série com parte em erro ou descartada fica “parada” com aviso e não segura o canal; no “Instagram + WhatsApp”, WhatsApp confirmado conta como parte enviada e o Story que faltou vira “Instagram não saiu — Repostar só o Story”. Vigia: nenhuma série segura o mesmo canal por mais de 20 min.
+- Limite ou bloqueio do Instagram (“too many actions”, “action is blocked”, rate limit, códigos 4/9/17/32/368/613/80000–80014, subcódigos 2207042/2207051) vira pausa só do Instagram (15 → 30 → 60 → 120 min, volta ao normal após publicações bem-sucedidas), sem erro. Na pausa o WhatsApp do “ambos” sai no horário e o Instagram sai sozinho depois, sem duplicar o WhatsApp; Grupo e Status 2 seguem normais. Espaço mínimo entre publicações do Instagram (padrão 3 min, configurável pelo gestor), até no “Agora mesmo”.
+- Token vencido ou sem permissão: pausa do Instagram e aviso ao gestor, sem marcar dezenas de itens como erro; reconectar o token encerra a pausa. Instabilidade do Instagram (rede/5xx): espera curta com tentativas limitadas. “Enviando” preso há mais de 30 min é recuperado sozinho, sem reenviar o que pode já ter saído no WhatsApp/Grupo.
+- Fila: faixa discreta “Saúde das postagens” por canal, item “Aguardando pausa do Instagram” com horário previsto e botão do gestor “Retomar Instagram agora”.
+
 ## [7.55.7] - 2026-11-05
 
 - Seleção de mídias inteiras permite escolher o início do lote e reestruturar a fila seguinte, mantendo canais juntos, ordem e intervalos, com comparação atômica e backup privado.

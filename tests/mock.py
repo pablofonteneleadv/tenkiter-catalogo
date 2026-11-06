@@ -749,6 +749,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     r0={"ok":True,"posts":[x for x in g["posts"] if x["status"]!="cancelado"],"contagens":{},"conectado":g["conectado"],"usuario":"tenkitermodasceara"}
                     if g.get("status2_bloq"): r0.update({"status2Disponivel":False,"status2Motivo":"o plano atual do Wame não inclui postar Status (é preciso o plano Pro)"})
                     if g.get("regras"): r0.update({"regras":1,"config":g["regras_cfg"],"podeRegras":g.get("pode_regras",True),"uso24h":g.get("uso24h",{"story":12,"status":3,"feed":1,"carrossel":0,"reels":0})})
+                    if g.get("saude"): r0["saude"]=g["saude"]   # v7.56: faixa "Saúde das postagens"
                     return route.fulfill(json=r0)
                 pb=json.loads(route.request.post_data or "{}")
                 g["post_chamadas"].append({"path":path,"corpo":pb})
