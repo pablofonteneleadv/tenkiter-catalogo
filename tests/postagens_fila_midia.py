@@ -28,7 +28,10 @@ with tempfile.TemporaryDirectory() as temp:
    pg.evaluate("""()=>{window.TKVideoPreparation={...TKVideoPreparation,prepararEmFundo:async(file,op)=>{const bytes=await file.arrayBuffer();return [1,2].map(ordem=>{const f=new File([bytes],file.name+'-parte-'+ordem+'.mp4',{type:'video/mp4'});f.tkParte={preparo:file.name,ordem,total:2};return f;});}};}""")
    pg.get_by_role('tab',name='Vídeos',exact=True).click()
    pg.set_input_files('#po-videos-arq',[str(root/f'video{n}.mp4') for n in [1,2,3]])
-   pg.wait_for_function("document.querySelectorAll('[data-vlib-status]').length===3&&[...document.querySelectorAll('[data-vlib-status]')].every(e=>e.textContent.startsWith('Pronto'))")
+   try:pg.wait_for_function("document.querySelectorAll('[data-vlib-status]').length===3&&[...document.querySelectorAll('[data-vlib-status]')].every(e=>e.textContent.startsWith('Pronto'))")
+   except Exception:
+    print(width,pg.locator('#po-corpo').inner_text(),errors,flush=True)
+    raise
    pg.get_by_role('tab',name='Nova postagem',exact=True).click()
    assert pg.locator('[data-lm=x]').count()==0,'A biblioteca não inclui vídeos sem seleção'
    pg.get_by_role('button',name='Recuperar vídeos',exact=True).click()
