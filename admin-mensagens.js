@@ -723,16 +723,16 @@
          nunca encostar na última linha (acontecia em 320px com texto em 130%). */
       /* A aba nunca encolhe abaixo de 3.4em (a palavra mais longa cabe em 2 linhas em
          qualquer zoom); se o conjunto passar da largura, a barra rola na horizontal. */
-      .sheet-mensagens .ms-abas .ms-aba{flex:1 1 0;min-width:0;white-space:normal;line-height:1.15;font-size:.71rem;padding:3px 2px 7px;overflow-wrap:anywhere;display:flex;align-items:center;justify-content:center;text-align:center}
+      .sheet-mensagens .ms-abas .ms-aba{flex:1 1 0;min-width:0;white-space:normal;line-height:1.15;font-size:.71rem;padding:3px 2px 7px;overflow-wrap:anywhere;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;text-align:center}
       /* Em 320px os quatro rótulos não cabem com 10px por aba: a fonte desce um passo
          (nunca abaixo de 10px, que ainda é legível) para nenhuma palavra quebrar no meio. */
       @media(max-width:400px){.sheet-mensagens .ms-abas .ms-aba{font-size:.62rem;letter-spacing:-.015em;padding:0 1px}}
       /* Alvo de toque: 44px é o piso do projeto para qualquer controle. Uma regra global
          (acabamento) baixava a aba para 40px; aqui o piso é reafirmado para a barra. */
-      .sheet-mensagens .ms-abas .ms-aba[role=tab]{min-height:44px!important;height:44px;box-sizing:border-box;border:0;position:relative}
+      .sheet-mensagens .ms-abas .ms-aba[role=tab]{min-height:44px!important;height:auto;box-sizing:border-box;border:0;position:relative}
       /* v7.40.35: o badge não entra no fluxo do texto — sobreposto no canto, o rótulo
          ganha a largura inteira da aba e não quebra por causa do número. */
-      .sheet-mensagens .ms-abas .ms-pt{position:absolute;top:3px;right:4px;min-width:15px;height:15px;line-height:15px;padding:0 3px;font-size:.6rem}
+      .sheet-mensagens .ms-abas .ms-pt{position:static;flex:none;min-width:15px;height:15px;line-height:15px;padding:0 3px;font-size:.6rem}
       /* Canal virou filtro (select) na linha de chips: três células, a mesma altura de antes. */
       .sheet-mensagens .ms-filtros .ms-chip.ms-canal-sel{appearance:none;-webkit-appearance:none;text-align:center;text-align-last:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555d4f;font-weight:600}
       .ms-aba-dica-lista{margin:0 0 10px;color:#5c6455;font-size:.86rem;line-height:1.4}
