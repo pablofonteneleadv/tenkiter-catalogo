@@ -217,6 +217,8 @@ jobs:
           node tests/worker_video_partes.js
           node tests/worker_fila_originais.js
           node tests/worker_postagens_limites.js
+          # v7.56: fila de Postagens à prova de falhas (pausa do Instagram, vigia, série parada, token, enviando preso)
+          node tests/worker_postagens_prova_falhas.js
           node tests/worker_gestor.js
           # v7.41.0: Esteira de Produtos (lista diária, conferência, escala, configurações)
           node tests/worker_esteira.js
@@ -298,6 +300,7 @@ jobs:
           python3 tests/postagens_fila.py
           python3 tests/postagens_fila_midia.py
           TK_EVID=tests/saida/postagens-retomar python3 tests/postagens_retomar_limites.py
+          python3 tests/postagens_prova_falhas_ui.py
           TK_EVID=tests/saida/fotos-postadas python3 tests/fotos_postadas_ui.py
           TK_EVID=tests/saida/esteira-fotos python3 tests/esteira_fotos_ui.py
           TK_EVID=tests/saida/esteira-fotos/continuidade python3 tests/esteira_continuidade_edicao_ui.py

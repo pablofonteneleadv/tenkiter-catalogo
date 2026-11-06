@@ -353,7 +353,7 @@ function d1() {
     const rodar = async (n) => { for (let i = 0; i < (n || 1); i++) await W.processarPostagens(env); };
     const linha = (id) => DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first();
     let x;
-    await DB.prepare('INSERT OR REPLACE INTO cfg (chave, valor) VALUES (?, ?)').bind('po_cfg', JSON.stringify({ pausaAtiva: false })).run();   // as regras novas têm seção própria; aqui a hora do dia não pode mudar o resultado
+    await DB.prepare('INSERT OR REPLACE INTO cfg (chave, valor) VALUES (?, ?)').bind('po_cfg', JSON.stringify({ pausaAtiva: false, igGapMin: 0 })).run();   // as regras novas têm seção própria; aqui a hora do dia não pode mudar o resultado
     // ---- quem pode
     r = await w.fetch(ped('GET', '/posts', ''), env, {}); chk('postagens: sem sessão = 401', r.status === 401);
     x = await G('GET', '/posts'); chk('equipe que cadastra (catalogo_cadastrar) vê a fila de postagens', x.r.status === 200 && x.j.ok === true && x.j.conectado === true, x.j);
@@ -467,12 +467,16 @@ function d1() {
     chk('na 2ª tentativa publica e limpa o erro', L.status === 'publicado' && L.erro === '', L);
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(6)], quando: 'agora' }); const idP = x.j.ids[0];
     postErro = { message: '(#10) Application does not have permission', code: 10 }; await rodar(); L = await linha(idP);
-    chk('sem permissão de publicar: erro na hora (não adianta repetir) com a frase certa', L.status === 'erro' && /instagram_business_content_publish/.test(L.erro), L);
+    // v7.56: falta de permissão é da CONTA: pausa o Instagram com aviso ao gestor, e a postagem espera (não vira erro)
+    chk('sem permissão de publicar: pausa do Instagram com a frase certa, sem virar erro', L.status === 'agendado' && /permissão de publicar/.test((await DB.prepare("SELECT valor FROM cfg WHERE chave='ig_pausa_motivo'").first()).valor) && /pausa do Instagram/.test(L.erro), L);
+    await DB.prepare("DELETE FROM cfg WHERE chave IN ('ig_pausa_ate','ig_pausa_motivo')").run();
     x = await G('POST', '/post/reagendar', { id: idP, quando: 'agora' }); await rodar(); L = await linha(idP);
     chk('"Tentar de novo" depois de corrigir o token publica', x.j.ok === true && L.status === 'publicado', L);
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(7)], quando: 'agora' }); const idL = x.j.ids[0];
     postErro = { message: 'Application request limit reached', code: 4 }; await rodar(); L = await linha(idL);
-    chk('limite do Instagram: espera 30 min sem gastar tentativa', L.status === 'agendado' && L.tentativas === 0 && Date.parse(L.agendado_em) - Date.now() > 25 * 60000, L);
+    // v7.56: limite = pausa global SÓ do Instagram (15 min na 1ª vez), sem gastar tentativa e sem perder o lugar na fila
+    chk('limite do Instagram: pausa de 15 min sem gastar tentativa', L.status === 'agendado' && L.tentativas === 0 && Math.abs(Date.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='ig_pausa_ate'").first()).valor) - Date.now() - 15 * 60000) < 60000, L);
+    await DB.prepare("DELETE FROM cfg WHERE chave IN ('ig_pausa_ate','ig_pausa_motivo','ig_pausa_estado')").run();
     await DB.prepare('UPDATE postagem SET agendado_em=? WHERE id=?').bind(ts(-1), idL).run(); await rodar();
     // ---- 3 falhas seguidas = erro
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(8)], quando: 'agora' }); const id3 = x.j.ids[0];
@@ -480,7 +484,8 @@ function d1() {
     L = await linha(id3); chk('3 falhas seguidas: para em "erro" (não fica tentando para sempre)', L.status === 'erro' && L.tentativas === 3, L);
     // ---- token vencido
     tokenValido = false; x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'agora' }); await rodar(); L = await linha(x.j.ids[0]);
-    chk('token vencido: erro com a frase "gere outro" (sem repetir)', L.status === 'erro' && /venceu ou foi recusado/.test(L.erro), L); tokenValido = true;
+    chk('token vencido: pausa do Instagram com a frase "gere outro" e aviso ao gestor, sem virar erro', L.status === 'agendado' && /pausa do Instagram/.test(L.erro) && /vencido/.test((await DB.prepare("SELECT valor FROM cfg WHERE chave='ig_aviso_gestor'").first()).valor), L); tokenValido = true;
+    await DB.prepare("DELETE FROM cfg WHERE chave IN ('ig_pausa_ate','ig_pausa_motivo','ig_pausa_estado','ig_aviso_gestor')").run(); await DB.prepare("UPDATE postagem SET status='cancelado' WHERE id=?").bind(L.id).run();
     // ---- limite diário
     await DB.prepare("DELETE FROM postagem WHERE status='agendado'").run();
     const hoje = agoraIso();
