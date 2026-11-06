@@ -1509,7 +1509,7 @@ async function estadoLoteAgora_(env,lote){
 async function finalizarLoteAgora_(env,raw){
   const rows=(await env.DB.prepare("SELECT p.*,EXISTS(SELECT 1 FROM postagem_grupo_recibo r WHERE r.postagem_id=p.id AND r.estado<>'recusado') recibo FROM postagem p WHERE status='agendado' ORDER BY agendado_em,id").all()).results||[];
   const ps=rows.filter(p=>!p.urgente&&!p.ig_id&&!p.zap_estado&&!p.zap_req&&!p.containers&&!p.recibo&&(!p.serie||rows.filter(x=>x.serie===p.serie).length===p.partes));
-  if(ps.length){const r=await inserirMidiaAntes_(env,ps,Date.now()+60000,(x,status=200)=>Response.json(x,{status}));if(r.status!==200)return false;}
+  if(ps.length){const r=await inserirMidiaAntesLocal_(env,ps,Date.now()+60000,(x,status=200)=>Response.json(x,{status}));if(r.status!==200)return false;}
   await env.DB.prepare("UPDATE cfg SET valor='' WHERE chave='post_agora_lote' AND valor=?").bind(raw).run();return true;
 }
 export async function processarPostagens(env) {
@@ -2051,6 +2051,10 @@ export function planoInsercaoMidia_(cfg,rows,ids,desejado,imediato=false){
   return {t,plano,grupos:selecionadas.map(ps=>ps.map(x=>x.id)),midias:selecionadas.length,deslocadas:mover.filter(g=>g.ps.some(x=>plano.some(p=>p.id===x.id))).length};
 }
 async function inserirMidiaAntes_(env,ps,desejado,J,simular=false,imediato=false){
+  if(env.POSTAGENS_SEQUENCIA){const r=await env.POSTAGENS_SEQUENCIA.get(env.POSTAGENS_SEQUENCIA.idFromName('loja')).reorganizarMidias({ps,desejado,simular,imediato});return J(r.body,r.status);}
+  return inserirMidiaAntesLocal_(env,ps,desejado,J,simular,imediato);
+}
+export async function inserirMidiaAntesLocal_(env,ps,desejado,J,simular=false,imediato=false){
   if(imediato&&await cfgGet(env,'post_agora_lote'))return J({ok:false,erro:'Há uma seleção imediata em andamento. Aguarde a confirmação antes de iniciar outra.'},409);
   const raw=await cfgGet(env,'po_cfg'),cfg=normalizarCfgPost(JSON.parse(raw||'null')),desde=new Date(Date.now()-86400000).toISOString();
   const cond="status IN ('agendado','processando','manual_pendente') OR (status IN ('publicado','manual_feito') AND publicado_em>=?)";
@@ -4603,7 +4607,7 @@ async function rotasSolicitacoes_(env,req,url,J){
     const fotoBytes=await corpoLimitadoVideo_(req,FOTO_MAX),g=await guardarFoto(env,new Request(req.url,{method:'POST',headers:req.headers,body:fotoBytes}));if(g.erro)return J({ok:false,erro:g.erro},g.cheio?507:400);
     const ficha=await fichaDaConversa_(env,c),w=ficha.canais.find(x=>x.canal!=='instagram'&&/^\d{10,15}$/.test(x.contato))?.contato||'',por=await meuNomeAtendente_(env,req);
     try{await env.DB.batch([
-      env.DB.prepare("INSERT INTO foto_cliente(origem,url,chave,whats,nome,instagram,obs,status,vinculo,criado_por,criado_em) SELECT 'equipe',?,?,?,?,'','','nova','mensageiro',?,? WHERE NOT EXISTS(SELECT 1 FROM cfg WHERE chave=?)").bind(g.url,g.chave,w,c.nome||'',por,em,recibo),
+      env.DB.prepare("INSERT INTO foto_cliente(origem,url,chave,whats,nome,instagram,obs,status,vinculo,criado_por,criado_em) SELECT 'equipe',?,?,?,?,'','','nova',?,?,? WHERE NOT EXISTS(SELECT 1 FROM cfg WHERE chave=?)").bind(g.url,g.chave,w,c.nome||'','mensageiro:'+c.id,por,em,recibo),
       env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) SELECT ?,CAST(last_insert_rowid() AS TEXT) WHERE changes()=1').bind(recibo),
     ]);}catch(e){await env.MIDIA.delete(g.chave);throw e;}
     const id=Number(await cfgGet(env,recibo));const registro=await env.DB.prepare('SELECT chave FROM foto_cliente WHERE id=?').bind(id).first();if(registro?.chave!==g.chave)await env.MIDIA.delete(g.chave);
@@ -4614,7 +4618,7 @@ async function rotasSolicitacoes_(env,req,url,J){
     if(status==='abertas')cond+=" AND s.status<>'atendida'";else if(['pendente','em_atendimento','aguardando_cliente','atendida'].includes(status)){cond+=' AND s.status=?';args.push(status);}else if(status!=='todas')return J({ok:false,erro:'Filtro de solicitações inválido.'},400);
     if(conversa){const [st,c]=await convFicha_(env,conversa);if(st)return J({ok:false,erro:c},st);const ficha=await fichaDaConversa_(env,c);cond+=' AND s.conversa_id IN('+ficha.canais.map(()=>'?').join(',')+')';args.push(...ficha.canais.map(x=>x.id));}
     if(antes){const [data,cursorId]=antes.split('|');if(!data||!uuid(cursorId))return J({ok:false,erro:'Página inválida.'},400);cond+=' AND (s.criado_em<? OR (s.criado_em=? AND s.id<?))';args.push(data,data,cursorId);}
-    const rows=(await env.DB.prepare("SELECT s.*,c.canal,"+MSG_NOME_SQL_.replace(/\bmsg_conversa\b/g,'c')+" AS nome FROM msg_solicitacao s JOIN msg_conversa c ON c.id=s.conversa_id WHERE "+cond+' ORDER BY s.criado_em DESC,s.id LIMIT 41').bind(...args).all()).results||[];
+    const rows=(await env.DB.prepare("SELECT s.*,c.canal,COALESCE((SELECT valor FROM cfg WHERE chave='msg_atendente_'||s.responsavel),'') AS responsavel_nome,"+MSG_NOME_SQL_.replace(/\bmsg_conversa\b/g,'c')+" AS nome FROM msg_solicitacao s JOIN msg_conversa c ON c.id=s.conversa_id WHERE "+cond+' ORDER BY s.criado_em DESC,s.id LIMIT 41').bind(...args).all()).results||[];
     const itens=[];for(const r of rows.slice(0,40)){const fotos=(await env.DB.prepare('SELECT id,mime FROM msg_solicitacao_foto WHERE solicitacao=? ORDER BY em,id').bind(r.id).all()).results||[];itens.push({...r,fotos});}
     return J({ok:true,itens,proximo:rows.length>40?rows[39].criado_em+'|'+rows[39].id:null});
   }

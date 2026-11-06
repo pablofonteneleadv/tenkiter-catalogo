@@ -218,6 +218,7 @@ jobs:
           node tests/worker_video_preparo.js
           node tests/worker_video_partes.js
           node tests/worker_fila_originais.js
+          node tests/worker_postagens_coordenacao.js
           node tests/worker_postagens_limites.js
           node tests/worker_gestor.js
           # v7.41.0: Esteira de Produtos (lista diária, conferência, escala, configurações)

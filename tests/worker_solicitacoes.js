@@ -39,7 +39,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert.equal((await raw(pathFoto,png)).status,200);assert.equal((await raw(pathFoto,png)).status,200);assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM msg_solicitacao_foto').get().n,1);
   const photo=await W.default.fetch(new Request('https://worker.test'+pathFoto,{headers}),env,{});assert.equal(photo.status,200);assert.equal(photo.headers.get('Cache-Control'),'no-store');assert.deepEqual(Buffer.from(await photo.arrayBuffer()),png);
   assert.equal((await raw('/msg/cliente-foto?conversa='+id+'&op='+fid,png)).status,200);assert.equal((await raw('/msg/cliente-foto?conversa='+id+'&op='+fid,png)).status,200);
-  const fc=sqlite.prepare('SELECT * FROM foto_cliente').all();assert.equal(fc.length,1);assert.equal(fc[0].nome,'Cliente Teste');assert.equal(fc[0].whats,'5588991234567');assert.equal(fc[0].vinculo,'mensageiro');
+  const fc=sqlite.prepare('SELECT * FROM foto_cliente').all();assert.equal(fc.length,1);assert.equal(fc[0].nome,'Cliente Teste');assert.equal(fc[0].whats,'5588991234567');assert.equal(fc[0].vinculo,'mensageiro:'+id);
   const grupo=Number(sqlite.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo) VALUES('whatsapp1','grupo','Grupo Teste',1)").run().lastInsertRowid);
   assert.equal((await chamar('/msg/solicitacoes','POST',{id:'33333333-3333-4333-8333-333333333333',conversa:grupo,descricao:'Não é cliente individual'})).status,400);
   assert.equal(W.msgRecurso_('/msg/solicitacoes/editar',{method:'POST'},new URL('https://worker.test')), 'responder');
