@@ -6,7 +6,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
 
 (async () => {
   const tmp = path.join(os.tmpdir(), 'tk-fila-originais.mjs');
-  fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '../instagram-worker/worker.js')) + '\nexport {videoClaims_,videoUsuario_,videoRunner_,autorizarVideoRunner_};export function simularAvanco_(f){avancarPostagem=f;}');
+  fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '../instagram-worker/worker.js')) + '\nexport {videoClaims_,videoUsuario_,videoRunner_,autorizarVideoRunner_,estadoLoteAgora_};export function simularAvanco_(f){avancarPostagem=f;}');
   const W = await import(require('node:url').pathToFileURL(tmp).href);
   const cache = new Map(), kv = new Map();
   global.caches = { default: { async match(r) { return cache.has(r.url) ? Response.json(cache.get(r.url)) : undefined; }, async put(r, v) { cache.set(r.url, await v.json()); } } };
@@ -148,6 +148,11 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert.equal(sqlite.prepare("SELECT valor FROM cfg WHERE chave='post_agora_lote'").get().valor,'');
   assert(Date.parse(sqlite.prepare('SELECT agendado_em FROM postagem WHERE id=?').get(resto).agendado_em)>time,'Fila seguinte afastada');
   await W.processarPostagens(env);assert.equal(disparos.length,3,'Nenhuma cópia ou fila futura enviada');
+  sqlite.prepare('DELETE FROM postagem').run();
+  const protegido=ins('confirma-pernas',time);sqlite.prepare("UPDATE postagem SET canal='ambos',status='publicado',zap_estado='aguardando' WHERE id=?").run(protegido);
+  assert(!(await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim,'Story publicado com Status pendente não libera a próxima mídia');
+  sqlite.prepare("UPDATE postagem SET zap_estado='confirmado' WHERE id=?").run(protegido);assert((await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim);
+  sqlite.prepare("UPDATE postagem SET status='erro' WHERE id=?").run(protegido);assert(!(await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim,'Erro protege a sequência sem nova cópia');
   global.Date=RealDate;
   console.log('OK: três originais, seis partes, intervalo completo entre originais, origens entre canais, reagendamento comum (incluindo legado), prioridade de pendentes, concorrência atômica e envio incerto preservado.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

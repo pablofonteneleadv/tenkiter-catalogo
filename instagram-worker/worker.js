@@ -1552,10 +1552,11 @@ export async function processarPostagens(env) {
     const cfgStatus2 = lin.some(p => p.canal === 'whatsapp2' && p.status === 'agendado') ? await cfgWafly_(env, 2) : null;
     const impedimentoStatus2 = cfgStatus2 ? await impedimentoStatus2_(cfgStatus2) : '';
     let feitas = 0, novas = usados, tentadas = 0;
+    let estadoAgora=loteAgora?await estadoLoteAgora_(env,loteAgora):null;const bloqueadasAgora=new Set();
     for (const p of lin) {
       let imediato=false;
-      if(loteAgora){const e=await estadoLoteAgora_(env,loteAgora);if(e.fim)break;imediato=e.atual.includes(p.id);if(!imediato&&p.status!=='processando')continue;
-        if(imediato&&p.status==='agendado'){const faltam=(e.rows||[]).filter(x=>x.status==='agendado');let excede=false;for(const b of CANAIS_FILA){const n=faltam.filter(x=>bucketsDoPost(x.tipo,x.canal).includes(b)).length;if(n&&(await contarUsados24h_(env,b,desde))+n>limiteDoTipo(cfgP,b))excede=true;}if(excede)continue;}
+      if(loteAgora){const e=estadoAgora;if(e.fim)break;imediato=e.atual.includes(p.id);if(bloqueadasAgora.has(p.id)||!imediato&&p.status!=='processando')continue;
+        if(imediato&&p.status==='agendado'){const faltam=(e.rows||[]).filter(x=>x.status==='agendado');let excede=false;for(const b of CANAIS_FILA){const n=faltam.filter(x=>bucketsDoPost(x.tipo,x.canal).includes(b)).length;if(n&&(await contarUsados24h_(env,b,desde))+n>limiteDoTipo(cfgP,b))excede=true;}const nIg=faltam.filter(x=>canalUsaInstagram_(x.canal)).length;if(nIg){const n=(await env.DB.prepare("SELECT COUNT(*) n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()).n;if(n+nIg>cfgP.max24h)excede=true;}if(excede){e.atual.forEach(id=>bloqueadasAgora.add(id));continue;}}
       }
       if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
       if (p.canal === 'whatsapp2' && p.status === 'agendado' && impedimentoStatus2 && !(await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(p.id).first())) {
@@ -1590,6 +1591,7 @@ export async function processarPostagens(env) {
       tentadas++;
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
       const atual=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE id=?').bind(p.id).first();
+      if(loteAgora)estadoAgora=await estadoLoteAgora_(env,loteAgora);
       if(atual?.status==='publicado')recentes.push({...p,...atual});
       if(p.serie){
         if(atual){estados.set(p.serie+':'+p.parte,atual);if(p.parte===1&&!ativas.some(s=>s.serie===p.serie))ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});if(atual.status==='publicado'){if(p.parte===p.partes){const i=ativas.findIndex(s=>s.serie===p.serie);if(i>=0)ativas.splice(i,1);}}}
@@ -5854,13 +5856,14 @@ async function videoUsuario_(env,req,url,J){
     const jobs=(await env.DB.prepare("SELECT id,nome,estado,erro,inicio,duracao,criado FROM video_preparo WHERE dono=? AND perfil=? AND criado>? AND origem<>'' ORDER BY criado,id LIMIT 50").bind(dono,perfil,Date.now()-86400000).all()).results||[];return J({ok:true,videos:jobs});
   }
   if(req.method==='POST'&&url.searchParams.get('repetir')==='1'){
-    const id=url.searchParams.get('id')||'',job=await env.DB.prepare('SELECT estado,origem FROM video_preparo WHERE id=? AND dono=? AND perfil=?').bind(id,dono,perfil).first();if(!job||!job.origem)return J({ok:false,erro:'Original indisponível. Selecione novamente o arquivo.'},404);
-    if(job.estado!=='erro')return J({ok:true,id,estado:job.estado});
-    const claim=await env.DB.prepare("UPDATE video_preparo SET estado='limpando',lease='',ate=0 WHERE id=? AND dono=? AND estado='erro'").bind(id,dono).run();if(!claim.meta.changes)return J({ok:false,erro:'O estado mudou. Consulte o andamento.'},409);
-    const arquivos=await env.MIDIA.list({prefix:'video-preparo/'+id+'/',limit:100});for(const x of arquivos.objects)if(x.key!==job.origem)await env.MIDIA.delete(x.key);if(arquivos.truncated)return J({ok:false,erro:'Limpeza em andamento. Tente novamente.'},409);
-    await env.DB.batch([env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id),env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='' WHERE id=? AND estado='limpando'").bind(id)]);return J({ok:true,id,estado:'fila'});
+    const id=url.searchParams.get('id')||'',job=await env.DB.prepare('SELECT estado,origem,criado FROM video_preparo WHERE id=? AND dono=? AND perfil=?').bind(id,dono,perfil).first();if(!job||!job.origem||job.criado<Date.now()-86400000)return J({ok:false,erro:'Original indisponível. Selecione novamente o arquivo.'},404);
+    if(!['erro','limpando'].includes(job.estado))return J({ok:true,id,estado:job.estado});
+    const lease=crypto.randomUUID(),claim=await env.DB.prepare("UPDATE video_preparo SET estado='limpando',lease=?,ate=? WHERE id=? AND dono=? AND (estado='erro' OR (estado='limpando' AND ate<?))").bind(lease,Date.now()+120000,id,dono,Date.now()).run();if(!claim.meta.changes)return J({ok:false,erro:'A limpeza já está em andamento. Consulte novamente em instantes.'},409);
+    try{
+      const arquivos=await env.MIDIA.list({prefix:'video-preparo/'+id+'/',limit:100});for(const x of arquivos.objects)if(x.key!==job.origem)await env.MIDIA.delete(x.key);if(arquivos.truncated)throw Error('limpeza incompleta');
+      await env.DB.batch([env.DB.prepare("DELETE FROM video_parte WHERE preparo=? AND EXISTS(SELECT 1 FROM video_preparo WHERE id=? AND estado='limpando' AND lease=?)").bind(id,id,lease),env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='limpando' AND lease=?").bind(id,lease)]);return J({ok:true,id,estado:'fila'});
+    }catch(_){await env.DB.prepare("UPDATE video_preparo SET estado='erro',lease='',ate=0 WHERE id=? AND estado='limpando' AND lease=?").bind(id,lease).run();return J({ok:false,erro:'Não consegui concluir a limpeza. O original foi preservado; tente novamente.'},503);}
   }
-
   if(req.method==='POST'&&url.searchParams.get('excluir')==='1'){
     const id=url.searchParams.get('id')||'';
     if(!/^[a-f0-9-]{36}$/.test(id))return J({ok:false,erro:'Vídeo inválido.'},400);
