@@ -13,7 +13,7 @@ function d1() {
 }
 
 (async () => {
-  const W = await import(tmp), w = W.default;
+  const W = await import(require('node:url').pathToFileURL(tmp).href), w = W.default;
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();

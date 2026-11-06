@@ -17,6 +17,7 @@ with tempfile.TemporaryDirectory() as tmp:
    jobs=[];held=[];ready=set();fail=set();errors=[]
    def preparation(route):
     req=route.request;url=req.url
+    if req.method=='POST' and 'excluir=1' in url:route.fulfill(json={'ok':True});return
     if req.method=='POST':
      ident='primeiro' if 'duracao=75' in url else 'segundo';jobs.append(ident);held.append((ident,route));return
     ident='primeiro' if 'id=primeiro' in url else 'segundo'
@@ -32,61 +33,65 @@ with tempfile.TemporaryDirectory() as tmp:
     pg.goto(os.environ.get('TK_BASE','http://localhost:8773/')+'admin.html');pg.wait_for_timeout(1500);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-postagens');pg.wait_for_timeout(300)
    abrir();pg.get_by_role('button',name='✍️ Livre',exact=True).click()
    pg.set_input_files('#po-livre-arq',[str(root/'primeiro.mp4'),str(root/'segundo.mp4'),str(root/'foto.png')])
-   pg.wait_for_function("document.querySelectorAll('[data-preparo]').length===2")
-   for _ in range(50):
+   for _ in range(80):
     if len(held)==2:break
     pg.wait_for_timeout(100)
-   assert len(held)==2,'Segundo original aguardou a conclusão do primeiro'
-   assert not pg.locator('#tk-video-preparo').count(),'Lote abriu modal bloqueante'
-   assert pg.locator('[data-a=enviar]').is_disabled()
-   assert pg.locator('[data-preparo] button:visible').first.evaluate('(e)=>e.getBoundingClientRect().height>=48&&e.getBoundingClientRect().width>=48')
-   assert pg.locator('[data-lm=x]').count()==3
-   assert all(r.request.post_data_buffer==(root/(ident+'.mp4')).read_bytes() for ident,r in held)
-   # Um novo seletor e a navegação continuam utilizáveis durante os dois uploads.
-   pg.locator('#po-leg').fill('Legenda preservada durante o preparo')
-   pg.locator('#po-fechar').click();pg.click('#btn-abrir-postagens');pg.wait_for_timeout(250)
-   assert len(jobs)==2 and pg.locator('#po-leg').input_value()=='Legenda preservada durante o preparo'
+   assert len(held)==2,'Uploads devem continuar fora do compositor'
+   assert not pg.locator('[data-preparo]').count(),'Compositor ainda mostra preparos'
+   assert pg.locator('[data-lm=x]').count()==1,'Só a foto deve entrar diretamente'
+   assert pg.locator('[data-a=enviar]').is_enabled(),'Preparo da biblioteca bloqueou a foto'
+   pg.locator('#po-leg').fill('Legenda preservada na biblioteca')
+   pg.get_by_role('tab',name='Vídeos',exact=True).click()
+   assert pg.locator('.po-video-item').count()==2
+   pg.screenshot(path=str(OUT/f'videos-debug-{width}.png'))
+   assert pg.locator('.po-video-item progress').count()==2
+   pg.screenshot(path=str(OUT/f'videos-biblioteca-enviando-{width}.png'))
    for ident,r in held:r.fulfill(json={'ok':True,'id':ident,'estado':'fila'})
-   held.clear();pg.wait_for_function("[...document.querySelectorAll('[data-progresso]')].every(e=>e.textContent.includes('Original recebido'))")
-   pg.locator('[data-preparo]').first.scroll_into_view_if_needed()
-   pg.screenshot(path=str(OUT/f'videos-lote-andamento-{width}.png'))
-   # Recarregar retoma por ID, sem escolher arquivos ou reenviar os originais.
-   pg.wait_for_timeout(500);abrir();assert pg.locator('[data-preparo]').count()==2
-   assert len(jobs)==2
-   if width==320:pg.evaluate("document.documentElement.style.fontSize='130%'");pg.set_viewport_size({'width':320,'height':470})
+   held.clear()
+   pg.wait_for_function("[...document.querySelectorAll('[data-vlib-status]')].every(e=>e.textContent.includes('Original recebido'))")
+   pg.wait_for_timeout(600);abrir()
+   pg.get_by_role('tab',name='Vídeos',exact=True).click()
+   assert pg.locator('.po-video-item').count()==2 and len(jobs)==2,'Recarregar perdeu ou reenviou original'
+   if width==320:pg.evaluate("document.documentElement.style.fontSize='130%'")
    fail.add('primeiro');ready.add('segundo')
-   pg.wait_for_function("document.querySelectorAll('[data-preparo]').length===1",timeout=15000)
-   assert 'primeiro.mp4' in pg.locator('[data-preparo]').inner_text()
-   assert 'segundo-parte-01' in pg.inner_text('#po-corpo')
-   assert pg.locator('[data-a=enviar]').is_disabled()
-   assert len(jobs)==2,'Falha de consulta provocou reupload'
-   # Finalização não rouba o foco nem apaga o texto sendo editado.
-   pg.locator('#po-leg').fill('Editando enquanto termina');pg.locator('#po-leg').focus()
+   pg.wait_for_function("[...document.querySelectorAll('[data-vlib-status]')].filter(e=>e.textContent.startsWith('Pronto')).length===1",timeout=15000)
+   assert len(jobs)==2,'Falha temporária provocou reupload'
    fail.clear();ready.add('primeiro')
-   pg.wait_for_function("document.querySelectorAll('[data-preparo]').length===0",timeout=15000)
-   assert pg.locator('#po-leg').input_value()=='Editando enquanto termina'
-   assert pg.locator('#po-leg').evaluate('(e)=>e===document.activeElement')
+   pg.wait_for_function("[...document.querySelectorAll('[data-vlib-status]')].every(e=>e.textContent.startsWith('Pronto'))",timeout=15000)
+   pg.screenshot(path=str(OUT/f'videos-biblioteca-prontos-{width}.png'))
+   pg.get_by_role('tab',name='Nova postagem',exact=True).click()
+   assert pg.locator('#po-leg').input_value()=='Legenda preservada na biblioteca'
+   assert pg.locator('[data-lm=x]').count()==1,'Vídeos foram incluídos sem seleção'
+   pg.get_by_role('button',name='Recuperar vídeos',exact=True).click()
+   checks=pg.locator('[data-vlib-sel]');assert checks.count()==2
+   for cb in checks.all():cb.check()
+   pg.screenshot(path=str(OUT/f'videos-recuperar-{width}.png'))
+   pg.get_by_role('button',name='Incluir selecionados na postagem',exact=True).click()
+   pg.wait_for_function("document.querySelectorAll('[data-lm=x]').length===6")
    names=pg.locator('.po-escolhida small').all_text_contents()
-   assert names==['primeiro-parte-01-de-3.mp4','primeiro-parte-02-de-3.mp4','primeiro-parte-03-de-3.mp4','segundo-parte-01-de-2.mp4','segundo-parte-02-de-2.mp4','foto.png'],names
-   assert pg.locator('[data-a=enviar]').is_enabled()
-   pg.locator('[data-lm=x]').first.scroll_into_view_if_needed();assert pg.locator('[data-lm=x]').first.evaluate('(e)=>e.getBoundingClientRect().width>=44&&e.getBoundingClientRect().height>=44');pg.screenshot(path=str(OUT/f'videos-lote-pronto-{width}.png'))
-   pg.locator('.po-escolhida summary').first.click();assert pg.locator('.po-escolhida video').first.is_visible();pg.locator('.po-escolhida summary').first.focus();pg.keyboard.press('Enter');assert pg.locator('.po-escolhida video').first.is_hidden()
+   assert names==['foto.png','primeiro-parte-01-de-3.mp4','primeiro-parte-02-de-3.mp4','primeiro-parte-03-de-3.mp4','segundo-parte-01-de-2.mp4','segundo-parte-02-de-2.mp4'],names
+   # Duplicar recuperação não duplica as partes no rascunho.
+   pg.get_by_role('button',name='Recuperar vídeos',exact=True).click()
+   pg.locator('[data-vlib-sel]').first.check()
+   pg.get_by_role('button',name='Incluir selecionados na postagem',exact=True).click()
+   pg.wait_for_timeout(300);assert pg.locator('[data-lm=x]').count()==6
+   pg.get_by_role('tab',name='Vídeos',exact=True).click()
+   pg.once('dialog',lambda d:d.accept())
+   pg.locator('[data-vlib-excluir]').first.click()
+   pg.wait_for_function("document.querySelectorAll('.po-video-item').length===1")
+   abrir();pg.get_by_role('tab',name='Nova postagem',exact=True).click()
+   assert pg.locator('[data-lm=x]').count()==6,'Excluir biblioteca apagou a cópia do rascunho'
+   pg.locator('.po-escolhida summary').first.click()
+   assert pg.locator('.po-escolhida video').first.is_visible()
+   pg.locator('.po-escolhida summary').first.focus();pg.keyboard.press('Enter')
+   assert pg.locator('.po-escolhida video').first.is_hidden()
+   pg.screenshot(path=str(OUT/f'videos-incluidos-{width}.png'))
    pg.add_script_tag(path=str(Path(__file__).with_name('axe.min.js')))
    violations=pg.evaluate("async()=>{const r=await axe.run(document.querySelector('#overlay-postagens'));return r.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>v.id)}")
    assert not violations,violations
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')
    assert len(jobs)==2 and not [x for x in st['ig']['post_chamadas'] if x['path']=='/post']
    assert not errors,errors
-   if width==390:
-    for destino in ['instagram','whatsapp2','grupo']:
-     botao=pg.locator('[data-destino='+destino+']')
-     if botao.count() and botao.get_attribute('aria-pressed')=='true':botao.click()
-    botao=pg.locator('[data-destino=whatsapp]')
-    if botao.get_attribute('aria-pressed')!='true':botao.click()
-    pg.locator('[data-a=enviar]').click();pg.wait_for_timeout(2000)
-    calls=[x for x in st['ig']['post_chamadas'] if x['path']=='/post'];assert len(calls)==1,calls
-    refs=[x['serie'] for x in calls[0]['corpo']['posts'] if x.get('serie')]
-    assert [(r['preparo'],r['ordem']) for r in refs]==[('primeiro',1),('primeiro',2),('primeiro',3),('segundo',1),('segundo',2)],refs
-   print('OK',width,'uploads paralelos, retomada automática, ordem, foco e confirmação preservados')
+   print('OK',width,'biblioteca, retomada, seleção de todas as partes e exclusão sem apagar rascunho')
    ctx.close()
   browser.close()

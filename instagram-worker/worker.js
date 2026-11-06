@@ -290,6 +290,7 @@ function msgDireitos_(perms, whats, regras) {
   return direitos;
 }
 function msgRecurso_(p, req, url) {
+  if(p==='/msg/cliente-foto'||p.startsWith('/msg/solicitacoes'))return req.method==='GET'?'acessar':'responder';
   if (['/msg/video-preparar','/msg/enviar','/msg/anexo','/msg/dono','/msg/encerrar'].includes(p)) return 'responder';
   if (p === '/msg/midia') return url.searchParams.get('baixar') === '1' ? 'arquivos' : 'acessar';
   if (/^\/msg\/(pessoa|ficha)(\/|$)/.test(p)) return 'contatos';
@@ -1498,6 +1499,19 @@ async function dispararPostagens_(env){
   if(env.POSTAGENS_SEQUENCIA)return env.POSTAGENS_SEQUENCIA.get(env.POSTAGENS_SEQUENCIA.idFromName('loja')).acordar();
   return processarPostagens(env); // ambiente de testes/versão anterior, cron continua disponível
 }
+async function estadoLoteAgora_(env,lote){
+  const ids=lote.grupos.flat(),rows=(await env.DB.prepare("SELECT * FROM postagem WHERE id IN(SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all()).results||[];
+  if(rows.length!==ids.length)return {atual:[],bloqueado:true};
+  const concluido=p=>p.status==='cancelado'||p.status==='manual_feito'||p.status==='publicado'&&(p.canal!=='ambos'||p.zap_estado==='confirmado');
+  for(const ids of lote.grupos){const ps=rows.filter(p=>ids.includes(p.id));if(!ps.every(concluido))return {atual:ids,rows:ps};}
+  return {fim:true};
+}
+async function finalizarLoteAgora_(env,raw){
+  const rows=(await env.DB.prepare("SELECT p.*,EXISTS(SELECT 1 FROM postagem_grupo_recibo r WHERE r.postagem_id=p.id AND r.estado<>'recusado') recibo FROM postagem p WHERE status='agendado' ORDER BY agendado_em,id").all()).results||[];
+  const ps=rows.filter(p=>!p.urgente&&!p.ig_id&&!p.zap_estado&&!p.zap_req&&!p.containers&&!p.recibo&&(!p.serie||rows.filter(x=>x.serie===p.serie).length===p.partes));
+  if(ps.length){const r=await inserirMidiaAntes_(env,ps,Date.now()+60000,(x,status=200)=>Response.json(x,{status}));if(r.status!==200)return false;}
+  await env.DB.prepare("UPDATE cfg SET valor='' WHERE chave='post_agora_lote' AND valor=?").bind(raw).run();return true;
+}
 export async function processarPostagens(env) {
   try {
     await iniciar(env);
@@ -1514,6 +1528,8 @@ export async function processarPostagens(env) {
       }
     }
     await acompanharPernasZap_(env);                                   // v7.48.3: WhatsApp do "ambos" em paralelo, sem segurar a fila
+    let loteRaw=await cfgGet(env,'post_agora_lote'),loteAgora=loteRaw?JSON.parse(loteRaw):null;
+    if(loteAgora&&(await estadoLoteAgora_(env,loteAgora)).fim){if(!await finalizarLoteAgora_(env,loteRaw))return {feitas:0};loteAgora=null;}
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
     const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY CASE WHEN serie<>'' AND (status='processando' OR (parte>1 AND EXISTS(SELECT 1 FROM postagem ant WHERE ant.serie=postagem.serie AND ant.parte=postagem.parte-1 AND ant.status IN ('publicado','manual_feito')))) THEN 0 WHEN serie<>'' AND parte>1 THEN 2 ELSE 1 END, agendado_em, id LIMIT 200").bind(t).all()).results || [];
@@ -1537,6 +1553,10 @@ export async function processarPostagens(env) {
     const impedimentoStatus2 = cfgStatus2 ? await impedimentoStatus2_(cfgStatus2) : '';
     let feitas = 0, novas = usados, tentadas = 0;
     for (const p of lin) {
+      let imediato=false;
+      if(loteAgora){const e=await estadoLoteAgora_(env,loteAgora);if(e.fim)break;imediato=e.atual.includes(p.id);if(!imediato&&p.status!=='processando')continue;
+        if(imediato&&p.status==='agendado'){const faltam=(e.rows||[]).filter(x=>x.status==='agendado');let excede=false;for(const b of CANAIS_FILA){const n=faltam.filter(x=>bucketsDoPost(x.tipo,x.canal).includes(b)).length;if(n&&(await contarUsados24h_(env,b,desde))+n>limiteDoTipo(cfgP,b))excede=true;}if(excede)continue;}
+      }
       if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
       if (p.canal === 'whatsapp2' && p.status === 'agendado' && impedimentoStatus2 && !(await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(p.id).first())) {
         if (p.erro !== impedimentoStatus2) await env.DB.prepare("UPDATE postagem SET erro=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(impedimentoStatus2, agora(), p.id).run();
@@ -1546,15 +1566,15 @@ export async function processarPostagens(env) {
       if(p.serie&&p.parte>1){
         anterior=estados.get(p.serie+':'+(p.parte-1));
         if(!anterior||!['publicado','manual_feito'].includes(anterior.status))continue;
-        if(!cfgP.partesRapidas&&Date.parse(anterior.publicado_em)+Math.max(...bucketsDoPost(p.tipo,p.canal).map(b=>gapDoTipoMs(cfgP,b)))>Date.now())continue;
+        if(!imediato&&!cfgP.partesRapidas&&Date.parse(anterior.publicado_em)+Math.max(...bucketsDoPost(p.tipo,p.canal).map(b=>gapDoTipoMs(cfgP,b)))>Date.now())continue;
       }
       const minha=ativas.findIndex(s=>s.serie===p.serie);
       if(ativas.some((s,i)=>s.serie!==p.serie&&(minha<0||i<minha)&&bucketsDoPost(s.tipo,s.canal).some(b=>bucketsDoPost(p.tipo,p.canal).includes(b))))continue;
-      if (p.status === 'agendado' && !(anterior&&cfgP.partesRapidas) && !p.urgente && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
+      if (p.status === 'agendado' && !(anterior&&cfgP.partesRapidas) && !p.urgente && !imediato && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
         tentadas++;try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
         continue;
       }
-      if(p.status==='agendado'&&!(anterior&&cfgP.partesRapidas)&&!(p.urgente&&cfgP.agoraIgnora)){
+      if(p.status==='agendado'&&!imediato&&!(anterior&&cfgP.partesRapidas)&&!(p.urgente&&cfgP.agoraIgnora)){
         let liberar=0;for(const r of recentes)if((p.serie||r.serie)&&r.id!==p.id&&!(p.serie&&r.serie===p.serie)&&!(p.origem_midia&&r.origem_midia===p.origem_midia))for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+Math.max(gapDoTipoMs(cfgP,b),Number(p.intervalo_ms)||0));
         if(liberar>Date.now()){tentadas++;await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
       }
@@ -1576,7 +1596,8 @@ export async function processarPostagens(env) {
       }
     }
     const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND e.status IN ('erro','cancelado','manual_pendente')) LIMIT 1").bind(agora()).first());
-    return { feitas: feitas,continuar:tentadas>0&&!!rapidas };
+    if(loteAgora&&(await estadoLoteAgora_(env,loteAgora)).fim)await finalizarLoteAgora_(env,loteRaw);
+    return { feitas: feitas,continuar:tentadas>0&&!!(rapidas||loteAgora) };
   } catch (e) { return { feitas: 0, erro: true }; }
 }
 /** Quantas postagens deste canal já saíram nas últimas 24 h (Story, Feed… do Instagram; ou "status" do WhatsApp). */
@@ -2008,7 +2029,7 @@ async function validarSeriesPost_(env,req,lista,vs){
   for(const g of grupos.values())if(g.refs.length!==g.total||g.refs[0].parte!==1)throw Error('Inclua todas as partes do mesmo vídeo, na ordem original.');
 }
 function identidadeBlocoPost_(x){if(x.origem_midia)return x.origem_midia;const ms=JSON.parse(x.midias||'[]');return x.criado_em&&ms.length&&!x.serie?'legado:'+x.tipo+':'+(x.grupo||'')+':'+String(x.criado_em).slice(0,16)+':'+ms.map(m=>m.url).join('|'):'id:'+x.id;}
-export function planoInsercaoMidia_(cfg,rows,ids,desejado){
+export function planoInsercaoMidia_(cfg,rows,ids,desejado,imediato=false){
   const selecionados=new Set(ids),alvo=rows.filter(x=>selecionados.has(x.id));
   const chave=identidadeBlocoPost_;
   const mapa=new Map();for(const x of rows){const k=chave(x);if(!mapa.has(k))mapa.set(k,[]);mapa.get(k).push(x);}
@@ -2023,23 +2044,25 @@ export function planoInsercaoMidia_(cfg,rows,ids,desejado){
     for(let i=0;i<2000;i++){const limites=[];for(const b of canais){const xs=eventos.filter(e=>e.canais.includes(b)&&e.t>t-86400000&&e.t<=t).map(e=>e.t).sort((a,b)=>a-b),limite=limiteDoTipo(cfg,b);const entram=ps.filter(p=>bs([p]).includes(b)).length;if(entram>limite)throw Error('Esta sequência excede a cota diária do canal.');if(xs.length+entram>limite)limites.push(xs[xs.length+entram-limite-1]+86400000+1000);}if(canais.some(b=>TIPOS_FILA.includes(b))){const xs=eventos.filter(e=>e.canais.some(b=>TIPOS_FILA.includes(b))&&e.t>t-86400000&&e.t<=t).map(e=>e.t).sort((a,b)=>a-b);const entram=ps.filter(p=>bs([p]).some(b=>TIPOS_FILA.includes(b))).length;if(entram>cfg.max24h)throw Error('Esta sequência excede a cota diária do Instagram.');if(xs.length+entram>cfg.max24h)limites.push(xs[xs.length+entram-cfg.max24h-1]+86400000+1000);}if(!limites.length)break;t=ajustarHorarioMulti(ajustada,canais,Math.max(...limites),ocup).t;if(i===1999)throw Error('Não foi possível encontrar um horário comum dentro das regras.');}
     for(const p of ps){const canaisPost=bs([p]);for(const b of canaisPost)ocup[b].push(t);eventos.push({t,canais:canaisPost});}return t;
   }
-  const selecionadas=[...mapa.values()].map(xs=>xs.filter(x=>selecionados.has(x.id))).filter(xs=>xs.length).sort((a,b)=>Math.min(...a.map(x=>Date.parse(x.agendado_em)))-Math.min(...b.map(x=>Date.parse(x.agendado_em)))||a[0].id-b[0].id);const plano=[];let cursor=desejado,t=null;for(const ps of selecionadas){const n=reservar(ps,cursor);if(t===null)t=n;for(const x of ps)plano.push({id:x.id,antes:x.agendado_em,para:new Date(n).toISOString()});cursor=n+Math.max(ed(ps),...bs(ps).map(b=>gapDoTipoMs(cfg,b)));}
+  const selecionadas=[...mapa.values()].map(xs=>xs.filter(x=>selecionados.has(x.id))).filter(xs=>xs.length).sort((a,b)=>Math.min(...a.map(x=>Date.parse(x.agendado_em)))-Math.min(...b.map(x=>Date.parse(x.agendado_em)))||a[0].id-b[0].id);const plano=[];let cursor=desejado,t=null;for(const ps of selecionadas){const n=imediato?desejado:reservar(ps,cursor);if(t===null)t=n;for(const x of ps)plano.push({id:x.id,antes:x.agendado_em,para:new Date(n).toISOString()});cursor=n+(imediato?selecionadas.length*60000:0)+Math.max(ed(ps),...bs(ps).map(b=>gapDoTipoMs(cfg,b)));}
   for(const g of mover){const n=reservar(g.ps,Math.max(cursor,...g.ps.map(x=>Date.parse(x.agendado_em))));for(const x of g.ps)if(Date.parse(x.agendado_em)!==n)plano.push({id:x.id,antes:x.agendado_em,para:new Date(n).toISOString()});cursor=n+Math.max(ed(g.ps),...bs(g.ps).map(b=>gapDoTipoMs(cfg,b)));}
-  return {t,plano,midias:selecionadas.length,deslocadas:mover.filter(g=>g.ps.some(x=>plano.some(p=>p.id===x.id))).length};
+  return {t,plano,grupos:selecionadas.map(ps=>ps.map(x=>x.id)),midias:selecionadas.length,deslocadas:mover.filter(g=>g.ps.some(x=>plano.some(p=>p.id===x.id))).length};
 }
-async function inserirMidiaAntes_(env,ps,desejado,J,simular=false){
+async function inserirMidiaAntes_(env,ps,desejado,J,simular=false,imediato=false){
+  if(imediato&&await cfgGet(env,'post_agora_lote'))return J({ok:false,erro:'Há uma seleção imediata em andamento. Aguarde a confirmação antes de iniciar outra.'},409);
   const raw=await cfgGet(env,'po_cfg'),cfg=normalizarCfgPost(JSON.parse(raw||'null')),desde=new Date(Date.now()-86400000).toISOString();
   const cond="status IN ('agendado','processando','manual_pendente') OR (status IN ('publicado','manual_feito') AND publicado_em>=?)";
   const rows=(await env.DB.prepare("SELECT p.*,EXISTS(SELECT 1 FROM postagem_grupo_recibo r WHERE r.postagem_id=p.id AND r.estado<>'recusado') recibo FROM postagem p WHERE "+cond+' ORDER BY id').bind(desde).all()).results||[];
   const campos=['id','status','modo','tipo','canal','origem_midia','agendado_em','atualizado_em','ig_id','zap_estado','zap_req','containers','urgente','serie','parte','partes','intervalo_ms','repostado_de','criado_em','grupo'];
   if(rows.some(x=>ps.some(p=>p.id===x.id)&&x.recibo))return J({ok:false,erro:'Há envio aguardando confirmação na seleção. Nenhum horário foi alterado.'},409);
   if(!ps.every(p=>{const x=rows.find(x=>x.id===p.id);return x&&!x.recibo&&campos.every(k=>x[k]===p[k]);}))return J({ok:false,erro:'A mídia mudou durante a revisão. Atualize a fila.'},409);
-  const ids=ps.map(x=>x.id);let r;try{r=planoInsercaoMidia_(cfg,rows,ids,desejado);}catch(e){return J({ok:false,erro:e.message},409);}const json=JSON.stringify(r.plano),snapshot=JSON.stringify(rows.map(x=>Object.fromEntries(campos.map(k=>[k,x[k]??null])))),em=agora(),backup='backup-insercao-midia-'+crypto.randomUUID();
+  const ids=ps.map(x=>x.id);let r;try{r=planoInsercaoMidia_(cfg,rows,ids,desejado,imediato);}catch(e){return J({ok:false,erro:e.message},409);}const json=JSON.stringify(r.plano),snapshot=JSON.stringify(rows.map(x=>Object.fromEntries(campos.map(k=>[k,x[k]??null])))),em=agora(),backup='backup-insercao-midia-'+crypto.randomUUID();
   if(simular)return J({ok:true,simulado:true,quando:new Date(r.t).toISOString(),plano:r.plano,midias:r.midias,deslocadas:r.deslocadas});
   if(r.plano.length>200)return J({ok:false,erro:'Há mais de 200 destinos envolvidos. Nenhum horário foi alterado.'},409);
   const igual=campos.map(k=>'q.'+k+" IS json_extract(s.value,'$."+k+"')").join(' AND ');
-  const sql="WITH guard AS MATERIALIZED(SELECT (SELECT COUNT(*) FROM json_each(?) s JOIN postagem q ON q.id=json_extract(s.value,'$.id') WHERE "+igual+")=? AND (SELECT COUNT(*) FROM postagem WHERE "+cond+")=? AND (SELECT valor FROM cfg WHERE chave='po_cfg') IS ? AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND g.estado<>'recusado') ok) UPDATE postagem SET agendado_em=(SELECT json_extract(value,'$.para') FROM json_each(?) WHERE json_extract(value,'$.id')=postagem.id),atualizado_em=?,urgente=CASE WHEN id IN(SELECT value FROM json_each(?)) THEN 0 ELSE urgente END WHERE id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND (SELECT ok FROM guard)";
-  const out=await env.DB.batch([env.DB.prepare('INSERT INTO cfg(chave,valor) VALUES(?,?)').bind(backup,JSON.stringify({em,antes:r.plano,snapshot:JSON.parse(snapshot)})),env.DB.prepare(sql).bind(snapshot,rows.length,desde,rows.length,raw,json,json,em,JSON.stringify(ids),json)]);
+  const sql="WITH guard AS MATERIALIZED(SELECT "+(imediato?"NOT EXISTS(SELECT 1 FROM cfg WHERE chave='post_agora_lote' AND valor<>'') AND ":"")+"(SELECT COUNT(*) FROM json_each(?) s JOIN postagem q ON q.id=json_extract(s.value,'$.id') WHERE "+igual+")=? AND (SELECT COUNT(*) FROM postagem WHERE "+cond+")=? AND (SELECT valor FROM cfg WHERE chave='po_cfg') IS ? AND NOT EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND g.estado<>'recusado') ok) UPDATE postagem SET agendado_em=(SELECT json_extract(value,'$.para') FROM json_each(?) WHERE json_extract(value,'$.id')=postagem.id),atualizado_em=?,urgente=CASE WHEN id IN(SELECT value FROM json_each(?)) THEN "+(imediato?'1':'0')+" ELSE urgente END WHERE id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND (SELECT ok FROM guard)";
+  const lote=JSON.stringify({id:crypto.randomUUID(),grupos:r.grupos,criado:em});
+  const out=await env.DB.batch([env.DB.prepare('INSERT INTO cfg(chave,valor) VALUES(?,?)').bind(backup,JSON.stringify({em,antes:r.plano,snapshot:JSON.parse(snapshot)})),env.DB.prepare(sql).bind(snapshot,rows.length,desde,rows.length,raw,json,json,em,JSON.stringify(ids),json),...(imediato?[env.DB.prepare("INSERT INTO cfg(chave,valor) SELECT 'post_agora_lote',? WHERE changes()=? ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor").bind(lote,r.plano.length)]:[])]);
   if(out[1].meta?.changes!==r.plano.length)return J({ok:false,erro:'A fila mudou durante o ajuste. Nenhum horário foi alterado; atualize e tente novamente.'},409);
   return J({ok:true,quando:new Date(r.t).toISOString(),destinos:ps.length,midias:r.midias,deslocadas:r.deslocadas,deslocados:r.plano.length-ps.length,backup,ajustado:r.t!==desejado,motivo:r.t!==desejado?'intervalo':'insercao'});
 }
@@ -2218,16 +2241,21 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const chave=identidadeBlocoPost_;
     const alvos=ids.map(id=>rows.find(x=>x.id===id));if(alvos.some(x=>!x||x.status!=='agendado'))return J({ok:false,erro:'Uma mídia mudou ou não está agendada. Atualize a seleção.'},409);
     const chaves=new Set(alvos.map(chave)),todos=rows.filter(x=>chaves.has(chave(x))),ps=todos.filter(x=>x.status==='agendado');
+    const ativo=await cfgGet(env,'post_agora_lote');if(ativo&&JSON.parse(ativo).grupos.flat().some(id=>ps.some(p=>p.id===id)))return J({ok:false,erro:'Esta mídia está em uma seleção imediata. Aguarde o término ou cancele os destinos pendentes antes de reagendar.'},409);
     if(todos.some(x=>['processando','manual_pendente','erro','convertendo','transcodificando'].includes(x.status))||ps.some(x=>x.ig_id||x.zap_estado||x.zap_req||x.containers)||todos.some(x=>x.serie&&x.status!=='agendado'))return J({ok:false,erro:'Há destino em verificação ou sequência já iniciada na seleção. Nenhum horário foi alterado.'},409);
     for(const x of ps)if(x.serie){const partes=todos.filter(y=>y.serie===x.serie);if(partes.length!==x.partes||!partes.some(y=>y.parte===1))return J({ok:false,erro:'Inclua a sequência completa para mudar o horário.'},409);}
     for(const x of ps)if(x.canal==='grupo'){const erro=await erroVideoGrupo_(env,JSON.parse(x.midias||'[]'));if(erro)return J({ok:false,erro},400);}
-    const t=Date.parse(b.quando);if(!Number.isFinite(t)||t<Date.now()+60000||t>Date.now()+60*86400000)return J({ok:false,erro:'Escolha um horário futuro, até 60 dias à frente.'},400);
-    return inserirMidiaAntes_(env,ps,t,J,b.simular===true);
+    if(b.agora===true&&ps.some(x=>x.modo!=='auto'))return J({ok:false,erro:'A seleção imediata exige destinos automáticos. Mantenha os destinos manuais no horário agendado.'},409);
+    const t=b.agora===true?Date.now():Date.parse(b.quando);if(b.agora!==true&&(!Number.isFinite(t)||t<Date.now()+60000||t>Date.now()+60*86400000))return J({ok:false,erro:'Escolha um horário futuro, até 60 dias à frente.'},400);
+    const resultado=await inserirMidiaAntes_(env,ps,t,J,b.simular===true,b.agora===true);
+    if(b.agora===true&&!b.simular&&resultado.status===200&&ctx?.waitUntil)ctx.waitUntil(dispararPostagens_(env));
+    return resultado;
   }
   const id = Number(b.id) || 0;
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
   if (p.indexOf('/post/') === 0 && req.method === 'POST') {
     if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
+    const imediato=await cfgGet(env,'post_agora_lote');if(imediato&&p!=='/post/cancelar'&&JSON.parse(imediato).grupos.flat().includes(linha.id))return J({ok:false,erro:'Esta mídia pertence à seleção imediata em andamento. Aguarde ou cancele os destinos pendentes.'},409);
     if((linha.origem_midia||!linha.serie&&linha.criado_em&&JSON.parse(linha.midias||'[]').length)&&['/post/reagendar','/post/proximo'].includes(p))return reagendarMidiaOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
     if(linha.serie&&(p==='/post/proximo'||p==='/post/reagendar'&&linha.parte===1))return reagendarVideoOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
     if(linha.serie&&['/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
@@ -4558,6 +4586,70 @@ export async function moverNoFunil_(env, d) {
   const outras = ((await env.DB.prepare('SELECT x.etiqueta_id AS id FROM msg_alvo_etiqueta x JOIN msg_etiqueta e ON e.id=x.etiqueta_id WHERE x.alvo=? AND e.venda=0').bind(alvoDe_(conv)).all()).results || []).map((r) => r.id);
   return [0, { etiquetas: await gravarEtiquetas_(env, conv, outras.concat(etq ? [etq] : [])) }];
 }
+async function rotasSolicitacoes_(env,req,url,J){
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_solicitacao(id TEXT PRIMARY KEY,conversa_id INTEGER NOT NULL,descricao TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pendente',obs TEXT NOT NULL DEFAULT '',responsavel TEXT NOT NULL DEFAULT '',criado_por TEXT NOT NULL,criado_em TEXT NOT NULL,atualizado_em TEXT NOT NULL,versao INTEGER NOT NULL DEFAULT 1)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_msg_solicitacao_status ON msg_solicitacao(status,criado_em)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_solicitacao_foto(id TEXT NOT NULL,solicitacao TEXT NOT NULL,chave TEXT NOT NULL,mime TEXT NOT NULL,hash TEXT NOT NULL,por TEXT NOT NULL,em TEXT NOT NULL,PRIMARY KEY(solicitacao,id))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_solicitacao_evento(id INTEGER PRIMARY KEY AUTOINCREMENT,solicitacao TEXT NOT NULL,por TEXT NOT NULL,em TEXT NOT NULL,antes TEXT NOT NULL,depois TEXT NOT NULL)"),
+  ]);
+  const p=url.pathname,eu=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,''),em=agora(),uuid=v=>/^[a-f0-9-]{36}$/.test(String(v||''));
+  if(p==='/msg/cliente-foto'&&req.method==='POST'){
+    const [st,c]=await convFicha_(env,Number(url.searchParams.get('conversa')));if(st)return J({ok:false,erro:c},st);
+    const op=url.searchParams.get('op');if(!uuid(op))return J({ok:false,erro:'Identificação da foto inválida.'},400);
+    const recibo='msg_cliente_foto_'+await sha(eu+'|'+c.id+'|'+op),existe=await cfgGet(env,recibo);if(existe)return J({ok:true,id:Number(existe),existente:true});
+    const fotoBytes=await corpoLimitadoVideo_(req,FOTO_MAX),g=await guardarFoto(env,new Request(req.url,{method:'POST',headers:req.headers,body:fotoBytes}));if(g.erro)return J({ok:false,erro:g.erro},g.cheio?507:400);
+    const ficha=await fichaDaConversa_(env,c),w=ficha.canais.find(x=>x.canal!=='instagram'&&/^\d{10,15}$/.test(x.contato))?.contato||'',por=await meuNomeAtendente_(env,req);
+    try{await env.DB.batch([
+      env.DB.prepare("INSERT INTO foto_cliente(origem,url,chave,whats,nome,instagram,obs,status,vinculo,criado_por,criado_em) SELECT 'equipe',?,?,?,?,'','','nova','mensageiro',?,? WHERE NOT EXISTS(SELECT 1 FROM cfg WHERE chave=?)").bind(g.url,g.chave,w,c.nome||'',por,em,recibo),
+      env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) SELECT ?,CAST(last_insert_rowid() AS TEXT) WHERE changes()=1').bind(recibo),
+    ]);}catch(e){await env.MIDIA.delete(g.chave);throw e;}
+    const id=Number(await cfgGet(env,recibo));const registro=await env.DB.prepare('SELECT chave FROM foto_cliente WHERE id=?').bind(id).first();if(registro?.chave!==g.chave)await env.MIDIA.delete(g.chave);
+    return J({ok:true,id,nome:c.nome||'',vinculo:'mensageiro'});
+  }
+  if(p==='/msg/solicitacoes'&&req.method==='GET'){
+    const status=url.searchParams.get('status')||'abertas',conversa=Number(url.searchParams.get('conversa'))||0,antes=url.searchParams.get('antes')||'',args=[];let cond='1=1';
+    if(status==='abertas')cond+=" AND s.status<>'atendida'";else if(['pendente','em_atendimento','aguardando_cliente','atendida'].includes(status)){cond+=' AND s.status=?';args.push(status);}else if(status!=='todas')return J({ok:false,erro:'Filtro de solicitações inválido.'},400);
+    if(conversa){const [st,c]=await convFicha_(env,conversa);if(st)return J({ok:false,erro:c},st);const ficha=await fichaDaConversa_(env,c);cond+=' AND s.conversa_id IN('+ficha.canais.map(()=>'?').join(',')+')';args.push(...ficha.canais.map(x=>x.id));}
+    if(antes){const [data,cursorId]=antes.split('|');if(!data||!uuid(cursorId))return J({ok:false,erro:'Página inválida.'},400);cond+=' AND (s.criado_em<? OR (s.criado_em=? AND s.id<?))';args.push(data,data,cursorId);}
+    const rows=(await env.DB.prepare("SELECT s.*,c.canal,"+MSG_NOME_SQL_.replace(/\bmsg_conversa\b/g,'c')+" AS nome FROM msg_solicitacao s JOIN msg_conversa c ON c.id=s.conversa_id WHERE "+cond+' ORDER BY s.criado_em DESC,s.id LIMIT 41').bind(...args).all()).results||[];
+    const itens=[];for(const r of rows.slice(0,40)){const fotos=(await env.DB.prepare('SELECT id,mime FROM msg_solicitacao_foto WHERE solicitacao=? ORDER BY em,id').bind(r.id).all()).results||[];itens.push({...r,fotos});}
+    return J({ok:true,itens,proximo:rows.length>40?rows[39].criado_em+'|'+rows[39].id:null});
+  }
+  if(p==='/msg/solicitacoes'&&req.method==='POST'){
+    const d=await req.json().catch(()=>({})),descricao=String(d.descricao||'').trim();
+    if(!uuid(d.id)||!descricao||descricao.length>2000)return J({ok:false,erro:'Escreva a descrição geral com até2000 caracteres.'},400);
+    const [st,c]=await convFicha_(env,Number(d.conversa));if(st)return J({ok:false,erro:c},st);
+    const existente=await env.DB.prepare('SELECT * FROM msg_solicitacao WHERE id=?').bind(d.id).first();
+    if(existente)return existente.criado_por===eu&&existente.conversa_id===c.id&&existente.descricao===descricao?J({ok:true,item:existente,existente:true}):J({ok:false,erro:'A identificação já pertence a outro registro.'},409);
+    await env.DB.prepare("INSERT OR IGNORE INTO msg_solicitacao(id,conversa_id,descricao,criado_por,criado_em,atualizado_em) VALUES(?,?,?,?,?,?)").bind(d.id,c.id,descricao,eu,em,em).run();
+    return J({ok:true,item:await env.DB.prepare('SELECT * FROM msg_solicitacao WHERE id=?').bind(d.id).first()});
+  }
+  const id=url.searchParams.get('solicitacao')||'',foto=url.searchParams.get('foto')||'';
+  if(p==='/msg/solicitacoes/foto'&&['GET','POST'].includes(req.method)){
+    if(!uuid(id)||!uuid(foto))return J({ok:false,erro:'Foto inválida.'},400);
+    const item=await env.DB.prepare('SELECT id FROM msg_solicitacao WHERE id=?').bind(id).first();if(!item)return J({ok:false,erro:'Solicitação não encontrada.'},404);
+    const existente=await env.DB.prepare('SELECT * FROM msg_solicitacao_foto WHERE solicitacao=? AND id=?').bind(id,foto).first();
+    if(req.method==='GET'){if(!existente)return J({ok:false,erro:'Foto não encontrada.'},404);const obj=await env.MIDIA.get(existente.chave);return obj?new Response(obj.body,{headers:{'Content-Type':existente.mime,'Cache-Control':'no-store',...Object.fromEntries(cors(env,req))}}):J({ok:false,erro:'Foto indisponível.'},404);}
+    const bytes=await corpoLimitadoVideo_(req,5*1048576),mime=detectarAnexo_(bytes,'imagem');if(!mime)return J({ok:false,erro:'Use uma foto JPG, PNG ou WebP até5MiB.'},415);
+    const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
+    if(existente)return existente.hash===hash?J({ok:true,existente:true}):J({ok:false,erro:'Esta identificação pertence a outra foto.'},409);
+    const uso=await lerUso(env);if(uso.bytes+bytes.byteLength>limite(env))return J({ok:false,erro:'Armazenamento cheio. A solicitação foi preservada.'},507);
+    const chave=await guardarMidiaMsg_(env,bytes,mime,'solicitacoes');
+    try{const r=await env.DB.prepare('INSERT OR IGNORE INTO msg_solicitacao_foto(id,solicitacao,chave,mime,hash,por,em) SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM msg_solicitacao_foto WHERE solicitacao=?)<20').bind(foto,id,chave,mime,hash,eu,em,id).run();if(!r.meta.changes){await env.MIDIA.delete(chave);const ref=await env.DB.prepare('SELECT hash FROM msg_solicitacao_foto WHERE solicitacao=? AND id=?').bind(id,foto).first();return ref?.hash===hash?J({ok:true,existente:true}):J({ok:false,erro:'A solicitação aceita até20 fotos.'},409);}}catch(e){await env.MIDIA.delete(chave);throw e;}
+    uso.bytes+=bytes.byteLength;uso.arquivos++;await env.CACHE.put('uso',JSON.stringify(uso));return J({ok:true});
+  }
+  if(p==='/msg/solicitacoes/editar'&&req.method==='POST'){
+    const d=await req.json().catch(()=>({})),r=await env.DB.prepare('SELECT * FROM msg_solicitacao WHERE id=?').bind(String(d.id||'')).first();if(!r)return J({ok:false,erro:'Solicitação não encontrada.'},404);
+    if(d.versao!==r.versao)return J({ok:false,erro:'Outra pessoa alterou a solicitação. Atualize antes de salvar; seu texto foi preservado.'},409);
+    const status=d.status??r.status,obs=String(d.obs??r.obs).trim(),descricao=String(d.descricao??r.descricao).trim(),responsavel=d.assumir===true?eu:r.responsavel;
+    if(!['pendente','em_atendimento','aguardando_cliente','atendida'].includes(status)||!descricao||descricao.length>2000||obs.length>2000)return J({ok:false,erro:'Confira a descrição, observações e situação.'},400);
+    const out=await env.DB.batch([env.DB.prepare('UPDATE msg_solicitacao SET descricao=?,status=?,obs=?,responsavel=?,atualizado_em=?,versao=versao+1 WHERE id=? AND versao=?').bind(descricao,status,obs,responsavel,em,r.id,r.versao),env.DB.prepare('INSERT INTO msg_solicitacao_evento(solicitacao,por,em,antes,depois) SELECT ?,?,?,?,? WHERE changes()=1').bind(r.id,eu,em,JSON.stringify(r),JSON.stringify({descricao,status,obs,responsavel}))]);
+    return out[0].meta.changes?J({ok:true,item:await env.DB.prepare('SELECT * FROM msg_solicitacao WHERE id=?').bind(r.id).first()}):J({ok:false,erro:'A solicitação mudou. Reabra para conferir.'},409);
+  }
+  return J({ok:false,erro:'Ação não encontrada.'},404);
+}
+
 async function convFicha_(env, id) {
   const conv = id ? await env.DB.prepare('SELECT id, canal, contato, grupo, ' + MSG_NOME_SQL_ + ' AS nome, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first() : null;
   if (!conv) return [404, 'Conversa não encontrada.'];
@@ -5757,6 +5849,36 @@ async function limparVideoPreparo_(env){
 async function videoUsuario_(env,req,url,J){
   await env.DB.prepare(VIDEO_TABELA_).run();await iniciarPartesVideo_(env);
   const dono=await sha(req.headers.get('X-TK-Whats')||''),perfil=url.pathname.startsWith('/msg/')?'mensageiro':url.searchParams.get('partes')==='1'?'postagens-partes':'postagens';
+  const cols=(await env.DB.prepare('PRAGMA table_info(video_preparo)').all()).results||[];if(!cols.some(x=>x.name==='nome')){try{await env.DB.prepare("ALTER TABLE video_preparo ADD COLUMN nome TEXT NOT NULL DEFAULT ''").run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
+  if(req.method==='GET'&&url.searchParams.get('biblioteca')==='1'){
+    const jobs=(await env.DB.prepare("SELECT id,nome,estado,erro,inicio,duracao,criado FROM video_preparo WHERE dono=? AND perfil=? AND criado>? AND origem<>'' ORDER BY criado,id LIMIT 50").bind(dono,perfil,Date.now()-86400000).all()).results||[];return J({ok:true,videos:jobs});
+  }
+  if(req.method==='POST'&&url.searchParams.get('repetir')==='1'){
+    const id=url.searchParams.get('id')||'',job=await env.DB.prepare('SELECT estado,origem FROM video_preparo WHERE id=? AND dono=? AND perfil=?').bind(id,dono,perfil).first();if(!job||!job.origem)return J({ok:false,erro:'Original indisponível. Selecione novamente o arquivo.'},404);
+    if(job.estado!=='erro')return J({ok:true,id,estado:job.estado});
+    const claim=await env.DB.prepare("UPDATE video_preparo SET estado='limpando',lease='',ate=0 WHERE id=? AND dono=? AND estado='erro'").bind(id,dono).run();if(!claim.meta.changes)return J({ok:false,erro:'O estado mudou. Consulte o andamento.'},409);
+    const arquivos=await env.MIDIA.list({prefix:'video-preparo/'+id+'/',limit:100});for(const x of arquivos.objects)if(x.key!==job.origem)await env.MIDIA.delete(x.key);if(arquivos.truncated)return J({ok:false,erro:'Limpeza em andamento. Tente novamente.'},409);
+    await env.DB.batch([env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id),env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='' WHERE id=? AND estado='limpando'").bind(id)]);return J({ok:true,id,estado:'fila'});
+  }
+
+  if(req.method==='POST'&&url.searchParams.get('excluir')==='1'){
+    const id=url.searchParams.get('id')||'';
+    if(!/^[a-f0-9-]{36}$/.test(id))return J({ok:false,erro:'Vídeo inválido.'},400);
+    const job=await env.DB.prepare('SELECT estado,resultado FROM video_preparo WHERE id=? AND dono=? AND perfil=?').bind(id,dono,perfil).first();
+    if(!job)return J({ok:true});
+    if(job.estado==='processando'||job.estado==='recebendo')return J({ok:false,erro:'Aguarde o processamento terminar antes de excluir o vídeo do servidor.'},409);
+    const claim=await env.DB.prepare("UPDATE video_preparo SET estado='excluindo',lease='',ate=0 WHERE id=? AND dono=? AND perfil=? AND estado NOT IN ('processando','recebendo')").bind(id,dono,perfil).run();
+    if(!claim.meta.changes)return J({ok:false,erro:'O estado mudou. Atualize e tente novamente.'},409);
+    const objects=await env.MIDIA.list({prefix:'video-preparo/'+id+'/',limit:100});
+    for(const o of objects.objects)await env.MIDIA.delete(o.key);
+    if(objects.truncated)return J({ok:false,erro:'Limpeza em andamento. Toque em Excluir novamente.'},409);
+    // Partes copiadas ao rascunho ainda precisam dos hashes para validação no
+    // agendamento. Libera os binários, mantendo apenas os recibos até o prazo
+    // temporário já existente; não altera nenhuma mídia pública da postagem.
+    if(perfil==='postagens-partes'&&(job.estado==='pronto'||job.resultado==='partes'))await env.DB.prepare("UPDATE video_preparo SET estado='pronto',origem='',reservado=0 WHERE id=? AND dono=? AND estado='excluindo'").bind(id,dono).run();
+    else await env.DB.batch([env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id),env.DB.prepare("DELETE FROM video_preparo WHERE id=? AND dono=? AND estado='excluindo'").bind(id,dono)]);
+    return J({ok:true});
+  }
   if(req.method==='POST'){
     const fila=await env.DB.prepare("SELECT COUNT(*) n FROM video_preparo WHERE dono=? AND criado>? AND estado IN ('recebendo','fila','processando')").bind(dono,Date.now()-86400000).first();
     if(fila.n>=3)return J({ok:false,erro:'Há três vídeos em preparação. Aguarde antes de adicionar outro.'},429);
@@ -5766,15 +5888,16 @@ async function videoUsuario_(env,req,url,J){
     const buf=await corpoLimitadoVideo_(req,40*1048576);
     const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(x=>x.toString(16).padStart(2,'0')).join('');
     const hash=await sha('video-v1:'+dono+':'+perfil+':'+inicio+':'+duracao+':'+Math.floor(Date.now()/86400000)+':'+digest);
-    const id=hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32);
-    const existente=await env.DB.prepare('SELECT estado FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();
+    let id=hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32);
+    let existente=await env.DB.prepare('SELECT estado,origem FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();
+    if(existente?.origem===''){id=crypto.randomUUID();existente=null;}
     if(existente&&existente.estado!=='erro')return J({ok:true,id,estado:existente.estado});
     if(existente){const antigos=await env.MIDIA.list({prefix:'video-preparo/'+id+'/',limit:100});for(const o of antigos.objects)if(o.key!=='video-preparo/'+id+'/original')await env.MIDIA.delete(o.key);if(antigos.truncated)return J({ok:false,erro:'Limpando resultados da tentativa anterior. Tente novamente em instantes; o original foi preservado.'},409);await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id).run();await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
     // Reserva atômica: limita temporários e respeita o orçamento de armazenamento existente.
     const uso=await lerUso(env),reserva=buf.byteLength+(perfil==='postagens-partes'?(duracao>0?Math.min(256*1048576,planoPartes(duracao,inicio).length*9961472):256*1048576):VIDEO_PERFIS_[perfil].bytes);
     const teto=Math.min(512*1048576,Math.max(0,limite(env)-uso.bytes));
     const origem='video-preparo/'+id+'/original';
-    const reservado=await env.DB.prepare("INSERT OR IGNORE INTO video_preparo(id,dono,perfil,estado,origem,inicio,duracao,criado,reservado) SELECT ?,?,?,'recebendo',?,?,?,?,? WHERE (SELECT COALESCE(SUM(reservado),0) FROM video_preparo)+?<=? AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND criado>?)<20 AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND estado IN ('recebendo','fila','processando') AND criado>?)<3").bind(id,dono,perfil,origem,inicio,duracao,Date.now(),reserva,reserva,teto,dono,Date.now()-86400000,dono,Date.now()-86400000).run();
+    const reservado=await env.DB.prepare("INSERT OR IGNORE INTO video_preparo(id,dono,perfil,estado,origem,inicio,duracao,criado,reservado,nome) SELECT ?,?,?,'recebendo',?,?,?,?,?,? WHERE (SELECT COALESCE(SUM(reservado),0) FROM video_preparo)+?<=? AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND criado>?)<20 AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND estado IN ('recebendo','fila','processando') AND criado>?)<3").bind(id,dono,perfil,origem,inicio,duracao,Date.now(),reserva,String(url.searchParams.get('nome')||'').replace(/[\u0000-\u001f]/g,' ').slice(0,160),reserva,teto,dono,Date.now()-86400000,dono,Date.now()-86400000).run();
     if(!reservado.meta.changes){const atual=await env.DB.prepare('SELECT estado FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();return atual?J({ok:true,id,estado:atual.estado}):J({ok:false,erro:'Limite de preparação ou espaço temporário atingido. Aguarde a limpeza dos temporários ou use um link para o original.'},429);}
     // Prefixo não aceito pelas rotas públicas /m/ ou /msg/midia.
     try{
@@ -5897,6 +6020,7 @@ export default {
           if ((('respostas' in d) && !direitos.respostas) || (('lerCelular' in d) && !direitos.configuracoes) || (('meuNome' in d)&&!direitos.responder)) return J({ok:false,erro:'Seu acesso não permite alterar esta configuração.'},403);
         }
       }
+      if(p==='/msg/cliente-foto'||p.startsWith('/msg/solicitacoes'))return await rotasSolicitacoes_(env,req,url,J);
       if(p==='/msg/gestor'||p.startsWith('/msg/gestor/'))return await rotasGestor_(env,req,url,J,perms);
       if(['/msg/video-preparar','/post/video-preparar'].includes(p)&&['GET','POST'].includes(req.method))return await videoUsuario_(env,req,url,J);
       if(p==='/msg/tempo-real/ticket'&&req.method==='POST')return J(await ticketsEventos_(env,req));
@@ -7227,6 +7351,27 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const s=registros[tipo],campos={};s.campos.forEach(k=>campos[k]=String(r[k]||''));
     return {tipo,id:r.id,produto:r.produto||'',titulo:tipo==='foto'?(r.produto_nome||'Foto enviada'):tipo==='conferencia'?'Conferência':r.titulo||'Pedido de fotos',por:nomeDe(r[s.dono])||r.enviada_nome||'Pessoa da equipe',em:r[s.em]||'',campos,versao:JSON.stringify(campos)};
   };
+  if(p==='/esteira/caixa/lote'&&['GET','POST'].includes(req.method)){
+    const d=req.method==='POST'?await req.json().catch(()=>({})):Object.fromEntries(url.searchParams),lote=String(d.lote||''),id=Number(d.id)||0;
+    if(!lote&&!id)return J({ok:false,erro:'Escolha o envio de fotos.'},400);
+    const rows=(await env.DB.prepare('SELECT id,lote,enviada_por,descricao_lote FROM est_caixa WHERE '+(lote?'lote=?':'id=?')+' ORDER BY id').bind(lote||id).all()).results||[];
+    if(!rows.length)return J({ok:false,erro:'Este envio não foi encontrado.'},404);
+    if(!admin&&rows.some(x=>estFone_(x.enviada_por)!==eu))return J({ok:false,erro:'Você só pode editar a descrição geral dos próprios envios.'},403);
+    const versao=JSON.stringify(rows),descricao=rows[0].descricao_lote||'';
+    if(req.method==='GET')return J({ok:true,lote,id,descricao,versao,fotos:rows.length});
+    if(d.versao!==versao)return J({ok:false,erro:'O envio mudou. Reabra para conferir antes de salvar.'},409);
+    const texto=String(d.descricao||'').trim().slice(0,300),igual="q.id=json_extract(j.value,'$.id') AND q.enviada_por IS json_extract(j.value,'$.enviada_por') AND q.descricao_lote IS json_extract(j.value,'$.descricao_lote')";
+    const out=await env.DB.batch([env.DB.prepare("WITH guard AS MATERIALIZED(SELECT (SELECT COUNT(*) FROM json_each(?) j JOIN est_caixa q ON "+igual+")=? AND (SELECT COUNT(*) FROM est_caixa WHERE "+(lote?'lote=?':'id=?')+")=? ok) UPDATE est_caixa SET descricao_lote=? WHERE id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND (SELECT ok FROM guard)").bind(versao,rows.length,lote||id,rows.length,texto,versao),env.DB.prepare('INSERT INTO est_registro_edicao(tipo,registro,por,em,antes,depois) SELECT ?,?,?,?,?,? WHERE changes()=?').bind('foto_lote',rows[0].id,eu,agora,versao,JSON.stringify({descricao_lote:texto}),rows.length)]);
+    return out[0].meta.changes===rows.length?J({ok:true,fotos:rows.length}):J({ok:false,erro:'Outra pessoa alterou o envio. Nenhuma descrição foi modificada.'},409);
+  }
+  if(p==='/esteira/caixa/arquivar-proprias'&&req.method==='POST'){
+    if(!admin&&!perms.includes('esteira_arquivar_fotos'))return J({ok:false,erro:'Seu acesso não permite arquivar fotos próprias. Peça ao administrador para liberar em Acessos.'},403);
+    const d=await req.json().catch(()=>({})),ids=estCaixaIds_(d.ids),de=d.restaurar===true?'descartada':'nova',para=d.restaurar===true?'nova':'descartada';if(!ids.length)return J({ok:false,erro:'Escolha as fotos.'},400);
+    const rows=(await env.DB.prepare('SELECT id,enviada_por,status FROM est_caixa WHERE id IN(SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all()).results||[];
+    if(rows.length!==ids.length||rows.some(x=>(!admin&&estFone_(x.enviada_por)!==eu)||x.status!==de))return J({ok:false,erro:'Só podem ser arquivadas as próprias fotos ainda novas. Fotos em uso ou cadastro são preservadas.'},409);
+    const out=await env.DB.batch([env.DB.prepare("UPDATE est_caixa SET status=?,usada_por=?,usada_nome=?,usada_em=? WHERE id IN(SELECT value FROM json_each(?)) AND (SELECT COUNT(*) FROM est_caixa q JOIN json_each(?) j ON q.id=json_extract(j.value,'$.id') WHERE q.enviada_por IS json_extract(j.value,'$.enviada_por') AND q.status=?)=?").bind(para,eu,meuNome,agora,JSON.stringify(ids),JSON.stringify(rows),de,rows.length),env.DB.prepare('INSERT INTO est_registro_edicao(tipo,registro,por,em,antes,depois) SELECT ?,?,?,?,?,? WHERE changes()=?').bind('foto_arquivo',ids[0],eu,agora,JSON.stringify(rows),JSON.stringify({status:para}),rows.length)]);
+    return out[0].meta.changes===rows.length?J({ok:true,marcadas:rows.length}):J({ok:false,erro:'Uma foto mudou. Nenhuma foi arquivada.'},409);
+  }
   if(p==='/esteira/registros'&&req.method==='GET'){
     const tipo=url.searchParams.get('tipo')||'foto',s=Object.prototype.hasOwnProperty.call(registros,tipo)?registros[tipo]:null;
     if(!s)return J({ok:false,erro:'Escolha um tipo de registro válido.'},400);
@@ -7435,7 +7580,7 @@ async function rotasEsteira_(env, req, url, J, perms) {
       : (await env.DB.prepare('SELECT * FROM est_caixa WHERE enviada_por=? ORDER BY id DESC LIMIT 100').bind(eu).all()).results || [];
     const cont = await env.DB.prepare("SELECT SUM(CASE WHEN status IN ('nova','cadastro') THEN 1 ELSE 0 END) AS novas, SUM(CASE WHEN status='usada' THEN 1 ELSE 0 END) AS usadas, SUM(CASE WHEN status='descartada' THEN 1 ELSE 0 END) AS descartadas FROM est_caixa" + (gestorFotos ? '' : ' WHERE enviada_por=?')).bind(...(gestorFotos ? [] : [eu])).first() || {};
     const rep = await estCaixaRepetidas_(env, rows);
-    return J({ ok: true, gestor: gestorFotos, ver: gestorFotos ? ver : 'minhas', contagem: { novas: cont.novas || 0, usadas: cont.usadas || 0, descartadas: cont.descartadas || 0 }, itens: rows.map((x) => estCaixaSaida_(x, nomeDe, eu, rep[x.id] ? Object.assign({}, rep[x.id], { por: nomeDe(rep[x.id].por) || 'alguém da equipe' }) : null)) });
+    return J({ ok: true, gestor: gestorFotos, podeArquivarProprias:admin||perms.includes('esteira_arquivar_fotos'), ver: gestorFotos ? ver : 'minhas', contagem: { novas: cont.novas || 0, usadas: cont.usadas || 0, descartadas: cont.descartadas || 0 }, itens: rows.map((x) => estCaixaSaida_(x, nomeDe, eu, rep[x.id] ? Object.assign({}, rep[x.id], { por: nomeDe(rep[x.id].por) || 'alguém da equipe' }) : null)) });
   }
   if (p.startsWith('/esteira/caixa/') && !gestorFotos) return J({ ok: false, erro: 'Só o administrador total e quem cadastra peças usam as fotos recebidas.' }, 403);
   if (p === '/esteira/caixa/itens' && req.method === 'GET') {                // a Gestão abre o cadastro já com estas fotos

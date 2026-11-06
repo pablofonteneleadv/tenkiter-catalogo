@@ -7,7 +7,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
 (async () => {
   const tmp = path.join(os.tmpdir(), 'tk-video-partes.mjs');
   fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '../instagram-worker/worker.js')) + '\nexport {videoClaims_,videoUsuario_,videoRunner_,autorizarVideoRunner_};export function simularAvanco_(f){avancarPostagem=f;}');
-  const W = await import(tmp);
+  const W = await import(require('node:url').pathToFileURL(tmp).href);
   const cache = new Map(), kv = new Map();
   global.caches = { default: { async match(r) { return cache.has(r.url) ? Response.json(cache.get(r.url)) : undefined; }, async put(r, v) { cache.set(r.url, await v.json()); } } };
   let envios = [];
@@ -78,11 +78,14 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
     const key='202610/'+String(i).padStart(20,'0')+'.mp4';await env.MIDIA.put(key,bytes);
     posts.push({tipo:'story',canal:'whatsapp',quando:future,midias:[{url:'https://midia.test/m/'+key,tipo:'video'}],serie:{preparo:prep.id,ordem:i,total:3}});
   }
+  const biblioteca=await(await call(route+'&biblioteca=1')).json();assert(biblioteca.videos.some(x=>x.id===prep.id),'Biblioteca recupera os originais desta conta');
+  const bibliotecaOutra=await W.videoUsuario_(env,new Request('https://worker.test'+route+'&biblioteca=1',{headers:outro}),new URL('https://worker.test'+route+'&biblioteca=1'),J);assert.equal((await bibliotecaOutra.json()).videos.length,0,'Biblioteca não mistura contas');
   assert.equal((await W.videoUsuario_(env,new Request('https://worker.test'+route+'&id='+prep.id,{headers:outro}),new URL('https://worker.test'+route+'&id='+prep.id),J)).status,404,'Outros usuários não recuperam partes');
   assert.equal((await chamar('/post','POST',{posts:posts.slice(0,2)})).status,400,'Não cadastrar sequência incompleta');
   assert.equal((await chamar('/post','POST',{posts:[posts[1],posts[0],posts[2]]})).status,400,'Não cadastrar partes fora de ordem');
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM postagem').get().n,0,'Falha não deixa meia sequência');
   const forged=JSON.parse(JSON.stringify(posts));forged[2].midias[0].url=posts[0].midias[0].url;assert.equal((await chamar('/post','POST',{posts:forged})).status,400,'Hashes impedem usar outra mídia para obter exceção');
+  assert.equal((await call(route+'&excluir=1&id='+prep.id,'POST','{}')).status,200);assert.equal((await env.MIDIA.list({prefix:'video-preparo/'+prep.id+'/'})).objects.length,0,'Excluir biblioteca libera todos os binários');assert.equal(sqlite.prepare('SELECT reservado FROM video_preparo WHERE id=?').get(prep.id).reservado,0);
   const accepted=await chamar('/post','POST',{posts});assert.equal(accepted.status,200,JSON.stringify(accepted));assert.equal(new Set(accepted.j.quandos).size,1,'Partes compartilham agendamento inicial');
   const rows=sqlite.prepare('SELECT * FROM postagem ORDER BY id').all();assert.deepEqual(rows.map(r=>r.parte),[1,2,3]);assert.equal(new Set(rows.map(r=>r.serie)).size,1);
   const calls=[];let pending=true;

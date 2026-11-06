@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.55.8 — vídeos, seleção imediata e solicitações de clientes
+
+- Aba Vídeos separa upload/preparo do rascunho; Recuperar vídeos inclui o original completo e permite limpar a biblioteca sem apagar cópias em uso.
+- Postar seleção agora mantém originais em sequência por confirmação, afasta a fila comum e protege envios incertos. Horário da seleção permanece disponível.
+- Esteira edita a descrição geral do envio e arquiva/restaura fotos próprias com permissão específica.
+- Mensageiro registra fotos pela ficha e pedidos com fotos, descrição, responsável, situação e observações internas; reaproveitamento na resposta prepara um rascunho.
+
 ## 7.54.5 — aparência aprovada na auditoria
 
 - Aplica o comparativo aprovado: ferramentas mais legíveis, descrições de14px, alvos de toque de44px e atalho Ferramentas do gestor.

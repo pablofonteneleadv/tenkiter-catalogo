@@ -7,7 +7,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { assert(x.le
 (async () => {
   const tmp = path.join(os.tmpdir(), 'tk-fila-limites.mjs');
   fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '../instagram-worker/worker.js')) + '\nexport {videoClaims_,videoUsuario_,videoRunner_,autorizarVideoRunner_};export function simularAvanco_(f){avancarPostagem=f;}');
-  const W = await import(tmp);
+  const W = await import(require('node:url').pathToFileURL(tmp).href);
   const cache = new Map(), kv = new Map();
   global.caches = { default: { async match(r) { return cache.has(r.url) ? Response.json(cache.get(r.url)) : undefined; }, async put(r, v) { cache.set(r.url, await v.json()); } } };
   let envios = [];

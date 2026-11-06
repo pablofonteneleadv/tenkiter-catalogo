@@ -8,7 +8,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
 (async () => {
   const tmp = path.join(os.tmpdir(), 'tk-video-preparo.mjs');
   fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '../instagram-worker/worker.js')) + '\nexport {videoClaims_,videoUsuario_,videoRunner_,autorizarVideoRunner_};');
-  const W = await import(tmp);
+  const W = await import(require('node:url').pathToFileURL(tmp).href);
   const cache = new Map(), kv = new Map();
   global.caches = { default: { async match(r) { return cache.has(r.url) ? Response.json(cache.get(r.url)) : undefined; }, async put(r, v) { cache.set(r.url, await v.json()); } } };
   let envios = [];
@@ -62,8 +62,11 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   require('node:child_process').execFileSync('ffmpeg',['-nostdin','-v','error','-f','lavfi','-i','color=c=orange:s=160x240:r=24','-t','4','-c:v','libx264','-threads','2','-y',mediaFile]);
   const real=fs.readFileSync(mediaFile);const postJob=await (await call('/post/video-preparar?inicio=0&duracao=4','POST',real)).json();assert(postJob.ok);
   const next=(await (await call('/internal/video?acao=proximo','POST',undefined,auth)).json()).job;assert.equal(next.id,postJob.id);
+  assert.equal((await call('/post/video-preparar?excluir=1&id='+next.id,'POST','{}')).status,409,'Não excluir durante processamento');
   const nextAuth={...auth,'X-Video-Lease':next.lease};const output=await call('/internal/video?acao=resultado&id='+next.id,'POST',real,nextAuth);assert.equal(output.status,200);assert((await output.json()).ok);
   const download=await call('/post/video-preparar?arquivo=1&id='+next.id);assert.equal(download.status,200);assert.equal(Buffer.from(await download.arrayBuffer()).compare(real),0);assert.equal(download.headers.get('Cache-Control'),'no-store');
+  assert.equal((await W.videoUsuario_(env,new Request('https://worker.test/post/video-preparar?excluir=1&id='+next.id,{method:'POST',headers:outro}),new URL('https://worker.test/post/video-preparar?excluir=1&id='+next.id),J)).status,200);assert(sqlite.prepare('SELECT id FROM video_preparo WHERE id=?').get(next.id),'Outra conta não exclui o vídeo');
+  assert.equal((await call('/post/video-preparar?excluir=1&id='+next.id,'POST','{}')).status,200);assert.equal((await call('/post/video-preparar?id='+next.id)).status,404);assert(!sqlite.prepare('SELECT id FROM video_preparo WHERE id=?').get(next.id));
   fs.rmSync(folder,{recursive:true,force:true});assert.equal(envios.length,0,'Resultado pronto não publica nem envia');
   const met=await call('/msg/metricas?canal=todos');assert.equal(met.status,200);const data=await met.json();assert.equal(data.cobertura.parcial,false);
   const when=new Date(Date.now()-600000).toISOString();
