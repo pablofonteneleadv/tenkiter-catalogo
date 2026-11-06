@@ -723,7 +723,7 @@
          nunca encostar na última linha (acontecia em 320px com texto em 130%). */
       /* A aba nunca encolhe abaixo de 3.4em (a palavra mais longa cabe em 2 linhas em
          qualquer zoom); se o conjunto passar da largura, a barra rola na horizontal. */
-      .sheet-mensagens .ms-abas .ms-aba{flex:1 1 0;min-width:0;white-space:normal;line-height:1.15;font-size:.71rem;padding:3px 2px 7px;overflow-wrap:break-word;display:flex;align-items:center;justify-content:center;text-align:center}
+      .sheet-mensagens .ms-abas .ms-aba{flex:1 1 0;min-width:0;white-space:normal;line-height:1.15;font-size:.71rem;padding:3px 2px 7px;overflow-wrap:anywhere;display:flex;align-items:center;justify-content:center;text-align:center}
       /* Em 320px os quatro rótulos não cabem com 10px por aba: a fonte desce um passo
          (nunca abaixo de 10px, que ainda é legível) para nenhuma palavra quebrar no meio. */
       @media(max-width:400px){.sheet-mensagens .ms-abas .ms-aba{font-size:.62rem;letter-spacing:-.015em;padding:0 1px}}
