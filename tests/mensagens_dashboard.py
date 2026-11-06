@@ -16,7 +16,8 @@ with sync_playwright() as p:
  for width,height in [(320,700),(390,844),(412,915),(1440,900)]:
   ctx=b.new_context(viewport={'width':width,'height':height},is_mobile=width<600,has_touch=width<600,service_workers='block');ctx.add_init_script(SESSION);ctx.add_init_script('window.TK_MENSAGENS_POLL_MS=400;');st=install(ctx,perms=PERMS_ALL,versao='4.28');S=st['ig'].setdefault('msg',mock_msg.novo_estado());pg=ctx.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.on('dialog',lambda d:d.accept())
   pg.goto(BASE+'admin.html');pg.wait_for_timeout(1500);pg.click('#details-ferramentas > summary');pg.locator('#btn-abrir-mensagens').evaluate("e=>e.scrollIntoView({block:'center'})");pg.click('#btn-abrir-mensagens');pg.wait_for_selector('#ms-abas .ms-aba')
-  assert pg.locator('#ms-abas .ms-aba').count()==4
+  assert pg.locator('#ms-abas .ms-aba[data-aba]').count()==4
+  assert pg.locator('#ms-abas [data-ms=solicitacoes][aria-haspopup=dialog]').count()==1
   pg.click('#ms-abas [data-aba=todos]');aplicar(pg,canal='whatsapp1');pg.wait_for_selector('[data-ms=abrir][data-id="1"]');assert valor(pg,'canal')=='whatsapp1'
   pg.fill('#ms-busca','entregam');pg.wait_for_timeout(800);assert pg.locator('#ms-lista .ms-conv').count()==1;pg.fill('#ms-busca','');pg.wait_for_timeout(600)
   pg.click('[data-ms=abrir][data-id="1"]');pg.wait_for_selector('#ms-fio .ms-bolha')
