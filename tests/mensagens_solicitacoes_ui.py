@@ -43,7 +43,26 @@ with sync_playwright() as p:
   agir(pg.get_by_role('tab',name='Solicitações de clientes',exact=True));pg.locator('.ms-solicitacao').wait_for();assert pg.locator('.ms-solicitacao').count()==1;agir(pg.locator('.ms-solicitacao-fotos summary'));agir(pg.get_by_role('button',name='Anexar à resposta',exact=True));pg.wait_for_function("document.querySelector('#ms-stage img')?.naturalWidth>0");assert not st['ig']['msg']['envios'];
   if width<700:agir(pg.get_by_role('button',name='Voltar para as conversas',exact=True))
   agir(pg.get_by_role('tab',name='Solicitações de clientes',exact=True));pg.get_by_label('Situação das solicitações',exact=True).select_option('atendida');pg.get_by_text('Nenhuma solicitação neste filtro.',exact=True).wait_for()
-  pg.get_by_label('Situação das solicitações',exact=True).select_option('abertas');pg.locator('.ms-solicitacao').wait_for();agir(pg.get_by_text('Acompanhar solicitação',exact=True));pg.get_by_label('Observações internas',exact=True).fill('Rascunho interno preservado ao fechar');agir(pg.get_by_role('button',name='Fechar Solicitações de clientes',exact=True));agir(pg.get_by_role('tab',name='Solicitações de clientes',exact=True));pg.locator('.ms-solicitacao').wait_for();agir(pg.get_by_text('Acompanhar solicitação',exact=True));assert pg.get_by_label('Observações internas',exact=True).input_value()=='Rascunho interno preservado ao fechar';pg.once('dialog',lambda d:d.accept());agir(pg.get_by_role('button',name='Descartar edição local',exact=True));pg.locator('.ms-solicitacao').wait_for();agir(pg.get_by_text('Acompanhar solicitação',exact=True));assert pg.get_by_label('Observações internas',exact=True).input_value()=='Confirmar a cor antes de separar.'
+  pg.get_by_label('Situação das solicitações',exact=True).select_option('abertas');pg.locator('.ms-solicitacao').wait_for()
+  agir(pg.get_by_text('Acompanhar solicitação',exact=True));pg.get_by_label('Observações internas',exact=True).fill('Rascunho interno preservado ao fechar')
+  agir(pg.get_by_role('button',name='Fechar Solicitações de clientes',exact=True));agir(pg.get_by_role('tab',name='Solicitações de clientes',exact=True));pg.locator('.ms-solicitacao').wait_for()
+  agir(pg.get_by_text('Acompanhar solicitação',exact=True));assert pg.get_by_label('Observações internas',exact=True).input_value()=='Rascunho interno preservado ao fechar'
+  # Outra alteração salva enquanto há edição local: descartar deve recarregar a versão atual.
+  atual=json.loads(api('/qa/estado')[1])['solicitacoes'][0]
+  esperado='Cor conferida por outra atendente.'
+  code,_,_=api('/msg/solicitacoes/editar',json.dumps({'id':atual['id'],'versao':atual['versao'],'status':atual['status'],'obs':esperado}).encode(),{'X-TK-Whats':'5588999999999','X-TK-Sessao':'tk3.teste','Content-Type':'application/json'},'POST');assert code==200
+  recargas=[]
+  def reter_recarga(route):recargas.append(route)
+  ctx.route('**/msg/solicitacoes?**',reter_recarga)
+  pg.once('dialog',lambda d:d.accept());agir(pg.get_by_role('button',name='Descartar edição local',exact=True))
+  for _ in range(50):
+   if recargas:break
+   pg.wait_for_timeout(100)
+  assert len(recargas)==1
+  assert not pg.locator('.ms-solicitacao').count(),'Formulário descartado ainda disponível durante a recarga'
+  forward(recargas.pop());ctx.unroute('**/msg/solicitacoes?**',reter_recarga)
+  pg.locator('.ms-solicitacao').wait_for();agir(pg.get_by_text('Acompanhar solicitação',exact=True))
+  assert pg.get_by_label('Observações internas',exact=True).input_value()==esperado
   pg.add_script_tag(path=str(Path(__file__).with_name('axe.min.js')));violations=pg.evaluate("async()=>{const r=await axe.run(document.querySelector('#overlay-mensagens'));return r.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>v.id)}");assert not violations,violations;assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth');assert not errors,errors
   ctx.close();print('OK',width,'ficha automática, fotos, pedido, acompanhamento e rascunho sem envio')
  browser.close()
