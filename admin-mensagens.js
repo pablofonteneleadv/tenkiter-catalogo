@@ -2555,7 +2555,7 @@
       dono:()=>contaAtual_===contaSessao_(getSessao())?contaAtual_:'',mudou:pintarRegistros_,erro:t=>aviso_(t),
       concluiu:j=>solicitacoesRascunhos_.delete(j.chave),
       executar:async(j,guardar,conferir)=>{
-        if(j.modo!=='foto'&&!j.registrado){conferir();j.etapa='Registrando pedido…';await guardar();const r=await worker_('/msg/solicitacoes','POST',{id:j.id,conversa:j.conv.id,descricao:j.descricao});conferir();if(!r.ok)throw Error(r.erro||'Não consegui registrar o pedido.');j.registrado=true;await guardar();}
+        if(j.modo!=='foto'&&!j.registrado){conferir();j.etapa='Registrando pedido…';await guardar();conferir();const r=await worker_('/msg/solicitacoes','POST',{id:j.id,conversa:j.conv.id,descricao:j.descricao});conferir();if(!r.ok)throw Error(r.erro||'Não consegui registrar o pedido.');j.registrado=true;await guardar();}
         for(const [i,f]of j.fotos.entries()){if(f.salva)continue;conferir();j.etapa='Guardando foto '+(i+1)+' de '+j.fotos.length+'…';await guardar();const blob=await reduzirImagem_(f.file);if(!blob)throw Error('Não consegui ler '+f.nome+'.');conferir();
           const rota=j.modo==='foto'?'/msg/cliente-foto?'+new URLSearchParams({conversa:j.conv.id,op:f.id}):'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:j.id,foto:f.id});await enviarFotoRegistro_(rota,blob);conferir();f.salva=true;delete f.file;await guardar();
         }
