@@ -2225,7 +2225,19 @@ function atualizarBibliotecaVideos_(v){
   document.querySelectorAll('[data-vlib-status="'+v.id+'"]').forEach(e=>e.textContent=v.partes?'Pronto · '+v.partes.length+' parte(s)':v.preparacao.texto);
   document.querySelectorAll('[data-vlib-progresso="'+v.id+'"]').forEach(e=>{e.hidden=v.preparacao.pct==null;if(!e.hidden)e.value=v.preparacao.pct;});
 }
-function redesenharBibliotecaVideos_(){if(abaAtual==='videos'||abaAtual==='nova'&&recuperarVideosAberto_)redesenharPreparo_();}
+function redesenharBibliotecaVideos_(v){
+  if(!(abaAtual==='videos'||abaAtual==='nova'&&recuperarVideosAberto_))return;
+  const atual=document.querySelector('[data-vlib-item="'+v.id+'"]');
+  if(!atual)return;
+  const painel=atual.closest('section'),embutido=painel.classList.contains('po-video-recuperar');
+  const temp=document.createElement('div');temp.innerHTML=htmlBibliotecaVideos_(embutido);
+  const novo=temp.querySelector('[data-vlib-item="'+v.id+'"]');
+  if(!novo)return;
+  // Atualiza o resultado, conservando o seletor, a duração e os outros vídeos em uso.
+  atual.firstElementChild.replaceChildren(...novo.firstElementChild.childNodes);
+  const resumo=painel.querySelector('[data-vlib-resumo]');
+  if(resumo)resumo.textContent=temp.querySelector('[data-vlib-resumo]').textContent;
+}
 function iniciarVideoBiblioteca_(v){
   if(videosAtivos_.has(v.id)||v.partes||v.preparacao.fase==='erro')return;
   const c=new AbortController(),conta=videosConta_,ss=sessao();videosAtivos_.set(v.id,c);
@@ -2236,8 +2248,8 @@ function iniciarVideoBiblioteca_(v){
     const arquivos=await TKVideoPreparation.prepararEmFundo(v.file,{forcarServidor:true,base:INSTAGRAM_URL,conta,headers:{'X-TK-Whats':ss.whatsapp,'X-TK-Sessao':ss.sessao},estado:v.preparacao,signal:c.signal,salvar,progresso:()=>{atualizarBibliotecaVideos_(v);if(fase!==v.preparacao.fase){fase=v.preparacao.fase;salvar().catch(()=>{});}}});
     if(c.signal.aborted||conta!==videosConta_)return;
     v.partes=arquivos.map(f=>({file:f,serie:f.tkParte||null}));v.preparacao.fase='pronto';v.preparacao.texto='Pronto';v.preparacao.pct=null;
-    await salvar();redesenharBibliotecaVideos_();
-  }catch(e){if(e.name!=='AbortError'&&conta===videosConta_){v.preparacao.fase='erro';v.preparacao.texto=e.message||'Não foi possível preparar. Tente novamente.';v.preparacao.pct=null;try{await videoLocal_(v.id,v);}catch(_){}redesenharBibliotecaVideos_();}}
+    await salvar();redesenharBibliotecaVideos_(v);
+  }catch(e){if(e.name!=='AbortError'&&conta===videosConta_){v.preparacao.fase='erro';v.preparacao.texto=e.message||'Não foi possível preparar. Tente novamente.';v.preparacao.pct=null;try{await videoLocal_(v.id,v);}catch(_){}redesenharBibliotecaVideos_(v);}}
   finally{if(videosAtivos_.get(v.id)===c)videosAtivos_.delete(v.id);}})();
 }
 async function adicionarBibliotecaVideos_(arquivos){
@@ -2257,9 +2269,9 @@ async function adicionarBibliotecaVideos_(arquivos){
 function htmlBibliotecaVideos_(embutido=false){
   const lista=videosBiblioteca_,prontos=lista.filter(v=>v.partes),pendentes=lista.length-prontos.length;
   let h=embutido?'<section aria-label="Recuperar vídeos" class="po-video-recuperar">':'<section class="po-passo"><h4>Vídeos</h4><p class="po-ajuda">Envie os originais aqui. Quando estiverem prontos, use Recuperar vídeos em Nova postagem.</p><label for="po-video-duracao" class="po-ajuda">Máximo por parte (segundos)</label><input id="po-video-duracao" type="number" min="3" max="30" value="30" style="display:block;width:96px;min-height:48px;margin-bottom:8px"><label for="po-videos-arq" style="display:block;font-weight:700">Adicionar vídeos</label><input id="po-videos-arq" type="file" accept="video/mp4,video/webm,video/quicktime" multiple style="max-width:100%"><p class="po-ajuda">Mantenha a página aberta até aparecer “Original recebido”. Depois disso, o servidor continua preparando mesmo com o painel fechado. Os originais recebidos podem ser recuperados nesta conta por até 24 horas. As cópias prontas também ficam neste aparelho até você excluir.</p>';
-  h+='<p class="po-ajuda" role="status">'+(videosCarregando_?'Carregando vídeos…':prontos.length+' pronto(s) · '+pendentes+' em preparação ou com ação pendente')+'</p>';
+  h+='<p class="po-ajuda" role="status" data-vlib-resumo>'+(videosCarregando_?'Carregando vídeos…':prontos.length+' pronto(s) · '+pendentes+' em preparação ou com ação pendente')+'</p>';
   if(!lista.length&&!videosCarregando_)h+='<p class="po-ajuda">Nenhum vídeo na biblioteca. Adicione os originais na aba Vídeos.</p>';
-  h+=lista.map(v=>'<div class="po-video-item"><div style="min-width:0;flex:1"><b style="overflow-wrap:anywhere">'+esc(v.nome)+'</b><p class="po-ajuda" data-vlib-status="'+v.id+'">'+esc(v.partes?'Pronto · '+v.partes.length+' parte(s)':v.preparacao.texto)+'</p><progress data-vlib-progresso="'+v.id+'" max="100" aria-label="Envio de '+esc(v.nome)+'" '+(v.preparacao.pct==null?'hidden':'value="'+v.preparacao.pct+'"')+' style="width:100%"></progress>'+previaBiblioteca_(v)+(v.usado?'<small>Incluído em um rascunho. Pode excluir a cópia da biblioteca.</small>':'')+(v.partes&&embutido?'<label class="po-video-selecao"><input type="checkbox" data-vlib-sel="'+v.id+'" '+(videosSelecionados_.has(v.id)?'checked':'')+'> Selecionar vídeo'+(v.partes.length>1?' com todas as partes':'')+'</label>':'')+(v.preparacao.fase==='erro'&&!v.partes?'<button type="button" data-vlib-repetir="'+v.id+'">Tentar novamente</button>':'')+'</div><button type="button" data-vlib-excluir="'+v.id+'" aria-label="Excluir '+esc(v.nome)+'">Excluir</button></div>').join('');
+  h+=lista.map(v=>'<div class="po-video-item" data-vlib-item="'+esc(v.id)+'"><div style="min-width:0;flex:1"><b style="overflow-wrap:anywhere">'+esc(v.nome)+'</b><p class="po-ajuda" data-vlib-status="'+v.id+'">'+esc(v.partes?'Pronto · '+v.partes.length+' parte(s)':v.preparacao.texto)+'</p><progress data-vlib-progresso="'+v.id+'" max="100" aria-label="Envio de '+esc(v.nome)+'" '+(v.preparacao.pct==null?'hidden':'value="'+v.preparacao.pct+'"')+' style="width:100%"></progress>'+previaBiblioteca_(v)+(v.usado?'<small>Incluído em um rascunho. Pode excluir a cópia da biblioteca.</small>':'')+(v.partes&&embutido?'<label class="po-video-selecao"><input type="checkbox" data-vlib-sel="'+v.id+'" '+(videosSelecionados_.has(v.id)?'checked':'')+'> Selecionar vídeo'+(v.partes.length>1?' com todas as partes':'')+'</label>':'')+(v.preparacao.fase==='erro'&&!v.partes?'<button type="button" data-vlib-repetir="'+v.id+'">Tentar novamente</button>':'')+'</div><button type="button" data-vlib-excluir="'+v.id+'" aria-label="Excluir '+esc(v.nome)+'">Excluir</button></div>').join('');
   h+=embutido?'<button type="button" data-a="videos-incluir" '+(videosIncluindo_?'disabled':'')+'>Incluir selecionados na postagem</button> <button type="button" data-a="videos-fechar">Fechar lista</button>':'<button type="button" data-a="videos-nova">Voltar para Nova postagem</button>';
   return h+'</section>';
 }

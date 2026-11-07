@@ -59,11 +59,15 @@ with tempfile.TemporaryDirectory() as tmp:
    pg.get_by_role('tab',name='Vídeos',exact=True).click()
    assert pg.locator('.po-video-item').count()==2 and len(jobs)==2,'Recarregar perdeu ou reenviou original'
    if width==320:pg.evaluate("document.documentElement.style.fontSize='130%'")
+   pg.evaluate("window.__entradaVideo=document.querySelector('#po-videos-arq')")
+   pg.locator('#po-video-duracao').fill('17')
    fail.add('primeiro');ready.add('segundo')
    pg.wait_for_function("[...document.querySelectorAll('[data-vlib-status]')].filter(e=>e.textContent.startsWith('Pronto')).length===1",timeout=15000)
    assert len(jobs)==2,'Falha temporária provocou reupload'
    fail.clear();ready.add('primeiro')
    pg.wait_for_function("[...document.querySelectorAll('[data-vlib-status]')].every(e=>e.textContent.startsWith('Pronto'))",timeout=15000)
+   assert pg.evaluate("window.__entradaVideo===document.querySelector('#po-videos-arq')&&__entradaVideo.isConnected"),'Conclusão do preparo substituiu o seletor de arquivos'
+   assert pg.locator('#po-video-duracao').input_value()=='17','Conclusão do preparo apagou a duração em edição'
    pg.screenshot(path=str(OUT/f'videos-biblioteca-prontos-{width}.png'))
    pg.get_by_role('tab',name='Nova postagem',exact=True).click()
    assert pg.locator('#po-leg').input_value()=='Legenda preservada na biblioteca'
