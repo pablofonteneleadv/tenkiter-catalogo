@@ -37,6 +37,14 @@ definir('85993333333',['Esteira'],EU);
 run('var __realVerificar=acVerificar_;acVerificar_=function(){return {ok:true,usuario:{permissoes:["gerir_acessos"]}}};');
 let equipe=run('acEsteiraEquipe_({whatsapp:"85991047615",sessao:"fake"})');
 ok(equipe.ok&&equipe.equipe.length===1&&equipe.equipe[0].whats==='85993333333','rodízio recebe somente pessoas com Esteira ativa',equipe);
+if(run('AC_PERMISSOES.some(function(p){return p.chave==="esteira_arquivar_fotos"})')){
+  ok(!permsDe('85993333333').esteira_arquivar_fotos,'arquivar fotos próprias não é concedido por padrão');
+  r=call({nome:'Arquivo inválido',permissoes:['cliente','esteira_arquivar_fotos'],revisao:rev()});ok(!r.ok,'arquivar exige acesso à Esteira');
+  r=call({nome:'Fotos com arquivo',permissoes:['cliente','esteira','esteira_arquivar_fotos'],revisao:rev()});ok(r.ok,'permissão de arquivo pode ser definida no modelo');
+  definir('85993333333',['Fotos com arquivo'],EU);ok(permsDe('85993333333').esteira_arquivar_fotos,'modelo concede arquivo próprio explicitamente');
+  equipe=run('acEsteiraEquipe_({whatsapp:"85991047615",sessao:"fake"})');ok(equipe.equipe[0].arquivarFotos===1,'equipe transporta permissão de arquivo');
+  definir('85993333333',['Esteira'],EU);ok(!permsDe('85993333333').esteira_arquivar_fotos,'retirar modelo revoga arquivo sem retirar Esteira');
+}
 aba.d[3][4]='Inativo';run('memoriaPessoasLimpar_()');
 equipe=run('acEsteiraEquipe_({whatsapp:"85991047615",sessao:"fake"})');ok(equipe.equipe.length===0,'pessoa inativa sai do rodízio');
 run('exigirPerm_=function(){return {ok:false,erro:"Sem permissão"}};');

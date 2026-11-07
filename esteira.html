@@ -1142,6 +1142,7 @@
       const g = el('section', 'cx-lote'); const i0 = its[0];
       const cab = el('div', 'cx-lote-cab'); cab.append(el('b', '', i0.por + ' · ' + dataBR(i0.em) + (its.length > 1 ? ' · ' + its.length + ' fotos' : '')));
       if (i0.descricaoLote) cab.append(el('p', 'cx-desc', '“' + i0.descricaoLote + '”'));
+      if(its.every(i=>i.minha)||EU?.admin)cab.append(bt('Editar descrição geral','leve',()=>editarDescricaoLote(i0)));
       if (i0.produto) { const x = CATALOGO && CATALOGO.get(String(i0.produto)); cab.append(el('small', 'muted', 'Peça indicada: ' + ((x && x.Nome) || i0.produtoNome || 'Peça ' + i0.produto) + (x && ehInativo(x) ? ' (arquivada)' : ''))); }
       g.append(cab);
       const grade = el('div', 'cx-grade');
@@ -1163,6 +1164,7 @@
         if (i.status === 'cadastro') info.append(el('small', 'muted', 'Aberto' + (i.usadaPor ? ' por ' + i.usadaPor : '') + ' em ' + dataBR(i.usadaEm) + '.'));
         card.append(info);
         if(i.minha||EU?.admin)card.append(bt('Editar descrição','leve',()=>abrirRegistros('foto',i.id)));
+        if(r.podeArquivarProprias&&(i.minha||EU?.admin)&&['nova','descartada'].includes(i.status))card.append(bt(i.status==='nova'?'Arquivar foto':'Restaurar foto','leve',async()=>{if(!confirm(i.status==='nova'?'Arquivar esta foto enviada por engano? Ela poderá ser restaurada.':'Restaurar esta foto para a caixa?'))return;const y=await srv('/esteira/caixa/arquivar-proprias',{ids:[i.id],restaurar:i.status==='descartada'});if(!y.ok)return stB.diga(y.erro||'Não consegui alterar a foto.','erro');depois('Foto '+(i.status==='nova'?'arquivada':'restaurada')+'.');}));
         if (gestor && (i.status === 'nova' || i.status === 'cadastro')) {
           const b = el('button', 'cx-sel', 'Escolher'); b.type = 'button'; b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Escolher a foto ' + (r.itens.indexOf(i) + 1));
           b.onclick = () => { if (sel.has(i.id)) sel.delete(i.id); else sel.add(i.id); b.setAttribute('aria-pressed', String(sel.has(i.id))); b.textContent = sel.has(i.id) ? '✓ Escolhida' : 'Escolher'; card.classList.toggle('sel', sel.has(i.id)); atualizarBarra(); };
@@ -1269,6 +1271,22 @@
   function foraDasListas(campos) {
     const nomes = campos.filter(([, c]) => c && c.foraDaLista && c.foraDaLista()).map(([n]) => n);
     return nomes.length ? 'Escolha ' + nomes.join(', ') + ' da lista da Gestão (o que está marcado “fora da lista” não pode ser salvo).' : '';
+  }
+  function editarDescricaoLote(item){
+    abrirFolha('esteira-descricao-lote','Descrição geral do envio',({corpo,fechar})=>{
+      const st=linhaStatus();corpo.append(st);let atual=null;
+      const [label,input]=campoTexto('Descrição geral','',{area:true,max:300});input.setAttribute('aria-label','Descrição geral');input.disabled=true;
+      const salvar=bt('Salvar descrição geral','laranja',async()=>{
+        if(!atual)return;salvar.disabled=true;const texto=input.value;
+        const r=await srv('/esteira/caixa/lote',{lote:item.lote,id:item.id,versao:atual.versao,descricao:texto});
+        if(!corpo.isConnected)return;salvar.disabled=false;
+        if(!r.ok)return st.diga(r.erro||'Não consegui salvar. Seu texto foi preservado.','erro');
+        fluidez.invalidar();
+        if(input.value!==texto){atual=await srv('/esteira/caixa/lote?'+new URLSearchParams({lote:item.lote||'',id:item.id}));st.diga('Salvo. Há texto novo para salvar.','ok');return;}
+        fechar();$('fotos-status')?.diga?.('Descrição geral salva para todas as fotos do envio. Use Atualizar fotos para rever.','ok');
+      });salvar.disabled=true;corpo.append(label,st,acoes(salvar,bt('Cancelar','leve',fechar)));
+      srv('/esteira/caixa/lote?'+new URLSearchParams({lote:item.lote||'',id:item.id})).then(r=>{if(!corpo.isConnected)return;if(!r.ok)return st.diga(r.erro||'Não consegui carregar o envio.','erro');atual=r;input.value=r.descricao;input.disabled=false;salvar.disabled=false;st.diga(r.fotos+' foto(s) deste envio. As descrições individuais serão preservadas.');input.focus();});
+    });
   }
   function abrirRegistros(tipo='foto',id=0){
     abrirFolha('esteira-registros',EU?.admin?'Registros da equipe':'Meus registros',({corpo})=>{

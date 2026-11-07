@@ -26,7 +26,17 @@ with tempfile.TemporaryDirectory() as temp:
     pg.goto(BASE+'admin.html');pg.wait_for_timeout(1600);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-postagens');pg.wait_for_timeout(400)
    abrir();pg.get_by_role('button',name='✍️ Livre',exact=True).click()
    pg.evaluate("""()=>{window.TKVideoPreparation={...TKVideoPreparation,prepararEmFundo:async(file,op)=>{const bytes=await file.arrayBuffer();return [1,2].map(ordem=>{const f=new File([bytes],file.name+'-parte-'+ordem+'.mp4',{type:'video/mp4'});f.tkParte={preparo:file.name,ordem,total:2};return f;});}};}""")
-   pg.set_input_files('#po-livre-arq',[str(root/f'video{n}.mp4') for n in [1,2,3]])
+   pg.get_by_role('tab',name='Vídeos',exact=True).click()
+   pg.set_input_files('#po-videos-arq',[str(root/f'video{n}.mp4') for n in [1,2,3]])
+   try:pg.wait_for_function("document.querySelectorAll('[data-vlib-status]').length===3&&[...document.querySelectorAll('[data-vlib-status]')].every(e=>e.textContent.startsWith('Pronto'))")
+   except Exception:
+    print(width,pg.locator('#po-corpo').inner_text(),errors,flush=True)
+    raise
+   pg.get_by_role('tab',name='Nova postagem',exact=True).click()
+   assert pg.locator('[data-lm=x]').count()==0,'A biblioteca não inclui vídeos sem seleção'
+   pg.get_by_role('button',name='Recuperar vídeos',exact=True).click()
+   for cb in pg.locator('[data-vlib-sel]').all():cb.check()
+   pg.get_by_role('button',name='Incluir selecionados na postagem',exact=True).click()
    pg.wait_for_function("document.querySelectorAll('[data-lm=x]').length===6&&!document.querySelector('[data-preparo]')")
    rule=pg.locator('.po-partes-regra');assert '3 vídeos originais' in rule.inner_text() and '6 partes' in rule.inner_text()
    interval=pg.get_by_role('group',name='Intervalo entre mídias originais');assert '3 vídeos originais' in interval.inner_text();assert '6 Stories' not in pg.inner_text('#po-corpo')

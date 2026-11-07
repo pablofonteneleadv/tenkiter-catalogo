@@ -553,6 +553,7 @@
       .ms-rel-sec summary { min-height: 44px; display: flex; align-items: center; padding: 0 12px; font-weight: 700; cursor: pointer; }
       .ms-rel-lista { margin: 0; padding: 0 12px 10px 28px; font-size: 0.82rem; } .ms-rel-lista li { margin: 4px 0; overflow-wrap: anywhere; } .ms-cfg-tit.ms-cfg-tit1 { margin-top: 0; }
       /* conversa */
+      .ms-solicitacoes-corpo input[type=file]{min-height:48px;max-width:100%}.ms-solicitacoes-corpo input[type=file]::file-selector-button{min-height:44px;padding:8px 12px}.ms-solicitacoes-corpo{padding:12px 14px;box-sizing:border-box}.ms-solicitacoes-corpo>.ms-copia,.ms-solicitacoes-corpo textarea{width:100%;box-sizing:border-box;min-height:48px}.ms-solicitacoes-corpo button{white-space:normal;max-width:100%;min-height:44px}.ms-cliente-atalhos{display:flex;gap:8px;flex-wrap:wrap;padding:0 12px;border-bottom:1px solid #e6e1d6}.ms-cliente-atalhos .ms-btn{background:transparent;border:0;text-decoration:underline;text-underline-offset:3px;min-height:44px;padding:4px 0;font-size:.8rem;color:#5c5349}.ms-solicitacao{padding:12px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere}.ms-solicitacao h4{margin:0 0 8px}.ms-solicitacao button,.ms-solicitacao summary{min-height:44px}.ms-solicitacao-arquivo{display:flex;align-items:center;gap:8px;overflow-wrap:anywhere}.ms-solicitacao-arquivo span{flex:1;min-width:0}.ms-solicitacao select,.ms-solicitacao textarea{width:100%;box-sizing:border-box;min-height:44px}.ms-solicitacao-fotos details{margin:8px 0}
       .ms-cab { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #e6e1d6; background: #fff; }
       .ms-cab .ms-quem { flex: 1; min-width: 0; } .ms-cab .ms-quem b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ms-cab .ms-quem span { display: block; font-size: 0.76rem; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-voltar { display: inline-flex; } @media (min-width: 860px) { .ms-voltar { display: none; } }
@@ -722,16 +723,16 @@
          nunca encostar na última linha (acontecia em 320px com texto em 130%). */
       /* A aba nunca encolhe abaixo de 3.4em (a palavra mais longa cabe em 2 linhas em
          qualquer zoom); se o conjunto passar da largura, a barra rola na horizontal. */
-      .sheet-mensagens .ms-abas .ms-aba{flex:1 0 auto;min-width:3.4em;white-space:normal;line-height:1.15;font-size:.71rem;padding:3px 2px 7px;overflow-wrap:break-word;display:flex;align-items:center;justify-content:center;text-align:center}
+      .sheet-mensagens .ms-abas .ms-aba{flex:1 1 0;min-width:0;white-space:normal;line-height:1.15;font-size:.71rem;padding:0 2px;overflow-wrap:anywhere;display:flex;flex-direction:column;gap:0;align-items:center;justify-content:center;text-align:center}
       /* Em 320px os quatro rótulos não cabem com 10px por aba: a fonte desce um passo
          (nunca abaixo de 10px, que ainda é legível) para nenhuma palavra quebrar no meio. */
       @media(max-width:400px){.sheet-mensagens .ms-abas .ms-aba{font-size:.62rem;letter-spacing:-.015em;padding:0 1px}}
       /* Alvo de toque: 44px é o piso do projeto para qualquer controle. Uma regra global
          (acabamento) baixava a aba para 40px; aqui o piso é reafirmado para a barra. */
-      .sheet-mensagens .ms-abas .ms-aba[role=tab]{min-height:44px!important;height:44px;box-sizing:border-box;border:0;position:relative}
+      .sheet-mensagens .ms-abas .ms-aba[role=tab]{min-height:44px!important;height:auto;box-sizing:border-box;border:0;position:relative}
       /* v7.40.35: o badge não entra no fluxo do texto — sobreposto no canto, o rótulo
          ganha a largura inteira da aba e não quebra por causa do número. */
-      .sheet-mensagens .ms-abas .ms-pt{position:absolute;top:3px;right:4px;min-width:15px;height:15px;line-height:15px;padding:0 3px;font-size:.6rem}
+      .sheet-mensagens .ms-abas .ms-pt{position:static;flex:none;box-sizing:border-box;min-width:15px;height:15px;line-height:11px!important;padding:0 3px;font-size:.6rem}
       /* Canal virou filtro (select) na linha de chips: três células, a mesma altura de antes. */
       .sheet-mensagens .ms-filtros .ms-chip.ms-canal-sel{appearance:none;-webkit-appearance:none;text-align:center;text-align-last:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555d4f;font-weight:600}
       .ms-aba-dica-lista{margin:0 0 10px;color:#5c6455;font-size:.86rem;line-height:1.4}
@@ -981,6 +982,7 @@
       b.appendChild(p);
       abas.appendChild(b);
     });
+    const solicitacoes=botao('ms-aba','Solicitações','solicitacoes');solicitacoes.setAttribute('role','tab');solicitacoes.setAttribute('aria-selected','false');solicitacoes.setAttribute('aria-haspopup','dialog');solicitacoes.setAttribute('aria-label','Solicitações de clientes');abas.appendChild(solicitacoes);
     const pendente=abas.querySelector('[data-aba=pendentes]'),n=c.pendentes;
     let nivel=0,desde='';
     if(n>0){for(const [k]of CANAIS){const x=contagens?.[k];if(!x?.esperando)continue;const inicio=Date.parse(x.esperando_desde),min=Math.max(0,(Date.now()-inicio)/60000),meta=Math.max(1,Number(x.meta_resposta_min)||15);if(Number.isFinite(inicio)){nivel=Math.max(nivel,min>=4*meta?2:min>=meta?1:0);if(!desde||inicio<Date.parse(desde))desde=x.esperando_desde;}}
@@ -2517,6 +2519,76 @@
   function sairFicha_(){return !fichaMudou_()||confirm('Você mudou a ficha e ainda não salvou. Sair sem salvar?')}
   async function salvarFicha_(b){if(!aberta||!$('ms-fi-nome'))return;const gen=$('ms-gaveta')?.dataset.gen,conv=aberta.id,perfil=capturarFicha_(),corpo={conversa:conv,nome:perfil.nome,cidade:perfil.cidade,preferencias:perfil.preferencias.texto,perfil};corpo.tamanhos=perfil.preferencias.tamanhos.join(' · ').slice(0,60);b.disabled=true;const r=await worker_('/msg/ficha','POST',corpo);b.disabled=false;if(!r.ok){aviso_(r.erro||'Não foi possível salvar a ficha agora. Tente de novo.');b.focus();return}if(!aberta||aberta.id!==conv||$('ms-gaveta')?.dataset.gen!==gen)return;aberta.tamanhos=r.ficha.tamanhos||'';if(r.nome){aberta.nome=r.nome;const q=$('ms-conversa').querySelector('.ms-quem b');if(q)q.textContent=r.nome;await carregarLista(true)}const fx=$('ms-etq-faixa');if(fx)fx.replaceWith(faixaEtq_(aberta));fichaOrig_=null;fecharGaveta_();aviso_('Ficha salva.');const q=document.querySelector('#ms-conversa .ms-quem');if(q)q.focus()}
 
+  const solicitacoesRascunhos_=new Map(),solicitacoesEdicoes_=new Map();
+  const SOL_STATUS_={pendente:'Pendente',em_atendimento:'Em atendimento',aguardando_cliente:'Aguardando cliente',atendida:'Atendida'};
+  function atalhosCliente_(c){
+    const w=el('div','ms-cliente-atalhos');w.setAttribute('aria-label','Registros do cliente');
+    if(podeFerramenta_('responder'))w.append(botao('ms-btn','Foto do cliente','cliente-foto'),botao('ms-btn','Pedido do cliente','cliente-pedido'));
+    return w;
+  }
+  async function enviarFotoRegistro_(rota,blob){
+    const s=getSessao();if(!s)throw Error('Entre novamente para continuar.');
+    const r=await fetch(INSTAGRAM_URL+rota,{method:'POST',headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},body:blob,signal:AbortSignal.timeout(60000)});
+    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.erro||'Não consegui guardar a foto. Tente novamente.');return j;
+  }
+  function abrirRegistroCliente_(modo){
+    if(!aberta||aberta.grupo)return;const conv={...aberta},conta=contaSessao_(getSessao()),epoca=epocaConta_,key=conta+'|'+conv.id+'|'+modo;
+    let r=solicitacoesRascunhos_.get(key);if(!r){r={id:crypto.randomUUID(),descricao:'',fotos:[]};solicitacoesRascunhos_.set(key,r);}
+    const corpo=gaveta_(modo==='foto'?'Foto do cliente':'Pedido do cliente');if(!corpo)return;corpo.classList.add('ms-solicitacoes-corpo');
+    corpo.append(el('p','ms-ficha-quem',rotuloContato(conv)),el('p','ms-auto-exp',modo==='foto'?'Os dados vêm da ficha. As fotos ficam disponíveis em Fotos de clientes para a equipe de postagens.':'Registre fotos e uma descrição geral. A solicitação fica no Mensageiro para acompanhar e responder pela conversa.'));
+    const ta=el('textarea','ms-copia');ta.rows=4;ta.maxLength=2000;ta.value=r.descricao;ta.disabled=!!r.registrado;ta.setAttribute('aria-label','Descrição geral do pedido');ta.placeholder='O que o cliente procura? Inclua tamanho, cor ou prazo quando informado.';ta.addEventListener('input',()=>r.descricao=ta.value);
+    if(modo!=='foto'){const label=el('label','ms-ficha-rot','Descrição geral do pedido');ta.id='ms-solicitacao-descricao';label.htmlFor=ta.id;corpo.append(label,ta);}
+    const input=el('input');input.type='file';input.multiple=true;input.accept='image/jpeg,image/png,image/webp';input.id='ms-registro-fotos';input.style.maxWidth='100%';
+    const label=el('label','ms-ficha-rot','Fotos'),lista=el('div'),st=el('p','ms-auto-exp');label.htmlFor=input.id;st.setAttribute('role','status');
+    const pintar=()=>{lista.replaceChildren();for(const f of r.fotos){const linha=el('div','ms-solicitacao-arquivo');linha.append(el('span','',f.nome+(f.salva?' · Guardada':'')));const tirar=el('button','ms-btn','Retirar');tirar.type='button';tirar.disabled=!!f.salva;tirar.onclick=()=>{r.fotos=r.fotos.filter(x=>x!==f);pintar();};linha.append(tirar);lista.append(linha);}};
+    input.onchange=()=>{for(const f of Array.from(input.files||[])){if(r.fotos.length>=20){st.textContent='Cada registro aceita até 20 fotos.';break;}if(!/^image\/(jpeg|png|webp)$/.test(f.type)){st.textContent='Use fotos JPG, PNG ou WebP.';continue;}r.fotos.push({id:crypto.randomUUID(),file:f,nome:f.name});}input.value='';pintar();};
+    const salvar=el('button','ms-btn prim',modo==='foto'?'Guardar fotos do cliente':'Registrar pedido');salvar.type='button';
+    salvar.onclick=async()=>{
+      if(salvar.disabled)return;if(!r.fotos.length&&modo==='foto'){st.textContent='Escolha as fotos do cliente.';return;}if(modo!=='foto'&&!r.descricao.trim()){st.textContent='Escreva a descrição geral do pedido.';ta.focus();return;}
+      if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))return;
+      salvar.disabled=true;input.disabled=true;ta.disabled=true;st.textContent='Guardando…';
+      try{
+        if(modo!=='foto'){const j=await worker_('/msg/solicitacoes','POST',{id:r.id,conversa:conv.id,descricao:r.descricao});if(!j.ok)throw Error(j.erro);r.registrado=true;}
+        for(const f of r.fotos){if(f.salva)continue;if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))throw Error('A conta mudou. Entre na conta original para continuar.');st.textContent='Guardando '+f.nome+'…';const blob=await reduzirImagem_(f.file);if(!blob)throw Error('Não consegui ler '+f.nome+'.');
+          if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))throw Error('A conta mudou. O envio foi interrompido.');
+          const rota=modo==='foto'?'/msg/cliente-foto?'+new URLSearchParams({conversa:conv.id,op:f.id}):'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:r.id,foto:f.id});await enviarFotoRegistro_(rota,blob);f.salva=true;}
+        solicitacoesRascunhos_.delete(key);if(epoca!==epocaConta_||!corpo.isConnected)return;st.textContent=modo==='foto'?'Fotos guardadas com os dados da ficha. Nenhuma mensagem foi enviada.':'Pedido registrado. Nenhuma mensagem foi enviada.';lista.replaceChildren();input.value='';salvar.hidden=true;
+        const ver=el('button','ms-btn',modo==='foto'?'Fechar':'Ver pedidos deste cliente');ver.type='button';ver.onclick=()=>modo==='foto'?fecharGaveta_():abrirSolicitacoes_(conv.id);corpo.append(ver);
+      }catch(e){if(corpo.isConnected){st.textContent=(r.registrado?'O pedido foi preservado. ':'')+(e.message||'Não consegui concluir.')+' Tente novamente para continuar das fotos que faltam.';pintar();}}
+      finally{salvar.disabled=false;input.disabled=false;ta.disabled=!!r.registrado;}
+    };
+    corpo.append(label,input,lista,st,salvar);pintar();
+  }
+  async function fotoSolicitacao_(id,foto){
+    const s=getSessao(),r=await fetch(INSTAGRAM_URL+'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:id,foto}),{headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},signal:AbortSignal.timeout(30000)});if(!r.ok)throw Error('Não consegui abrir a foto. Tente novamente.');return r.blob();
+  }
+  async function fecharSolicitacaoParaConversa_(){const g=$('ms-gaveta');if(g){g.remove();await desempilharEsperando_('ms-gaveta');}}
+  async function responderSolicitacao_(item,foto){
+    if(!podeFerramenta_('responder'))return;const epoca=epocaConta_;
+    let arquivo;if(foto)try{arquivo=new File([await fotoSolicitacao_(item.id,foto)],'pedido-cliente.jpg',{type:'image/jpeg'});}catch(e){aviso_(e.message);return;}
+    if(epoca!==epocaConta_)return;await fecharSolicitacaoParaConversa_();if(epoca!==epocaConta_)return;
+    if(aberta?.id!==item.conversa_id){if(canal!=='todos'&&canal!==item.canal){canal=item.canal;desenharFiltros();desenharAbas();await carregarLista(true);}await abrirConversa(item.conversa_id,false);}
+    else if(espiando)await abrirConversa(item.conversa_id,false);
+    if(epoca!==epocaConta_||aberta?.id!==item.conversa_id)return;fecharGaveta_();
+    if(arquivo){if(anexoPend&&!confirm('Substituir o anexo atual pela foto deste pedido?'))return;await escolherArquivo_(arquivo);}
+    else{const ta=$('ms-texto');if(ta){ta.value=[ta.value.trim(),item.descricao].filter(Boolean).join('\n\n');ta.dispatchEvent(new Event('input',{bubbles:true}));ta.focus();}}
+    aviso_('Rascunho pronto para conferir. Toque em Enviar quando quiser responder.');
+  }
+  async function abrirSolicitacoes_(conversa=0){
+    const corpo=gaveta_('Solicitações de clientes');if(!corpo)return;corpo.classList.add('ms-solicitacoes-corpo');
+    const filtro=el('select','ms-copia');filtro.setAttribute('aria-label','Situação das solicitações');for(const [v,t]of [['abertas','Em aberto'],...Object.entries(SOL_STATUS_),['todas','Todas']]){const op=el('option','',t);op.value=v;filtro.append(op);}
+    const lista=el('div'),st=el('p','ms-auto-exp');st.setAttribute('role','status');corpo.append(filtro,st,lista);let geracao=0;
+    const carregar=async(antes='')=>{const g=++geracao;st.textContent='Carregando solicitações…';const r=await worker_('/msg/solicitacoes?'+new URLSearchParams({status:filtro.value,...(conversa?{conversa}:{}),...(antes?{antes}:{})}));if(g!==geracao||!corpo.isConnected)return;if(!r.ok){st.textContent=r.erro||'Não consegui carregar.';const tentar=el('button','ms-btn','Tentar carregar solicitações novamente');tentar.type='button';tentar.onclick=()=>{tentar.remove();carregar(antes);};lista.append(tentar);return;}st.textContent=r.itens.length?'':'Nenhuma solicitação neste filtro.';if(!antes)lista.replaceChildren();for(const item of r.itens){const card=el('section','ms-solicitacao');card.append(el('h4','',item.nome||'Cliente'),el('p','ms-auto-exp ms-solicitacao-resumo',(NOME_CANAL[item.canal]||item.canal)+' · '+hora(item.criado_em)+' · '+SOL_STATUS_[item.status]),el('p','ms-solicitacao-descricao',item.descricao));
+      if(item.responsavel)card.append(el('small','',item.responsavel===String(getSessao()?.whatsapp)?'Responsável: você':'Responsável: '+(item.responsavel_nome||'Pessoa da equipe')));
+      const fotos=el('div','ms-solicitacao-fotos');for(const f of item.fotos||[]){const detalhes=el('details');detalhes.append(el('summary','','Foto '+((item.fotos||[]).indexOf(f)+1)));const img=el('div');detalhes.append(img);let urlLocal='';detalhes.ontoggle=async()=>{if(!detalhes.open||urlLocal)return;try{const blob=await fotoSolicitacao_(item.id,f.id);if(!img.isConnected)return;urlLocal=URL.createObjectURL(blob);img.innerHTML='<img alt="Foto do pedido do cliente" '+atribSrc(urlLocal)+' style="display:block;max-width:100%;max-height:240px;object-fit:contain">';img.firstElementChild.onload=()=>URL.revokeObjectURL(urlLocal);}catch(e){st.textContent=e.message;}};if(podeFerramenta_('responder')){const b=el('button','ms-btn','Anexar à resposta');b.type='button';b.onclick=()=>responderSolicitacao_(item,f.id);detalhes.append(b);}fotos.append(detalhes);}card.append(fotos);
+      const abrir=el('button','ms-btn','Abrir conversa');abrir.type='button';abrir.onclick=async()=>{const epoca=epocaConta_;await fecharSolicitacaoParaConversa_();if(epoca!==epocaConta_)return;if(canal!=='todos'&&canal!==item.canal){canal=item.canal;desenharFiltros();desenharAbas();await carregarLista(true);}await abrirConversa(item.conversa_id,true);};card.append(abrir);
+      if(podeFerramenta_('responder')){const usar=el('button','ms-btn','Usar descrição na resposta');usar.type='button';usar.onclick=()=>responderSolicitacao_(item);card.append(usar);const editar=el('details');editar.append(el('summary','','Acompanhar solicitação'));const sit=el('select','ms-copia');sit.setAttribute('aria-label','Situação do pedido');for(const [v,t]of Object.entries(SOL_STATUS_)){const op=el('option','',t);op.value=v;sit.append(op);}sit.value=item.status;const descricao=el('textarea','ms-copia');descricao.rows=3;descricao.maxLength=2000;descricao.value=item.descricao;descricao.setAttribute('aria-label','Descrição geral do pedido');const obs=el('textarea','ms-copia');obs.rows=3;obs.value=item.obs;obs.maxLength=2000;obs.setAttribute('aria-label','Observações internas');const chaveLocal=contaSessao_(getSessao())+'|'+item.id,local=solicitacoesEdicoes_.get(chaveLocal);let versaoLocal=local?.versao||item.versao;if(local){descricao.value=local.descricao;sit.value=local.status;obs.value=local.obs;}const lembrar=()=>solicitacoesEdicoes_.set(chaveLocal,{versao:versaoLocal,descricao:descricao.value,status:sit.value,obs:obs.value});descricao.addEventListener('input',lembrar);obs.addEventListener('input',lembrar);sit.addEventListener('change',lembrar);const rot=el('label','ms-ficha-rot','Observações internas');const status=el('p','ms-auto-exp');status.setAttribute('role','status');
+        const salvar=el('button','ms-btn prim','Salvar acompanhamento'),assumir=el('button','ms-btn','Assumir solicitação');salvar.type=assumir.type='button';const guardar=async(assume)=>{if(salvar.disabled)return;salvar.disabled=assumir.disabled=true;const enviado={id:item.id,versao:versaoLocal,status:sit.value,obs:obs.value,descricao:descricao.value,assumir:assume};const r=await worker_('/msg/solicitacoes/editar','POST',enviado);if(!card.isConnected)return;salvar.disabled=assumir.disabled=false;if(!r.ok){status.textContent=r.erro||'Não consegui salvar. Seu texto foi preservado.';return;}Object.assign(item,r.item);versaoLocal=item.versao;if(obs.value===enviado.obs&&descricao.value===enviado.descricao&&sit.value===enviado.status)solicitacoesEdicoes_.delete(chaveLocal);else lembrar();card.querySelector('.ms-solicitacao-descricao').textContent=item.descricao;card.querySelector('.ms-solicitacao-resumo').textContent=(NOME_CANAL[item.canal]||item.canal)+' · '+hora(item.criado_em)+' · '+SOL_STATUS_[item.status]+(item.responsavel?' · Responsável atribuído':'');status.textContent=obs.value!==enviado.obs||descricao.value!==enviado.descricao||sit.value!==enviado.status?'Salvo. Há novas alterações ainda não salvas.':'Acompanhamento salvo. Nenhuma mensagem foi enviada.';};salvar.onclick=()=>guardar(false);assumir.onclick=()=>guardar(true);const descartar=el('button','ms-btn','Descartar edição local');descartar.type='button';descartar.onclick=()=>{if(confirm('Descartar o texto não salvo desta solicitação e carregar o registro atual?')){solicitacoesEdicoes_.delete(chaveLocal);lista.replaceChildren();carregar();}};if(local)status.textContent='Edição local ainda não salva.';editar.append(el('p','ms-ficha-rot','Descrição geral'),descricao,sit,rot,obs,status,salvar,assumir,descartar);card.append(editar);}
+      lista.append(card);
+    }if(r.proximo){const mais=el('button','ms-btn','Mais solicitações');mais.type='button';mais.onclick=()=>{mais.remove();carregar(r.proximo);};lista.append(mais);}};
+    filtro.onchange=()=>carregar();await carregar();
+  }
+
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab'+(!c.grupo?' ms-com-relacionamento':''));
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
@@ -2555,6 +2627,7 @@
     if ($('ms-gaveta')) fecharGaveta_();
     const pai = $('ms-conversa'); pai.textContent = '';
     pai.appendChild(cabecalhoConversa(c));
+    if(!c.grupo)pai.appendChild(atalhosCliente_(c));
     if (!c.grupo) pai.appendChild(faixaEtq_(c));
     if (c.outro_id) {
       const f = el('div', 'ms-faixa ambos'); f.appendChild(el('span', '', 'Esta pessoa também está falando pelo ' + NOME_CANAL[outroCanal_(c)] + '.'));
@@ -3591,6 +3664,8 @@
     if(a==='cortesia-rever'){b.disabled=true;const r=await worker_('/msg/cortesia/rever','POST',{mensagem:Number(b.dataset.id)});if(!r.ok){aviso_(r.erro||'Não consegui revisar a mensagem.');if(b.isConnected)b.disabled=false;return;}aviso_('Mensagem tratada como solicitação. Nenhuma resposta foi enviada.');if(aberta)await abrirConversa(aberta.id,espiando);await carregarLista(true);return;}
     if(a==='lista-dividida'||a==='lista-continua'){if($('ms-gaveta')){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}salvarVisualLista_(a==='lista-dividida'?'dividida':'continua');$('ms-nav')?.querySelector('[data-ms=menu-geral]')?.focus();return;}
     if(a==='gestor'){await abrirGestao_();return;}
+    if(a==='solicitacoes'){await abrirSolicitacoes_();return;}
+    if(a==='cliente-foto'||a==='cliente-pedido'){if(!podeFerramenta_('responder'))return;abrirRegistroCliente_(a==='cliente-foto'?'foto':'pedido');return;}
     if($('ms-gaveta')?.dataset.tipo==='ficha'&&!b.closest('#ms-gaveta')&&fichaMudou_()){if(!sairFicha_())return;fichaOrig_=null;}
     if($('ms-gaveta')?.dataset.tipo==='mais'&&a!=='gaveta-fechar'){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}
     const recurso = recursoAcao_(a); if (recurso && !podeFerramenta_(recurso)) { aviso_('Seu acesso não permite usar esta ferramenta.'); return; }

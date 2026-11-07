@@ -196,5 +196,20 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const pagina1=await registros(BIA,'foto'),pagina2=(await A(BIA,'GET','/esteira/registros?tipo=foto&antes='+pagina1.proximo)).j;
   chk('paginação mantém acesso aos registros antigos sem repetir',pagina1.itens.length===40&&pagina2.itens.length===4&&!pagina2.itens.some(x=>pagina1.itens.some(y=>x.id===y.id)));
   }
+  {
+    const lot=(await env.DB.prepare("SELECT lote FROM est_caixa WHERE enviada_por=? AND lote<>'' LIMIT 1").bind(BIA).first()).lote;
+    const snap=await A(BIA,'GET','/esteira/caixa/lote?lote='+encodeURIComponent(lot));chk('autora consulta descrição geral do envio',snap.j.ok&&snap.j.fotos>=1,snap.j);
+    chk('outra funcionária não consulta lote alheio',(await A(IARA,'GET','/esteira/caixa/lote?lote='+encodeURIComponent(lot))).r.status===403);
+    const before=(await env.DB.prepare('SELECT descricao FROM est_caixa WHERE lote=? ORDER BY id').bind(lot).all()).results;
+    const saved=await A(BIA,'POST','/esteira/caixa/lote',{lote:lot,versao:snap.j.versao,descricao:'Descrição geral corrigida'});chk('edição geral atualiza todas as fotos do lote',saved.j.ok&&(await env.DB.prepare("SELECT COUNT(DISTINCT descricao_lote) n FROM est_caixa WHERE lote=?").bind(lot).first()).n===1,saved.j);
+    chk('edição geral preserva descrições individuais',JSON.stringify(before)===JSON.stringify((await env.DB.prepare('SELECT descricao FROM est_caixa WHERE lote=? ORDER BY id').bind(lot).all()).results));
+    chk('edição geral velha é recusada integralmente',(await A(BIA,'POST','/esteira/caixa/lote',{lote:lot,versao:snap.j.versao,descricao:'velha'})).r.status===409);
+    const own=(await env.DB.prepare("INSERT INTO est_caixa(op,url,enviada_por,enviada_em,status) VALUES('arquivar-teste',?,?,?,'nova')").bind(U(299),BIA,agoraIso).run()).meta.last_row_id;
+    chk('funcionária sem permissão não arquiva',(await A(BIA,'POST','/esteira/caixa/arquivar-proprias',{ids:[own]})).r.status===403);
+    usuarios[BIA].permissoes.push('esteira_arquivar_fotos');
+    chk('permissão explícita permite arquivar própria foto',(await A(BIA,'POST','/esteira/caixa/arquivar-proprias',{ids:[own]})).j.ok);
+    chk('arquivamento é reversível',(await A(BIA,'POST','/esteira/caixa/arquivar-proprias',{ids:[own],restaurar:true})).j.ok);
+    chk('saber ID alheio não permite arquivar',(await A(BIA,'POST','/esteira/caixa/arquivar-proprias',{ids:[ids[U(4)]]})).r.status===409);
+  }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); console.log('FALHAS=' + falhas.length); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

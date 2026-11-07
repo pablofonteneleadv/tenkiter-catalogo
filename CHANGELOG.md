@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.55.8 — vídeos, seleção imediata e solicitações de clientes
+
+- Aba Vídeos separa upload/preparo do rascunho; Recuperar vídeos inclui o original completo e permite limpar a biblioteca sem apagar cópias em uso.
+- Postar seleção agora mantém originais em sequência por confirmação, afasta a fila comum e protege envios incertos. Horário da seleção permanece disponível.
+- Esteira edita a descrição geral do envio e arquiva/restaura fotos próprias com permissão específica.
+- Mensageiro registra fotos pela ficha e pedidos com fotos, descrição, responsável, situação e observações internas; reaproveitamento na resposta prepara um rascunho.
+
 ## 7.54.5 — aparência aprovada na auditoria
 
 - Aplica o comparativo aprovado: ferramentas mais legíveis, descrições de14px, alvos de toque de44px e atalho Ferramentas do gestor.
@@ -11,6 +18,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
+
+## [7.56.1] - 2026-11-07
+
+- Conclui a biblioteca de vídeos, recuperação por conta e seleção imediata de mídias do PR383, preservando as proteções de pausa, limite e recibos da7.56.0.
+- Seleção imediata impedida por erro, falta de conexão ou limite deixa a fila comum seguir, sem liberar a próxima mídia selecionada nem repetir a que falhou.
+- Corrige a atualização da fila e das fotos que reconstruía a aba Vídeos, removendo o seletor de arquivos durante o uso. Mantém o alvo de48px e os rascunhos.
+- Integra solicitações de clientes com fotos privadas e resposta como rascunho, sem envio automático. Arquivo de fotos próprias permanece sujeito à permissão explícita do RH.
+
 
 ## [7.56.0] - 2026-11-06
 

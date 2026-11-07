@@ -44,6 +44,7 @@ bucket_name = "tenkiter-midia"
 [ai]
 binding = "AI"
 
+# Secret GITHUB_DISPATCH_TOKEN: credencial GitHub restrita ao repositório, Actions:write, para disparar wafly-transcode.yml. Opcional; nunca declarar o valor em [vars].
 # Secret WAFLY_GRUPO_CLIENTES: JSON privado {instance, token, clientToken, phone}.
 # Secret IG_APP_SECRET: segredo do app da Meta (valida a assinatura dos webhooks de mensagens do Instagram). Sem ele, o Instagram fica "não ligado" no módulo Mensagens.
 # Secret WAME_STATUS_2: JSON privado {"key":"<chave da instância Wame do WhatsApp 2>"} (opcional "base"). Sem ele, o WhatsApp Status 2 aparece como não configurado.

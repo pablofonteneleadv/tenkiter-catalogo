@@ -48,6 +48,7 @@ OPCIONAIS = {
     "WAFLY_GRUPO_CLIENTES",  # JSON privado: credenciais e destino fixo, preservado como secret.
     "IG_APP_SECRET",  # segredo do app Meta: valida a assinatura dos webhooks de DM do Instagram (módulo Mensagens).
     "WAME_STATUS_2",  # JSON privado: chave da instância Wame (WhatsApp 2), preservado como secret.
+    "GITHUB_DISPATCH_TOKEN", # segredo opcional para acordar somente o preparo de vídeos; nunca em [vars].
     "FREECONVERT_API_KEY",  # segredo externo; cadastrar no Cloudflare, nunca em [vars].
 }
 

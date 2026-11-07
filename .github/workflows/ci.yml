@@ -151,6 +151,11 @@ jobs:
 
       - name: Preparação de vídeo sem envio
         run: |
+          # O mirror HTTP do Azure levou mais de 30 min para baixar 59 MB.
+          # Preserva pacotes, versões e assinaturas do Ubuntu, usando seu espelho HTTPS.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           python3 tests/transcode_profiles.py
@@ -213,9 +218,12 @@ jobs:
           # Instagram vai por texto, e o historico guarda o vinculo.
           node tests/worker_citar_mensagem.js
           node tests/worker_equipe_inicio.js
+          node tests/worker_solicitacoes.js
+          node tests/worker_video_disparo.js
           node tests/worker_video_preparo.js
           node tests/worker_video_partes.js
           node tests/worker_fila_originais.js
+          node tests/worker_postagens_coordenacao.js
           node tests/worker_postagens_limites.js
           # v7.56: fila de Postagens à prova de falhas (pausa do Instagram, vigia, série parada, token, enviando preso)
           node tests/worker_postagens_prova_falhas.js
@@ -259,6 +267,17 @@ jobs:
         run: |
           python3 -m pip install playwright pillow
           python3 -m playwright install chromium
+
+      - name: Biblioteca de vídeos e recuperação no Chromium
+        if: github.event_name == 'pull_request'
+        env:
+          TK_BASE: http://localhost:8773/
+        run: |
+          curl -fsSL --retry 3 https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js -o tests/axe.min.js
+          python3 -m http.server 8773 > /tmp/videos-http.log 2>&1 &
+          video_server_pid=$!
+          trap 'kill "$video_server_pid"' EXIT
+          python3 tests/postagens_video_status.py
 
       - name: Pedido idempotente e compatibilidade com backend antigo
         if: github.event_name == 'pull_request'
@@ -311,7 +330,15 @@ jobs:
           python3 tests/mensagens_layout_compacto.py
           python3 tests/mensagens_lista_secoes_ui.py
           python3 tests/mensagens_relacionamento_ui.py
-          python3 tests/postagens_video_status.py
+          node tests/fixtures/solicitacoes_server.cjs > /tmp/solicitacoes-sqlite.log 2>&1 &
+          solicitacoes_pid=$!
+          trap 'kill "$tecido_server_pid" "$solicitacoes_pid"' EXIT
+          for tentativa in $(seq 1 20); do curl -fsS http://127.0.0.1:8774/qa/estado > /dev/null && break; sleep 1; done
+          python3 tests/mensagens_solicitacoes_ui.py
+          python3 tests/esteira_lote_arquivo_ui.py
+          python3 tests/postagens_agora_selecao_ui.py
+          kill "$solicitacoes_pid"
+          trap 'kill "$tecido_server_pid"' EXIT
           python3 tests/video_upload_feedback.py
           python3 tests/video_lote_limites.py
           python3 tests/video_camera_90s.py

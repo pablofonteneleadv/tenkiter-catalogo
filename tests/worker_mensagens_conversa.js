@@ -13,7 +13,7 @@ function d1() {
 }
 
 (async () => {
-  const W = await import(tmp), w = W.default;
+  const W = await import(require('node:url').pathToFileURL(tmp).href), w = W.default;
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
@@ -1318,7 +1318,7 @@ function d1() {
   const arquivo=await DB.prepare("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,enviada_em,midia_chave,midia_mime) VALUES(?,'whatsapp1','test-download','entrada','documento','TENKiTER-Mensagens-2.4.2.apk',?,'msg/fake.apk','application/vnd.android.package-archive')").bind(nConv,agoraIso()).run();
   const ar=await w.fetch(ped('GET','/msg/midia?id='+arquivo.meta.last_row_id+'&baixar=1','tk2.admin'),env,{});
   chk('APK tem conteúdo original, nome e download privado',ar.status===200&&ar.headers.get('content-disposition').includes('TENKiTER-Mensagens-2.4.2.apk')&&ar.headers.get('cache-control').includes('no-store')&&Buffer.from(await ar.arrayBuffer()).equals(Buffer.from(apkBytes)));
-  const cold=(await import(tmp+'?cold-permissions')).default, prepareOriginal=DB.prepare;let alters=0;
+  const cold=(await import(require('node:url').pathToFileURL(tmp).href+'?cold-permissions')).default, prepareOriginal=DB.prepare;let alters=0;
   DB.prepare=function(sql){if(/^ALTER/i.test(sql))alters++;return prepareOriginal.call(DB,sql);};
   const coldResults=await Promise.all([cold.fetch(ped('GET','/msg/acesso','tk2.admin'),env,{}),cold.fetch(ped('GET','/msg/acesso','tk2.admin'),env,{})]);
   DB.prepare=prepareOriginal;
