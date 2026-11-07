@@ -22,6 +22,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ## [7.56.1] - 2026-11-07
 
 - Conclui a biblioteca de vídeos, recuperação por conta e seleção imediata de mídias do PR383, preservando as proteções de pausa, limite e recibos da7.56.0.
+- Seleção imediata impedida por erro, falta de conexão ou limite deixa a fila comum seguir, sem liberar a próxima mídia selecionada nem repetir a que falhou.
 - Corrige a atualização da fila e das fotos que reconstruía a aba Vídeos, removendo o seletor de arquivos durante o uso. Mantém o alvo de48px e os rascunhos.
 - Integra solicitações de clientes com fotos privadas e resposta como rascunho, sem envio automático. Arquivo de fotos próprias permanece sujeito à permissão explícita do RH.
 

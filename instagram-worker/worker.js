@@ -1685,7 +1685,7 @@ async function estadoLoteAgora_(env,lote){
   const ids=lote.grupos.flat(),rows=(await env.DB.prepare("SELECT * FROM postagem WHERE id IN(SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all()).results||[];
   if(rows.length!==ids.length)return {atual:[],bloqueado:true};
   const concluido=p=>p.status==='cancelado'||p.status==='manual_feito'||p.status==='publicado'&&(p.canal!=='ambos'||p.zap_estado==='confirmado');
-  for(const ids of lote.grupos){const ps=rows.filter(p=>ids.includes(p.id));if(!ps.every(concluido))return {atual:ids,rows:ps};}
+  for(const ids of lote.grupos){const ps=rows.filter(p=>ids.includes(p.id));if(!ps.every(concluido))return {atual:ids,rows:ps,bloqueado:ps.some(p=>['erro','manual_pendente'].includes(p.status)||p.canal==='ambos'&&['erro','sem_confirmacao'].includes(p.zap_estado))};}
   return {fim:true};
 }
 async function finalizarLoteAgora_(env,raw){
@@ -1743,7 +1743,10 @@ export async function processarPostagens(env) {
     let estadoAgora=loteAgora?await estadoLoteAgora_(env,loteAgora):null;const bloqueadasAgora=new Set();
     for (const p of lin) {
       let imediato=false;
-      if(loteAgora){const e=estadoAgora;if(e.fim)break;imediato=e.atual.includes(p.id);if(bloqueadasAgora.has(p.id)||!imediato&&p.status!=='processando')continue;
+      if(loteAgora){const e=estadoAgora;if(e.fim)break;imediato=e.atual.includes(p.id);
+        // Uma seleção impedida espera sua correção; não prende os canais da fila comum.
+        const aguardando=e.bloqueado||(e.rows||[]).some(x=>x.status==='agendado'&&canalUsaInstagram_(x.canal)&&bloqueioIg_(token,ctxFila.pausa))||(e.rows||[]).length>0&&(e.rows||[]).every(x=>x.status==='agendado'&&(cotaCheia(x)||x.canal==='whatsapp2'&&impedimentoStatus2));
+        if(bloqueadasAgora.has(p.id)||!imediato&&p.status!=='processando'&&(!aguardando||loteAgora.grupos.some(ids=>ids.includes(p.id))))continue;
         if(imediato&&p.status==='agendado'){const faltam=(e.rows||[]).filter(x=>x.status==='agendado');let excede=false;for(const b of CANAIS_FILA){const n=faltam.filter(x=>bucketsDoPost(x.tipo,x.canal).includes(b)).length;if(n&&(await contarUsados24h_(env,b,desde))+n>limiteDoTipo(cfgP,b))excede=true;}const nIg=faltam.filter(x=>canalUsaInstagram_(x.canal)).length;if(nIg){const n=(await env.DB.prepare("SELECT COUNT(*) n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()).n;if(n+nIg>cfgP.max24h)excede=true;}if(excede){e.atual.forEach(id=>bloqueadasAgora.add(id));continue;}}
       }
       if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
