@@ -99,13 +99,13 @@
   window.addEventListener('tk:sessao',conferirContaAtual_);
   window.addEventListener('storage',e=>{if(e.key==='tm_session')conferirContaAtual_();});
   window.addEventListener('tk:mensagens-sair',()=>{epocaConta_++;contaAtual_='';});
-  async function worker_(caminho, metodo, corpo, repetiu) {
+  async function worker_(caminho, metodo, corpo, repetiu, sinal) {
     if(cacheConversa && metodo && metodo!=='GET') return {ok:false,erro:'Aguarde atualizar a conversa para continuar.'};
     const s = (typeof getSessao === 'function' && getSessao()) || null;
     if (!s || typeof INSTAGRAM_URL === 'undefined') return { ok: false, erro: 'Entre com o seu login (não vale só o PIN) para ver as mensagens.' };
     conferirContaAtual_(); const epoca = epocaConta_, conta = contaSessao_(s);
     try {
-      const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo, headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+      const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo, headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined, signal: sinal });
       const dados = await r.json();
       const mesmaSessao=()=>{conferirContaAtual_();return epoca===epocaConta_&&contaSessao_(getSessao())===conta;};
       if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
@@ -113,7 +113,7 @@
         let atual=getSessao();
         if(r.status===401 && atual && atual.sessao===s.sessao){await renovarAcesso_(s,epoca);atual=getSessao();}
         if(!mesmaSessao())return {ok:false,erro:'Entre na sua conta para continuar.'};
-        if(atual && atual.sessao!==s.sessao)return worker_(caminho,metodo,corpo,true);
+        if(atual && atual.sessao!==s.sessao)return worker_(caminho,metodo,corpo,true,sinal);
       }
       if (APP_RECENTES && (r.status===401 || (r.status===403 && /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) {
         cacheBloqueado=true;limparRecentes_(); lista=[];msgs=[];aberta=null;cacheConversa=false;
@@ -553,7 +553,7 @@
       .ms-rel-sec summary { min-height: 44px; display: flex; align-items: center; padding: 0 12px; font-weight: 700; cursor: pointer; }
       .ms-rel-lista { margin: 0; padding: 0 12px 10px 28px; font-size: 0.82rem; } .ms-rel-lista li { margin: 4px 0; overflow-wrap: anywhere; } .ms-cfg-tit.ms-cfg-tit1 { margin-top: 0; }
       /* conversa */
-      .ms-solicitacoes-corpo input[type=file]{min-height:48px;max-width:100%}.ms-solicitacoes-corpo input[type=file]::file-selector-button{min-height:44px;padding:8px 12px}.ms-solicitacoes-corpo{padding:12px 14px;box-sizing:border-box}.ms-solicitacoes-corpo>.ms-copia,.ms-solicitacoes-corpo textarea{width:100%;box-sizing:border-box;min-height:48px}.ms-solicitacoes-corpo button{white-space:normal;max-width:100%;min-height:44px}.ms-cliente-atalhos{display:flex;gap:8px;flex-wrap:wrap;padding:0 12px;border-bottom:1px solid #e6e1d6}.ms-cliente-atalhos .ms-btn{background:transparent;border:0;text-decoration:underline;text-underline-offset:3px;min-height:44px;padding:4px 0;font-size:.8rem;color:#5c5349}.ms-solicitacao{padding:12px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere}.ms-solicitacao h4{margin:0 0 8px}.ms-solicitacao button,.ms-solicitacao summary{min-height:44px}.ms-solicitacao-arquivo{display:flex;align-items:center;gap:8px;overflow-wrap:anywhere}.ms-solicitacao-arquivo span{flex:1;min-width:0}.ms-solicitacao select,.ms-solicitacao textarea{width:100%;box-sizing:border-box;min-height:44px}.ms-solicitacao-fotos details{margin:8px 0}
+      .ms-solicitacoes-corpo input[type=file]{min-height:48px;max-width:100%}.ms-solicitacoes-corpo input[type=file]::file-selector-button{min-height:44px;padding:8px 12px}.ms-solicitacoes-corpo{padding:12px 14px;box-sizing:border-box}.ms-solicitacoes-corpo>.ms-copia,.ms-solicitacoes-corpo textarea{width:100%;box-sizing:border-box;min-height:48px}.ms-solicitacoes-corpo button{white-space:normal;max-width:100%;min-height:44px}.ms-cliente-atalhos{display:flex;gap:8px;flex-wrap:wrap;padding:0 12px;border-bottom:1px solid #e6e1d6}.ms-cliente-atalhos .ms-btn{background:transparent;border:0;text-decoration:underline;text-underline-offset:3px;min-height:44px;padding:4px 0;font-size:.8rem;color:#5c5349}.ms-solicitacao{padding:12px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere}.ms-solicitacao h4{margin:0 0 8px}.ms-solicitacao button,.ms-solicitacao summary{min-height:44px}.ms-solicitacao-arquivo{display:flex;align-items:center;gap:8px;padding:4px 0;overflow-wrap:anywhere}.ms-solicitacao-arquivo span{flex:1;min-width:0}.ms-solicitacao select,.ms-solicitacao textarea{width:100%;box-sizing:border-box;min-height:44px}.ms-solicitacao-fotos details{margin:8px 0}
       .ms-cab { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #e6e1d6; background: #fff; }
       .ms-cab .ms-quem { flex: 1; min-width: 0; } .ms-cab .ms-quem b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ms-cab .ms-quem span { display: block; font-size: 0.76rem; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-voltar { display: inline-flex; } @media (min-width: 860px) { .ms-voltar { display: none; } }
@@ -2526,38 +2526,84 @@
     if(podeFerramenta_('responder'))w.append(botao('ms-btn','Foto do cliente','cliente-foto'),botao('ms-btn','Pedido do cliente','cliente-pedido'));
     return w;
   }
-  async function enviarFotoRegistro_(rota,blob){
+  async function registroDisco_(chave,valor,id,conta){
+    const db=await new Promise((ok,erro)=>{const q=indexedDB.open('tk-registros-clientes-v1',1);q.onupgradeneeded=()=>q.result.createObjectStore('rascunhos',{keyPath:'chave'}).createIndex('registro',['conta','id']);q.onsuccess=()=>ok(q.result);q.onerror=()=>erro(q.error);});
+    try{return await new Promise((ok,erro)=>{const tx=db.transaction('rascunhos',valor===undefined?'readonly':'readwrite'),store=tx.objectStore('rascunhos');let q;
+      if(valor===undefined)q=id?store.index('registro').get([conta,id]):store.get(chave);
+      else if(valor===null)store.delete(chave);else store.put(valor);
+      tx.oncomplete=()=>ok(q?.result||null);tx.onerror=()=>erro(tx.error);tx.onabort=()=>erro(tx.error);
+    });}finally{db.close();}
+  }
+  const registrosGravacoes_=new Map();let registroAbrirGeracao_=0;
+  function guardarRegistro_(chave,r){
+    const valor=r?{chave,conta:r.conta,id:r.id,descricao:r.descricao,registrado:!!r.registrado,tentado:!!r.tentado,fotos:r.fotos.map(f=>({id:f.id,nome:f.nome,assinatura:f.assinatura,salva:!!f.salva,tentada:!!f.tentada,file:f.salva||f.blob?null:f.file,blob:f.salva?null:f.blob}))}:null;
+    const anterior=registrosGravacoes_.get(chave)||Promise.resolve(),p=anterior.catch(()=>{}).then(()=>registroDisco_(chave,valor));registrosGravacoes_.set(chave,p);
+    p.finally(()=>{if(registrosGravacoes_.get(chave)===p)registrosGravacoes_.delete(chave);}).catch(()=>{});return p;
+  }
+  async function registroComPrazo_(tarefa,padrao=30000){
+    const c=new AbortController(),prazo=Math.max(1000,Number(window.TK_REGISTRO_PRAZO_MS)||padrao);let timer;
+    try{return await Promise.race([tarefa(c.signal),new Promise((_,erro)=>{timer=setTimeout(()=>{c.abort();erro(Error('A confirmação demorou. Use Continuar envio; o mesmo pedido e as mesmas fotos serão conferidos novamente.'));},prazo);})]);}finally{clearTimeout(timer);}
+  }
+  async function enviarFotoRegistro_(rota,blob,sinal){
     const s=getSessao();if(!s)throw Error('Entre novamente para continuar.');
-    const r=await fetch(INSTAGRAM_URL+rota,{method:'POST',headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},body:blob,signal:AbortSignal.timeout(60000)});
+    const r=await fetch(INSTAGRAM_URL+rota,{method:'POST',headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},body:blob,signal:sinal});
     const j=await r.json();if(!r.ok||!j.ok)throw Error(j.erro||'Não consegui guardar a foto. Tente novamente.');return j;
   }
-  function abrirRegistroCliente_(modo){
-    if(!aberta||aberta.grupo)return;const conv={...aberta},conta=contaSessao_(getSessao()),epoca=epocaConta_,key=conta+'|'+conv.id+'|'+modo;
-    let r=solicitacoesRascunhos_.get(key);if(!r){r={id:crypto.randomUUID(),descricao:'',fotos:[]};solicitacoesRascunhos_.set(key,r);}
-    const corpo=gaveta_(modo==='foto'?'Foto do cliente':'Pedido do cliente');if(!corpo)return;corpo.classList.add('ms-solicitacoes-corpo');
-    corpo.append(el('p','ms-ficha-quem',rotuloContato(conv)),el('p','ms-auto-exp',modo==='foto'?'Os dados vêm da ficha. As fotos ficam disponíveis em Fotos de clientes para a equipe de postagens.':'Registre fotos e uma descrição geral. A solicitação fica no Mensageiro para acompanhar e responder pela conversa.'));
-    const ta=el('textarea','ms-copia');ta.rows=4;ta.maxLength=2000;ta.value=r.descricao;ta.disabled=!!r.registrado;ta.setAttribute('aria-label','Descrição geral do pedido');ta.placeholder='O que o cliente procura? Inclua tamanho, cor ou prazo quando informado.';ta.addEventListener('input',()=>r.descricao=ta.value);
+  async function abrirRegistroCliente_(modo,existente){
+    if(!getSessao()){aviso_('Entre com seu login para registrar fotos do cliente.');return;}
+    if(!existente&&(!aberta||aberta.grupo))return;
+    const geracao=++registroAbrirGeracao_,gavetaInicial=$('ms-gaveta');
+    const conv=existente?{id:existente.conversa_id,nome:existente.nome,canal:existente.canal}:{...aberta},conta=contaSessao_(getSessao()),epoca=epocaConta_;
+    let key=conta+'|'+(existente?'solicitacao|'+existente.id:conv.id+'|'+modo),r=solicitacoesRascunhos_.get(key);
+    if(existente&&!r)r=[...solicitacoesRascunhos_.values()].find(x=>x.conta===conta&&x.id===existente.id);
+    if(!r){try{r=await registroDisco_(key,undefined,existente?.id,conta);}catch(_){/* O envio só começa após guardar uma cópia local. */}}
+    if(geracao!==registroAbrirGeracao_||$('ms-gaveta')!==gavetaInicial||!existente&&aberta?.id!==conv.id||epoca!==epocaConta_||conta!==contaSessao_(getSessao()))return;
+    if(r?.chave)key=r.chave;
+    if(!r)r={id:existente?.id||crypto.randomUUID(),descricao:existente?.descricao||'',fotos:[],registrado:!!existente,tentado:!!existente};
+    r.conta=conta;r.chave=key;if(existente){r.registrado=true;r.tentado=true;r.descricao=existente.descricao;}
+    if(!r.enviando&&(r.fotos.length||r.tentado)&&!r.concluido)r.mensagem=r.semCopia?'Mantenha esta página aberta: não consegui guardar a cópia no aparelho.':r.registrado?'O pedido foi preservado. Continue as fotos que faltam.':'Envio preservado neste aparelho. Continue com os mesmos arquivos.';
+    solicitacoesRascunhos_.set(key,r);
+    const corpo=gaveta_(modo==='foto'?'Foto do cliente':existente?'Fotos do pedido':'Pedido do cliente');if(!corpo)return;corpo.classList.add('ms-solicitacoes-corpo');
+    corpo.append(el('p','ms-ficha-quem',rotuloContato(conv)),el('p','ms-auto-exp',modo==='foto'?'Os dados vêm da ficha. As fotos ficam disponíveis em Fotos de clientes para a equipe de postagens.':existente?'Acrescente as fotos a este pedido. A descrição e os dados do cliente já estão registrados.':'Registre fotos e uma descrição geral. A solicitação fica no Mensageiro para acompanhar e responder pela conversa.'));
+    const ta=el('textarea','ms-copia');ta.rows=4;ta.maxLength=2000;ta.value=r.descricao;ta.setAttribute('aria-label','Descrição geral do pedido');ta.placeholder='O que o cliente procura? Inclua tamanho, cor ou prazo quando informado.';
+    const persistir=async()=>{try{const v=await guardarRegistro_(key,r);r.semCopia=false;return v;}catch(_){r.semCopia=true;throw Error('Não consegui guardar a cópia no aparelho. Libere espaço e continue nesta tela.');}},avisarDisco=()=>{r.mensagem='Não consegui guardar a cópia no aparelho. Seu texto e arquivos continuam nesta tela; libere espaço antes de sair.';if(corpo.isConnected)st.textContent=r.mensagem;};
+    ta.addEventListener('input',()=>{r.descricao=ta.value;persistir().catch(avisarDisco);});
     if(modo!=='foto'){const label=el('label','ms-ficha-rot','Descrição geral do pedido');ta.id='ms-solicitacao-descricao';label.htmlFor=ta.id;corpo.append(label,ta);}
     const input=el('input');input.type='file';input.multiple=true;input.accept='image/jpeg,image/png,image/webp';input.id='ms-registro-fotos';input.style.maxWidth='100%';
     const label=el('label','ms-ficha-rot','Fotos'),lista=el('div'),st=el('p','ms-auto-exp');label.htmlFor=input.id;st.setAttribute('role','status');
-    const pintar=()=>{lista.replaceChildren();for(const f of r.fotos){const linha=el('div','ms-solicitacao-arquivo');linha.append(el('span','',f.nome+(f.salva?' · Guardada':'')));const tirar=el('button','ms-btn','Retirar');tirar.type='button';tirar.disabled=!!f.salva;tirar.onclick=()=>{r.fotos=r.fotos.filter(x=>x!==f);pintar();};linha.append(tirar);lista.append(linha);}};
-    input.onchange=()=>{for(const f of Array.from(input.files||[])){if(r.fotos.length>=20){st.textContent='Cada registro aceita até 20 fotos.';break;}if(!/^image\/(jpeg|png|webp)$/.test(f.type)){st.textContent='Use fotos JPG, PNG ou WebP.';continue;}r.fotos.push({id:crypto.randomUUID(),file:f,nome:f.name});}input.value='';pintar();};
-    const salvar=el('button','ms-btn prim',modo==='foto'?'Guardar fotos do cliente':'Registrar pedido');salvar.type='button';
+    const pintar=()=>{lista.replaceChildren();for(const f of r.fotos){const linha=el('div','ms-solicitacao-arquivo'),dados=el('div');dados.style.cssText='min-width:0;flex:1;overflow-wrap:anywhere';const estado=el('small','ms-auto-exp',f.salva?'Guardada':f.tentada?'Aguardando confirmação':'A enviar');estado.style.display='block';dados.append(el('span','',f.nome),estado);
+      const imagem=f.blob||f.file;if(imagem){const url=URL.createObjectURL(imagem),previa=el('div');previa.innerHTML='<img alt="Prévia da foto" '+atribSrc(url)+' style="width:64px;height:80px;object-fit:contain;background:#f7f6f2">';const img=previa.firstElementChild;img.onload=img.onerror=()=>URL.revokeObjectURL(url);linha.append(previa);}
+      linha.append(dados);const tirar=el('button','ms-btn','Retirar');tirar.type='button';tirar.disabled=!!(r.enviando||f.salva||f.tentada);tirar.onclick=()=>{r.fotos=r.fotos.filter(x=>x!==f);pintar();persistir().catch(avisarDisco);};linha.append(tirar);lista.append(linha);}};
+    input.onchange=()=>{for(const f of Array.from(input.files||[])){
+      if((existente?.fotos?.length||0)+r.fotos.filter(x=>!x.salva).length>=20){st.textContent='Cada pedido aceita até 20 fotos.';break;}
+      if(!/^image\/(jpeg|png|webp)$/.test(f.type)){st.textContent='Use fotos JPG, PNG ou WebP.';continue;}
+      const assinatura=f.name+'|'+f.size+'|'+f.lastModified;if(r.fotos.some(x=>x.assinatura===assinatura))continue;
+      r.fotos.push({id:crypto.randomUUID(),file:f,nome:f.name,assinatura});
+    }input.value='';pintar();persistir().catch(avisarDisco);};
+    const salvar=el('button','ms-btn prim');salvar.type='button';let ver;
+    const atualizar=()=>{if(!corpo.isConnected)return;salvar.disabled=!!r.enviando;input.disabled=!!r.enviando;ta.disabled=!!(r.enviando||r.tentado||r.registrado);
+      salvar.textContent=r.enviando?'Guardando…':!r.concluido&&(!existente&&r.tentado||r.fotos.some(f=>f.tentada&&!f.salva))?'Continuar envio':existente?'Guardar fotos':modo==='foto'?'Guardar fotos do cliente':'Registrar pedido';
+      st.textContent=r.mensagem||'';pintar();
+      if(r.concluido){salvar.hidden=true;input.hidden=true;label.hidden=true;lista.replaceChildren();if(!ver){ver=el('button','ms-btn',modo==='foto'?'Fechar':'Ver pedidos deste cliente');ver.type='button';ver.onclick=()=>modo==='foto'?fecharGaveta_():abrirSolicitacoes_(conv.id);corpo.append(ver);}}
+    };r.atualizar=atualizar;
     salvar.onclick=async()=>{
-      if(salvar.disabled)return;if(!r.fotos.length&&modo==='foto'){st.textContent='Escolha as fotos do cliente.';return;}if(modo!=='foto'&&!r.descricao.trim()){st.textContent='Escreva a descrição geral do pedido.';ta.focus();return;}
+      if(r.enviando||r.concluido)return;if(!r.fotos.length&&(modo==='foto'||existente)){st.textContent='Escolha as fotos do cliente.';return;}
+      if(modo!=='foto'&&!r.descricao.trim()){st.textContent='Escreva a descrição geral do pedido.';ta.focus();return;}
       if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))return;
-      salvar.disabled=true;input.disabled=true;ta.disabled=true;st.textContent='Guardando…';
+      r.enviando=true;r.mensagem='Preparando os arquivos…';r.atualizar();
       try{
-        if(modo!=='foto'){const j=await worker_('/msg/solicitacoes','POST',{id:r.id,conversa:conv.id,descricao:r.descricao});if(!j.ok)throw Error(j.erro);r.registrado=true;}
-        for(const f of r.fotos){if(f.salva)continue;if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))throw Error('A conta mudou. Entre na conta original para continuar.');st.textContent='Guardando '+f.nome+'…';const blob=await reduzirImagem_(f.file);if(!blob)throw Error('Não consegui ler '+f.nome+'.');
-          if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))throw Error('A conta mudou. O envio foi interrompido.');
-          const rota=modo==='foto'?'/msg/cliente-foto?'+new URLSearchParams({conversa:conv.id,op:f.id}):'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:r.id,foto:f.id});await enviarFotoRegistro_(rota,blob);f.salva=true;}
-        solicitacoesRascunhos_.delete(key);if(epoca!==epocaConta_||!corpo.isConnected)return;st.textContent=modo==='foto'?'Fotos guardadas com os dados da ficha. Nenhuma mensagem foi enviada.':'Pedido registrado. Nenhuma mensagem foi enviada.';lista.replaceChildren();input.value='';salvar.hidden=true;
-        const ver=el('button','ms-btn',modo==='foto'?'Fechar':'Ver pedidos deste cliente');ver.type='button';ver.onclick=()=>modo==='foto'?fecharGaveta_():abrirSolicitacoes_(conv.id);corpo.append(ver);
-      }catch(e){if(corpo.isConnected){st.textContent=(r.registrado?'O pedido foi preservado. ':'')+(e.message||'Não consegui concluir.')+' Tente novamente para continuar das fotos que faltam.';pintar();}}
-      finally{salvar.disabled=false;input.disabled=false;ta.disabled=!!r.registrado;}
+        const conferir=()=>{if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))throw Error('A conta mudou. Entre na conta original para continuar.');};
+        for(const [i,f]of r.fotos.entries()){if(f.salva||f.blob)continue;conferir();r.mensagem='Preparando foto '+(i+1)+' de '+r.fotos.length+'…';r.atualizar();f.blob=await registroComPrazo_(()=>reduzirImagem_(f.file));if(!f.blob||f.blob.size>5*1048576)throw Error('Não consegui preparar '+f.nome+'. Use uma foto JPG, PNG ou WebP até 5 MiB.');}
+        await persistir();conferir();
+        if(modo!=='foto'&&!r.registrado){r.tentado=true;await persistir();r.mensagem='Registrando a descrição do pedido…';r.atualizar();const j=await registroComPrazo_(sinal=>worker_('/msg/solicitacoes','POST',{id:r.id,conversa:conv.id,descricao:r.descricao},false,sinal));if(!j.ok)throw Error(j.erro);r.registrado=true;await persistir();}
+        for(const [i,f]of r.fotos.entries()){if(f.salva)continue;conferir();f.tentada=true;await persistir();r.mensagem='Guardando foto '+(i+1)+' de '+r.fotos.length+'…';r.atualizar();
+          const rota=modo==='foto'?'/msg/cliente-foto?'+new URLSearchParams({conversa:conv.id,op:f.id}):'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:r.id,foto:f.id});await registroComPrazo_(sinal=>enviarFotoRegistro_(rota,f.blob,sinal),60000);conferir();f.salva=true;await persistir();}
+        r.concluido=true;r.mensagem=modo==='foto'?'Fotos guardadas com os dados da ficha. Nenhuma mensagem foi enviada.':existente?'Fotos acrescentadas ao pedido. Nenhuma mensagem foi enviada.':'Pedido registrado. Nenhuma mensagem foi enviada.';
+        solicitacoesRascunhos_.delete(key);await guardarRegistro_(key,null).catch(()=>{});
+      }catch(e){r.mensagem=(r.registrado?'O pedido foi preservado. ':'')+(e.message||'Não consegui concluir. Use Continuar envio para tentar novamente.');}
+      finally{r.enviando=false;r.atualizar?.();}
     };
-    corpo.append(label,input,lista,st,salvar);pintar();
+    corpo.append(label,input,lista,st,salvar);atualizar();
   }
   async function fotoSolicitacao_(id,foto){
     const s=getSessao(),r=await fetch(INSTAGRAM_URL+'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:id,foto}),{headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},signal:AbortSignal.timeout(30000)});if(!r.ok)throw Error('Não consegui abrir a foto. Tente novamente.');return r.blob();
@@ -2580,9 +2626,9 @@
     const lista=el('div'),st=el('p','ms-auto-exp');st.setAttribute('role','status');corpo.append(filtro,st,lista);let geracao=0;
     const carregar=async(antes='')=>{const g=++geracao;st.textContent='Carregando solicitações…';const r=await worker_('/msg/solicitacoes?'+new URLSearchParams({status:filtro.value,...(conversa?{conversa}:{}),...(antes?{antes}:{})}));if(g!==geracao||!corpo.isConnected)return;if(!r.ok){st.textContent=r.erro||'Não consegui carregar.';const tentar=el('button','ms-btn','Tentar carregar solicitações novamente');tentar.type='button';tentar.onclick=()=>{tentar.remove();carregar(antes);};lista.append(tentar);return;}st.textContent=r.itens.length?'':'Nenhuma solicitação neste filtro.';if(!antes)lista.replaceChildren();for(const item of r.itens){const card=el('section','ms-solicitacao');card.append(el('h4','',item.nome||'Cliente'),el('p','ms-auto-exp ms-solicitacao-resumo',(NOME_CANAL[item.canal]||item.canal)+' · '+hora(item.criado_em)+' · '+SOL_STATUS_[item.status]),el('p','ms-solicitacao-descricao',item.descricao));
       if(item.responsavel)card.append(el('small','',item.responsavel===String(getSessao()?.whatsapp)?'Responsável: você':'Responsável: '+(item.responsavel_nome||'Pessoa da equipe')));
-      const fotos=el('div','ms-solicitacao-fotos');for(const f of item.fotos||[]){const detalhes=el('details');detalhes.append(el('summary','','Foto '+((item.fotos||[]).indexOf(f)+1)));const img=el('div');detalhes.append(img);let urlLocal='';detalhes.ontoggle=async()=>{if(!detalhes.open||urlLocal)return;try{const blob=await fotoSolicitacao_(item.id,f.id);if(!img.isConnected)return;urlLocal=URL.createObjectURL(blob);img.innerHTML='<img alt="Foto do pedido do cliente" '+atribSrc(urlLocal)+' style="display:block;max-width:100%;max-height:240px;object-fit:contain">';img.firstElementChild.onload=()=>URL.revokeObjectURL(urlLocal);}catch(e){st.textContent=e.message;}};if(podeFerramenta_('responder')){const b=el('button','ms-btn','Anexar à resposta');b.type='button';b.onclick=()=>responderSolicitacao_(item,f.id);detalhes.append(b);}fotos.append(detalhes);}card.append(fotos);
+      card.append(el('p','ms-auto-exp',item.fotos?.length?item.fotos.length+' foto(s) anexada(s)':'Sem fotos anexadas'));const fotos=el('div','ms-solicitacao-fotos');for(const f of item.fotos||[]){const detalhes=el('details');detalhes.append(el('summary','','Foto '+((item.fotos||[]).indexOf(f)+1)));const img=el('div');detalhes.append(img);let urlLocal='';detalhes.ontoggle=async()=>{if(!detalhes.open||urlLocal)return;try{const blob=await fotoSolicitacao_(item.id,f.id);if(!img.isConnected)return;urlLocal=URL.createObjectURL(blob);img.innerHTML='<img alt="Foto do pedido do cliente" '+atribSrc(urlLocal)+' style="display:block;max-width:100%;max-height:240px;object-fit:contain">';img.firstElementChild.onload=()=>URL.revokeObjectURL(urlLocal);}catch(e){st.textContent=e.message;}};if(podeFerramenta_('responder')){const b=el('button','ms-btn','Anexar à resposta');b.type='button';b.onclick=()=>responderSolicitacao_(item,f.id);detalhes.append(b);}fotos.append(detalhes);}card.append(fotos);
       const abrir=el('button','ms-btn','Abrir conversa');abrir.type='button';abrir.onclick=async()=>{const epoca=epocaConta_;await fecharSolicitacaoParaConversa_();if(epoca!==epocaConta_)return;if(canal!=='todos'&&canal!==item.canal){canal=item.canal;desenharFiltros();desenharAbas();await carregarLista(true);}await abrirConversa(item.conversa_id,true);};card.append(abrir);
-      if(podeFerramenta_('responder')){const usar=el('button','ms-btn','Usar descrição na resposta');usar.type='button';usar.onclick=()=>responderSolicitacao_(item);card.append(usar);const editar=el('details');editar.append(el('summary','','Acompanhar solicitação'));const sit=el('select','ms-copia');sit.setAttribute('aria-label','Situação do pedido');for(const [v,t]of Object.entries(SOL_STATUS_)){const op=el('option','',t);op.value=v;sit.append(op);}sit.value=item.status;const descricao=el('textarea','ms-copia');descricao.rows=3;descricao.maxLength=2000;descricao.value=item.descricao;descricao.setAttribute('aria-label','Descrição geral do pedido');const obs=el('textarea','ms-copia');obs.rows=3;obs.value=item.obs;obs.maxLength=2000;obs.setAttribute('aria-label','Observações internas');const chaveLocal=contaSessao_(getSessao())+'|'+item.id,local=solicitacoesEdicoes_.get(chaveLocal);let versaoLocal=local?.versao||item.versao;if(local){descricao.value=local.descricao;sit.value=local.status;obs.value=local.obs;}const lembrar=()=>solicitacoesEdicoes_.set(chaveLocal,{versao:versaoLocal,descricao:descricao.value,status:sit.value,obs:obs.value});descricao.addEventListener('input',lembrar);obs.addEventListener('input',lembrar);sit.addEventListener('change',lembrar);const rot=el('label','ms-ficha-rot','Observações internas');const status=el('p','ms-auto-exp');status.setAttribute('role','status');
+      if(podeFerramenta_('responder')){const usar=el('button','ms-btn','Usar descrição na resposta');usar.type='button';usar.onclick=()=>responderSolicitacao_(item);card.append(usar);const anexar=el('button','ms-btn','Adicionar fotos');anexar.type='button';anexar.onclick=()=>abrirRegistroCliente_('pedido',item);card.append(anexar);const editar=el('details');editar.append(el('summary','','Acompanhar solicitação'));const sit=el('select','ms-copia');sit.setAttribute('aria-label','Situação do pedido');for(const [v,t]of Object.entries(SOL_STATUS_)){const op=el('option','',t);op.value=v;sit.append(op);}sit.value=item.status;const descricao=el('textarea','ms-copia');descricao.rows=3;descricao.maxLength=2000;descricao.value=item.descricao;descricao.setAttribute('aria-label','Descrição geral do pedido');const obs=el('textarea','ms-copia');obs.rows=3;obs.value=item.obs;obs.maxLength=2000;obs.setAttribute('aria-label','Observações internas');const chaveLocal=contaSessao_(getSessao())+'|'+item.id,local=solicitacoesEdicoes_.get(chaveLocal);let versaoLocal=local?.versao||item.versao;if(local){descricao.value=local.descricao;sit.value=local.status;obs.value=local.obs;}const lembrar=()=>solicitacoesEdicoes_.set(chaveLocal,{versao:versaoLocal,descricao:descricao.value,status:sit.value,obs:obs.value});descricao.addEventListener('input',lembrar);obs.addEventListener('input',lembrar);sit.addEventListener('change',lembrar);const rot=el('label','ms-ficha-rot','Observações internas');const status=el('p','ms-auto-exp');status.setAttribute('role','status');
         const salvar=el('button','ms-btn prim','Salvar acompanhamento'),assumir=el('button','ms-btn','Assumir solicitação');salvar.type=assumir.type='button';const guardar=async(assume)=>{if(salvar.disabled)return;salvar.disabled=assumir.disabled=true;const enviado={id:item.id,versao:versaoLocal,status:sit.value,obs:obs.value,descricao:descricao.value,assumir:assume};const r=await worker_('/msg/solicitacoes/editar','POST',enviado);if(!card.isConnected)return;salvar.disabled=assumir.disabled=false;if(!r.ok){status.textContent=r.erro||'Não consegui salvar. Seu texto foi preservado.';return;}Object.assign(item,r.item);versaoLocal=item.versao;if(obs.value===enviado.obs&&descricao.value===enviado.descricao&&sit.value===enviado.status)solicitacoesEdicoes_.delete(chaveLocal);else lembrar();card.querySelector('.ms-solicitacao-descricao').textContent=item.descricao;card.querySelector('.ms-solicitacao-resumo').textContent=(NOME_CANAL[item.canal]||item.canal)+' · '+hora(item.criado_em)+' · '+SOL_STATUS_[item.status]+(item.responsavel?' · Responsável atribuído':'');status.textContent=obs.value!==enviado.obs||descricao.value!==enviado.descricao||sit.value!==enviado.status?'Salvo. Há novas alterações ainda não salvas.':'Acompanhamento salvo. Nenhuma mensagem foi enviada.';};salvar.onclick=()=>guardar(false);assumir.onclick=()=>guardar(true);const descartar=el('button','ms-btn','Descartar edição local');descartar.type='button';descartar.onclick=()=>{if(confirm('Descartar o texto não salvo desta solicitação e carregar o registro atual?')){solicitacoesEdicoes_.delete(chaveLocal);lista.replaceChildren();carregar();}};if(local)status.textContent='Edição local ainda não salva.';editar.append(el('p','ms-ficha-rot','Descrição geral'),descricao,sit,rot,obs,status,salvar,assumir,descartar);card.append(editar);}
       lista.append(card);
     }if(r.proximo){const mais=el('button','ms-btn','Mais solicitações');mais.type='button';mais.onclick=()=>{mais.remove();carregar(r.proximo);};lista.append(mais);}};

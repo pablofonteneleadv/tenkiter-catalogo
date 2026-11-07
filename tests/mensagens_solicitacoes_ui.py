@@ -10,7 +10,7 @@ _img=io.BytesIO();Image.new('RGB',(160,240),(45,82,123)).save(_img,format='PNG')
 BASE=os.environ.get('TK_BASE','http://localhost:8773/')
 OUT=Path(os.environ.get('TK_EVID',str(Path(__file__).parent/'saida/reparos/solicitacoes')));OUT.mkdir(parents=True,exist_ok=True)
 def api(path,body=None,headers=None,method=None):
- req=urllib.request.Request('http://127.0.0.1:8774'+path,data=body,headers=headers or {},method=method)
+ req=urllib.request.Request('http://127.0.0.1:'+os.environ.get('TK_QA_PORT','8774')+path,data=body,headers=headers or {},method=method)
  try:
   with urllib.request.urlopen(req) as r:return r.status,r.read(),r.headers.get('Content-Type','application/json')
  except urllib.error.HTTPError as e:return e.code,e.read(),e.headers.get('Content-Type','application/json')
