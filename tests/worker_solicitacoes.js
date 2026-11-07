@@ -37,6 +37,11 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   const raw=async(path,body)=>{const r=await W.default.fetch(new Request('https://worker.test'+path,{method:'POST',headers,body}),env,{});return {status:r.status,j:await r.json()};};
   const pathFoto='/msg/solicitacoes/foto?solicitacao='+op+'&foto='+fid;
   assert.equal((await raw(pathFoto,png)).status,200);assert.equal((await raw(pathFoto,png)).status,200);assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM msg_solicitacao_foto').get().n,1);
+  assert.equal((await raw('/msg/solicitacoes/foto?solicitacao='+op+'&foto=44444444-4444-4444-8444-444444444444',png)).status,200);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM msg_solicitacao_foto').get().n,1,'Mesma foto em outro identificador não cria cópia');
+  const outra=Buffer.concat([png,Buffer.from('outra referencia')]);
+  await Promise.all(['55555555-5555-4555-8555-555555555555','66666666-6666-4666-8666-666666666666'].map(f=>raw('/msg/solicitacoes/foto?solicitacao='+op+'&foto='+f,outra)));
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM msg_solicitacao_foto').get().n,2,'Seleções concorrentes iguais não criam duas fotos');
   const photo=await W.default.fetch(new Request('https://worker.test'+pathFoto,{headers}),env,{});assert.equal(photo.status,200);assert.equal(photo.headers.get('Cache-Control'),'no-store');assert.deepEqual(Buffer.from(await photo.arrayBuffer()),png);
   assert.equal((await raw('/msg/cliente-foto?conversa='+id+'&op='+fid,png)).status,200);assert.equal((await raw('/msg/cliente-foto?conversa='+id+'&op='+fid,png)).status,200);
   const fc=sqlite.prepare('SELECT * FROM foto_cliente').all();assert.equal(fc.length,1);assert.equal(fc[0].nome,'Cliente Teste');assert.equal(fc[0].whats,'5588991234567');assert.equal(fc[0].vinculo,'mensageiro:'+id);

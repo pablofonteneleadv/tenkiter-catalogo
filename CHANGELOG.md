@@ -19,6 +19,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.56.2] - 2026-11-07
+
+- Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.
+- Rascunho e anexos pendentes ficam neste aparelho, separados por conta, para retomar após fechar ou recarregar; conclusão exige confirmação do servidor.
+- Solicitações permite acrescentar fotos ao pedido já registrado, sem refazer texto/ficha; a mesma imagem não cria cópias no pedido, inclusive em tentativas concorrentes.
+- Mostra a quantidade de fotos anexadas, prévias e andamento por arquivo. Nenhuma ação envia mensagem automaticamente.
+
+
 ## [7.56.1] - 2026-11-07
 
 - Conclui a biblioteca de vídeos, recuperação por conta e seleção imediata de mídias do PR383, preservando as proteções de pausa, limite e recibos da7.56.0.

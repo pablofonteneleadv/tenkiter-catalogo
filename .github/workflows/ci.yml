@@ -335,6 +335,7 @@ jobs:
           trap 'kill "$tecido_server_pid" "$solicitacoes_pid"' EXIT
           for tentativa in $(seq 1 20); do curl -fsS http://127.0.0.1:8774/qa/estado > /dev/null && break; sleep 1; done
           python3 tests/mensagens_solicitacoes_ui.py
+          python3 tests/mensagens_solicitacoes_retomada_ui.py
           python3 tests/esteira_lote_arquivo_ui.py
           python3 tests/postagens_agora_selecao_ui.py
           kill "$solicitacoes_pid"

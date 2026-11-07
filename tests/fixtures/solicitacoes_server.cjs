@@ -37,5 +37,5 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
     if(req.url==='/qa/reset'){await reset();res.end('{}');return;}
     if(req.url==='/qa/estado'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({fila:sqlite.prepare('SELECT * FROM postagem').all(),lote:sqlite.prepare("SELECT valor FROM cfg WHERE chave='post_agora_lote'").get(),solicitacoes:sqlite.prepare('SELECT * FROM msg_solicitacao').all(),fotos:sqlite.prepare('SELECT * FROM foto_cliente').all(),caixa:sqlite.prepare('SELECT * FROM est_caixa').all()}));return;}
     const chunks=[];for await(const c of req)chunks.push(c);const body=Buffer.concat(chunks),r=await W.default.fetch(new Request('https://worker.test'+req.url,{method:req.method,headers:req.headers,body:['GET','HEAD'].includes(req.method)?undefined:body}),env,{});res.statusCode=r.status;r.headers.forEach((v,k)=>res.setHeader(k,v));res.end(Buffer.from(await r.arrayBuffer()));
-  }catch(e){res.statusCode=500;res.end(JSON.stringify({ok:false,erro:String(e)}));}}).listen(8774,'127.0.0.1',()=>console.log('QA SQLite:8774; serviços simulados'));
+  }catch(e){res.statusCode=500;res.end(JSON.stringify({ok:false,erro:String(e)}));}}).listen(Number(process.env.TK_QA_PORT)||8774,'127.0.0.1',()=>console.log('QA SQLite:8774; serviços simulados'));
 })().catch(e=>{console.error(e);process.exitCode=1;});
