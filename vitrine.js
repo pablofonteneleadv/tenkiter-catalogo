@@ -452,13 +452,13 @@
         b.dataset.thumb = String(i);
         b.setAttribute('aria-pressed', String(i === 0));
         b.setAttribute('aria-label', 'Ver foto ' + (i + 1) + ' de ' + Math.min(3, fotos.length) + ': ' + nome);
-        b.style.backgroundImage = "url('" + f + "')";
+        b.style.backgroundImage = "url('" + (typeof fotoMini === 'function' ? fotoMini(f, 160) : f) + "')";   // miniatura de ~50 px: não baixa a foto inteira (260–480 KB) três vezes por cartão
         b.addEventListener('click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
           img.removeAttribute('srcset');
           img.removeAttribute('sizes');
-          img.src = f;
+          img.src = typeof fotoMini === 'function' && typeof larguraMini === 'function' ? fotoMini(f, larguraMini()) : f;
           box.querySelectorAll('.thumb-card').forEach((x, j) => {
             x.classList.toggle('on', j === i);
             x.setAttribute('aria-pressed', String(j === i));

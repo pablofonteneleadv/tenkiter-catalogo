@@ -187,7 +187,10 @@ jobs:
 
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
-        run: node tests/worker_midia.js
+        run: |
+          node tests/worker_midia.js
+          # v7.57: cópias reduzidas das fotos (480/240 px), leitura ?w= com queda para a original e gerador das fotos antigas (OIDC falso)
+          node tests/worker_midia_mini.js
 
       - name: Worker do Instagram e canal
         if: needs.escopo.outputs.suite_completa != 'true'
@@ -278,6 +281,18 @@ jobs:
           video_server_pid=$!
           trap 'kill "$video_server_pid"' EXIT
           python3 tests/postagens_video_status.py
+
+      - name: Fotos leves e painel mais leve (Chromium, serviços simulados)
+        if: github.event_name == 'pull_request'
+        env:
+          TK_BASE: http://localhost:8774/
+        run: |
+          python3 -m http.server 8774 > /tmp/fotosleves-http.log 2>&1 &
+          fotos_server_pid=$!
+          trap 'kill "$fotos_server_pid"' EXIT
+          python3 tests/fotos_mini_script.py
+          python3 tests/painel_leve.py
+          python3 tests/midia_r2.py
 
       - name: Pedido idempotente e compatibilidade com backend antigo
         if: github.event_name == 'pull_request'

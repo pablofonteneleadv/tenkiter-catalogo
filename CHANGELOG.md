@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.57.0] - 2026-11-07
+
+- Fotos leves: cada foto nova ganha, no momento do envio, cópias de 480 px e 240 px (feitas no aparelho, guardadas ao lado da original no Worker de mídia, contadas no limite de armazenamento). A vitrine, a lista do painel, as bolinhas de fotos e a seleção pedem a cópia (`?w=480`/`?w=240`); sem cópia, o Worker devolve a original. Vitrine em 390 px: de ~9,5 MB para ~0,5 MB de foto ao abrir (medido com fotos de 1080 px e serviços simulados).
+- Fotos antigas: workflow manual `Cópias reduzidas das fotos antigas` (`scripts/fotos/gerar_minis.py`) gera as cópias em lotes, sem apagar nada e sem segredo novo (identidade OIDC do GitHub).
+- Painel: a lista de produtos e as fotos só são montadas depois do login (antes: ~30 mil nós e ~2,4 MB de fotos atrás da janela de entrada). Lista grande aparece em duas etapas (80 primeiros cartões na hora).
+- `common.js` (`fotoMini`) entra no APK: Android 2.4.23 (versionCode 30), sem mudança de comportamento do aplicativo. Todas as páginas passam a carregar `common.js?v=` igual à versão do site.
+
 ## [7.56.2] - 2026-11-07
 
 - Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.

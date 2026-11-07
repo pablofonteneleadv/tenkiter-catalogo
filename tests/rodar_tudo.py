@@ -97,6 +97,9 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_og.js", lambda o: "FALHAS=0" in o),         # Worker da Cloudflare com o Apps Script simulado
     ("worker_midia.js", lambda o: "FALHAS=0" in o),      # Worker de mídia (R2) com R2/KV/Apps Script falsos: quem envia, tipos, travas de tamanho e de armazenamento
     ("midia_r2.py", lambda o: "FALHAS=0" in o),          # painel -> R2 (e reserva no Cloudinary)
+    ("worker_midia_mini.js", lambda o: "FALHAS=0" in o), # v7.57: cópias reduzidas (480/240 px) das fotos, ?w= com queda para a original, gerador das fotos antigas (OIDC falso)
+    ("fotos_mini_script.py", lambda o: "FALHAS=0" in o),  # v7.57: scripts/fotos/gerar_minis.py com Worker simulado (idempotente, nada apagado)
+    ("painel_leve.py", lambda o: "FALHAS=0" in o),        # v7.57: vitrine < 1 MB de foto; painel sem lista nem foto antes do login
     ("fotoia_plano.js", lambda o: "FOTOIA PLANO PASS" in o),
     ("worker_fotoia_migracao.js", lambda o: "FOTOIA MIGRACAO PASS" in o),
     ("worker_fotoia_catalogo.js", lambda o: "FOTOIA CATALOGO WORKER PASS" in o),
