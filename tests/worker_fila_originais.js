@@ -171,6 +171,17 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert.equal(sqlite.prepare('SELECT status FROM postagem WHERE id=?').get(referenciaAusente).status,'publicado','Referência ausente não prende a fila comum');
   sqlite.prepare("UPDATE cfg SET valor='' WHERE chave='post_agora_lote'").run();
   sqlite.prepare('DELETE FROM postagem').run();
+  await chamar('/post/config','POST',{config:{igGapMin:0,canais:{status:{max24h:1}}}});
+  sqlite.prepare("INSERT OR REPLACE INTO cfg(chave,valor) VALUES('ig_token','token-simulado')").run();
+  sqlite.prepare("INSERT OR REPLACE INTO cfg(chave,valor) VALUES('ig_token_exp',?)").run(String(time+40*86400000));
+  const jaFoi=ins('status-ja-contado',time),faltaStory=ins('ambos-falta-story',time);
+  sqlite.prepare("UPDATE postagem SET status='publicado',publicado_em=? WHERE id=?").run(new Date(time).toISOString(),jaFoi);
+  sqlite.prepare("UPDATE postagem SET canal='ambos',zap_estado='confirmado',zap_desde=? WHERE id=?").run(new Date(time).toISOString(),faltaStory);
+  sqlite.prepare("UPDATE cfg SET valor=? WHERE chave='post_agora_lote'").run(JSON.stringify({grupos:[[faltaStory]],criado:new Date(time).toISOString()}));
+  await W.processarPostagens(env);
+  assert.equal(sqlite.prepare('SELECT status FROM postagem WHERE id=?').get(faltaStory).status,'publicado','Status já confirmado não consome uma segunda vaga nem impede o Story selecionado');
+  sqlite.prepare("DELETE FROM cfg WHERE chave IN ('ig_token','ig_token_exp')").run();
+  sqlite.prepare('DELETE FROM postagem').run();
   const protegido=ins('confirma-pernas',time);sqlite.prepare("UPDATE postagem SET canal='ambos',status='publicado',zap_estado='aguardando' WHERE id=?").run(protegido);
   assert(!(await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim,'Story publicado com Status pendente não libera a próxima mídia');
   sqlite.prepare("UPDATE postagem SET zap_estado='confirmado' WHERE id=?").run(protegido);assert((await W.estadoLoteAgora_(env,{grupos:[[protegido]]})).fim);
