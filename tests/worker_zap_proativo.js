@@ -61,7 +61,7 @@ function d1() {
   const envelhecer = async (id, min) => DB.prepare('UPDATE postagem SET zap_desde=?, inicio_proc=?, zap_consulta=?, atualizado_em=? WHERE id=?').bind(iso(-min), iso(-min), iso(-2), iso(-2), id).run();
   const P = async () => W.processarPostagens(env);
   await P();
-  await cfg('po_cfg', JSON.stringify({ pausaAtiva: false, canais: { status: { gapMin: 300, gapMax: 300, max24h: 100 }, status2: { gapMin: 300, gapMax: 300, max24h: 100 }, story: { gapMin: 300, gapMax: 300, max24h: 100 } } }));
+  await cfg('po_cfg', JSON.stringify({ pausaAtiva: false, igGapMin: 0, canais: { status: { gapMin: 300, gapMax: 300, max24h: 100 }, status2: { gapMin: 300, gapMax: 300, max24h: 100 }, story: { gapMin: 300, gapMax: 300, max24h: 100 } } }));
   await cfg('wafly_1', JSON.stringify({ instance: 'INST_TESTE_001', token: 'TOKEN_TESTE_AAA111', clientToken: 'CLIENT_TESTE_BBB222' }));
   await cfg('wafly_2', JSON.stringify({ instance: 'INST_TESTE_002', token: 'TOKEN_TESTE_CCC333', clientToken: 'CLIENT_TESTE_DDD444' }));
   await cfg('ig_token', TOKEN); await cfg('ig_token_exp', String(Date.now() + 50 * 86400000));

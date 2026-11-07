@@ -105,6 +105,16 @@ export async function garantirEsquemaFotoIA_(env) {
   }
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_fotoia_request ON fotoia(request_id)').run();
 }
+/** v7.56: colunas aditivas da fila à prova de falhas, garantidas mesmo em bancos que já têm o marcador de esquema atual. */
+async function garantirColunasPostagem_(env) {
+  const cols = new Set(((await env.DB.prepare('PRAGMA table_info(postagem)').all()).results || []).map((c) => c.name));
+  if (!cols.size) return;                                                    // banco novo: a migração cria a tabela já com as colunas
+  for (const nome of ['atencao', 'atencao_em']) {
+    if (cols.has(nome)) continue;
+    try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN ' + nome + " TEXT NOT NULL DEFAULT ''").run(); }
+    catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
+  }
+}
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -114,13 +124,13 @@ async function iniciar(env) {
     let versao;
     try { versao = await cfgGet(env,'schema_ig_version'); }
     catch(e) { if (!/no such table/i.test(String(e))) throw e; }
-    if (versao === ESQUEMA_) return;
+    if (versao === ESQUEMA_) { await garantirColunasPostagem_(env); return; }
     await migrarEsquema_(env);
     const postCols=new Set((await env.DB.prepare('PRAGMA table_info(postagem)').all()).results.map(c=>c.name));
     for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0'],['origem_midia',"TEXT NOT NULL DEFAULT ''"],['intervalo_ms','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
     /* v7.48.3: estado da perna do WhatsApp (Status 1/2) guardado à parte — no canal "ambos" o Instagram não espera por ela.
        Colunas aditivas (nada é migrado nem apagado): zap_estado = ''|aguardando|confirmado|sem_confirmacao|erro. */
-    for(const [nome,tipo] of [['zap_estado',"TEXT NOT NULL DEFAULT ''"],['zap_req',"TEXT NOT NULL DEFAULT ''"],['zap_desde',"TEXT NOT NULL DEFAULT ''"],['zap_tent','INTEGER NOT NULL DEFAULT 0'],['zap_erro',"TEXT NOT NULL DEFAULT ''"],['zap_consulta',"TEXT NOT NULL DEFAULT ''"],['fotos_origem',"TEXT NOT NULL DEFAULT ''"]])if(!postCols.has(nome)){try{await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
+    for(const [nome,tipo] of [['zap_estado',"TEXT NOT NULL DEFAULT ''"],['zap_req',"TEXT NOT NULL DEFAULT ''"],['zap_desde',"TEXT NOT NULL DEFAULT ''"],['zap_tent','INTEGER NOT NULL DEFAULT 0'],['zap_erro',"TEXT NOT NULL DEFAULT ''"],['zap_consulta',"TEXT NOT NULL DEFAULT ''"],['fotos_origem',"TEXT NOT NULL DEFAULT ''"],['atencao',"TEXT NOT NULL DEFAULT ''"],['atencao_em',"TEXT NOT NULL DEFAULT ''"]])if(!postCols.has(nome)){try{await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_serie ON postagem(serie,parte)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_publicado ON postagem(status,publicado_em)').run();
     // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
@@ -366,8 +376,9 @@ function igBase(env) { return String(env.IG_BASE || IG_BASE_PADRAO).replace(/\/$
 async function graph(env, token, caminho) {
   const u = igBase(env) + caminho + (caminho.indexOf('?') === -1 ? '?' : '&') + 'access_token=' + encodeURIComponent(token);
   let r, j = null;
-  try { r = await fetch(u, { headers: { 'User-Agent': UA } }); j = await r.json(); } catch (e) { throw new Error('não consegui falar com o Instagram'); }
-  if (!r.ok || (j && j.error)) throw new Error('Instagram: ' + ((j && j.error && j.error.message) || ('HTTP ' + r.status)).replace(/access_token=[^&\s]+/g, 'access_token=***'));
+  try { r = await fetch(u, { headers: { 'User-Agent': UA } }); j = await r.json(); } catch (e) { throw new ErroIG({ message: 'não consegui falar com o Instagram' }, 0); }
+  // v7.56: o erro leva código/subcódigo/HTTP (antes só o texto), para a fila separar limite, token, instabilidade e mídia.
+  if (!r.ok || (j && j.error)) { const x = (j && j.error) || {}; throw new ErroIG({ message: 'Instagram: ' + String(x.message || ('HTTP ' + r.status)).replace(/access_token=[^&\s]+/g, 'access_token=***'), code: x.code, error_subcode: x.error_subcode, is_transient: x.is_transient }, r.status); }
   return j;
 }
 async function renovarToken(env, token) {
@@ -771,7 +782,7 @@ function canalUsaWhatsApp_(c) { const x = normalizarCanal_(c); return x === 'wha
 const MAX_POSTS_24H = 90;                 // o Instagram deixa ~100 publicações por API a cada 24 h; paramos antes
 const MAX_ESPERA_VIDEO_MS = 20 * 60 * 1000;
 const MAX_TENT = 3;
-class ErroIG extends Error { constructor(e, http) { super((e && e.message) || ('HTTP ' + http)); this.code = e && e.code; this.sub = e && e.error_subcode; this.http = http; } }
+class ErroIG extends Error { constructor(e, http) { super((e && e.message) || ('HTTP ' + http)); this.code = e && e.code; this.sub = e && e.error_subcode; this.http = http; this.transitorio = !!(e && e.is_transient); } }
 async function graphPost(env, token, caminho, params) {
   const corpo = new URLSearchParams();
   Object.keys(params || {}).forEach((k) => { if (params[k] !== undefined && params[k] !== null && params[k] !== '') corpo.set(k, String(params[k])); });
@@ -781,13 +792,23 @@ async function graphPost(env, token, caminho, params) {
   if (!r.ok || (j && j.error)) throw new ErroIG(j && j.error, r.status);
   return j;
 }
-/** Frase para a pessoa + se vale tentar de novo. Nunca devolve JSON nem o token. */
+/** Frase para a pessoa + o tipo da falha. Nunca devolve JSON nem o token.
+ *  v7.56 (06/11/2026): { espera } = limite/bloqueio anti-spam do Instagram (vira pausa global, não erro);
+ *  { conta } = token vencido/sem permissão (pausa + aviso ao gestor, sem marcar dezenas de itens como erro);
+ *  { transitorio } = rede/5xx/instabilidade (espera curta, tentativas limitadas); o resto é falha só daquele item. */
+const IG_CODIGOS_LIMITE_ = [4, 9, 17, 32, 341, 368, 613];                       // códigos de limite/bloqueio documentados na Graph API
+const IG_SUB_LIMITE_ = [2207042, 2207051, 2207069];                             // 2207042 = teto de publicações; 2207051 = ação bloqueada (anti-spam)
+const IG_TXT_LIMITE_ = /too many (?:actions|requests|calls)|performing too many|action (?:is |was |has been )?blocked|blocked (?:from|for)|rate.?limit|try again later|request limit|limit (?:reached|exceeded)|calls? within one hour|temporarily (?:blocked|restricted)|spam/i;
+const IG_TXT_TOKEN_ = /session has expired|error validating access token|invalid oauth|access token (?:has )?expired|token (?:has )?expired|has not authorized application|session (?:has been )?invalidated|password (?:was )?changed/i;
+const IG_TXT_TRANSITORIO_ = /unexpected error|unknown error|temporar(?:il)?y unavailable|service unavailable|please retry|timed? ?out|timeout|não consegui falar com o instagram/i;
 export function fraseErroIG(e) {
-  const code = e && e.code, sub = e && e.sub, msg = String((e && e.message) || '').replace(/access_token=[^&\s]+/g, 'access_token=***');
-  if (code === 190) return { frase: 'O token do Instagram venceu ou foi recusado. Gere outro e conecte de novo.', fatal: true };
-  if (code === 10 || code === 200 || /permission/i.test(msg)) return { frase: 'O token não tem a permissão de publicar (instagram_business_content_publish). Gere outro token marcando essa permissão.', fatal: true };
-  if (code === 4 || code === 17 || code === 32 || code === 613 || sub === 2207051) return { frase: 'O Instagram pediu para esperar (limite de publicações). Tento de novo mais tarde.', espera: true };
-  if (sub === 2207026 || sub === 2207052 || sub === 2207003 || /download|fetch|unsupported|format|ratio|aspect/i.test(msg)) return { frase: 'O Instagram não aceitou a mídia (precisa ser JPEG ou MP4 público, dentro das proporções). ' + msg.slice(0, 140) };
+  const code = Number(e && e.code), sub = Number(e && e.sub), http = Number(e && e.http);
+  const msg = String((e && e.message) || '').replace(/access_token=[^&\s]+/g, 'access_token=***').replace(/^Instagram:\s*/i, '');
+  if (code === 190 || code === 102 || IG_TXT_TOKEN_.test(msg)) return { frase: 'O token do Instagram venceu ou foi recusado. Gere outro e conecte de novo (Conexões). As postagens do Instagram esperam; nada vira erro.', fatal: true, conta: 'token' };
+  if (code === 10 || code === 200 || /permission/i.test(msg)) return { frase: 'O token não tem a permissão de publicar (instagram_business_content_publish). Gere outro token marcando essa permissão. As postagens do Instagram esperam; nada vira erro.', fatal: true, conta: 'permissao' };
+  if (IG_CODIGOS_LIMITE_.indexOf(code) !== -1 || IG_SUB_LIMITE_.indexOf(sub) !== -1 || (code >= 80000 && code <= 80014) || http === 429 || IG_TXT_LIMITE_.test(msg)) return { frase: 'O Instagram pediu para esperar (limite de ações do Instagram). As postagens do Instagram ficam em pausa e saem sozinhas depois; o WhatsApp segue normal.', espera: true };
+  if (sub === 2207026 || sub === 2207052 || sub === 2207003 || sub === 2207004 || sub === 2207005 || sub === 2207009 || /download|fetch|unsupported|format|ratio|aspect|media (?:type|id)|invalid (?:image|video)/i.test(msg)) return { frase: 'O Instagram não aceitou a mídia (precisa ser JPEG ou MP4 público, dentro das proporções). ' + msg.slice(0, 140) };
+  if (http === 0 || http >= 500 || code === 1 || code === 2 || (e && e.transitorio) || IG_TXT_TRANSITORIO_.test(msg)) return { frase: 'O Instagram ficou instável agora (sem resposta ou erro temporário). Tento de novo em poucos minutos.', transitorio: true };
   return { frase: 'Instagram: ' + (msg || 'erro desconhecido').slice(0, 200) };
 }
 function parametrosContainer(p, m, filho) {
@@ -1435,6 +1456,18 @@ async function enviarStatusWame_(env, p) {
   return { ok: true, canal: 'whatsapp2' };
 }
 
+/** v1.3/v7.48.3: a perna do WhatsApp do "ambos" já foi enviada (ou está em confirmação)? Nunca reenviar: requestId estável. */
+function zapJaEnviado_(p) { return String(p.ig_id || '').indexOf('zap:') === 0 || !!p.zap_estado; }
+/** Envia SÓ a perna do WhatsApp Status 1 do "ambos" e grava o estado em zap_* (não mexe no status do Instagram). */
+async function enviarPernaZapAmbos_(env, p) {
+  const z = await enviarWhatsAppSo_(env, p), em = agora(), rid = z.requestId || requestIdZap_(1, p.id, 0);
+  if (z.ok) await env.DB.prepare("UPDATE postagem SET ig_id=?, zap_estado='confirmado', zap_req=?, zap_desde=?, zap_consulta=?, zap_erro='', atualizado_em=? WHERE id=?").bind('zap:' + rid, rid, em, em, em, p.id).run();
+  else if (z.pendente) await env.DB.prepare("UPDATE postagem SET zap_estado='aguardando', zap_req=?, zap_desde=?, zap_consulta=?, zap_tent=0, zap_erro='', atualizado_em=? WHERE id=?").bind(rid, em, em, em, p.id).run();
+  else await env.DB.prepare("UPDATE postagem SET zap_estado='erro', zap_req=?, zap_erro=?, atualizado_em=? WHERE id=?").bind(rid, ('WhatsApp Status 1: ' + String(z.erro || 'o envio falhou') + ' Toque em “Repostar só o WhatsApp” para o próximo horário livre do Status 1.').slice(0, 300), em, p.id).run();
+  p.zap_estado = z.ok ? 'confirmado' : z.pendente ? 'aguardando' : 'erro';
+  if (z.ok) { p.ig_id = 'zap:' + rid; p.zap_desde = em; }
+  return p.zap_estado;
+}
 async function avancarPostagem(env, token, p) {
   if (p.canal === 'grupo') return enviarGrupoClientes_(env, p);
   if (p.canal === 'whatsapp2') return (String(p.ig_id || '').indexOf('zapq:') === 0 || await cfgWafly_(env, 2)) ? enviarStatusWafly2_(env, p) : enviarStatusWame_(env, p);
@@ -1452,14 +1485,7 @@ async function avancarPostagem(env, token, p) {
   /* v1.3/v7.48.3 (canal "ambos"): o WhatsApp é enviado primeiro, mas NÃO segura o Instagram. O estado da perna do WhatsApp
    * fica em zap_* (confirmado | aguardando | erro) e é acompanhado em paralelo pelo cron; o Instagram publica no horário.
    * Se já foi enviado ao WhatsApp numa tentativa anterior, não reenvia (requestId estável). */
-  const zapJaEnviado = String(p.ig_id || '').indexOf('zap:') === 0 || !!p.zap_estado;
-  if (canalUsaWhatsApp_(p.canal) && !zapJaEnviado) {
-    const z = await enviarWhatsAppSo_(env, p), em = agora(), rid = z.requestId || requestIdZap_(1, p.id, 0);
-    if (z.ok) await env.DB.prepare("UPDATE postagem SET ig_id=?, zap_estado='confirmado', zap_req=?, zap_desde=?, zap_consulta=?, zap_erro='', atualizado_em=? WHERE id=?").bind('zap:' + rid, rid, em, em, em, p.id).run();
-    else if (z.pendente) await env.DB.prepare("UPDATE postagem SET zap_estado='aguardando', zap_req=?, zap_desde=?, zap_consulta=?, zap_tent=0, zap_erro='', atualizado_em=? WHERE id=?").bind(rid, em, em, em, p.id).run();
-    else await env.DB.prepare("UPDATE postagem SET zap_estado='erro', zap_req=?, zap_erro=?, atualizado_em=? WHERE id=?").bind(rid, ('WhatsApp Status 1: ' + String(z.erro || 'o envio falhou') + ' Toque em “Repostar só o WhatsApp” para o próximo horário livre do Status 1.').slice(0, 300), em, p.id).run();
-    p.zap_estado = z.ok ? 'confirmado' : z.pendente ? 'aguardando' : 'erro';
-  }
+  if (canalUsaWhatsApp_(p.canal) && !zapJaEnviado_(p)) await enviarPernaZapAmbos_(env, p);
   if (p.status === 'agendado') {
     const r = await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
     if (!r.meta || r.meta.changes !== 1) return;                         // outra execução pegou
@@ -1487,12 +1513,168 @@ async function avancarPostagem(env, token, p) {
 async function esperar(env, p) {
   if (Date.now() - Date.parse(p.inicio_proc || agora()) > MAX_ESPERA_VIDEO_MS) throw new ErroIG({ message: 'o vídeo demorou demais para ser processado', code: 0, error_subcode: 2207052 }, 0);
 }
-async function falhaPostagem(env, p, e) {
+/* ==========================================================================
+ * v7.56 (06/11/2026) -- FILA DE POSTAGENS À PROVA DE FALHAS BOBAS
+ *
+ *  Caso real (05/11, ~21:31–21:40): o Instagram recusou 3 Stories do "ambos" com "User is performing too many actions".
+ *  O WhatsApp de todos saiu, mas viraram erro; um deles era a parte 1 de uma série e a regra de sequência fez TODO o Story e
+ *  o WhatsApp Status 1 esperarem ~22 h. Regras novas:
+ *   1. Uma falha nunca trava a fila dos outros: série com parte em erro/cancelada sai de "ativas" (fica parada, com aviso);
+ *      no "ambos", WhatsApp confirmado = a parte "saiu" para a sequência; o Story que faltou vira "Repostar só o Story".
+ *      Vigia: nenhuma série segura o mesmo canal por mais de 20 min -- passou disso, "precisa de atenção" e a fila segue.
+ *   2. Limite/bloqueio do Instagram = pausa SÓ do Instagram (15 → 30 → 60 → 120 min), sem erro. Na pausa o WhatsApp do
+ *      "ambos" sai no horário e o Instagram sai sozinho depois (sem duplicar o WhatsApp). Espaço mínimo entre publicações do
+ *      Instagram (padrão 3 min), inclusive para "Agora mesmo".
+ *   3. Token vencido = pausa + aviso ao gestor (nada vira erro); instabilidade = espera curta limitada; "enviando" preso há
+ *      mais de 30 min = recuperação automática; mídia inválida = erro só daquele item.
+ *  Tudo aditivo: colunas novas atencao/atencao_em; estado da pausa em cfg (ig_pausa_ate, ig_pausa_motivo, ig_pausa_estado).
+ * ========================================================================== */
+const IG_PAUSA_NIVEIS_MIN_ = [15, 30, 60, 120];          // backoff do limite do Instagram (máx. 2 h)
+const IG_PAUSA_TOKEN_MS_ = 2 * 3600000;                  // token vencido: tenta de novo a cada 2 h até o gestor reconectar
+const IG_PAUSA_INSTAVEL_MS_ = 5 * 60000;                 // rede/5xx do Graph: espera curta
+const IG_SUCESSOS_NORMAL_ = 2;                           // publicações seguidas que zeram o backoff
+const SEGURA_BALDE_MAX_MS_ = 20 * 60000;                 // vigia: tempo máximo que uma série segura o mesmo canal
+const PROCESSANDO_PRESO_MS_ = 30 * 60000;                // "enviando" sem novidade por mais que isso = recuperação
+const MAX_TENT_TRANSITORIO_ = 6;
+const ZAP_OK_ = ['confirmado', 'sem_confirmacao'];
+const MOTIVO_PAUSA_IG_ = { limite: 'limite do Instagram', token: 'token do Instagram vencido — o gestor precisa conectar de novo', permissao: 'token sem permissão de publicar — o gestor precisa gerar outro', instavel: 'Instagram instável (sem resposta)' };
+function zapSaiu_(r) { return !!r && r.canal === 'ambos' && ZAP_OK_.indexOf(String(r.zap_estado || '')) !== -1; }
+/** Para a SEQUÊNCIA, a parte saiu: publicada, feita à mão, ou ("ambos") com o WhatsApp confirmado mesmo que o Instagram falhe/espere. */
+export function parteSaiu_(r) { return !!r && (r.status === 'publicado' || r.status === 'manual_feito' || (zapSaiu_(r) && ['erro', 'agendado', 'processando', 'cancelado'].indexOf(r.status) !== -1)); }   // cancelado + WhatsApp ok = o Story foi repostado à parte
+/** A perna do Instagram dessa parte ainda vai sair (está esperando pausa/espaço/processamento). */
+function igAindaVai_(r) { return zapSaiu_(r) && (r.status === 'agendado' || r.status === 'processando'); }
+/** Falha definitiva da parte: a sequência para aqui (sem segurar ninguém). */
+export function parteFalhou_(r) { return !!r && (r.status === 'cancelado' || r.status === 'erro') && !zapSaiu_(r); }
+function tempoSaiu_(r) { return Date.parse((r && r.publicado_em) || '') || Date.parse((r && r.zap_desde) || '') || Date.parse((r && r.atualizado_em) || '') || 0; }
+/** Canais de contagem que ainda faltam para a postagem (no "ambos" com o WhatsApp já enviado, só o do Instagram). */
+function baldesRestantes_(p) { return p.canal === 'ambos' && zapJaEnviado_(p) ? bucketsDoPost(p.tipo, 'instagram') : bucketsDoPost(p.tipo, p.canal); }
+async function registrarEventoPost_(env, texto) {
+  try { let l = []; try { l = JSON.parse((await cfgGet(env, 'po_eventos')) || '[]'); } catch (e) { l = []; } if (!Array.isArray(l)) l = []; l.unshift({ em: agora(), texto: String(texto).slice(0, 300) }); await cfgSet(env, 'po_eventos', JSON.stringify(l.slice(0, 30))); } catch (e) { /* o registro nunca trava a fila */ }
+}
+export async function lerPausaIg_(env) {
+  let est = {}; try { est = JSON.parse((await cfgGet(env, 'ig_pausa_estado')) || '{}') || {}; } catch (e) { est = {}; }
+  const ate = Date.parse((await cfgGet(env, 'ig_pausa_ate')) || '') || 0;
+  return { ate: ate, motivo: String((await cfgGet(env, 'ig_pausa_motivo')) || ''), tipo: String(est.tipo || ''), nivel: Number(est.nivel) || 0, sucessos: Number(est.sucessos) || 0, ativa: ate > Date.now() };
+}
+/** Liga a pausa SÓ do Instagram. limite = backoff crescente; token/permissão = 2 h (e aviso); instável = 5 min. Devolve a pausa. */
+async function pausarIg_(env, tipo, detalhe) {
+  const a = await lerPausaIg_(env);
+  let nivel = a.nivel, dur;
+  if (tipo === 'limite') { nivel = Math.min(IG_PAUSA_NIVEIS_MIN_.length, nivel + 1); dur = IG_PAUSA_NIVEIS_MIN_[nivel - 1] * 60000; }
+  else if (tipo === 'token' || tipo === 'permissao') dur = IG_PAUSA_TOKEN_MS_;
+  else dur = IG_PAUSA_INSTAVEL_MS_;
+  const ate = Math.max(a.ativa ? a.ate : 0, Date.now() + dur), motivo = MOTIVO_PAUSA_IG_[tipo] || MOTIVO_PAUSA_IG_.limite;
+  await cfgSet(env, 'ig_pausa_ate', new Date(ate).toISOString());
+  await cfgSet(env, 'ig_pausa_motivo', motivo);
+  await cfgSet(env, 'ig_pausa_estado', JSON.stringify({ tipo: tipo, nivel: nivel, sucessos: 0, desde: agora() }));
+  if (tipo === 'token' || tipo === 'permissao') await cfgSet(env, 'ig_aviso_gestor', JSON.stringify({ em: agora(), texto: 'Instagram: ' + motivo + '. As postagens do Instagram estão esperando; o WhatsApp segue normal.' }));
+  await registrarEventoPost_(env, 'Instagram em pausa até ' + horaLocal_(ate) + ' (' + motivo + (detalhe ? '; ' + detalhe : '') + '). WhatsApp, Grupo e Status 2 seguem normais.');
+  return { ate: ate, motivo: motivo, tipo: tipo, nivel: nivel, sucessos: 0, ativa: true };
+}
+/** Publicação do Instagram deu certo: depois de 2 seguidas o backoff volta ao normal; token voltou = some o aviso. */
+async function sucessoIg_(env, pausa) {
+  if (!pausa || (!pausa.nivel && !pausa.tipo)) return;
+  const sucessos = (Number(pausa.sucessos) || 0) + 1, normal = sucessos >= IG_SUCESSOS_NORMAL_;
+  await cfgSet(env, 'ig_pausa_estado', JSON.stringify(normal ? { tipo: '', nivel: 0, sucessos: 0 } : { tipo: pausa.tipo, nivel: pausa.nivel, sucessos: sucessos }));
+  if (pausa.tipo === 'token' || pausa.tipo === 'permissao') await cfgSet(env, 'ig_aviso_gestor', null);
+  Object.assign(pausa, normal ? { tipo: '', nivel: 0, sucessos: 0 } : { sucessos: sucessos });
+  if (normal) await registrarEventoPost_(env, 'Instagram voltou ao normal (publicações seguidas sem bloqueio).');
+}
+/** Botão do gestor "Retomar Instagram agora" e reconexão do token: limpa a pausa (o backoff só zera com publicações bem-sucedidas). */
+async function retomarIg_(env, quem) {
+  const a = await lerPausaIg_(env);
+  await cfgSet(env, 'ig_pausa_ate', null); await cfgSet(env, 'ig_pausa_motivo', null);
+  if (a.tipo === 'token' || a.tipo === 'permissao') { await cfgSet(env, 'ig_aviso_gestor', null); await cfgSet(env, 'ig_pausa_estado', JSON.stringify({ tipo: '', nivel: a.nivel, sucessos: 0 })); }
+  await registrarEventoPost_(env, 'Pausa do Instagram encerrada' + (quem ? ' (' + quem + ')' : '') + '.');
+  return a;
+}
+/** O que impede o Instagram de ser chamado agora (null = livre). */
+function bloqueioIg_(token, pausa) {
+  if (!token) return { tipo: 'desconectado', ate: '', motivo: 'Instagram desconectado — o gestor precisa conectar de novo' };
+  if (pausa && pausa.ativa) return { tipo: pausa.tipo || 'limite', ate: new Date(pausa.ate).toISOString(), motivo: pausa.motivo || MOTIVO_PAUSA_IG_.limite };
+  return null;
+}
+function fraseEsperaIg_(b) { return 'Aguardando a pausa do Instagram' + (b.ate ? ' (até ' + horaLocal_(b.ate) + ')' : '') + ': ' + b.motivo + '. Sai sozinho depois, sem repetir o WhatsApp. Não é erro.'; }
+async function marcarAtencao_(env, id, frase) {
+  const g = await env.DB.prepare("UPDATE postagem SET atencao=?, atencao_em=?, atualizado_em=? WHERE id=? AND COALESCE(atencao,'')=''").bind(String(frase).slice(0, 300), agora(), agora(), id).run();
+  if (g.meta && g.meta.changes === 1) await registrarEventoPost_(env, 'Postagem ' + id + ': ' + frase);
+}
+async function falhaPostagem(env, p, e, ctxFila) {
   const f = fraseErroIG(e);
-  if (f.espera) { await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, containers='', erro=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() + 30 * 60000).toISOString(), f.frase, agora(), p.id).run(); return; }
+  if (f.espera || f.conta) {
+    /* Limite/bloqueio ou token: a culpa não é DESTA postagem. Pausa só o Instagram e a postagem continua agendada no mesmo
+     * lugar da fila (sem gastar tentativa e sem apagar o container já criado: menos ações no Instagram). */
+    const pausa = await pausarIg_(env, f.espera ? 'limite' : f.conta, '');
+    if (ctxFila) ctxFila.pausa = pausa;
+    await env.DB.prepare("UPDATE postagem SET status='agendado', inicio_proc='', erro=?, atualizado_em=? WHERE id=? AND status IN ('agendado','processando')").bind(fraseEsperaIg_(bloqueioIg_('x', pausa)).slice(0, 300), agora(), p.id).run();
+    return;
+  }
   const tent = (Number(p.tentativas) || 0) + 1;
+  if (f.transitorio) {
+    const pausa = await pausarIg_(env, 'instavel', '');
+    if (ctxFila) ctxFila.pausa = pausa;
+    if (tent >= MAX_TENT_TRANSITORIO_) { await env.DB.prepare("UPDATE postagem SET status='erro', tentativas=?, erro=?, atualizado_em=? WHERE id=?").bind(tent, 'O Instagram ficou instável em ' + tent + ' tentativas seguidas. Confira no Instagram se saiu; se não saiu, use “Postar agora mesmo assim”.', agora(), p.id).run(); return; }
+    await env.DB.prepare("UPDATE postagem SET status='agendado', inicio_proc='', tentativas=?, erro=?, atualizado_em=? WHERE id=?").bind(tent, f.frase, agora(), p.id).run();
+    return;
+  }
   if (f.fatal || tent >= MAX_TENT) { await env.DB.prepare("UPDATE postagem SET status='erro', tentativas=?, erro=?, containers='', atualizado_em=? WHERE id=?").bind(tent, f.frase, agora(), p.id).run(); return; }
   await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=?, containers='', erro=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() + 5 * 60000).toISOString(), tent, f.frase, agora(), p.id).run();
+}
+/** Recuperação automática: "enviando" sem novidade há mais de 30 min. Nunca reenvia o que pode já ter saído no WhatsApp/Grupo. */
+async function recuperarPresos_(env) {
+  try {
+    const limite = new Date(Date.now() - PROCESSANDO_PRESO_MS_).toISOString();
+    const l = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND status='processando' AND COALESCE(atualizado_em,'')<>'' AND atualizado_em<? AND COALESCE(NULLIF(inicio_proc,''),atualizado_em)<? ORDER BY id LIMIT 20").bind(limite, limite).all()).results || [];
+    for (const p of l) {
+      try {
+        const marcador = String(p.ig_id || '');
+        if (marcador.indexOf('zapq:') === 0) {
+          if (canalUsaInstagram_(p.canal)) continue;                       // "ambos" antigo: a migração da fila cuida
+          const rz = await resolverZapPendente_(env, p, true);
+          await registrarEventoPost_(env, 'Postagem ' + p.id + ': estava aguardando a Wafly há mais de 30 min; consulta forçada (' + rz.r + ').');
+          continue;
+        }
+        if (canalComRecibo_(p.canal)) {
+          const g = await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=? AND status='processando'").bind(nomeCanalRecibo_(p.canal) + ': ficou “enviando” por mais de 30 min sem confirmação. Confira no WhatsApp antes de qualquer novo envio; depois escolha “Repostar com novo ID” ou “Descartar”.', agora(), p.id).run();
+          if (g.meta && g.meta.changes === 1) await registrarEventoPost_(env, 'Postagem ' + p.id + ' (' + nomeCanalRecibo_(p.canal) + '): presa em “enviando” há mais de 30 min; saiu da fila sem reenviar.');
+          continue;
+        }
+        if (canalUsaInstagram_(p.canal)) {
+          const tent = (Number(p.tentativas) || 0) + 1;
+          const g = tent >= MAX_TENT
+            ? await env.DB.prepare("UPDATE postagem SET status='erro', tentativas=?, erro=?, atualizado_em=? WHERE id=? AND status='processando'").bind(tent, 'Instagram: ficou “enviando” por mais de 30 min, mesmo tentando de novo. Confira no Instagram; se não saiu, use “Postar agora mesmo assim”.', agora(), p.id).run()
+            : await env.DB.prepare("UPDATE postagem SET status='agendado', inicio_proc='', tentativas=?, erro=?, atualizado_em=? WHERE id=? AND status='processando'").bind(tent, 'Recuperado automaticamente: estava “enviando” ao Instagram há mais de 30 min. Tento de novo, aproveitando a mídia já enviada.', agora(), p.id).run();
+          if (g.meta && g.meta.changes === 1) await registrarEventoPost_(env, 'Postagem ' + p.id + ': presa em “enviando” ao Instagram há mais de 30 min; ' + (tent >= MAX_TENT ? 'ficou com erro claro.' : 'voltou para a fila.'));
+        }
+      } catch (e) { /* próxima passagem */ }
+    }
+  } catch (e) { /* esquema antigo */ }
+}
+/** Séries que seguram o canal agora (para as partes saírem juntas), com o vigia de 20 min. */
+async function seriesAtivas_(env, cfgP, pausa, token, cotaCheia) {
+  const rows = (await env.DB.prepare("SELECT id,serie,parte,partes,status,tipo,canal,modo,zap_estado,zap_desde,publicado_em,agendado_em,inicio_proc,atualizado_em,atencao FROM postagem WHERE serie<>'' AND serie IN (SELECT serie FROM postagem WHERE serie<>'' AND status IN ('agendado','processando','manual_pendente')) ORDER BY serie,parte").all()).results || [];
+  const porSerie = new Map(); for (const r of rows) { if (!porSerie.has(r.serie)) porSerie.set(r.serie, []); porSerie.get(r.serie).push(r); }
+  const out = [], agoraMs = Date.now();
+  for (const [serie, ps] of porSerie) {
+    let frente = null, prev = null;
+    for (const r of ps) { if (parteSaiu_(r)) { prev = r; continue; } frente = r; break; }
+    if (!frente || parteFalhou_(frente) || frente.atencao) continue;                     // terminou, parou (erro/cancelada) ou já pediu atenção: não segura ninguém
+    if (['agendado', 'processando', 'manual_pendente'].indexOf(frente.status) === -1) continue;
+    if (!prev && frente.status !== 'processando') continue;                              // ainda não começou
+    let devido = frente.status === 'processando' ? (Date.parse(frente.inicio_proc || '') || Date.parse(frente.atualizado_em || '') || agoraMs) : Math.max(Date.parse(frente.agendado_em || '') || 0, prev ? tempoSaiu_(prev) : 0);
+    if (devido > agoraMs + SEGURA_BALDE_MAX_MS_) continue;                                // a próxima parte está longe: não segura o canal até lá
+    if (frente.modo === 'auto' && cotaCheia(frente)) continue;                            // limite de 24 h do canal: espera vaga, sem segurar os outros
+    if (frente.modo === 'auto' && canalUsaInstagram_(frente.canal) && !(frente.canal === 'ambos' && !zapJaEnviado_(frente))) {
+      if (!token || pausa.ativa) devido = agoraMs; else devido = Math.max(devido, pausa.ate || 0);   // a pausa do Instagram não conta como "presa"
+    }
+    if (agoraMs - devido > SEGURA_BALDE_MAX_MS_) {
+      const motivo = frente.status === 'manual_pendente' ? 'aguardando a postagem manual' : frente.status === 'processando' ? 'ainda enviando ao destino' : 'não conseguiu sair no horário';
+      await marcarAtencao_(env, frente.id, 'Precisa de atenção: a parte ' + frente.parte + ' de ' + frente.partes + ' está parada há mais de 20 min (' + motivo + '). A fila dos outros seguiu; esta parte continua tentando sozinha.');
+      continue;
+    }
+    out.push({ serie: serie, tipo: frente.tipo, canal: frente.canal, ordem: String(ps[0].agendado_em || ''), id: ps[0].id });
+  }
+  return out.sort((a, b) => a.ordem.localeCompare(b.ordem) || a.id - b.id);
 }
 /** Chamado a cada minuto pelo cron (e logo ao criar "agora"). Nunca lança. */
 async function dispararPostagens_(env){
@@ -1528,30 +1710,36 @@ export async function processarPostagens(env) {
       }
     }
     await acompanharPernasZap_(env);                                   // v7.48.3: WhatsApp do "ambos" em paralelo, sem segurar a fila
+    await recuperarPresos_(env);                                       // v7.56: "enviando" preso há mais de 30 min
     let loteRaw=await cfgGet(env,'post_agora_lote'),loteAgora=loteRaw?JSON.parse(loteRaw):null;
     if(loteAgora&&(await estadoLoteAgora_(env,loteAgora)).fim){if(!await finalizarLoteAgora_(env,loteRaw))return {feitas:0};loteAgora=null;}
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
-    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY CASE WHEN serie<>'' AND (status='processando' OR (parte>1 AND EXISTS(SELECT 1 FROM postagem ant WHERE ant.serie=postagem.serie AND ant.parte=postagem.parte-1 AND ant.status IN ('publicado','manual_feito')))) THEN 0 WHEN serie<>'' AND parte>1 THEN 2 ELSE 1 END, agendado_em, id LIMIT 200").bind(t).all()).results || [];
+    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY CASE WHEN serie<>'' AND (status='processando' OR (parte>1 AND EXISTS(SELECT 1 FROM postagem ant WHERE ant.serie=postagem.serie AND ant.parte=postagem.parte-1 AND (ant.status IN ('publicado','manual_feito') OR (ant.canal='ambos' AND ant.zap_estado IN ('confirmado','sem_confirmacao')))))) THEN 0 WHEN serie<>'' AND parte>1 THEN 2 ELSE 1 END, agendado_em, id LIMIT 200").bind(t).all()).results || [];
     if (!lin.length) return { feitas: 0 };
     const cfgP = await lerCfgPost(env);
     /* v1.2: o token do Instagram só é exigido quando ALGUMA postagem vencida vai para o Instagram.
-     * Antes ele era exigido para a fila inteira: com "somente WhatsApp" escolhido, sem token do
-     * Instagram a peça virava erro e o WhatsApp nunca era chamado. */
+     * v7.56: sem token, as postagens do Instagram ESPERAM (o "ambos" manda o WhatsApp); nada vira erro em massa. */
     const precisaIg = lin.some((p) => canalUsaInstagram_(p.canal));
     let token = '';
     if (precisaIg) { token = await cfgGet(env, 'ig_token'); if (token) token = await renovarToken(env, token); }
+    const ctxFila = { pausa: await lerPausaIg_(env) };
+    const igGapMs = (Number(cfgP.igGapMin) || 0) * 60000;
+    let ultimaIg = precisaIg ? Math.max(Number(await cfgGet(env, 'ig_ultima_ms')) || 0, Date.parse(((await env.DB.prepare("SELECT MAX(publicado_em) AS m FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND ig_id NOT LIKE 'zap:%'").first()) || {}).m || '') || 0) : 0;
     const desde = new Date(Date.now() - 86400000).toISOString();
     const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
     /* v1.6: além do teto do Instagram, cada canal (Story, Status do WhatsApp, Reels, Carrossel, Feed) tem o SEU limite nas últimas 24 h. "Ambos" conta nos dois. */
     const porCanal = {}; for (const b of CANAIS_FILA) porCanal[b] = await contarUsados24h_(env, b, desde);
-    const ativas=(await env.DB.prepare("SELECT s.serie,s.tipo,s.canal FROM postagem s WHERE s.serie<>'' AND s.parte=1 AND s.status IN ('publicado','processando','manual_feito','erro') AND EXISTS(SELECT 1 FROM postagem q WHERE q.serie=s.serie AND q.status IN ('agendado','processando','erro','manual_pendente')) ORDER BY s.agendado_em,s.id").all()).results||[];
+    let novas = usados;
+    const cotaCheia = (p) => { const bs = baldesRestantes_(p); return (canalUsaInstagram_(p.canal) && novas >= (cfgP.max24h || MAX_POSTS_24H)) || bs.some((b) => porCanal[b] >= limiteDoTipo(cfgP, b)); };
+    const ativas = await seriesAtivas_(env, cfgP, ctxFila.pausa, token, cotaCheia);
     const recentes=(await env.DB.prepare("SELECT id,serie,origem_midia,tipo,canal,publicado_em FROM postagem WHERE status IN ('publicado','manual_feito') AND publicado_em>? ORDER BY publicado_em DESC LIMIT 1000").bind(new Date(Date.now()-86400000).toISOString()).all()).results||[];
     const estados=new Map(lin.filter(p=>p.serie).map(p=>[p.serie+':'+p.parte,p])),anteriores=lin.filter(p=>p.serie&&p.parte>1);
-    for(let i=0;i<anteriores.length;i+=40){const parte=anteriores.slice(i,i+40),rs=(await env.DB.prepare('SELECT serie,parte,status,publicado_em FROM postagem WHERE '+parte.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...parte.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
+    for(let i=0;i<anteriores.length;i+=40){const parte=anteriores.slice(i,i+40),rs=(await env.DB.prepare('SELECT id,serie,parte,status,canal,zap_estado,zap_desde,publicado_em,atualizado_em FROM postagem WHERE '+parte.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...parte.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
     const cfgStatus2 = lin.some(p => p.canal === 'whatsapp2' && p.status === 'agendado') ? await cfgWafly_(env, 2) : null;
     const impedimentoStatus2 = cfgStatus2 ? await impedimentoStatus2_(cfgStatus2) : '';
-    let feitas = 0, novas = usados, tentadas = 0;
+    let feitas = 0, tentadas = 0;
+    const lerAtual = (id) => env.DB.prepare('SELECT id,status,canal,zap_estado,zap_desde,publicado_em,atualizado_em FROM postagem WHERE id=?').bind(id).first();
     let estadoAgora=loteAgora?await estadoLoteAgora_(env,loteAgora):null;const bloqueadasAgora=new Set();
     for (const p of lin) {
       let imediato=false;
@@ -1563,41 +1751,68 @@ export async function processarPostagens(env) {
         if (p.erro !== impedimentoStatus2) await env.DB.prepare("UPDATE postagem SET erro=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(impedimentoStatus2, agora(), p.id).run();
         continue;
       }
-      let anterior=null;
+      let anterior=null,igEsperaAnterior=false;
       if(p.serie&&p.parte>1){
         anterior=estados.get(p.serie+':'+(p.parte-1));
-        if(!anterior||!['publicado','manual_feito'].includes(anterior.status))continue;
-        if(!imediato&&!cfgP.partesRapidas&&Date.parse(anterior.publicado_em)+Math.max(...bucketsDoPost(p.tipo,p.canal).map(b=>gapDoTipoMs(cfgP,b)))>Date.now())continue;
+        if(parteFalhou_(anterior)){                                   // v7.56: sequência parada -- avisa e não segura ninguém
+          if(!p.atencao){const frase='Sequência parada: a parte '+(p.parte-1)+' de '+p.partes+' '+(anterior.status==='cancelado'?'foi descartada':'não saiu')+'. Esta parte não sai sozinha para não ficar fora de ordem. Use “Cancelar partes pendentes” ou agende o vídeo de novo.';await marcarAtencao_(env,p.id,frase);p.atencao=frase;}
+          continue;
+        }
+        if(!parteSaiu_(anterior))continue;
+        if(!imediato&&!cfgP.partesRapidas&&tempoSaiu_(anterior)+Math.max(...bucketsDoPost(p.tipo,p.canal).map(b=>gapDoTipoMs(cfgP,b)))>Date.now())continue;
+        igEsperaAnterior=igAindaVai_(anterior);                        // o Story da parte anterior ainda vai sair: este Story espera, o WhatsApp não
       }
       const minha=ativas.findIndex(s=>s.serie===p.serie);
-      if(ativas.some((s,i)=>s.serie!==p.serie&&(minha<0||i<minha)&&bucketsDoPost(s.tipo,s.canal).some(b=>bucketsDoPost(p.tipo,p.canal).includes(b))))continue;
+      if(ativas.some((s,i)=>s.serie!==p.serie&&(minha<0||i<minha)&&bucketsDoPost(s.tipo,s.canal).some(b=>baldesRestantes_(p).includes(b))))continue;
       if (p.status === 'agendado' && !(anterior&&cfgP.partesRapidas) && !p.urgente && !imediato && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
         tentadas++;try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
         continue;
       }
       if(p.status==='agendado'&&!imediato&&!(anterior&&cfgP.partesRapidas)&&!(p.urgente&&cfgP.agoraIgnora)){
-        let liberar=0;for(const r of recentes)if((p.serie||r.serie)&&r.id!==p.id&&!(p.serie&&r.serie===p.serie)&&!(p.origem_midia&&r.origem_midia===p.origem_midia))for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+Math.max(gapDoTipoMs(cfgP,b),Number(p.intervalo_ms)||0));
+        let liberar=0;for(const r of recentes)if((p.serie||r.serie)&&r.id!==p.id&&!(p.serie&&r.serie===p.serie)&&!(p.origem_midia&&r.origem_midia===p.origem_midia))for(const b of baldesRestantes_(p))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+Math.max(gapDoTipoMs(cfgP,b),Number(p.intervalo_ms)||0));
         if(liberar>Date.now()){tentadas++;await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
       }
       const usaIg = canalUsaInstagram_(p.canal);
-      if (usaIg && !token) { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); continue; }
+      if (p.status === 'agendado' && cotaCheia(p)) continue;              // teto do Instagram / limite do canal: fica agendada até abrir vaga
+      /* v7.56: o Instagram só é chamado se estiver livre (token, pausa, espaço mínimo, Story anterior da série). */
+      const bIg = usaIg ? bloqueioIg_(token, ctxFila.pausa) : null;
+      const igEspera = bIg ? 'pausa' : usaIg && igEsperaAnterior ? 'anterior' : usaIg && p.status === 'agendado' && igGapMs && ultimaIg + igGapMs > Date.now() ? 'espaco' : '';
+      if (igEspera) {
+        if (p.canal === 'ambos' && p.status === 'agendado' && !zapJaEnviado_(p)) {          // o WhatsApp sai no horário; o Instagram espera
+          if (bucketsDoPost(p.tipo, 'whatsapp').some((b) => porCanal[b] >= limiteDoTipo(cfgP, b))) continue;
+          tentadas++; porCanal.status++;
+          try { await enviarPernaZapAmbos_(env, p); } catch (e) { /* próximo minuto */ }
+          if (p.serie) { const atual = await lerAtual(p.id); if (atual) estados.set(p.serie + ':' + p.parte, Object.assign({}, p, atual)); }
+        }
+        if (bIg) {
+          if (p.status === 'processando' && !String(p.ig_id || '').startsWith('zapq:')) await env.DB.prepare("UPDATE postagem SET status='agendado', inicio_proc='', atualizado_em=? WHERE id=? AND status='processando'").bind(agora(), p.id).run();
+          const frase = fraseEsperaIg_(bIg).slice(0, 300);
+          if (p.erro !== frase) await env.DB.prepare("UPDATE postagem SET erro=?, atualizado_em=? WHERE id=? AND status IN ('agendado','processando')").bind(frase, agora(), p.id).run();
+        }
+        continue;
+      }
       if (p.status === 'agendado') {
-        const bs = bucketsDoPost(p.tipo, p.canal);
-        if (usaIg && novas >= (cfgP.max24h || MAX_POSTS_24H)) continue;                                  // teto do Instagram: fica agendada até abrir vaga
-        if (bs.some((b) => porCanal[b] >= limiteDoTipo(cfgP, b))) continue;                              // limite do canal (ex.: Story): fica agendada até abrir vaga
         if (usaIg) novas++;
-        bs.forEach((b) => { porCanal[b]++; });
+        baldesRestantes_(p).forEach((b) => { porCanal[b]++; });
+        if (usaIg) { ultimaIg = Date.now(); try { await cfgSet(env, 'ig_ultima_ms', ultimaIg); } catch (e) { /* espaço só em memória */ } }
       }
       tentadas++;
-      try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
-      const atual=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE id=?').bind(p.id).first();
+      try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e, ctxFila); } catch (e2) { /* próximo minuto tenta de novo */ } }
+      const atual=await lerAtual(p.id);
       if(loteAgora)estadoAgora=await estadoLoteAgora_(env,loteAgora);
-      if(atual?.status==='publicado')recentes.push({...p,...atual});
-      if(p.serie){
-        if(atual){estados.set(p.serie+':'+p.parte,atual);if(p.parte===1&&!ativas.some(s=>s.serie===p.serie))ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});if(atual.status==='publicado'){if(p.parte===p.partes){const i=ativas.findIndex(s=>s.serie===p.serie);if(i>=0)ativas.splice(i,1);}}}
+      if(atual?.status==='publicado'){
+        recentes.push({...p,...atual});
+        if(usaIg){ultimaIg=Math.max(ultimaIg,Date.now());try{await sucessoIg_(env,ctxFila.pausa);}catch(e){/* só o backoff */}}
+        if(p.atencao)try{await env.DB.prepare("UPDATE postagem SET atencao='' WHERE id=?").bind(p.id).run();}catch(e){/* aviso */}
+      }
+      if(p.serie&&atual){
+        const st={...p,...atual};estados.set(p.serie+':'+p.parte,st);
+        const i=ativas.findIndex(s=>s.serie===p.serie);
+        if(parteFalhou_(st)||(parteSaiu_(st)&&p.parte===p.partes)){if(i>=0)ativas.splice(i,1);}
+        else if(p.parte===1&&i<0)ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});
       }
     }
-    const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND e.status IN ('erro','cancelado','manual_pendente')) LIMIT 1").bind(agora()).first());
+    const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND (e.status='manual_pendente' OR (e.status IN ('erro','cancelado') AND NOT (e.canal='ambos' AND e.zap_estado IN ('confirmado','sem_confirmacao'))))) LIMIT 1").bind(agora()).first());
     if(loteAgora&&(await estadoLoteAgora_(env,loteAgora)).fim)await finalizarLoteAgora_(env,loteRaw);
     return { feitas: feitas,continuar:tentadas>0&&!!(rapidas||loteAgora) };
   } catch (e) { return { feitas: 0, erro: true }; }
@@ -1643,7 +1858,7 @@ export const CANAL_FILA_PADRAO = {
   carrossel: { max24h: 20, gapMin: 300, gapMax: 600 },
   reels: { max24h: 10, gapMin: 600, gapMax: 1200 },
 };
-export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '06:30', max24h: 90, agoraIgnora: true, partesRapidas: true, canais: CANAL_FILA_PADRAO };
+export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '06:30', max24h: 90, agoraIgnora: true, partesRapidas: true, igGapMin: 3, canais: CANAL_FILA_PADRAO };   // v7.56: igGapMin = espaço mínimo (min) entre publicações do Instagram, até no "Agora mesmo"
 /** Em quais "canais de contagem" uma postagem entra: o tipo dela (se vai ao Instagram) e/ou "status" (se vai ao WhatsApp). */
 export function bucketsDoPost(tipo, canal) {
   const out = [];
@@ -1671,7 +1886,7 @@ export function normalizarCfgPost(c) {
   });
   return {
     pausaAtiva: x.pausaAtiva === undefined ? d.pausaAtiva : !!x.pausaAtiva, pausaDe: hm(x.pausaDe, d.pausaDe), pausaAte: hm(x.pausaAte, d.pausaAte),
-    max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora, canais: canais, partesRapidas:x.partesRapidas===undefined?true:!!x.partesRapidas,
+    max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora, canais: canais, partesRapidas:x.partesRapidas===undefined?true:!!x.partesRapidas, igGapMin: num(x.igGapMin, 0, 30, d.igGapMin),
   };
 }
 /** Junta o que o gestor mandou (pode ser só um canal) com o que já estava salvo, canal por canal. */
@@ -1831,7 +2046,7 @@ function estadoZapCli_(r) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, origemMidia:r.origem_midia||'', intervaloMs:Number(r.intervalo_ms)||0, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, zap: estadoZapCli_(r), grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, origemMidia:r.origem_midia||'', intervaloMs:Number(r.intervalo_ms)||0, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, zap: estadoZapCli_(r), grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal), atencao: ['agendado', 'processando', 'manual_pendente', 'erro'].indexOf(r.status) !== -1 ? String(r.atencao || '') : '' };
 }
 
 /* ====================================================================
@@ -1957,6 +2172,39 @@ export async function rotasFotos(env, ctx, req, url, J, perms) {       // /fotos
     return J({ ok: true, n: ids.length });
   }
   return null;
+}
+/** v7.56: "Saúde das postagens" por canal (Instagram, WhatsApp Status 1, Grupo, Status 2), em português, para a faixa da Fila. */
+async function saudePostagens_(env, rows, conectado, perms) {
+  const pausa = await lerPausaIg_(env), bloqueio = bloqueioIg_(conectado ? 'x' : '', pausa), ativos = ['agendado', 'processando', 'manual_pendente', 'erro'];
+  let eventos = []; try { eventos = JSON.parse((await cfgGet(env, 'po_eventos')) || '[]'); } catch (e) { eventos = []; }
+  const canalDe = (r, perna) => perna === 'zap' ? 'status' : r.canal === 'grupo' ? 'grupo' : r.canal === 'whatsapp2' ? 'status2' : r.canal === 'whatsapp' ? 'status' : 'instagram';
+  const nomes = { instagram: 'Instagram', status: 'WhatsApp Status 1', grupo: 'Grupo clientes', status2: 'WhatsApp Status 2' };
+  const c = {}; Object.keys(nomes).forEach((k) => { c[k] = { nome: nomes[k], estado: 'normal', texto: 'Normal', atencao: 0, motivos: [] }; });
+  const marca = (k, motivo) => { c[k].atencao++; if (motivo && c[k].motivos.length < 3 && c[k].motivos.indexOf(motivo) === -1) c[k].motivos.push(String(motivo).slice(0, 220)); };
+  for (const r of rows || []) {
+    if (ativos.indexOf(r.status) === -1 && !(r.canal === 'ambos' && r.zap_estado === 'erro' && r.status === 'publicado')) continue;
+    const at = String(r.atencao || '');
+    if (r.canal === 'ambos') {
+      if (r.status === 'erro' || at) marca('instagram', at || (zapSaiu_(r) ? 'Instagram não saiu (o WhatsApp saiu) — use “Repostar só o ' + (r.tipo === 'story' ? 'Story' : 'Instagram') + '”.' : r.erro));
+      if (r.zap_estado === 'erro') marca('status', r.zap_erro || 'O WhatsApp não saiu.');
+    } else if (r.status === 'erro' || at) marca(canalDe(r), at || r.erro);
+  }
+  if (bloqueio) {
+    c.instagram.estado = bloqueio.tipo === 'desconectado' || bloqueio.tipo === 'token' || bloqueio.tipo === 'permissao' ? 'desconectado' : 'pausa';
+    c.instagram.texto = bloqueio.ate ? 'Em pausa até ' + horaLocal_(bloqueio.ate) + ' (' + bloqueio.motivo + ')' : bloqueio.motivo;
+    c.status.texto = 'Seguindo normal';
+  }
+  Object.keys(c).forEach((k) => { if (c[k].atencao) { if (c[k].estado === 'normal') c[k].estado = 'atencao'; c[k].texto = (k === 'instagram' && bloqueio ? c[k].texto + ' · ' : (k === 'status' && bloqueio ? 'Seguindo normal · ' : '')) + 'Precisa de atenção: ' + c[k].atencao + (c[k].atencao === 1 ? ' item' : ' itens'); } });
+  const total = Object.keys(c).reduce((n, k) => n + c[k].atencao, 0);
+  const geral = bloqueio ? (bloqueio.ate ? 'Instagram em pausa até ' + horaLocal_(bloqueio.ate) + ' (' + bloqueio.motivo + ') — WhatsApp seguindo normal' : bloqueio.motivo + ' — WhatsApp seguindo normal') : total ? 'Precisa de atenção: ' + total + (total === 1 ? ' item' : ' itens') : 'Normal';
+  let aviso = null; try { aviso = JSON.parse((await cfgGet(env, 'ig_aviso_gestor')) || 'null'); } catch (e) { aviso = null; }
+  return { geral: geral, normal: !bloqueio && !total, canais: c, instagram: { estado: c.instagram.estado, ate: bloqueio && bloqueio.ate || '', motivo: bloqueio ? bloqueio.motivo : '', nivel: pausa.nivel }, podeRetomarIg: !!(pausa.ativa && (perms || []).indexOf('gerir_acessos') !== -1), avisoGestor: aviso && aviso.texto ? String(aviso.texto) : '', eventos: (Array.isArray(eventos) ? eventos : []).slice(0, 5), _bloqueio: bloqueio };
+}
+/** Item "aguardando pausa do Instagram" (diferente de erro): vencido, automático e com o Instagram bloqueado agora. */
+function esperaIgPost_(p, bloqueio) {
+  if (!bloqueio || p.modo !== 'auto' || !canalUsaInstagram_(p.canal) || ['agendado', 'processando'].indexOf(p.status) === -1 || String(p.ig_id || '').startsWith('zapq:')) return null;
+  if (p.status === 'agendado' && Date.parse(p.agendado_em) > Date.now()) return null;
+  return { tipo: bloqueio.tipo, ate: bloqueio.ate, motivo: bloqueio.motivo, previsto: bloqueio.ate || '' };
 }
 /** Janela móvel por destino: nenhuma mídia vira outra postagem para retomar. */
 async function cotasPostagens_(env,cfg){
@@ -2134,10 +2382,17 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
     const cfg=await lerCfgPost(env),cotas=await cotasPostagens_(env,cfg);
-    return J({ ok: true, posts: q.map(p=>({...linhaPostagem(p),espera:esperaCotaPost_(p,cotas)})), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: (await status2Info_(env)).ok, status2Motivo: (await status2Info_(env)).motivo, regras: 1, config: cfg, uso24h: Object.fromEntries(CANAIS_FILA.map(b=>[b,cotas.canais[b].usadas])), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    const conectadoIg = !!(await cfgGet(env, 'ig_token')), saude = await saudePostagens_(env, q, conectadoIg, perms);
+    return J({ ok: true, posts: q.map(p=>({...linhaPostagem(p),espera:esperaCotaPost_(p,cotas),esperaIg:esperaIgPost_(p,saude._bloqueio)})), saude: Object.assign({}, saude, { _bloqueio: undefined }), contagens: conta, conectado: conectadoIg, usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: (await status2Info_(env)).ok, status2Motivo: (await status2Info_(env)).motivo, regras: 1, config: cfg, uso24h: Object.fromEntries(CANAIS_FILA.map(b=>[b,cotas.canais[b].usadas])), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if(p==='/post/retomar-pendentes'&&req.method==='POST')return retomarPendentesPost_(env,req,b,perms||[],J);
+  if (p === '/post/ig-retomar' && req.method === 'POST') {                // v7.56: botão do gestor "Retomar Instagram agora"
+    if ((perms || []).indexOf('gerir_acessos') === -1) return J({ ok: false, erro: 'Só o gestor (Admin total) pode retomar o Instagram antes do fim da pausa.' }, 403);
+    const a = await retomarIg_(env, 'retomado pelo gestor');
+    if (ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
+    return J({ ok: true, mensagem: a.ativa ? 'Instagram retomado. As postagens que esperavam a pausa saem na ordem, com o espaço mínimo entre elas.' : 'O Instagram já estava liberado.' });
+  }
   if (p === '/post' && req.method === 'POST') {
     const originais = Array.isArray(b.posts) ? b.posts : [b];
     if (!originais.length || originais.length > 60 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a sessenta postagens por vez.' }, 400);
@@ -2264,7 +2519,9 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const imediato=await cfgGet(env,'post_agora_lote');if(imediato&&p!=='/post/cancelar'&&JSON.parse(imediato).grupos.flat().includes(linha.id))return J({ok:false,erro:'Esta mídia pertence à seleção imediata em andamento. Aguarde ou cancele os destinos pendentes.'},409);
     if((linha.origem_midia||!linha.serie&&linha.criado_em&&JSON.parse(linha.midias||'[]').length)&&['/post/reagendar','/post/proximo'].includes(p))return reagendarMidiaOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
     if(linha.serie&&(p==='/post/proximo'||p==='/post/reagendar'&&linha.parte===1))return reagendarVideoOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
-    if(linha.serie&&['/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
+    // v7.56: na série do "ambos" em que o WhatsApp saiu e só o Instagram falhou, dá para repostar SÓ o Story (cópia avulsa, fora da série).
+    const soIgDaSerie = linha.serie && p === '/post/repostar' && linha.status === 'erro' && zapSaiu_(linha) && String(b.perna || 'instagram') === 'instagram';
+    if(linha.serie&&!soIgDaSerie&&['/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
 
     if (p === '/post/repostar') {
       // Uma cópia por origem: duplo toque/repetição de rede retorna a mesma postagem.
@@ -6726,6 +6983,7 @@ export default {
         if (token.length < 20 || /\s/.test(token)) return J({ ok: false, erro: 'Esse texto não parece um token do Instagram.' }, 400);
         let eu; try { eu = await graph(env, token, '/me?fields=id,username'); } catch (e) { return J({ ok: false, erro: 'O Instagram recusou esse token: ' + String(e.message || e).replace(token, '***').slice(0, 200) }, 400); }
         await cfgSet(env, 'ig_token', token); await cfgSet(env, 'ig_usuario', eu.username || eu.id || '');
+        try { const pz = await lerPausaIg_(env); if (pz.ativa && (pz.tipo === 'token' || pz.tipo === 'permissao')) await retomarIg_(env, 'token conectado de novo'); } catch (e) { /* a pausa vence sozinha */ }
         await cfgSet(env, 'ig_token_exp', Date.now() + 60 * 86400000);     // token de longa duração dura 60 dias; a renovação automática confere de novo
         if (!(await cfgGet(env, 'ig_desde'))) await cfgSet(env, 'ig_desde', agora());                // só o que for postado daqui para frente (histórico: botão "importar os últimos")
         await cfgSet(env, 'falhas', 0);
