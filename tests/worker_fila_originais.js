@@ -180,6 +180,16 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   sqlite.prepare("UPDATE cfg SET valor=? WHERE chave='post_agora_lote'").run(JSON.stringify({grupos:[[faltaStory]],criado:new Date(time).toISOString()}));
   await W.processarPostagens(env);
   assert.equal(sqlite.prepare('SELECT status FROM postagem WHERE id=?').get(faltaStory).status,'publicado','Status já confirmado não consome uma segunda vaga nem impede o Story selecionado');
+  const historicoIg=ins('story-ja-contado',time),igLimitado=ins('story-selecao-limitado',time),grupoLivre=ins('grupo-normal-no-limite',time);
+  sqlite.prepare("UPDATE postagem SET canal='instagram',status='publicado',publicado_em=? WHERE id=?").run(new Date(time).toISOString(),historicoIg);
+  sqlite.prepare("UPDATE postagem SET canal='instagram' WHERE id=?").run(igLimitado);
+  sqlite.prepare("UPDATE postagem SET canal='grupo' WHERE id=?").run(grupoLivre);
+  await chamar('/post/config','POST',{config:{canais:{story:{max24h:1}}}});
+  sqlite.prepare("UPDATE cfg SET valor=? WHERE chave='post_agora_lote'").run(JSON.stringify({grupos:[[jaFoi,igLimitado]],criado:new Date(time).toISOString()}));
+  await W.processarPostagens(env);
+  assert.equal(sqlite.prepare('SELECT status FROM postagem WHERE id=?').get(grupoLivre).status,'publicado','Cota do destino restante não prende outro canal mesmo com irmão já concluído');
+  assert.equal(sqlite.prepare('SELECT status FROM postagem WHERE id=?').get(igLimitado).status,'agendado','Cota do Instagram continua respeitada');
+  sqlite.prepare("UPDATE cfg SET valor='' WHERE chave='post_agora_lote'").run();
   sqlite.prepare("DELETE FROM cfg WHERE chave IN ('ig_token','ig_token_exp')").run();
   sqlite.prepare('DELETE FROM postagem').run();
   const protegido=ins('confirma-pernas',time);sqlite.prepare("UPDATE postagem SET canal='ambos',status='publicado',zap_estado='aguardando' WHERE id=?").run(protegido);

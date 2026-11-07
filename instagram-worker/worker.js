@@ -1745,7 +1745,8 @@ export async function processarPostagens(env) {
       let imediato=false;
       if(loteAgora){const e=estadoAgora;if(e.fim)break;imediato=e.atual.includes(p.id);
         // Uma seleção impedida espera sua correção; não prende os canais da fila comum.
-        const aguardando=e.bloqueado||(e.rows||[]).some(x=>x.status==='agendado'&&canalUsaInstagram_(x.canal)&&bloqueioIg_(token,ctxFila.pausa))||(e.rows||[]).length>0&&(e.rows||[]).every(x=>x.status==='agendado'&&(cotaCheia(x)||x.canal==='whatsapp2'&&impedimentoStatus2));
+        const pendentes=(e.rows||[]).filter(x=>!['cancelado','manual_feito'].includes(x.status)&&!(x.status==='publicado'&&(x.canal!=='ambos'||x.zap_estado==='confirmado')));
+        const aguardando=e.bloqueado||pendentes.some(x=>x.status==='agendado'&&canalUsaInstagram_(x.canal)&&bloqueioIg_(token,ctxFila.pausa))||pendentes.length>0&&pendentes.every(x=>x.status==='agendado'&&(cotaCheia(x)||x.canal==='whatsapp2'&&impedimentoStatus2));
         if(bloqueadasAgora.has(p.id)||!imediato&&p.status!=='processando'&&(!aguardando||loteAgora.grupos.some(ids=>ids.includes(p.id))))continue;
         if(imediato&&p.status==='agendado'){const faltam=(e.rows||[]).filter(x=>x.status==='agendado');let excede=false;for(const b of CANAIS_FILA){const n=faltam.filter(x=>baldesRestantes_(x).includes(b)).length;if(n&&(await contarUsados24h_(env,b,desde))+n>limiteDoTipo(cfgP,b))excede=true;}const nIg=faltam.filter(x=>canalUsaInstagram_(x.canal)).length;if(nIg){const n=(await env.DB.prepare("SELECT COUNT(*) n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()).n;if(n+nIg>cfgP.max24h)excede=true;}if(excede){e.atual.forEach(id=>bloqueadasAgora.add(id));continue;}}
       }
