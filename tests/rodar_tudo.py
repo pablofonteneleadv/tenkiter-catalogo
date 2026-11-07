@@ -143,6 +143,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_elementos.py", lambda o: "FALHAS=0" in o),     # v4.36: mover/aumentar qualquer elemento, ➕ Adicionar, biblioteca só do Admin
     ("postagens_elementos_fotos.py", lambda o: "FALHAS=0" in o), # v4.36: elemento só nesta foto x todas
     ("postagens_terminou.py", lambda o: "FALHAS=0" in o),  # v4.29: pergunta "terminou de editar?" ao rolar para baixo
+    ("postagens_multi_sem_limite.py", lambda o: "FALHAS=0" in o), # peças juntas sem teto artificial; prévias paginadas
     ("postagens_multi.py", lambda o: "FALHAS=0" in o),     # v4.29: várias peças juntas, escopo "fazer em todas" (mesma peça × todas)
     ("capa_video.py", lambda o: "P-43 PASS" in o),
     ("enquadrar_lote.py", lambda o: "P-40 LOTE: PASS" in o),

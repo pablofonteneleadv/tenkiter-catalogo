@@ -16,6 +16,7 @@
   "admin-gestao.js",
   "admin-instagram.js",
   "admin-mensagens.js",
+  "mensagens-registros.js",
   "admin-postagens.js",
   "admin-push.js",
   "admin-tecidos.js",

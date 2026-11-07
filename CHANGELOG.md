@@ -19,6 +19,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.56.2] - 2026-11-07
+
+- Solicitações mostram três miniaturas por linha com ampliação por toque; ações e acompanhamento mantêm o contexto da lista.
+- Registrar pedido e guardar fotos persistem o envio no aparelho e liberam a conversa. Indicador flutuante mostra a etapa real, conclusão e retomada de falhas; arquivos confirmados não são reenviados. A execução retoma ao reabrir o Mensageiro, com a conta de origem.
+
+- Retira o teto de oito peças do botão “Usar peças juntas” e o corte silencioso das demais selecionadas. Cada foto mantém os dados da sua peça.
+- Permite percorrer todas as prévias em grupos de dez, mantendo apenas esse grupo de canvases em memória no celular.
+- Avisa antes de subir arquivos quando a seleção excede as sessenta postagens aceitas por envio pelo servidor; preserva peças e mídias para envio em etapas. Limites de formato e capacidade da fila continuam válidos.
+
+
 ## [7.56.1] - 2026-11-07
 
 - Conclui a biblioteca de vídeos, recuperação por conta e seleção imediata de mídias do PR383, preservando as proteções de pausa, limite e recibos da7.56.0.
