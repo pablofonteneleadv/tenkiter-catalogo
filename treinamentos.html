@@ -914,6 +914,11 @@ function buildQuizAttempt(level){
   var n = count > 0 ? Math.min(count, total) : total;
   var idx = quiz.questions.map(function(_, i){ return i; });
   var escolhidas = embPerguntas ? shuffleArray(idx).slice(0, n) : idx.slice(0, n);
+  escolhidas = escolhidas.filter(function(qi){
+    var q = quiz.questions[qi];
+    // pergunta sem alternativas (ou sem gabarito dentro das alternativas) nunca poderia ser respondida e travaria o botão Corrigir
+    return q && Array.isArray(q.options) && q.options.length >= 2 && q.correct >= 0 && q.correct < q.options.length;
+  });
   var questions = escolhidas.map(function(qi){
     var q = quiz.questions[qi];
     var ordem = q.options.map(function(_, i){ return i; });
@@ -1651,7 +1656,7 @@ function goHome(){
     '</div></div>';
   empurrarHistorico('home', null);
   wireTopbar();
-  carregarAvisoCurriculo();
+  carregarAvisoCurriculo(); resultadosPendentesReenviar_();
   if (window.TKTutorial) TKTutorial.montarAluno();
   // Estagiário em diante sem CPF: faixa vermelha grande NESTA tela, sem ir a configurações
   if (window.TKConta && TKConta.precisaCpf(state.user)){
@@ -2100,8 +2105,81 @@ function wireQuizIntro(level){
       return;
     }
     var btn = document.getElementById('quiz-corrigir'); if (btn) btn.disabled = true; // toque duplo não corrige duas vezes
-    gradeQuiz(level);
+    try{ gradeQuiz(level); }
+    catch(err){
+      // algo inesperado na correção: a pessoa NÃO fica presa. Botão liberado, respostas mantidas, motivo em português.
+      if (btn) btn.disabled = false;
+      var av2 = document.getElementById('quiz-aviso');
+      if (av2){ av2.hidden = false; av2.textContent = 'Não consegui corrigir agora. Suas respostas continuam marcadas: toque em Corrigir de novo. Se repetir, avise a gestão.'; if (av2.scrollIntoView) av2.scrollIntoView({ behavior:'smooth', block:'center' }); }
+      try{ console.error('quiz', err); }catch(e2){}
+    }
   });
+}
+
+
+/* ---- resultado da avaliação: guardado até o servidor confirmar; falha mostra o MOTIVO e deixa reenviar ---- */
+function resultadoPendKey_(whatsapp){ return 'tm_resultado_pend_' + whatsapp; }
+function resultadoPendenteGuardar_(p){
+  var lista = ls_get(resultadoPendKey_(p.whatsapp), []);
+  if (!Array.isArray(lista)) lista = [];
+  lista = lista.filter(function(x){ return x && x.tentativaId !== p.tentativaId; });
+  lista.push(p); ls_set(resultadoPendKey_(p.whatsapp), lista.slice(-10));
+}
+function resultadoPendenteBaixar_(whatsapp, tentativaId){
+  var lista = ls_get(resultadoPendKey_(whatsapp), []);
+  if (!Array.isArray(lista)) return;
+  ls_set(resultadoPendKey_(whatsapp), lista.filter(function(x){ return x && x.tentativaId !== tentativaId; }));
+}
+function motivoResultado_(r){
+  var e = String((r && r.erro) || '').trim();
+  if (r && r.limite) return 'O limite de avaliações deste manual já tinha sido atingido, então esta NÃO foi contada. Fale com a gestão para liberar outra.';
+  if (r && r.sessaoInvalida || /sess(ã|a)o/i.test(e)) return 'Sua sessão expirou. Saia, entre de novo e toque em Enviar de novo: sua nota está guardada neste aparelho.';
+  if (!e || e === 'sem conexão') return 'Sem conexão com o servidor. Sua nota está guardada neste aparelho: toque em Enviar de novo quando a internet voltar.';
+  if (r && r.demorou) return 'O servidor demorou para responder. Sua nota está guardada neste aparelho: toque em Enviar de novo.';
+  if (/permiss/i.test(e)) return 'Seu acesso não permite registrar a nota agora. Avise a gestão e mostre esta tela; sua nota está guardada neste aparelho.';
+  return e.length < 160 && !/[{}]/.test(e) ? e : 'Não consegui salvar agora. Sua nota está guardada neste aparelho: toque em Enviar de novo ou avise a gestão.';
+}
+function resultadoAposEnvio_(r, payload, level){
+  var infoEl = document.getElementById('quiz-tent-info');
+  if (!r){ // sem URL do servidor configurada
+    if (infoEl) infoEl.textContent = 'Não consegui salvar esta avaliação agora. Avise a gestão e mostre esta tela.';
+    return;
+  }
+  if (r.ok){
+    resultadoPendenteBaixar_(payload.whatsapp, payload.tentativaId);
+    if (state.quizTent && state.quizTent.ok && r.tentativa != null){ state.quizTent.porId = state.quizTent.porId || {}; state.quizTent.porId[level] = r.tentativa; }
+    if (infoEl && r.tentativa != null) infoEl.textContent = 'Esta foi a avaliação ' + Math.min(r.tentativa, r.max || r.tentativa) + ' de ' + (r.max || maxTentativas(level)) + '.';
+    if (r.tentativa != null && r.tentativa >= (r.max || maxTentativas(level))){ var rq = document.getElementById('retry-quiz'), sv = document.getElementById('qr-sem-vaga'); if (rq) rq.style.display = 'none'; if (sv) sv.style.display = 'block'; }
+    return;
+  }
+  if (r.limite) resultadoPendenteBaixar_(payload.whatsapp, payload.tentativaId); // recusada de propósito: não reenviar
+  var motivo = motivoResultado_(r); // o motivo fica NA tela da nota (não em aviso que some)
+  if (infoEl){
+    infoEl.textContent = motivo + ' ';
+    if (!r.limite){
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'btn qr-grande'; b.id = 'reenviar-resultado'; b.textContent = 'Enviar de novo';
+      b.addEventListener('click', async function(){
+        b.disabled = true; b.textContent = 'Enviando…';
+        var r2 = await submitResult(payload);
+        if (r2 && r2.ok){ resultadoAposEnvio_(r2, payload, level); b.remove(); toast('Nota enviada!'); }
+        else { b.disabled = false; b.textContent = 'Enviar de novo'; infoEl.firstChild.textContent = motivoResultado_(r2) + ' '; }
+      });
+      infoEl.appendChild(document.createElement('br')); infoEl.appendChild(b);
+    }
+  }
+}
+/** ao entrar: notas que não chegaram ao servidor numa avaliação anterior são reenviadas sozinhas (o servidor ignora repetição pelo tentativaId). */
+async function resultadosPendentesReenviar_(){
+  if (!state.user) return;
+  var lista = ls_get(resultadoPendKey_(state.user.whatsapp), []);
+  if (!Array.isArray(lista) || !lista.length) return;
+  for (var i = 0; i < lista.length; i++){
+    var p = lista[i]; if (!p || !p.tentativaId) continue;
+    p.senha = state.user.password;
+    var r = await submitResult(p);
+    if (r && (r.ok || r.limite)) resultadoPendenteBaixar_(state.user.whatsapp, p.tentativaId);
+    else break;
+  }
 }
 
 function gradeQuiz(level){
@@ -2134,21 +2212,10 @@ function gradeQuiz(level){
   state.quizAttempt = null; state.quizPicks = {};
   ls_set(quizKey(state.user.whatsapp, level), { score: score, total: total, date: date });
   if (state.quizTent && state.quizTent.legado) ls_set(tentativasKey(state.user.whatsapp, level), (tentativasFeitas(level) || 0) + 1);
-  state.pendingSubmit = submitResult({ action:'resultado', nome: state.user.name, whatsapp: state.user.whatsapp, senha: state.user.password, nivel: state.user.level, manual: DATA.titles[level], manualId: String(level), tentativaId: tentId, nota: score, total: total, data: date, errosDetalhados: JSON.stringify(erros), criticasErradas: criticasErradas });
-  state.pendingSubmit.then(function(r){
-    if (!r) return;
-    if (r.ok === false && r.erro) toast(r.erro);
-    var infoEl = document.getElementById('quiz-tent-info');
-    if (r.ok && r.tentativa != null){
-      if (state.quizTent && state.quizTent.ok){ state.quizTent.porId = state.quizTent.porId || {}; state.quizTent.porId[level] = r.tentativa; }
-      if (infoEl) infoEl.textContent = 'Esta foi a avaliação ' + Math.min(r.tentativa, r.max || r.tentativa) + ' de ' + (r.max || maxTentativas(level)) + '.';
-      if (r.tentativa >= (r.max || maxTentativas(level))){ var rq = document.getElementById('retry-quiz'), sv = document.getElementById('qr-sem-vaga'); if (rq) rq.style.display = 'none'; if (sv) sv.style.display = 'block'; }
-    } else if (r.ok === false && r.limite && infoEl){
-      infoEl.textContent = 'Atenção: o limite de avaliações já tinha sido atingido, então esta NÃO foi contada nem salva.';
-    } else if (r.ok === false && infoEl){
-      infoEl.textContent = 'Não consegui salvar esta avaliação agora. Avise a gestão e mostre esta tela.';
-    }
-  });
+  var payloadRes = { action:'resultado', nome: state.user.name, whatsapp: state.user.whatsapp, senha: state.user.password, nivel: state.user.level, manual: DATA.titles[level], manualId: String(level), tentativaId: tentId, nota: score, total: total, data: date, errosDetalhados: JSON.stringify(erros), criticasErradas: criticasErradas };
+  resultadoPendenteGuardar_(payloadRes); // fica guardado no aparelho até o servidor confirmar: a nota não se perde por queda de internet
+  state.pendingSubmit = submitResult(payloadRes);
+  state.pendingSubmit.then(function(r){ resultadoAposEnvio_(r, payloadRes, level); });
 
   var waText = encodeURIComponent(state.user.name + ' concluiu a avaliação do ' + DATA.titles[level] + ': ' + score + '/' + total + ' (' + Math.round(pct*100) + '%) em ' + date + '.');
   var waHtml = '';

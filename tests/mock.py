@@ -72,6 +72,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         if a=="avaliacoes_contagem":
             feitas=st.setdefault("aval_feitas",{})
             return {"ok":True,"porId":{i:feitas.get(i,0) for i in ("1","2","3")},"contagem":{},"maxPorManual":{"1":3,"2":3,"3":3},"max":3}
+        if a=="resultado" and st.get("resultado_erro"): return st["resultado_erro"]   # teste: o servidor recusa/some
         if a=="resultado" and b.get("manualId"):
             feitas=st.setdefault("aval_feitas",{}); vistos=st.setdefault("aval_ids",set()); mid=str(b.get("manualId"))
             if b.get("tentativaId") in vistos: return {"ok":True,"repetida":True,"tentativa":feitas.get(mid,0),"max":3}
@@ -86,6 +87,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 lib=tem("portal") and tem("manual_"+i)
                 ms.append({"id":i,"titulo":tit,"blurb":"resumo "+i,"nivelMinimo":int(i),"ordem":int(i),"liberado":lib,"parts":([{"title":"Parte","chapters":[{"title":"Cap "+i,"id":"cap-"+i,"hash":"h"+i,"blocks":[{"type":"p","text":"TEXTO-DO-SERVIDOR-"+i}]}]}] if lib else [])})
             provas={i:{"title":"Prova "+i,"pass":0.7,"questions":[{"q":"Pergunta do servidor?","options":["A","B"],"correct":1,"explain":"x"}]} for i in ("1","2","3") if tem("avaliacoes") and tem("manual_"+i)}
+            for k,v in (st.get("provas_extra") or {}).items():
+                if k in provas: provas[k]["questions"]=provas[k]["questions"]+v   # teste: perguntas extras (ex.: sem alternativas)
             return {"ok":True,"manuais":ms,"provas":provas}
         if versao>="4.1" and a=="auditoriaProdutos":
             st.setdefault("aud_chamadas",[]).append(b)

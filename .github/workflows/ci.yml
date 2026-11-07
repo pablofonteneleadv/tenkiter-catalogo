@@ -320,6 +320,7 @@ jobs:
           python3 tests/postagens_fila_midia.py
           TK_EVID=tests/saida/postagens-retomar python3 tests/postagens_retomar_limites.py
           python3 tests/postagens_prova_falhas_ui.py
+          python3 tests/prova_resiliente.py
           TK_EVID=tests/saida/fotos-postadas python3 tests/fotos_postadas_ui.py
           TK_EVID=tests/saida/esteira-fotos python3 tests/esteira_fotos_ui.py
           TK_EVID=tests/saida/esteira-fotos/continuidade python3 tests/esteira_continuidade_edicao_ui.py
