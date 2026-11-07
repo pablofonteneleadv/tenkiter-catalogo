@@ -266,6 +266,17 @@ jobs:
           python3 -m pip install playwright pillow
           python3 -m playwright install chromium
 
+      - name: Biblioteca de vídeos e recuperação no Chromium
+        if: github.event_name == 'pull_request'
+        env:
+          TK_BASE: http://localhost:8773/
+        run: |
+          curl -fsSL --retry 3 https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js -o tests/axe.min.js
+          python3 -m http.server 8773 > /tmp/videos-http.log 2>&1 &
+          video_server_pid=$!
+          trap 'kill "$video_server_pid"' EXIT
+          python3 tests/postagens_video_status.py
+
       - name: Pedido idempotente e compatibilidade com backend antigo
         if: github.event_name == 'pull_request'
         run: python3 tests/rodar_tudo.py --suite jornada_pedido.py --json-report tests/saida/pedido-ci.json
@@ -325,7 +336,6 @@ jobs:
           python3 tests/postagens_agora_selecao_ui.py
           kill "$solicitacoes_pid"
           trap 'kill "$tecido_server_pid"' EXIT
-          python3 tests/postagens_video_status.py
           python3 tests/video_upload_feedback.py
           python3 tests/video_lote_limites.py
           python3 tests/video_camera_90s.py
