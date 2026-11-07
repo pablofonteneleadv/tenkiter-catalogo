@@ -24,6 +24,7 @@ with sync_playwright() as p:
  browser=p.chromium.launch(args=['--no-sandbox'])
  for largura,altura in ([(390,844)] if os.environ.get('TK_QA_SOMENTE_390') else [(390,844),(412,915),(1440,900),(320,700)]):
   api('/qa/reset');ctx=browser.new_context(viewport={'width':largura,'height':altura},has_touch=largura<500,is_mobile=largura<500,service_workers='block');ctx.add_init_script(SESSION);ctx.add_init_script('window.TK_REGISTRO_PRAZO_MS=1000');st=install(ctx,perms=PERMS_ALL)
+  if largura==390:ctx.add_init_script('window.TKAndroid={versao:()=>"2.4.22",telaMensagensVisivel:()=>true};')
   retidas=[];metadados=[];fotos=[];perder={'pedido':True,'foto':True}
   def rota(route):
    path=urlsplit(route.request.url).path
@@ -41,7 +42,9 @@ with sync_playwright() as p:
    ctx.route('**/admin-mensagens.js*',lambda route:route.fulfill(body=anterior,content_type='application/javascript'))
   ctx.route('**/*',rota);pg=ctx.new_page();erros=[];pg.on('pageerror',lambda e:erros.append(str(e)))
   def abrir():
-   pg.goto(BASE+'admin.html');pg.wait_for_timeout(1800);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('.ms-conv');pg.click('#ms-lista .ms-conv[data-id="1"]');pg.wait_for_selector('#ms-texto')
+   pg.goto(BASE+('admin.html?app=mensagens' if largura==390 else 'admin.html'));pg.wait_for_timeout(1800)
+   if largura!=390:pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens')
+   pg.wait_for_selector('.ms-conv');pg.click('#ms-lista .ms-conv[data-id="1"]');pg.wait_for_selector('#ms-texto');pg.wait_for_timeout(300)
   abrir();pg.get_by_role('button',name='Pedido do cliente',exact=True).click();pg.get_by_label('Descrição geral do pedido',exact=True).fill('Vestido para sábado; azul, tamanho M.');pg.set_input_files('#ms-registro-fotos',FOTOS[:2]);pg.get_by_role('button',name='Registrar pedido',exact=True).click()
   try:
    pg.get_by_role('button',name='Continuar envio',exact=True).wait_for(timeout=6000)
