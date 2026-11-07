@@ -45,7 +45,10 @@ with tempfile.TemporaryDirectory() as tmp:
    pg.locator('#po-leg').fill('Legenda preservada na biblioteca')
    pg.get_by_role('tab',name='Vídeos',exact=True).click()
    assert pg.locator('.po-video-item').count()==2
-   assert pg.locator('#po-videos-arq').evaluate('(e)=>e.getBoundingClientRect().height>=44')
+   tamanho=pg.locator('#po-videos-arq').evaluate('(e)=>({altura:e.getBoundingClientRect().height,offset:e.offsetHeight,minHeight:getComputedStyle(e).minHeight,display:getComputedStyle(e).display,ancestrais:[...function*(x){while(x){yield x;x=x.parentElement}}(e)].map(x=>({tag:x.tagName,id:x.id,classe:x.className,display:getComputedStyle(x).display,transform:getComputedStyle(x).transform,zoom:getComputedStyle(x).zoom}))})')
+   print('Seletor de vídeos',width,tamanho,flush=True)
+   pg.screenshot(path=str(OUT/f'videos-controle-{width}.png'))
+   assert tamanho['altura']>=44,tamanho
    pg.screenshot(path=str(OUT/f'videos-debug-{width}.png'))
    assert pg.locator('.po-video-item progress').count()==2
    pg.screenshot(path=str(OUT/f'videos-biblioteca-enviando-{width}.png'))
