@@ -59,7 +59,7 @@ with sync_playwright() as p:
     print("== Prévia ==")
     pg.select_option("#av-publico", "g:alunos"); pg.wait_for_timeout(900)
     prev = pg.inner_text("#av-previa")
-    chk("grupo: 'N pessoa(s), 1 com aviso ativo agora'", "2 pessoa(s)" in prev and "1 com aviso ativo agora" in prev, prev)
+    chk("grupo: 'N pessoas, 1 com aviso ativo agora'", "2 pessoas" in prev and "1 com aviso ativo agora" in prev, prev)
     pg.select_option("#av-publico", "todos"); pg.wait_for_timeout(900)
     prev = pg.inner_text("#av-previa")
     chk("'todos': diz o número de aparelhos contados pelo site", "7" in prev and "aparelho(s) com aviso ativo" in prev, prev)
