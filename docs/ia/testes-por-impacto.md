@@ -8,7 +8,7 @@ Proteger a loja de regressões **sem executar toda a plataforma em toda PR**. O 
 
 - Toda PR com código: segredos, sintaxe, HTML, regras de segurança, testes do seletor e contratos estáticos.
 - PR por área: testes existentes dessa área + extras quando a alteração passa por serviços compartilhados.
-- Arquivo novo ou desconhecido, módulo central, mudança de workflow/deploy: **toda a cobertura** (fail-safe).
+- Arquivo novo ou desconhecido, módulo central, workflow de **deploy/segurança**: **toda a cobertura** (fail-safe). Exceção limitada: mudanças **exclusivamente no seletor de CI e nas instruções relacionadas** executam testes do próprio seletor e smoke transversal; um arquivo de produto ou infraestrutura de segurança fora da lista reativa cobertura ampla.
 - PR só com Markdown: validações estáticas/de segurança; Graphify quando sua própria documentação muda. Não iniciar dezenas de browsers.
 - **Bateria completa**: execução diária agendada (00:00 Fortaleza, cron 03:00 UTC), manual por `workflow_dispatch suite=completo`, ou `CI-EXTRA: todos` / rótulo `ci:todos`. Essa bateria **não** é dispensada.
 - Merge/deploy sempre depende do `Portão de qualidade` verde. Nunca force merge ou ignore job falho; o sistema de deploy preserva o controle original.
@@ -28,11 +28,24 @@ As categorias iniciais são `catalogo`, `mensagens`, `postagens`, `esteira`, `fo
 | `postagens.html` | Postagens + Mídia |
 | `instagram-worker/` | Mensagens + Postagens + Esteira + Fotos IA + Mídia + Infra |
 | `midia-worker/` | Mídia + Postagens + Esteira + Fotos IA + Infra |
-| `common.js`, `nav.js`, `package.json`, CI/deploy | Todos |
+| `common.js`, `nav.js`, `package.json`, workflow de deploy ou rotina de segurança | Todos |
+| Apenas `ci.yml`, seletor/manifesto de testes, prova do seletor e respectivas instruções | CI isolado: 4 smoke de catálogo/mensagens/treinamento + estático e Graphify aplicável |
 | Novo arquivo não reconhecido | Todos, até ser explicitamente classificado |
 | Somente arquivos `.md` | Checagens estáticas; sem navegador desnecessário |
 
 Os exemplos são **piso**, não teto. Se `treinamentos.html` começar a usar um recurso de mídia compartilhada, a IA deve adicionar `midia` no plano.
+
+## Exceção segura para a PR que modifica o próprio seletor de testes
+
+**Motivo:** classificar toda mudança em `ci.yml` como risco de produto dispara os ~115 testes mapeados até quando a PR apenas otimiza a maneira de escolher os testes. Era exatamente o gargalo de 15–20+ minutos observado na primeira execução da PR #389.
+
+O `planejar` aplica um perfil `ci` **somente se TODOS os arquivos alterados** pertencerem à lista restrita `ARQUIVOS_CI_ISOLADO` em `scripts/ci/testes_impacto.py`: `.github/workflows/ci.yml`, `scripts/ci/testes_impacto.py`, `scripts/ci/testes_impacto_manifesto.json`, `tests/testes_impacto_seletor.py`, `docs/ia/testes-por-impacto.md`, `AGENTS.md` e `CLAUDE.md`. A lista precisa ser revisada em PR, nunca estendida para caminhos de produto por comodidade.
+
+Além das verificações de todos os PRs (segredos, sintaxe, contratos, testes do seletor), o perfil executa quatro testes Node rápidos independentes: `cadastro_vinculos.js`, `catalogo_tecido.js`, `mensagens_pendentes_espiar.js` e `manual_fidelidade.js`. Não instala Chromium ou FFmpeg para esses testes. O log mostra cada comando e estabelece limite de 600 segundos **por comando** para diagnosticar travamentos.
+
+**Portões conservados:** uma mudança simultânea em `common.js`, `nav.js`, em scripts de deploy/segurança, em arquivo desconhecido ou em produto retorna à seleção ampliada. `CI-EXTRA:` soma módulos ao perfil; `ci:todos`, `CI-EXTRA: todos`, execução completa ou agendada acionam todos. A exceção nunca cancela o portão de qualidade nem a bateria noturna.
+
+**Exemplos para outras IAs:** `planejar --arquivos .github/workflows/ci.yml scripts/ci/testes_impacto.py` deve retornar `ci`; acrescente `common.js` e deve retornar todos. `tests/testes_impacto_seletor.py` valida essas duas regras e bloqueia regressões. Se houver dúvida real de dependência de produto, registre `CI-EXTRA: <módulos>` no corpo da PR.
 
 ## Obrigações de qualquer IA antes de abrir uma PR
 
