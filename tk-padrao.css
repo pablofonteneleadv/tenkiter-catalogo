@@ -187,3 +187,7 @@ html body :is(.bt, .chips button, .cx-filtro button, .cx-sel, .po-abas button, .
   .linha-share-busca button, .barra-filtros-flut button, .btn-editar-peca) {
   border-radius: var(--tk-botao-raio) !important;
 }
+
+/* contagem + ordem + limpar filtros: com campo de 16 px a linha passa de 320 px; quebra em vez de alargar a página */
+html body .barra-lista { flex-wrap: wrap; row-gap: 8px; }
+html body .barra-lista #ordem { min-width: 0; max-width: 100%; }

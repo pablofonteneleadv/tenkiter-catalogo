@@ -172,7 +172,7 @@
   .modal-conteudo .desc { font-size: 0.88rem; color: #444; line-height: 1.45; margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 8px; }
 
   .btn-principal-cta { display: block; width: calc(100% - 32px); margin: 12px 16px 8px; background: var(--verde); color: #fff; border: none; border-radius: 12px; padding: 16px; font-weight: 800; font-size: 1.05rem; cursor: pointer; text-align: center; }
-  .btn-secundario-cta { display: block; width: calc(100% - 32px); margin: 0 16px 8px; background: #f0f0f0; color: var(--preto); border: none; border-radius: 12px; padding: 12px; font-weight: 700; font-size: 0.85rem; cursor: pointer; text-align: center; }
+  .btn-secundario-cta { box-sizing: border-box; display: block; width: calc(100% - 32px); margin: 0 16px 8px; background: #f0f0f0; color: var(--preto); border: none; border-radius: 12px; padding: 12px; font-weight: 700; font-size: 0.85rem; cursor: pointer; text-align: center; }
   .btn-fechar { display: block; width: calc(100% - 32px); margin: 4px 16px 16px; background: var(--preto); color: var(--laranja); border: none; border-radius: 12px; padding: 12px; font-weight: 700; font-size: 0.95rem; cursor: pointer; }
 
   /* Sacola */
@@ -388,7 +388,7 @@
   .campo-rastreio input.num { text-transform: none; letter-spacing: 4px; }
   .preview-selecao { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 4px 16px 10px; }
   .preview-selecao img { width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 8px; background: #eee; }
-  .link-selecao { width: calc(100% - 32px); margin: 0 16px 8px; padding: 11px 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 0.8rem; background: #fafafa; color: #333; }
+  .link-selecao { box-sizing: border-box; min-width: 0; width: calc(100% - 32px); margin: 0 16px 8px; padding: 11px 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 0.8rem; background: #fafafa; color: #333; }
   .texto-pequeno { font-size: 0.8rem; color: #555; padding: 0 16px; line-height: 1.4; }
   .fav-linha { display: flex; gap: 10px; align-items: center; padding: 8px 16px; border-bottom: 1px solid #eee; }
   .fav-linha img { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; background: #eee; flex: none; }

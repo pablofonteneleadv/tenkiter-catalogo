@@ -75,14 +75,14 @@
     "tests/filtros_tecido.py": [
       "catalogo"
     ],
+    "tests/foto_ia.py": [
+      "fotoia"
+    ],
     "tests/foto_ia_catalogo.py": [
       "catalogo",
       "fotoia"
     ],
     "tests/foto_ia_lotes.py": [
-      "fotoia"
-    ],
-    "tests/foto_ia.py": [
       "fotoia"
     ],
     "tests/fotoia_plano.js": [
@@ -100,6 +100,10 @@
     ],
     "tests/juntar_admin.py": [
       "catalogo"
+    ],
+    "tests/manual_fidelidade.js": [
+      "treinamentos",
+      "ci"
     ],
     "tests/manual_fidelidade_ui.py": [
       "treinamentos"
@@ -175,14 +179,22 @@
       "esteira",
       "mensagens"
     ],
-    "tests/mensagens_tamanhos_resumo.js": [
+    "tests/mensagens_tamanhos.js": [
       "mensagens"
     ],
-    "tests/mensagens_tamanhos.js": [
+    "tests/mensagens_tamanhos_resumo.js": [
       "mensagens"
     ],
     "tests/menu_selecao_ia.py": [
       "fotoia"
+    ],
+    "tests/padrao_aparencia_ui.py": [
+      "catalogo",
+      "mensagens",
+      "postagens",
+      "esteira",
+      "fotoia",
+      "treinamentos"
     ],
     "tests/pedir_fotos_lote.py": [
       "esteira"
@@ -190,11 +202,11 @@
     "tests/postagens_agora_selecao_ui.py": [
       "postagens"
     ],
-    "tests/postagens_fila_midia.py": [
-      "midia",
+    "tests/postagens_fila.py": [
       "postagens"
     ],
-    "tests/postagens_fila.py": [
+    "tests/postagens_fila_midia.py": [
+      "midia",
       "postagens"
     ],
     "tests/postagens_prova_falhas_ui.py": [
@@ -275,10 +287,10 @@
     "tests/worker_equipe_inicio.js": [
       "mensagens"
     ],
-    "tests/worker_esteira_fotos.js": [
+    "tests/worker_esteira.js": [
       "esteira"
     ],
-    "tests/worker_esteira.js": [
+    "tests/worker_esteira_fotos.js": [
       "esteira"
     ],
     "tests/worker_eventos_runtime.cjs": [
@@ -319,10 +331,10 @@
       "mensagens",
       "postagens"
     ],
-    "tests/worker_mensagens_conversa.js": [
+    "tests/worker_mensagens.js": [
       "mensagens"
     ],
-    "tests/worker_mensagens.js": [
+    "tests/worker_mensagens_conversa.js": [
       "mensagens"
     ],
     "tests/worker_midia.js": [
@@ -331,15 +343,15 @@
     "tests/worker_mobile_push.js": [
       "push"
     ],
+    "tests/worker_og.js": [
+      "catalogo"
+    ],
     "tests/worker_og_resiliencia.js": [
       "catalogo"
     ],
     "tests/worker_og_runtime.cjs": [
       "catalogo",
       "infra"
-    ],
-    "tests/worker_og.js": [
-      "catalogo"
     ],
     "tests/worker_postagens_coordenacao.js": [
       "postagens"
@@ -387,10 +399,6 @@
     "tests/worker_zap_proativo.js": [
       "mensagens",
       "postagens"
-    ],
-    "tests/manual_fidelidade.js": [
-      "treinamentos",
-      "ci"
     ]
   },
   "evidencias": {
