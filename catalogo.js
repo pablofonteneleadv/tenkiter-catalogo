@@ -364,8 +364,10 @@ try { tkSelExpirar_(); } catch (e) {}
     const passaFiltros = (p, sem) => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
       if (soSelecao_ && !estaNaSacola(p.ID)) return false;
-      if (!isNaN(min) && (ehConsulta(p) || Number(p.Preco) < min)) return false;   // "Consulte valor" não entra em filtro de preço
-      if (!isNaN(max) && (ehConsulta(p) || Number(p.Preco) > max)) return false;
+      // v7.57.0: o filtro compara o MESMO valor que o cartão mostra como preço principal (à vista, com DESCONTO_AVISTA); o rótulo do filtro diz "à vista".
+      const avistaFiltro = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      if (!isNaN(min) && (ehConsulta(p) || avistaFiltro < min)) return false;   // "Consulte valor" não entra em filtro de preço
+      if (!isNaN(max) && (ehConsulta(p) || avistaFiltro > max)) return false;
       if (apenasNovidades && !ehNovidade(p)) return false;
       if (apenasFavoritos && !ehFavorito(p.ID)) return false;
       if (sem !== 'cat') if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
@@ -430,7 +432,7 @@ try { tkSelExpirar_(); } catch (e) {}
     filtroTecidos.forEach(t => itens.push(['Tecido: ' + t, () => { filtroTecidos.delete(t); }]));
     if (min !== '' || max !== '') {
       const rot = min !== '' && max !== '' ? 'R$ ' + min + ' a ' + max : (min !== '' ? 'a partir de R$ ' + min : 'até R$ ' + max);
-      itens.push(['Preço: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
+      itens.push(['Preço à vista: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
     }
     box.textContent = '';
     box.hidden = !itens.length;
@@ -757,7 +759,7 @@ try { tkSelExpirar_(); } catch (e) {}
       const disp = nivelDisponibilidade(p);
       const favoritado = ehFavorito(p.ID);
       const naSacola = estaNaSacola(p.ID);
-      const nFotos = 1 + String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean).length;
+      const nFotos = window.TKPadrao ? TKPadrao.contarFotos(p) : 1 + String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean).length;   // v7.57.0: mesma contagem da Gestão
       const temVideo = !!idVideoSeguro(p.Video_URL);
       const ultimas = estoqueInformado(p) && !esgotado && Number(p.Estoque) <= 2;
       return `
@@ -1018,6 +1020,7 @@ try { tkSelExpirar_(); } catch (e) {}
   // Título, descrição e dados estruturados da peça aberta (buscadores e abas do navegador); volta ao normal ao fechar.
   const META_PADRAO_ = { titulo: document.title, descricao: (document.querySelector('meta[name="description"]') || {}).content || '' };
   function definirMetaPeca_(p, avista) {
+    // Dados estruturados (Google): price = preço de tabela, igual ao og-worker e ao feed do Merchant; o desconto à vista aparece só no texto.
     const cod = p.Codigo ? ' [' + p.Codigo + ']' : '';
     document.title = p.Nome + cod + ' — ' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(avista) + ' à vista') + ' | TENKiTER Modas';
     const d = document.querySelector('meta[name="description"]');
@@ -1028,7 +1031,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const dados = {
       '@context': 'https://schema.org', '@type': 'Product', name: p.Nome, image: imgs, description: p.Descricao || p.Nome,
       sku: p.Codigo || String(p.ID), brand: { '@type': 'Brand', name: 'TENKiTER Modas' }, url: linkProduto(p),
-      offers: { '@type': 'Offer', url: linkProduto(p), priceCurrency: 'BRL', price: Number(avista).toFixed(2), availability: estaEsgotado(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock', itemCondition: 'https://schema.org/NewCondition', seller: { '@type': 'Organization', name: 'TENKiTER Modas' } }
+      offers: { '@type': 'Offer', url: linkProduto(p), priceCurrency: 'BRL', price: Number(p.Preco).toFixed(2), availability: estaEsgotado(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock', itemCondition: 'https://schema.org/NewCondition', seller: { '@type': 'Organization', name: 'TENKiTER Modas' } }
     };
     if (ehConsulta(p)) delete dados.offers;   // sem preço não há oferta para os buscadores
     ld.textContent = JSON.stringify(dados);
@@ -1083,7 +1086,7 @@ try { tkSelExpirar_(); } catch (e) {}
 
     document.getElementById('modal-conteudo').innerHTML = `
       <div class="sheet-handle" aria-hidden="true"></div>
-      <button type="button" class="btn-x-modal" id="btn-fechar-modal" aria-label="Fechar">${ic_('fechar', '✕')}</button>
+      <button type="button" class="btn-x-modal tk-fechar tk-fechar-foto" id="btn-fechar-modal" aria-label="Fechar">${ic_('fechar', '✕')}</button>
       <div class="carrossel-wrap">
         <div class="slide-area" id="slide-area"><img id="foto-principal-modal" alt="${escaparHtml(p.Nome)}"></div>
         ${equipe_.pode ? `<a class="btn-editar-peca" id="btn-editar-peca" href="admin.html?editar=${encodeURIComponent(p.ID)}">✎ Editar produto</a>` : ''}
@@ -1531,9 +1534,9 @@ try { tkSelExpirar_(); } catch (e) {}
       }
       corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Minha conta' }));
       corpo.appendChild(el('p', { text: 'Entre para guardar seus favoritos e sua sacola e vê-los em qualquer aparelho. Você continua podendo navegar sem conta.' }));
-      const abas = el('div', { className: 'conta-abas' });
+      const abas = el('div', { className: 'conta-abas tk-abas' }); abas.setAttribute('role', 'tablist'); abas.setAttribute('aria-label', 'Entrar ou criar conta');
       [['entrar', 'Entrar'], ['criar', 'Criar conta']].forEach(([id, rotulo]) => {
-        const b = el('button', { type: 'button', text: rotulo, className: aba === id ? 'ativa' : '' });
+        const b = el('button', { type: 'button', text: rotulo }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(aba === id));
         b.addEventListener('click', () => { aba = id; desenhar(); });
         abas.appendChild(b);
       });
@@ -1644,23 +1647,26 @@ try { tkSelExpirar_(); } catch (e) {}
   // v6.5: no celular o menu é um PAINEL de tela cheia (rolagem própria, topo e rodapé fixos); no computador continua sendo a gaveta.
   const painel_ = () => window.matchMedia('(max-width: 600px)').matches;
   const extras_ = document.getElementById('filtros-extras');
-  let voltarFoco_ = null;
+  let voltarFoco_ = null, pjFiltros_ = null;
   function abrir() {
     yAbertura = window.scrollY; f.classList.add('aberto'); btn.setAttribute('aria-expanded', 'true');
     if (painel_() && extras_) {
-      document.documentElement.classList.add('fx-travado');
+      document.documentElement.classList.add('tk-travado');
       extras_.setAttribute('role', 'dialog'); extras_.setAttribute('aria-modal', 'true'); extras_.setAttribute('aria-label', 'Filtros');
       voltarFoco_ = document.activeElement;
       if (window.TKCamadas && !TKCamadas.aberta('filtros-painel')) TKCamadas.empilhar('filtros-painel', fecharNoCore_);
+      /* Tab preso dentro do painel e foco devolvido ao fechar (TKJanela, a11y.js) */
+      if (window.TKJanela && !pjFiltros_) pjFiltros_ = TKJanela.prender(extras_, { papel: false, devolver: false, camada: 'filtros-painel', fechar: () => fechar(), foco: '#fx-fechar' });
       const x = document.getElementById('fx-fechar'); if (x) setTimeout(() => x.focus({ preventScroll: true }), 30);
     }
   }
   function fecharNoCore_() {
     f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'false');
-    document.documentElement.classList.remove('fx-travado');
+    document.documentElement.classList.remove('tk-travado');
     if (extras_) { extras_.removeAttribute('role'); extras_.removeAttribute('aria-modal'); extras_.removeAttribute('aria-label'); }
     try { if (voltarFoco_ && voltarFoco_.focus && document.contains(voltarFoco_)) voltarFoco_.focus({ preventScroll: true }); } catch (e) {}
     voltarFoco_ = null;
+    if (pjFiltros_) { pjFiltros_.soltar(); pjFiltros_ = null; }
   }
   // abre sozinho ao procurar e fecha ao sair (só se foi aberto por esta busca)
   let autoAberto = false;
@@ -1696,7 +1702,12 @@ try { tkSelExpirar_(); } catch (e) {}
   document.addEventListener('pointerdown', (ev) => {
     if (!painel_() && f.classList.contains('compacto') && f.classList.contains('aberto') && !ev.target.closest('#filtros')) fechar();
   });
-  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') fechar(); });
+  /* Esc só fecha os filtros quando eles são a janela do topo (outra janela aberta por cima fica com o Esc dela) */
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    if (window.TKCamadas && TKCamadas.total() > 0) { const st = window.history.state; if (!(st && st.overlay === 'filtros-painel')) return; }
+    fechar();
+  });
   ['fx-fechar', 'fx-ver'].forEach(id => { const b = document.getElementById(id); if (b) b.addEventListener('click', fechar); });
   // X dentro do campo: apaga o que foi digitado de uma vez (v6.4)
   const bX = document.getElementById('busca-limpar');

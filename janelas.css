@@ -1,0 +1,81 @@
+/* ====================================================================
+ * TENKiTER — gramática única de janelas, abas, foco e camadas (v7.57)
+ * Carregado por TODAS as páginas. É o ÚNICO lugar onde ficam:
+ *   1. a escala de camadas (--z-*)
+ *   2. o botão de fechar (.tk-fechar)  — "✕" 44×44 contornado, canto superior direito
+ *   3. a aba/segmento ativo (.tk-abas) — escolha marcada em preto, com aria-selected
+ *   4. o pulo para o conteúdo (.tk-pular) e o anel de foco (3 px laranja)
+ *   5. altura das folhas em dvh (o botão do rodapé nunca fica atrás da barra do navegador)
+ * Não copie estas regras em outro arquivo: use as classes.
+ * ==================================================================== */
+:root {
+  /* Escala de camadas (do fundo para o topo). Janela nova escolhe um degrau; não inventa número. */
+  --z-sticky: 20;        /* cabeçalhos e barras coladas dentro da página */
+  --z-menu: 80;          /* botões flutuantes, painéis soltos */
+  --z-barra: 90;         /* barra inferior (nav.js) */
+  --z-folha: 100;        /* folhas e modais comuns (painel e vitrine) */
+  --z-folha-2: 110;      /* folha aberta sobre outra folha */
+  --z-foto: 130;         /* foto em tela cheia (TKFotoGrande, no common.js) */
+  --z-dialogo: 150;      /* diálogo sobre foto/folha: Minha conta, confirmações */
+  --z-dialogo-2: 160;
+  --z-processo: 1000;    /* operação longa por cima de tudo que é folha */
+  --z-processo-2: 1100;
+  --z-processo-3: 1200;
+  --z-sobre-tudo: 2000;  /* disponibilidade, encaminhar, certificado, foto de perfil */
+  --z-tutorial: 3000;    /* tutorial guiado */
+  --z-aviso: 4000;       /* faixa de versão nova e avisos do sistema */
+  --tkj-borda: #e3ddd3;
+  --tkj-texto: #141414;
+}
+
+/* ---------- 2. botão de fechar único ---------- */
+/* !important de propósito: garante que nenhum CSS local de módulo deforme o botão (largura, borda, fundo). */
+html body .tk-fechar, html body .sheet-x {
+  flex: none !important; box-sizing: border-box !important; width: 44px !important; height: 44px !important;
+  min-width: 44px !important; min-height: 44px !important; padding: 0 !important; margin: 0;
+  border-radius: 8px !important; background: transparent !important; border: 1px solid var(--tkj-borda) !important;
+  color: var(--tkj-texto) !important; font: 700 1rem/1 "Inter", -apple-system, Roboto, Arial, sans-serif !important;
+  cursor: pointer; align-items: center; justify-content: center;
+}
+/* display fora do !important: o módulo pode esconder o botão (ex.: app Android esconde o ✕ do Mensageiro) */
+:where(.tk-fechar, .sheet-x) { display: inline-flex; }
+html body .tk-fechar:hover, html body .sheet-x:hover { background: #f3efe8 !important; }
+html body .tk-fechar .tk-ico { width: 18px; height: 18px; }
+/* sobre foto (detalhe do produto): mesmo formato, fundo claro para ler em cima da foto */
+html body .tk-fechar.tk-fechar-foto { background: rgba(255, 255, 255, .94) !important; border-color: rgba(0, 0, 0, .18) !important; }
+/* em fundo escuro */
+html body .tk-fechar.tk-fechar-escuro { border-color: rgba(255, 255, 255, .4) !important; color: #fff !important; }
+html body .tk-fechar.tk-fechar-escuro:hover { background: rgba(255, 255, 255, .12) !important; }
+/* cabeçalho de janela: título à esquerda, ✕ à direita */
+.tk-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* ---------- 3. aba / segmento ativo único ---------- */
+/* Escolha marcada = preto com texto branco (aria-selected="true"). Segmentos (alternância) usam aria-pressed. */
+html body .tk-abas { display: flex; overflow-x: auto; scrollbar-width: none; }
+:where(.tk-abas) { gap: 6px; }
+/* medidas e fonte com especificidade zero: o módulo pode ajustar (ex.: rótulo longo em 320 px); cor, fundo e borda não mudam */
+:where(.tk-abas) > :where([role=tab], button) { min-height: 44px; padding: 0 14px; font: 600 .95rem "Inter", -apple-system, Roboto, Arial, sans-serif; }
+html body .tk-abas > [role=tab], html body .tk-abas > button {
+  flex: none; box-sizing: border-box; border-radius: 8px !important; border: 1px solid var(--tkj-borda) !important;
+  background: #fff !important; color: var(--tkj-texto) !important; cursor: pointer;
+  box-shadow: none !important; white-space: nowrap;
+}
+html body .tk-abas > [role=tab][aria-selected="true"], html body .tk-abas > button[aria-pressed="true"] {
+  background: #141414 !important; border-color: #141414 !important; color: #fff !important;
+}
+
+/* ---------- 4. pular para o conteúdo e foco visível ---------- */
+.tk-pular { position: fixed; top: 0; left: 8px; z-index: var(--z-aviso); transform: translateY(-160%); background: #0d0d0d; color: #fff;
+  font: 700 .95rem "Inter", -apple-system, Roboto, Arial, sans-serif; padding: 12px 18px; border-radius: 10px; text-decoration: none;
+  min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; }
+.tk-pular:focus, .tk-pular:focus-visible { transform: translateY(8px); outline: 3px solid #E67E22; outline-offset: 2px; }
+html body :focus-visible { outline: 3px solid #E67E22; outline-offset: 2px; }
+html body main:focus, html body [tabindex="-1"]:focus { outline: none; }
+
+/* ---------- 5. fundo da página travado de UM jeito: classe tk-travado no <html> (janela de tela cheia) ----------
+ * Folhas comuns (.overlay-sheet) não travam: usam overscroll-behavior:contain no corpo rolável da folha. */
+html.tk-travado, html.tk-travado body { overflow: hidden; }
+.overlay-sheet .sheet, .overlay-sheet-loja .modal, #overlay .modal { overscroll-behavior: contain; }
+
+/* ---------- 6. altura das folhas: dvh com reserva em vh (declarada junto de cada folha: admin.html, catalogo.css, push.js) ---------- */
+@media (prefers-reduced-motion: reduce) { .tk-pular { transition: none; } }

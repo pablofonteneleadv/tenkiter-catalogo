@@ -100,7 +100,7 @@
       const fundo=novo('div','tk-disp-fundo');fundo.id='ms-edicao-tamanhos';
       const painel=novo('section','tk-disp-painel');painel.setAttribute('role','dialog');painel.setAttribute('aria-modal','true');painel.setAttribute('aria-labelledby','tk-disp-titulo');
       const cab=novo('header','tk-disp-cab'), titulo=novo('h3','','Disponibilidade');titulo.id='tk-disp-titulo';
-      const fechar=novo('button','tk-disp-fechar','×');fechar.type='button';fechar.setAttribute('aria-label','Fechar sem salvar');cab.append(titulo,fechar);
+      const fechar=novo('button','tk-disp-fechar tk-fechar','✕');fechar.type='button';fechar.setAttribute('aria-label','Fechar sem salvar');cab.append(titulo,fechar);
       const corpo=novo('div','tk-disp-corpo'), nome=novo('strong','',p.Nome||'Peça');
       corpo.append(nome,novo('small','tk-disp-info',[p.Codigo,typeof window.TKTecido!=='undefined'&&TKTecido.ler(p)].filter(Boolean).join(' · ')));
       const status=novo('p','tk-disp-status','Retire o que acabou. As outras informações ficam como estão.');status.setAttribute('role','status');
@@ -122,12 +122,17 @@
       grupo('Fotos',fotos,'foto',true);grupo('Vídeos',videos,'video',true);
       grupo('Tamanhos e idades',tamanhos,'tamanho');grupo('Cores e estampas',cores,'cor');
       const detalhes=novo('details','tk-disp-detalhes'), resumo=novo('summary','','Informações da peça');detalhes.append(resumo);
-      const dl=novo('dl');for(const [r,v] of [['Categoria',p.Categoria],['Gênero',p.Genero],['Descrição',window.TKTecido?TKTecido.semDescricao(p.Descricao):p.Descricao],['Preço',typeof ehConsulta==='function'&&ehConsulta(p)?'Consultar valor':typeof moeda==='function'?moeda(p.Preco):p.Preco],['Estoque',p.Estoque]]){if(v!==''&&v!=null){dl.append(novo('dt','',r),novo('dd','',String(v)));}}detalhes.append(dl);corpo.append(detalhes);
+      const dl=novo('dl');for(const [r,v] of [['Categoria',p.Categoria],['Gênero',p.Genero],['Descrição',window.TKTecido?TKTecido.semDescricao(p.Descricao):p.Descricao],['Preço',typeof ehConsulta==='function'&&ehConsulta(p)?(typeof TEXTO_CONSULTA==='string'?TEXTO_CONSULTA:'Consulte valor'):typeof formatarReal==='function'&&Number(p.Preco)>0?formatarReal(p.Preco):''],['Estoque',p.Estoque]]){if(v!==''&&v!=null){dl.append(novo('dt','',r),novo('dd','',String(v)));}}detalhes.append(dl);corpo.append(detalhes);
       const arq=novo('button','tk-disp-arquivar','× Arquivar produto inteiro');arq.type='button';arq.onclick=()=>{arquivar=!arquivar;arq.setAttribute('aria-pressed',String(arquivar));arq.textContent=arquivar?'↶ Manter produto':'× Arquivar produto inteiro';status.textContent=arquivar?'A peça inteira será arquivada ao salvar.':'Produto mantido. Confira as retiradas antes de salvar.';};arq.setAttribute('aria-pressed','false');corpo.append(arq);
       const rodape=novo('footer','tk-disp-rodape'), cancelar=novo('button','','Cancelar'), salvar=novo('button','tk-disp-salvar','Salvar alterações');cancelar.type=salvar.type='button';rodape.append(cancelar,salvar);painel.append(cab,corpo,status,rodape);fundo.append(painel);
       function encerrar(){fundo.remove();if(window.TKCamadas&&TKCamadas.aberta('ms-edicao-tamanhos'))TKCamadas.desempilhar('ms-edicao-tamanhos');if(anterior?.isConnected)anterior.focus({preventScroll:true});}
-      fechar.onclick=cancelar.onclick=encerrar;fundo.onclick=e=>{if(e.target===fundo)encerrar();};
-      fundo.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();encerrar();}if(e.key==='Tab'){const bs=[...painel.querySelectorAll('button,summary')].filter(x=>x.getClientRects().length&&!x.disabled);if(e.shiftKey&&document.activeElement===bs[0]){e.preventDefault();bs.at(-1).focus();}else if(!e.shiftKey&&document.activeElement===bs.at(-1)){e.preventDefault();bs[0].focus();}}};
+      /* v7.57: não perder o que a pessoa marcou. ✕, toque fora, Esc e Voltar perguntam antes de descartar; "Cancelar" é escolha explícita. */
+      const sujo=()=>arquivar||Object.values(removidos).some(s=>s.size>0);
+      const descartarOk=()=>!sujo()||confirm('Descartar o que você marcou? Nada foi salvo ainda.');
+      const tentar=()=>{if(descartarOk())encerrar();};
+      const aoVoltar=()=>{if(!fundo.isConnected)return;if(descartarOk()){encerrar();return;}setTimeout(()=>{if(fundo.isConnected&&window.TKCamadas)TKCamadas.empilhar('ms-edicao-tamanhos',aoVoltar);},0);};
+      cancelar.onclick=encerrar;fechar.onclick=tentar;fundo.onclick=e=>{if(e.target===fundo)tentar();};
+      fundo.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();tentar();}if(e.key==='Tab'){const bs=[...painel.querySelectorAll('button,summary')].filter(x=>x.getClientRects().length&&!x.disabled);if(e.shiftKey&&document.activeElement===bs[0]){e.preventDefault();bs.at(-1).focus();}else if(!e.shiftKey&&document.activeElement===bs.at(-1)){e.preventDefault();bs[0].focus();}}};
       salvar.onclick=()=>{
         if(guardado)return;
         if(ctx.conta()!==dono||!ctx.pode()){status.textContent='Seu acesso mudou. Feche e abra Produtos novamente.';return;}
@@ -147,7 +152,7 @@
           guardado=true;aplicar(p,ops);encerrar();notificar();ctx.avisar('Alteração guardada. Salvando em segundo plano…');void processar();
         }catch(_){status.textContent='Não consegui guardar a alteração neste aparelho. Libere espaço e tente salvar novamente.';}
       };
-      document.body.append(fundo);if(window.TKCamadas)TKCamadas.empilhar('ms-edicao-tamanhos',encerrar);fechar.focus({preventScroll:true});
+      document.body.append(fundo);if(window.TKCamadas)TKCamadas.empilhar('ms-edicao-tamanhos',aoVoltar);fechar.focus({preventScroll:true});
     }
     window.addEventListener('online',tentar);
     window.addEventListener('storage',e=>{if(e.key?.startsWith(PREFIXO)){notificar();void processar();}});

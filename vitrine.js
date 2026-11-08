@@ -58,14 +58,14 @@
    * primeira peça. Este link é a primeira coisa que o Tab encontra.
    * ================================================================== */
   function criarSalto() {
-    if ($('pular-pecas')) return;
+    if ($('pular-pecas') || document.querySelector('.tk-pular')) return;
     const main = $('pecas') || document.querySelector('main');
     if (!main) return;
     if (!main.id) main.id = 'pecas';
     if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
     const a = document.createElement('a');
     a.id = 'pular-pecas';
-    a.className = 'pular-conteudo';
+    a.className = 'tk-pular';
     a.href = '#' + main.id;
     a.textContent = 'Pular para as peças';
     a.addEventListener('click', () => {

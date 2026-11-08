@@ -103,10 +103,11 @@ try:
             # Falha parcial: repete apenas a peça sem confirmação, com o mesmo identificador.
             ctx, pg, state, calls, errors, ids = setup(browser, 390, 844, 'admin.html', mode='partial')
             open_dialog(pg, 'admin.html'); pg.locator('[data-opcao="manequim"]').click(); pg.locator('.pf-enviar').click()
-            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("restantes")')
+            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("Tentar")')
             chk('falha parcial informa 1 de 2', '1 de 2' in pg.locator('.pf-status').inner_text())
+            chk('plural: falta 1 (não "Faltam 1")', 'Falta 1' in pg.locator('.pf-status').inner_text() and 'Faltam 1' not in pg.locator('.pf-status').inner_text() and 'restantes' not in pg.locator('.pf-enviar').inner_text())
             pg.locator('.pf-fechar').click(); open_dialog(pg, 'admin.html')
-            chk('fechar/reabrir preserva falha e formulario', pg.locator('[data-opcao="manequim"]').get_attribute('aria-pressed') == 'true' and 'restantes' in pg.locator('.pf-enviar').inner_text())
+            chk('fechar/reabrir preserva falha e formulario', pg.locator('[data-opcao="manequim"]').get_attribute('aria-pressed') == 'true' and 'Tentar' in pg.locator('.pf-enviar').inner_text())
             pg.locator('.pf-enviar').click(); pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent === "Concluído"')
             chk('retry nao repete confirmado', len(calls) == 3 and calls[1]['produto'] == calls[2]['produto'] and calls[0]['produto'] != calls[2]['produto'])
             chk('retry conserva op', calls[1]['op'] == calls[2]['op'])

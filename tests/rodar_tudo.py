@@ -55,6 +55,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("aparencia_aprovada_ui.py", lambda o: "PASS aparência aprovada" in o),
     ("x_equipe.py", lambda o: "FALHAS=0" in o),   # X de arquivar na loja (Equipe do site)
     ("botao_voltar.py", lambda o: "FALHAS=0" in o),   # botão voltar fecha só a janela de cima
+    ("janelas_padrao.py", lambda o: "FALHAS=0" in o),   # v7.57.0: ✕ único, abas, foco, Voltar/Esc e camadas em todas as janelas
     ("selecao_link.py", lambda o: "RESULTADO:" in o and " 0 falhas" in o),   # compartilhar seleção leva as PEÇAS (?sel=…), não só a loja
     ("rolagem_infinita.py", lambda o: "FALHAS=0" in o),   # rolagem infinita + faixa flutuante de filtros
     ("central_avisos.py", lambda o: "FALHAS=0" in o),      # Central de avisos do lojista (público, {nome}, agendar, modelos, histórico, preparar)
@@ -176,6 +177,9 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_gestor.js", lambda o: "OK: gestor Admin total" in o),
     ("worker_fila_originais.js", lambda o: "OK: três originais" in o),
     ("worker_postagens_prova_falhas.js", lambda o: "FALHAS=0" in o),   # v7.56: pausa do Instagram com backoff, vigia de 20 min, série parada, token, enviando preso
+    ("worker_post_chave.js", lambda o: "FALHAS=0" in o),   # v7.57: chave de operação do POST /post (tocar de novo não duplica)
+    ("postagens_chave_ui.py", lambda o: "FALHAS=0" in o),   # v7.57: Postagens reusa a chave e diz "Sem confirmação"
+    ("padrao_regras_dados.py", lambda o: "FALHAS=0" in o),   # v7.57: padrao-dados.js, preço à vista, foto do cliente, pedir fotos, travas estáticas
     ("mensagens_relacionamento_ui.py", lambda o: "OK 1440" in o),
     ("mensagens_grupos_busca_ui.py", lambda o: "OK 1440" in o),
     ("mensagens_layout_compacto.py", lambda o: "OK 1440" in o),

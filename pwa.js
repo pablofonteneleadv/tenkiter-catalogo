@@ -49,7 +49,7 @@
   function msg(t) { var m = $('inst-msg'); if (m) m.textContent = t || ''; }
 
   function copiarEndereco() {
-    var url = location.origin + '/';
+    var url = (typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/');   // v7.57.0: link compartilhável = SITE_URL (common.js)
     var fim = function (ok) { msg(ok ? 'Endereço copiado. Cole no Safari (ou no Chrome) para instalar.' : 'Endereço do site: ' + url); };
     try { navigator.clipboard.writeText(url).then(function () { fim(true); }, function () { fim(false); }); } catch (e) { fim(false); }
   }
@@ -154,7 +154,7 @@
     $('btn-inst-ios').addEventListener('click', function () {
       if (this.getAttribute('data-modo') === 'copiar') { copiarEndereco(); return; }
       try {
-        navigator.share({ title: 'TENKiTER Modas', url: location.origin + '/' }).catch(function () { /* a pessoa fechou o menu */ });
+        navigator.share({ title: 'TENKiTER Modas', url: (typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/') }).catch(function () { /* a pessoa fechou o menu */ });
         msg('No menu que abriu, role e escolha “Adicionar à Tela de Início”.');
       } catch (e) { msg('Toque no botão Compartilhar do Safari e depois em “Adicionar à Tela de Início”.'); }
     });
@@ -219,7 +219,7 @@
       if (embutido) { copiarEndereco(); return; }
       if (iOS) {
         fecharConvite(false);
-        try { navigator.share({ title: 'TENKiTER Modas', url: location.origin + '/' }).catch(function () {}); } catch (e) {}
+        try { navigator.share({ title: 'TENKiTER Modas', url: (typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/') }).catch(function () {}); } catch (e) {}
         if (secao) { try { secao.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
         return;
       }
