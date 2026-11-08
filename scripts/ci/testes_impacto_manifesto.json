@@ -222,6 +222,9 @@
     "tests/produtos_busca_esteira_ia.py": [
       "esteira"
     ],
+    "tests/prova_resiliente.py": [
+      "treinamentos"
+    ],
     "tests/reparos_integrados_ui.py": [
       "esteira",
       "mensagens",

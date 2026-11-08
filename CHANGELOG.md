@@ -30,6 +30,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Foto de produto 4:5 também na vitrine (cartão e galeria) e no Instagram; selos de foto e de estado com um estilo e uma posição.
 - Vitrine reserva a altura da grade e o deslocamento de layout em rede lenta cai de 0,155 para 0,025 no celular. Teste `tests/padrao_aparencia_ui.py` trava as regras.
 
+## [7.56.3] - 2026-11-07
+
+- Prova do manual: o estagiário (e qualquer pessoa) sempre consegue finalizar. Pergunta impossível de responder (sem alternativas) deixa de travar o botão Corrigir; se algo falhar na correção, o botão é liberado com explicação.
+- Nota da avaliação fica guardada no aparelho até o servidor confirmar. Se o servidor recusar ou a internet cair, a tela diz o motivo em português (sessão, permissão, limite, conexão) e oferece "Enviar de novo"; ao entrar de novo, notas pendentes são reenviadas sozinhas (o servidor ignora repetição).
+
 ## [7.56.2] - 2026-11-07
 
 - Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.

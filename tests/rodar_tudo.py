@@ -120,6 +120,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_grupo.py", lambda o: "FALHAS=0" in o),
     ("postagens_admin.py", lambda o: "FALHAS=0" in o),   # aba Postagens: feed/carrossel/reels/story, templates, agenda, fila, Story com link manual
     ("conteudo_protegido.py", lambda o: "FALHAS=0" in o),   # treinamentos: manuais e provas só pelo servidor, com sessão e permissão (RH 3.4)
+    ("prova_resiliente.py", lambda o: "FALHAS=0" in o),   # prova: sem pergunta impossível, motivo claro ao falhar, nota guardada e reenviada
     ("provas_v52.py", lambda o: "FALHAS=0" in o),   # v5.2: prova só corrige respondida, n de 3 vem do servidor, botão Editar produto
     ("manual_rico.py", lambda o: "FALHAS=0" in o),          # manual rico no site: formatação por trecho, foto ao lado, vídeo, caixas, lição que só conclui acertando, botões da prova
     ("modulo0_verificado.py", lambda o: "FALHAS=0" in o),   # módulo 0 verificado: checagem na lição, regra de ouro, prática validada, certificado e verificação
