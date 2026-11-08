@@ -26,6 +26,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Story com mais de 60 mídias avisa antes de subir arquivos (a fila aceita 60 postagens por envio) e mantém a seleção para enviar em etapas.
 - Substitui o PR #385 (parte de Postagens); a parte de registros de clientes/solicitações do #385 não entra nesta versão.
 
+## [7.61.1] - 2026-11-08
+
+- Corrige as faixas de abas (Postagens, Avisos e outras): na 7.61.0 cada aba ficou com a largura da tela inteira e só a primeira aparecia (sumiram Fila, Postar à mão, Já postadas…). A regra única das abas agora fixa a largura pelo texto. Teste novo `tests/abas_visiveis.py` (falha no código anterior).
+
 ## [7.61.0] - 2026-11-08
 
 - Padrão de aparência único: novo `tk-padrao.css` (carrega por último em todas as páginas) concentra cores da marca, alvo de toque de 44 px, botão por papel (principal, secundário, perigoso, texto), campo (44 px, fonte 16, raio 8), chip, foco laranja de 3 px, foto 4:5 e selos. Os acabamentos deixam de repetir os tokens.
