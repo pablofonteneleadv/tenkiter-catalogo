@@ -34,7 +34,7 @@ with sync_playwright() as pw:
   agenda.click();pg.wait_for_selector('#ms-acompanhar:enabled');pg.locator('#ms-gaveta [data-ms=agenda-abrir]').click();pg.wait_for_selector('#ms-ag-texto');pg.locator('#ms-ag-texto').fill('')
   pg.locator('#ms-ag-arquivo').set_input_files({'name':'foto do produto.png','mimeType':'image/png','buffer':PNG});pg.wait_for_function('document.querySelector(".ms-ag-anexo-nome").textContent.includes("foto do produto")')
   data=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=3)+datetime.timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M')
-  pg.locator('#ms-ag-quando').fill(data);s['agendar_falha_apos_gravar']=True;pg.locator('#ms-ag-salvar').click();pg.wait_for_function('document.getElementById("ms-ag-form-status").textContent.includes("Tente de novo")')
+  pg.locator('#ms-ag-quando').fill(data);s['agendar_falha_apos_gravar']=True;pg.locator('#ms-ag-salvar').click();pg.wait_for_function('document.getElementById("ms-ag-form-status").textContent.includes("Tente novamente")')
   assert pg.locator('#ms-ag-quando').input_value()==data;assert pg.locator('.ms-ag-anexo-nome').inner_text().startswith('foto do produto')
   pg.locator('#ms-ag-salvar').click();pg.wait_for_function('document.getElementById("ms-ag-form-status").textContent.includes("Agendada para")')
   assert s['agendar_posts'][-1]['idLocal']==s['agendar_posts'][-2]['idLocal'];assert len([a for a in s['agenda'] if a.get('tem_anexo')])==1

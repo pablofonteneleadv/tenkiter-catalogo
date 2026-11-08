@@ -1,6 +1,7 @@
 """Família de produtos na Gestão (v7.44.0/v7.47.0): família = mesmo produto (estampa ou tamanho). Nada é digitado à parte.
 "+ Nova variação desta família" (pré-preenchido, sem fotos/tamanhos/cores, liga ao salvar), "Ligar como família" na seleção em lote (só confirma), "Sugestões de famílias" (Ligar/Ignorar) e "Tirar da família". Apps Script e Worker SIMULADOS.
     python3 tests/familia_gestao.py"""
+DLG = []
 import sys, os, json
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
@@ -35,12 +36,12 @@ with sync_playwright() as p:
         ctx.add_init_script(SESSION); log = []
         st = install(ctx, log=log, versao="4.19"); st["midia"]["modo"] = "ok"; P = preparar(st)
         orig = P[0]["ID"]
-        pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
+        pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: (DLG.append(d.message), d.accept()))
         pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2500)
 
         # ---- edição: família da peça + "+ Nova variação desta família" (estampa nova: nada é digitado à parte) ----
         pg.evaluate(f"editarProduto('{orig}')"); pg.wait_for_selector("#fam-form:not([hidden]) .fam-novo", timeout=6000)
-        chk(f"{w}: na edição aparece a família do produto e o botão '+ Nova variação desta família'", "ainda não está ligada" in pg.inner_text("#fam-form") and pg.locator("#fam-form .fam-novo").inner_text() == "+ Nova variação desta família")
+        chk(f"{w}: na edição aparece a família do produto e o botão '+ Nova variação desta família'", "ainda não está ligado" in pg.inner_text("#fam-form") and pg.locator("#fam-form .fam-novo").inner_text() == "+ Nova variação desta família")
         pg.locator("#fam-form").scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"gestao_edicao_familia_{w}.png"))
         pg.click("#fam-form .fam-novo"); pg.wait_for_function("document.getElementById('titulo-form').textContent.startsWith('Nova variação')", timeout=4000)
         v = pg.evaluate("({nome: nome.value, tam: tamanhos.value, cores: cores.value, est: estoque.value, fotos: fotosItens.length, preco: preco.value, cat: [...selecionadasCategorias].join(), gen: [...selecionadosGeneros].join(), id: document.getElementById('produto-id').value, tit: document.getElementById('titulo-form').textContent})")
@@ -68,7 +69,7 @@ with sync_playwright() as p:
         chk(f"{w}: com 2 produtos marcados aparece 'Ligar como família'", pg.locator("#btn-bulk-familia").is_visible())
         pg.click("#btn-bulk-familia"); pg.wait_for_selector("#overlay-familias.aberto", timeout=4000)
         chk(f"{w}: a janela não tem nenhum campo para digitar (nome, tamanho, idade)", pg.locator("#fam-corpo input, #fam-corpo textarea").count() == 0)
-        chk(f"{w}: a janela mostra os produtos com foto, nome e código", pg.locator("#fam-corpo .fam-membro").count() == 2 and "Vestido festa 2 anos" in pg.inner_text("#fam-corpo") and "VF-4" in pg.inner_text("#fam-corpo") and "Nada nelas muda" in pg.inner_text("#fam-corpo"))
+        chk(f"{w}: a janela mostra os produtos com foto, nome e código", pg.locator("#fam-corpo .fam-membro").count() == 2 and "Vestido festa 2 anos" in pg.inner_text("#fam-corpo") and "VF-4" in pg.inner_text("#fam-corpo") and "Nada neles muda" in pg.inner_text("#fam-corpo"))
         chk(f"{w}: nomes do mesmo produto não geram alerta", pg.locator("#fam-corpo .fam-alerta").count() == 0)
         pg.screenshot(path=str(OUT / f"gestao_ligar_lote_{w}.png"))
         pg.click("#fam-pe .fam-prim"); pg.wait_for_timeout(800)
@@ -116,9 +117,8 @@ with sync_playwright() as p:
         # tirar da família onde está para colocar na nova
         marcar("Vestido festa 4 anos", "Vestido festa 8 anos")
         btf = pg.locator("#fam-corpo .tem-fam button", has_text="Tirar da família")
-        btf.click()
-        chk(f"{w}: 'Tirar da família' pede um segundo toque", btf.inner_text() == "Toque de novo para tirar da família" and not any(c["corpo"].get("produto") == P[2]["ID"] for c in chamadas(st, "/familias/desligar")))
         btf.click(); pg.wait_for_timeout(600)
+        chk(f"{w}: 'Tirar da família' pede confirm() com a consequência", any("Tirar este produto da família" in m and "continua no site" in m for m in DLG), DLG)
         chk(f"{w}: depois de tirar da família, o produto fica livre e dá para ligar a família nova", any(c["corpo"].get("produto") == P[2]["ID"] for c in chamadas(st, "/familias/desligar")) and pg.locator("#fam-corpo .tem-fam").count() == 0 and pg.inner_text("#fam-pe .fam-prim") == "Ligar 2 produtos como família" and "saiu da família" in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
         pg.click("#fam-pe .fam-prim"); pg.wait_for_timeout(700)
         lg = chamadas(st, "/familias/ligar")[-1]["corpo"]
@@ -162,10 +162,9 @@ with sync_playwright() as p:
         pg.locator("#fam-form").scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"gestao_edicao_com_familia_{w}.png"))
         alv = pg.evaluate("[...document.querySelectorAll('#fam-form button')].map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")
         chk(f"{w}: botões da caixa Família com pelo menos 44 px", all(x >= 43.5 for x in alv), alv)
-        pg.click("#fam-form .fam-tirar")
-        chk(f"{w}: 'Tirar da família' pede um segundo toque antes", pg.locator("#fam-form .fam-tirar").inner_text() == "Toque de novo para tirar" and not any(c["corpo"].get("produto") == orig for c in chamadas(st, "/familias/desligar")))
         pg.click("#fam-form .fam-tirar"); pg.wait_for_timeout(600)
-        chk(f"{w}: tirar da família chama o servidor e atualiza a caixa", chamadas(st, "/familias/desligar")[-1]["corpo"] == {"produto": orig} and "ainda não está ligada" in pg.inner_text("#fam-form") and "família foi desfeita" in pg.inner_text("#status"), pg.inner_text("#status"))
+        chk(f"{w}: 'Tirar da família' pede confirm() antes", any("Tirar este produto da família" in m for m in DLG), DLG)
+        chk(f"{w}: tirar da família chama o servidor e atualiza a caixa", chamadas(st, "/familias/desligar")[-1]["corpo"] == {"produto": orig} and "ainda não está ligado" in pg.inner_text("#fam-form") and "família foi desfeita" in pg.inner_text("#status"), pg.inner_text("#status"))
         chk(f"{w}: sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
         chk(f"{w}: sem erro de JavaScript", not errs, errs)
         ctx.close()
@@ -174,7 +173,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     ctx.add_init_script(SESSION); log = []
     st = install(ctx, log=log, versao="4.19"); st["midia"]["modo"] = "ok"; P = preparar(st)
-    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: (DLG.append(d.message), d.accept()))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2500)
     st["ig"]["fora"] = True
     pg.evaluate(f"editarProduto('{P[0]['ID']}')"); pg.wait_for_selector("#fam-form .fam-novo", timeout=6000)

@@ -67,7 +67,7 @@ with sync_playwright() as pw:
    assert not errors,errors
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1');pg.keyboard.press('Escape')
    if admin and w==390:
-    calls['segurar']=True;pg.click('.cx-descartar');pg.click('.cx-descartar')
+    calls['segurar']=True;pg.once('dialog',lambda d:d.accept());pg.click('.cx-descartar')
     for tentativa in range(50):
      if retidas:break
      pg.wait_for_timeout(100)
