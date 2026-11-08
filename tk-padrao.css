@@ -159,7 +159,7 @@ html body .sel-esg { background: #fdecec; color: var(--vermelho); border-color: 
   font-size: .75rem; font-weight: 700; line-height: 1.2; padding: 3px 8px; text-align: left;
 }
 .tk-selo-foto { position: absolute; left: 6px; bottom: 6px; z-index: 2; pointer-events: none; display: inline-flex; align-items: center; gap: 4px; }
-html body :is(.foto-ampliar .foto-qtd, .foto-bt .qtd-fotos, .po-m .po-postada, .po-m .po-c) { position: absolute; left: 6px; bottom: 6px; right: auto; top: auto; width: auto; pointer-events: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+html body :is(.foto-ampliar .foto-qtd, .foto-bt .qtd-fotos, .po-m .po-postada, .po-m .po-c) { position: absolute; left: 6px; bottom: 6px; right: auto; top: auto; width: auto; pointer-events: none; display: inline-flex; align-items: center; gap: 4px; max-width: calc(100% - 12px); box-sizing: border-box; }
 html body .mini-selos { left: 6px; bottom: 6px; }
 /* sobre a foto, estado (Novidade, Esgotado): canto de cima à esquerda, raio único */
 html body .selo-card { border-radius: var(--tk-selo-raio); font-size: .75rem; }
