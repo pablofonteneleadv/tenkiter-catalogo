@@ -220,7 +220,6 @@
       "postagens"
     ],
     "tests/janelas_sem_estouro.py": [
-      "padroes",
       "postagens"
     ],
     "tests/postagens_multi_sem_limite.py": [
