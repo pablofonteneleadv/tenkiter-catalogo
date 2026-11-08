@@ -19,7 +19,8 @@ def foto_real(w, h, seed):
 orig = {"202609/" + "1" * 20 + ".jpg": foto_real(1080, 1350, 1), "202609/" + "2" * 20 + ".jpg": foto_real(1080, 1080, 2), "202610/" + "3" * 20 + ".jpg": foto_real(400, 500, 3)}
 orig["202610/" + "4" * 20 + ".jpg"] = b"nao-e-imagem"                         # foto corrompida: não pode derrubar as outras
 armaz = dict(orig); armaz["202610/" + "5" * 20 + ".jpg"] = foto_real(1080, 1350, 5); orig["202610/" + "5" * 20 + ".jpg"] = armaz["202610/" + "5" * 20 + ".jpg"]
-armaz["202610/" + "5" * 20 + "@480.jpg"] = b"\xff\xd8\xff-ja-existe"               # esta já tem cópia
+armaz["202610/" + "5" * 20 + "@480.jpg"] = b"\xff\xd8\xff-ja-existe"               # esta já tem as cópias
+armaz["202610/" + "5" * 20 + "@240.jpg"] = b"\xff\xd8\xff-ja-existe240"
 chamadas = []
 
 class H(BaseHTTPRequestHandler):
@@ -35,7 +36,7 @@ class H(BaseHTTPRequestHandler):
         a = q["acao"][0]
         if a == "saude": return self._j({"ok": True, "gerador": "mini-v1"})
         if a == "lote":
-            pend = [k for k in sorted(armaz) if "@" not in k and k.replace(".jpg", "@480.jpg") not in armaz]
+            pend = [k for k in sorted(armaz) if "@" not in k and (k.replace(".jpg", "@480.jpg") not in armaz or k.replace(".jpg", "@240.jpg") not in armaz)]
             return self._j({"ok": True, "pendentes": pend, "cursor": None, "fim": True})
         if a == "origem":
             d = armaz[q["chave"][0]]; self.send_response(200); self.send_header("Content-Length", str(len(d))); self.end_headers(); return self.wfile.write(d)
@@ -43,7 +44,7 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         q = self._t(); n = int(self.headers.get("Content-Length", "0")); d = self.rfile.read(n)
         if self.headers.get("Authorization") != "Bearer TESTE": return self._j({"ok": False}, 401)
-        ch = q["chave"][0]; cm = ch.replace(".jpg", "@480.jpg")
+        ch = q["chave"][0]; cm = ch.replace(".jpg", "@%s.jpg" % q.get("w", ["480"])[0])
         if cm in armaz: return self._j({"ok": True, "jaExistia": True})
         if n > 150 * 1024: return self._j({"ok": False, "erro": "grande"}, 413)
         armaz[cm] = d; self._j({"ok": True})
@@ -54,10 +55,11 @@ def rodar(extra=None):
     return subprocess.run([sys.executable, os.path.join(RAIZ, "scripts/fotos/gerar_minis.py")], env=dict(env, **(extra or {})), capture_output=True, text=True, timeout=120)
 
 print("== Só saúde ==")
-r = rodar({"MINI_SO_SAUDE": "1"}); chk("confere a identidade e não gera nada", r.returncode == 0 and not any(c[1] == "gravar" for c in chamadas) and len(armaz) == 6, r.stdout + r.stderr)
+r = rodar({"MINI_SO_SAUDE": "1"}); chk("confere a identidade e não gera nada", r.returncode == 0 and not any(c[1] == "gravar" for c in chamadas) and len(armaz) == 7, r.stdout + r.stderr)
 print("== Primeira execução ==")
 r = rodar(); print(r.stdout.strip()[-400:])
 minis = {k: v for k, v in armaz.items() if k.endswith("@480.jpg")}
+minis240 = {k: v for k, v in armaz.items() if k.endswith("@240.jpg")}
 chk("terminou sem erro (uma foto ruim não derruba o resto)", r.returncode == 0, r.stderr)
 chk("criou cópia das 3 fotos boas (a corrompida ficou de fora, a que já tinha foi respeitada)", set(minis) == {"202609/" + "1" * 20 + "@480.jpg", "202609/" + "2" * 20 + "@480.jpg", "202610/" + "3" * 20 + "@480.jpg", "202610/" + "5" * 20 + "@480.jpg"}, sorted(minis))
 for k in ("1", "2"):
@@ -67,8 +69,9 @@ m1 = minis["202609/" + "1" * 20 + "@480.jpg"]; o1 = orig["202609/" + "1" * 20 + 
 chk("cópia bem menor que a original (< 150 KB e < 40% do tamanho)", len(m1) <= 150 * 1024 and len(m1) < 0.4 * len(o1), (len(m1), len(o1)))
 im3 = Image.open(io.BytesIO(minis["202610/" + "3" * 20 + "@480.jpg"])); chk("foto pequena (400 px) não é ampliada", im3.width == 400, im3.size)
 chk("proporção 4:5 preservada", abs(Image.open(io.BytesIO(m1)).height / 480 - 1350 / 1080) < 0.01)
+chk("também criou a cópia de 240 px (bem menor)", len(minis240) == 4 and len(minis240["202609/" + "1" * 20 + "@240.jpg"]) < 0.5 * len(m1) and Image.open(io.BytesIO(minis240["202609/" + "1" * 20 + "@240.jpg"])).width == 240)
 chk("originais intactas (nada apagado nem trocado)", all(armaz[k] == v for k, v in orig.items()))
-chk("a cópia que já existia não foi mexida", armaz["202610/" + "5" * 20 + "@480.jpg"] == b"\xff\xd8\xff-ja-existe")
+chk("a cópia que já existia não foi mexida", armaz["202610/" + "5" * 20 + "@480.jpg"] == b"\xff\xd8\xff-ja-existe" and armaz["202610/" + "5" * 20 + "@240.jpg"] == b"\xff\xd8\xff-ja-existe240")
 print("== Segunda execução (idempotente) ==")
 antes = dict(armaz); n0 = len([c for c in chamadas if c[1] == "gravar"]); r = rodar()
 chk("repetir não muda nada no armazenamento", armaz == antes)
