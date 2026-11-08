@@ -4054,7 +4054,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
           window.logDebug_('← Cloudinary HTTP ' + xhr.status + ' em ' + ms + 'ms -- subiu, url=' + dadosResp.secure_url);
           resolve(dadosResp.secure_url);
         } else {
-          const msgErro = (dadosResp && dadosResp.error && dadosResp.error.message) || ('HTTP ' + xhr.status);
+          const msgErro = (dadosResp && dadosResp.error && dadosResp.error.message) || 'O servidor de imagens recusou o envio. Tente de novo.';
           window.logDebug_('← Cloudinary HTTP ' + xhr.status + ' em ' + ms + 'ms -- recusou: ' + msgErro);
           reject(new Error('Cloudinary: ' + msgErro));
         }
