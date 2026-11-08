@@ -29,6 +29,21 @@ ORDEM = M["modules"]
 DIRETORIOS_IGNORADOS = ("docs/", "documentacao/")
 GRAPHIFY = re.compile(r"^(scripts/graphify/|scripts/ci/check_graphify\.py$|tests/graphify_automatico\.py$|\.graphifyignore$|\.gitignore$|AGENTS\.md$|CLAUDE\.md$|GEMINI\.md$|docs/ia/|\.(agents|claude|codex)/skills/graphify/|\.claude/(hooks/graphify-session\.sh|settings\.json)$|\.cursor/|\.github/(copilot-instructions\.md|workflows/(ci|copilot-setup-steps)\.yml)$)")
 
+# Mudanças APENAS no contrato do seletor/CI: testes do próprio seletor + smoke de
+# catálogo, mensagens e treinamento. Fluxos de deploy, segurança e código de produto
+# fora desta lista continuam com cobertura ampla (fail-safe).
+ARQUIVOS_CI_ISOLADO = frozenset({
+    ".github/workflows/ci.yml",
+    "scripts/ci/testes_impacto.py",
+    "scripts/ci/testes_impacto_manifesto.json",
+    "tests/testes_impacto_seletor.py",
+    "docs/ia/testes-por-impacto.md",
+    "agents.md", "claude.md",
+})
+
+def somente_ci_isolado(arquivos: list[str]) -> bool:
+    return bool(arquivos) and all(a.replace("\\\\", "/").removeprefix("./").lower() in ARQUIVOS_CI_ISOLADO for a in arquivos)
+
 def classificar(arquivo: str) -> set[str]:
     """Caminhos compartilhados/novos retornam TODOS; primeiro a segurança."""
     p = arquivo.replace("\\", "/").removeprefix("./").lower()
@@ -92,10 +107,16 @@ def plano(arquivos: list[str], evento: str, suite: str, rotulos: list[str], desc
     so_docs = bool(arquivos) and not completo and all(a.lower().endswith(".md") for a in arquivos)
     motivos = {}
     modulos: set[str] = set()
+    ci_isolado = somente_ci_isolado(arquivos) and not completo
     for a in arquivos:
-        encontrados = classificar(a)
+        # CI puro: evita a armadilha de acionar a plataforma inteira só porque
+        # uma PR altera o seletor. Se houver QUALQUER arquivo além da lista
+        # restrita, volta à classificação conservadora normal.
+        encontrados = {"ci"} if ci_isolado else classificar(a)
         motivos[a] = sorted(encontrados)
         modulos.update(encontrados)
+    if ci_isolado:
+        motivos["controle do CI isolado"] = ["seletor validado em testes estáticos + quatro testes smoke de código"]
     for extra_modulo in extra:
         if extra_modulo in MODULOS:
             modulos.add(extra_modulo)
@@ -139,8 +160,14 @@ def escrever_saida(pl: dict, saida: str, resumo: str) -> None:
         with open(resumo, "a", encoding="utf-8") as f: f.write(texto)
 
 def cmd(comando: list[str], env: dict[str, str] | None = None) -> None:
-    print("CI-impacto: " + " ".join(comando), flush=True)
-    subprocess.run(comando, cwd=ROOT, env={**os.environ, **(env or {})}, check=True)
+    # Limite por comando: evita job silenciosamente preso durante horas.
+    # Ampliações longas têm que ser justificadas no próprio teste.
+    limite = int(os.environ.get("TK_CI_TIMEOUT_SEGUNDOS", "600"))
+    print("CI-impacto: " + " ".join(comando) + f" (limite {limite}s)", flush=True)
+    try:
+        subprocess.run(comando, cwd=ROOT, env={**os.environ, **(env or {})}, check=True, timeout=limite)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Teste/comando ultrapassou {limite}s: {' '.join(comando)}")
 
 @contextmanager
 def servidor(cmdline: list[str], porta: int):
