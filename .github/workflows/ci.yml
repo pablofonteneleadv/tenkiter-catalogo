@@ -8,7 +8,7 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
     paths:
       - '**'
   workflow_dispatch:
@@ -60,10 +60,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           SUITE_PEDIDA: ${{ inputs.suite }}
           ROTULOS_PR: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          DESCRICAO_PR: ${{ github.event.pull_request.body }}
         run: |
           python3 scripts/ci/testes_impacto.py planejar \
             --evento "$EVENTO" --base "$BASE_SHA" --head "$HEAD_SHA" \
-            --suite "$SUITE_PEDIDA" --rotulos "$ROTULOS_PR" \
+            --suite "$SUITE_PEDIDA" --rotulos "$ROTULOS_PR" --descricao "$DESCRICAO_PR" \
             --saida "$GITHUB_OUTPUT" --resumo "$GITHUB_STEP_SUMMARY"
 
   segredos:
