@@ -144,6 +144,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Alguns runners vêm sem ffmpeg (reparos_integrados_ui gera vídeo de teste): garante antes de rodar.
+      - name: Garantir ffmpeg
+        run: command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
       # Uma PR de RH não executa 53 scripts de atendimento/postagens/Esteira.
       # O planejador é fail-safe: arquivos desconhecidos e compartilhados => cobertura ampla.
       # No full/noturno roda a bateria integral separada abaixo.
