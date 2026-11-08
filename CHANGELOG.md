@@ -19,6 +19,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.61.0] - 2026-11-08
+
+- Padrão de aparência único: novo `tk-padrao.css` (carrega por último em todas as páginas) concentra cores da marca, alvo de toque de 44 px, botão por papel (principal, secundário, perigoso, texto), campo (44 px, fonte 16, raio 8), chip, foco laranja de 3 px, foto 4:5 e selos. Os acabamentos deixam de repetir os tokens.
+- Nenhum controle abaixo de 44 px nas telas medidas (vitrine, Gestão, Cadastro, Postagens, Instagram, Métricas, Push, Conexões, Tecidos, Famílias, Fotos IA, Esteira, RH, Verificar): botões dos cartões, chips, abas, tamanhos da vitrine, caixa de seleção da lista, remover foto do Cadastro.
+- Cadastro da peça no padrão Opção A: laranja do token, campos de 44 px com raio 8, botão principal sem sombra e com texto escuro; chips e botões no mesmo formato do resto.
+- Ações principais com um só raio e altura mínima de 48 px; ações perigosas (Descartar, Desconectar, Excluir) viram secundárias em vermelho; contraste do botão de Verificar corrigido.
+- Foco visível único (laranja, 3 px) também em Treinamentos, Currículos e Verificar; tons de laranja e marrom soltos trocados pelos tokens.
+- Chips marcados passam a expor `aria-pressed` (a11y.js) em Lista, Push, Métricas, Cadastro e filtros da vitrine; lupa em todas as caixas de busca.
+- Foto de produto 4:5 também na vitrine (cartão e galeria) e no Instagram; selos de foto e de estado com um estilo e uma posição.
+- Vitrine reserva a altura da grade e o deslocamento de layout em rede lenta cai de 0,155 para 0,025 no celular. Teste `tests/padrao_aparencia_ui.py` trava as regras.
+
 ## [7.60.0] - 2026-11-08
 
 - Avisos que não travam a tela: novo `avisos.js` (região única empilhada, sucesso some em 6 s, erro fica até fechar, "Desfazer" quando reversível). Substitui os `alert()` de sucesso/informação da Gestão, Instagram, Conexões, Mensageiro, Postagens, Avisos e Pedir fotos; o aviso não cobre mais a faixa de juntar/separar.

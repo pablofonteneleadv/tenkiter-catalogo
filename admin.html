@@ -21,7 +21,7 @@
 <title>Gestão — TENKiTER Modas</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&family=Playfair+Display:ital,wght@0,700;1,700&family=Dancing+Script:wght@700&family=Oswald:wght@500;700&display=swap">
 <style>html,body{overscroll-behavior-y:none}
-  :root { --preto: #0d0d0d; --laranja: #E67E22; --laranja-txt: #A85200; --ouro: #F39C12; --cinza: #F5F1E8; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #8a6200; }
+  /* cores e medidas: ver tk-padrao.css (fonte única) */
   input, button, select, textarea { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; }
   h1, h2, h3 { font-family: "Poppins", sans-serif; font-weight: 800; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -107,7 +107,7 @@
   .sug-ver-todas { width: auto; min-height: 40px; padding: 0 10px; background: none; color: var(--laranja-txt); font-size: 0.82rem; font-weight: 700; border-radius: 8px; white-space: nowrap; }
   .sug-cartoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .sug-cartao { width: 100%; padding: 0; background: #fff; border: 1px solid #e3ddd3; border-radius: 10px; overflow: hidden; text-align: left; color: #141414; display: flex; flex-direction: column; }
-  .sug-cartao img, .sug-cartao .sug-sem-foto { width: 100%; aspect-ratio: 3 / 4; height: auto; object-fit: cover; background: #eee8de; display: block; }
+  .sug-cartao img, .sug-cartao .sug-sem-foto { width: 100%; aspect-ratio: var(--tk-foto, 4 / 5); height: auto; object-fit: cover; background: #eee8de; display: block; }
   .sug-cartao span { display: block; padding: 5px 7px 0; font-size: 0.76rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
   .sug-cartao small { display: block; padding: 1px 7px 7px; font-size: 0.7rem; color: #625c53; }
   .cp-overlay { align-items: stretch; }
@@ -131,7 +131,7 @@
   @media (min-width: 860px) { .cp-grade { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .cp-card { position: relative; background: #fff; border: 1px solid #e3ddd3; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
   .cp-usar { width: 100%; padding: 0; background: none; border: 0; border-radius: 0; text-align: left; color: #141414; display: flex; flex-direction: column; flex: 1 1 auto; }
-  .cp-usar img, .cp-usar .sug-sem-foto { width: 100%; aspect-ratio: 3 / 4; height: auto; object-fit: cover; background: #eee8de; display: block; }
+  .cp-usar img, .cp-usar .sug-sem-foto { width: 100%; aspect-ratio: var(--tk-foto, 4 / 5); height: auto; object-fit: cover; background: #eee8de; display: block; }
   .cp-usar .cp-nome { display: block; padding: 7px 9px 0; font-size: 0.86rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
   .cp-usar .cp-meta { display: block; padding: 2px 9px 0; font-size: 0.75rem; color: #625c53; }
   .cp-usar .cp-meta b { color: #141414; font-weight: 700; }
@@ -254,17 +254,17 @@
   .stats-card strong { display: block; font-size: 1.05rem; margin-top: 2px; color: var(--laranja-txt); }
   .stats-card small { display: block; font-size: 0.64rem; color: #666; margin-top: 2px; }
 
-  .btn-seo-ia { background: #f3e8ff; color: #6b21a8; margin-top: 10px; }
+  .btn-seo-ia { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); margin-top: 10px; }
   .seo-sugestao { background: #f9f5ff; border: 1px solid #e3d3fb; border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 0.82rem; }
   .seo-sugestao .campo { margin-bottom: 8px; }
-  .seo-sugestao .campo b { display: block; font-size: 0.68rem; color: #6b21a8; text-transform: uppercase; margin-bottom: 2px; }
+  .seo-sugestao .campo b { display: block; font-size: 0.68rem; color: var(--tk-texto-2); text-transform: uppercase; margin-bottom: 2px; }
   .seo-sugestao button { width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 2px 4px 0 0; }
   .seo-sugestao .sug-ia-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #d9c2f7; border-radius: 999px; padding: 2px 4px 2px 10px; margin: 2px 4px 2px 0; font-size: .82rem; }
   .seo-sugestao .sug-ia-x { width: 32px; min-width: 32px; height: 32px; padding: 0; margin: 0; border-radius: 50%; background: #fee2e2; color: #b91c1c; font-size: .8rem; font-weight: 800; flex: none; }
   .seo-sugestao .sug-ia-linha { display: flex; gap: 6px; align-items: flex-start; }
   .seo-sugestao .sug-ia-txt { flex: 1; min-width: 0; font-size: .85rem; padding: 6px 8px; border: 1px solid #d9c2f7; border-radius: 8px; background: #fff; }
   .seo-sugestao .sug-ia-vazio { color: #777; font-size: .8rem; }
-  .seo-sugestao .sug-ia-volta { background: transparent; color: #6b21a8; text-decoration: underline; padding: 4px; font-size: .75rem; }
+  .seo-sugestao .sug-ia-volta { background: transparent; color: var(--laranja-txt); text-decoration: underline; padding: 4px; font-size: .75rem; }
 
   .auditoria-item { border-bottom: 1px solid #eee; padding: 8px 0; font-size: 0.78rem; }
   .auditoria-item .linha1 { display: flex; justify-content: space-between; font-weight: 700; }
@@ -460,7 +460,7 @@
   .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .tag { display: inline-flex; align-items: center; gap: 6px; background: var(--laranja); color: var(--preto); font-weight: 700; font-size: 0.82rem; border-radius: 16px; padding: 6px 6px 6px 12px; }
   .tag button { width: 20px; height: 20px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.18); color: var(--preto); font-size: 0.7rem; line-height: 20px; }
-  .btn-escolher { background: #f0f0f0; color: #333; border: 1px dashed #aaa; padding: 12px; font-size: 0.9rem; }
+  .btn-escolher { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); padding: 12px; font-size: 0.9rem; font-weight: 600; min-height: var(--tk-botao-h); }
   .cad-falta { margin-top: 16px; font-size: 0.8rem; font-weight: 600; text-align: center; padding: 8px; border-radius: 10px; background: #fff3e0; color: #7a4a00; }
   .cad-falta.pronto { background: #edf7ee; color: #1a6b2c; }
 
@@ -592,7 +592,7 @@
   .produto img { width: 64px; height: 80px; flex: none; }
   .produto.arquivado { opacity: .72; }
   .produto { padding: 12px; }
-  .produto-chk { position: absolute; left: 15px; top: 15px; width: 26px; height: 26px; margin: 0; z-index: 2; accent-color: var(--laranja); }
+  .produto-chk { position: absolute; left: 15px; top: 15px; margin: 0; z-index: 2; }   /* tamanho e desenho: tk-padrao.css */
   .acoes-linha > button { padding: 7px 10px; }
   .produto-info .estoque-linha { font-size: 0.74rem; color: #666; margin-top: 2px; }
   .sel-esg { background: #fde3e3; color: var(--vermelho); font-size: 0.6rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
@@ -748,41 +748,39 @@
 #form-produto .publico-seis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
 #form-produto .publico-seis .chip{width:100%;min-width:0;justify-content:center;min-height:52px;white-space:normal;text-align:center}
 #form-produto .cad-unissex{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-top:12px;border:1px solid #ead8f6;border-radius:13px;background:#fbf5ff;font-weight:700;flex-wrap:wrap}
-#form-produto .cad-unissex input{width:20px;height:20px;accent-color:#ef861e}
+#form-produto .cad-unissex input{width:20px;height:20px;accent-color:var(--laranja)}
 #form-produto .cad-unissex small{display:block;flex-basis:100%;padding-left:30px;font-weight:400;color:#666}
 #form-produto .cad-vinculos{padding:12px;background:#faf9f6;border-radius:14px;margin-bottom:12px}
 #form-produto .cad-vinculos-titulo{font-weight:750;margin:8px 0}
 #form-produto .cad-etiquetas,#form-produto .cad-faixas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-#form-produto .cad-vinculos button{min-height:43px;border:1px solid #ddd;background:white;border-radius:24px;font-weight:700}
-#form-produto .cad-vinculos button.ativo{background:#ed861d;border-color:#ed861d;color:#111}
+#form-produto .cad-vinculos button{min-height:var(--tk-chip-h);border:1px solid var(--tk-borda);background:white;border-radius:var(--tk-chip-raio);font-weight:700}
+#form-produto .cad-vinculos button.ativo{background:var(--laranja);border-color:var(--laranja);color:#111}
 #form-produto .cad-vinculos-ajuda{font-size:12px;line-height:1.5;color:#666}
 @media(max-width:400px){#form-produto .publico-seis{gap:5px}#form-produto .publico-seis .chip{font-size:12px;padding:9px 3px}}
 #form-produto .cad-tamanhos-legados{margin:12px 0 0;padding:10px 12px;border:1px solid #ddd;border-radius:12px}
 #form-produto .cad-tamanhos-legados summary{font-size:13px;font-weight:650;cursor:pointer}
 #form-produto .cad-tamanhos-legados .chips{margin-top:12px}
 #form-produto .cad-tamanhos-legados input{width:100%;margin-top:8px}
-#form-produto .cad-vinculos button:focus-visible,#form-produto .publico-seis .chip:focus-visible{outline:3px solid #ea7b00;outline-offset:2px}
+#form-produto .cad-vinculos button:focus-visible,#form-produto .publico-seis .chip:focus-visible{outline:3px solid var(--laranja);outline-offset:2px}
 
 /* Cadastro visual: referencia TENKiTER — formulario unico, sem etapa de revisao. */
 #card-form .cad-corpo{background:#faf9f6}
 #card-form #titulo-form{font-size:clamp(1.3rem,4.5vw,1.75rem);letter-spacing:-.025em;margin:6px 0}
 #card-form .cad-sub{color:#69645f;line-height:1.5;margin-bottom:18px}
 #form-produto{display:flex;flex-direction:column;gap:13px}
-#form-produto .passo{background:#fff;border:1px solid #eae6df;border-radius:18px;padding:16px;box-shadow:0 2px 10px rgba(31,25,16,.035);margin:0}
+#form-produto .passo{background:#fff;border:1px solid var(--tk-borda);border-radius:var(--tk-raio);padding:16px;box-shadow:none;margin:0}
 #form-produto .passo-tit{font-size:1rem;line-height:1.4;font-weight:800;margin-bottom:13px;color:#24211e;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-#form-produto .passo-tit .num{display:inline-grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#f1871b;color:#1d1711;font-size:.9rem;font-weight:850}
+#form-produto .passo-tit .num{display:inline-grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:var(--laranja);color:#1d1711;font-size:.9rem;font-weight:850}
 #form-produto .passo-tit .opc,#form-produto .passo-tit .passo-cont{font-size:.76rem;font-weight:500;color:#77716b}
-#form-produto input:not([type="checkbox"]):not([type="file"]):not([type="hidden"]),#form-produto textarea{border-radius:12px;min-height:46px;border:1px solid #dcd7cf;background:#fff;font-size:16px}
-#form-produto input:focus-visible,#form-produto textarea:focus-visible{outline:2px solid #f1871b;outline-offset:1px}
+#form-produto input:not([type="checkbox"]):not([type="file"]):not([type="hidden"]),#form-produto textarea{border-radius:var(--tk-campo-raio);min-height:var(--tk-campo-h);border:1px solid var(--tk-borda);background:#fff;font-size:16px}
 #form-produto .btn-foto{border:2px dashed #e3b47e;border-radius:15px;background:#fff9f2;color:#6a3a0e;min-height:92px;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px}
 #form-produto #chips-categorias{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
-#form-produto #chips-categorias .chip{width:100%;min-width:0;min-height:47px;justify-content:center;border-radius:12px;white-space:normal;text-align:center}
-#form-produto .publico-seis .chip{border-radius:13px;min-height:56px}
+#form-produto #chips-categorias .chip{width:100%;min-width:0;min-height:var(--tk-chip-h);justify-content:center;white-space:normal;text-align:center}
+#form-produto .publico-seis .chip{min-height:56px}
 #form-produto .cad-vinculos{background:#fff9f2;border:1px solid #f0dfcc}
-#form-produto .cad-vinculos button.ativo{background:#f1871b;color:#23180c}
-#form-produto .cad-vinculos button{border-radius:12px}
-#form-produto #btn-salvar{min-height:54px;border-radius:14px;background:#f1871b;color:#20150a;font-weight:850;font-size:1.05rem;box-shadow:0 4px 14px rgba(241,135,27,.18)}
-#form-produto #details-mais{background:#fff;border:1px solid #eae6df;border-radius:18px;padding:16px}
+#form-produto .cad-vinculos button.ativo{background:var(--laranja);color:#23180c}
+#form-produto #btn-salvar{min-height:var(--tk-botao-prim-h);border-radius:var(--tk-botao-raio);background:var(--laranja);color:var(--preto);font-weight:700;font-size:1.05rem;box-shadow:none}
+#form-produto #details-mais{background:#fff;border:1px solid var(--tk-borda);border-radius:var(--tk-raio);padding:16px}
 @media(max-width:440px){#form-produto .passo{padding:13px}#form-produto .cad-etiquetas,#form-produto .cad-faixas{gap:6px}#form-produto #chips-categorias .chip{font-size:.87rem;padding:10px 5px}}
 @media(prefers-reduced-motion:no-preference){#form-produto .chip,#form-produto .cad-vinculos button{transition:background-color .12s ease,border-color .12s ease}}
 
@@ -805,18 +803,18 @@
 #form-produto .dica-midia-expansivel{background:#fff9f0;border-radius:9px;padding:7px 9px;font-size:.73rem;line-height:1.4}
 #form-produto .dica-midia-expansivel summary{cursor:pointer;color:#6a5a48;font-weight:650}
 #form-produto .dica-midia-expansivel p{margin:7px 0 2px}
-#form-produto #btn-foto-ia{padding:9px 10px;min-height:40px;font-size:.83rem;border-radius:10px;margin-top:8px}
+#form-produto #btn-foto-ia{padding:9px 10px;min-height:var(--tk-botao-h);font-size:.83rem;border-radius:var(--tk-botao-raio);margin-top:8px}
 #form-produto .form-linha{gap:9px}
 #form-produto .form-linha label{font-size:.78rem}
-#form-produto input:not([type="checkbox"]):not([type="file"]):not([type="hidden"]){min-height:42px;padding:8px 10px}
+#form-produto input:not([type="checkbox"]):not([type="file"]):not([type="hidden"]){min-height:var(--tk-campo-h);padding:8px 10px}
 #form-produto #chips-categorias{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-#form-produto #chips-categorias .chip{min-height:37px;padding:7px 3px;font-size:.75rem;line-height:1.2;border-radius:999px}
-#form-produto #btn-abrir-categorias{padding:8px 12px;min-height:39px;font-size:.8rem}
+#form-produto #chips-categorias .chip{min-height:var(--tk-chip-h);padding:7px 3px;font-size:.75rem;line-height:1.2}
+#form-produto #btn-abrir-categorias{padding:8px 12px;min-height:var(--tk-botao-h);font-size:.8rem}
 #form-produto .publico-seis{gap:6px}
-#form-produto .publico-seis .chip{min-height:43px;padding:7px 3px;font-size:.8rem;border-radius:12px}
+#form-produto .publico-seis .chip{min-height:var(--tk-chip-h);padding:7px 3px;font-size:.8rem}
 #form-produto .cad-unissex{padding:9px 11px;margin-top:8px;font-size:.83rem;gap:7px}
 #form-produto .cad-unissex small{padding-left:27px;font-size:.71rem}
-#form-produto .chk-consulta{font-size:.83rem;min-height:38px}
+#form-produto .chk-consulta{font-size:.83rem;min-height:var(--tk-alvo)}
 #form-produto .chk-consulta small{font-size:.72rem}
 @media(max-width:420px){
  #card-form[open]>.cad-corpo{padding:6px 9px 12px}
@@ -858,13 +856,13 @@
 #form-produto .video-x{min-height:32px;padding:5px 7px;font-size:.73rem}
 #form-produto .dica-midia-expansivel{padding:6px 9px;font-size:.71rem}
 #form-produto .cad-nome-linha{display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,30%);align-items:stretch;gap:8px}
-#form-produto .cad-nome-linha input{width:100%;min-width:0;min-height:45px}
-#form-produto .cad-nome-linha #btn-foto-ia{margin:0;min-height:45px;padding:6px 7px;font-size:.8rem;line-height:1.2;white-space:normal}
+#form-produto .cad-nome-linha input{width:100%;min-width:0;min-height:var(--tk-campo-h)}
+#form-produto .cad-nome-linha #btn-foto-ia{margin:0;min-height:var(--tk-campo-h);padding:6px 7px;font-size:.8rem;line-height:1.2;white-space:normal}
 #form-produto .cad-nome-linha #btn-foto-ia small{display:block;font-size:.64rem;font-weight:500;margin-top:2px}
 #form-produto .chk-consulta{margin-top:5px;padding:5px 7px;border-radius:9px;background:#fff9f0}
 #form-produto #chips-categorias{gap:5px}
-#form-produto #chips-categorias .chip{min-height:35px;padding:5px 3px;font-size:.74rem;border-radius:999px}
-#form-produto .publico-seis .chip{min-height:41px}
+#form-produto #chips-categorias .chip{min-height:var(--tk-chip-h);padding:5px 3px;font-size:.74rem}
+#form-produto .publico-seis .chip{min-height:var(--tk-chip-h)}
 #form-produto .cad-unissex{margin-top:7px;padding:7px 9px}
 @media(max-width:440px){
  #form-produto .passo{padding:10px}
@@ -1012,7 +1010,7 @@
 }
 
 </style>
-<link rel="stylesheet" href="acabamento-admin.css?v=7.58.1">
+<link rel="stylesheet" href="acabamento-admin.css?v=7.61.0">
 <link rel="stylesheet" href="janelas.css?v=7.58.1">
 <style id="atendimento-edicao-rapida">
 /* Mostra só as escolhas necessárias. Campos originais permanecem no DOM para
@@ -1037,7 +1035,7 @@ body.edicao-rapida-atendimento #form-produto { padding-bottom:110px; }
 body.edicao-rapida-atendimento #cad-faixas button { scroll-margin-bottom:130px; }
 body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; }
 #cad-atendimento-voltar { min-height:44px; border:0; background:transparent; color:var(--laranja-txt,#a65b13); font-size:.9rem; font-family:inherit; font-weight:700; cursor:pointer; padding:8px 0; text-decoration:underline; text-underline-offset:3px; }
-#cad-atendimento-voltar:focus-visible { outline:3px solid #e98a20; outline-offset:2px; }
+#cad-atendimento-voltar:focus-visible { outline:3px solid var(--tk-foco-cor,#A85200); outline-offset:2px; }
 @media (max-width: 359px) {
   body.edicao-rapida-atendimento #cad-etiquetas button {
     font-size: 10px !important;
@@ -1048,6 +1046,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   }
 }
 </style>
+<link rel="stylesheet" href="tk-padrao.css?v=7.61.0">
 </head>
 <body>
 
@@ -1404,7 +1403,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   <div class="overlay-sheet" id="overlay-categorias">
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Escolher categoria">
       <div class="sheet-topo"><strong>Escolha a categoria</strong><button type="button" class="sheet-x" id="cat-fechar" aria-label="Fechar">✕</button></div>
-      <input type="text" id="cat-busca" placeholder="Digite para procurar (ex.: vestido)" autocomplete="off">
+      <input type="text" id="cat-busca" class="tk-busca" placeholder="Digite para procurar (ex.: vestido)" autocomplete="off">
       <div class="cat-lista" id="cat-lista"></div>
       <div class="nova-categoria" id="nova-categoria-linha">
         <label for="input-nova-categoria">Nome da nova categoria</label>
@@ -1424,7 +1423,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   <div class="overlay-sheet" id="overlay-tamanhos">
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Escolher tamanhos">
       <div class="sheet-topo"><strong>Escolha os tamanhos</strong><button type="button" class="sheet-x" id="tam-fechar" aria-label="Fechar">✕</button></div>
-      <input type="text" id="tam-busca" placeholder="🔎 Digite para procurar (ex: M)" autocomplete="off">
+      <input type="text" id="tam-busca" class="tk-busca" placeholder="Digite para procurar (ex: M)" autocomplete="off">
       <div class="cat-lista" id="tam-lista"></div>
       <div class="nova-categoria" id="nova-tamanho-linha">
         <label for="input-novo-tamanho">Nome do novo tamanho</label>
@@ -1444,7 +1443,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   <div class="overlay-sheet" id="overlay-cores">
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Escolher cores e estampas">
       <div class="sheet-topo"><strong>Escolha as cores e estampas</strong><button type="button" class="sheet-x" id="cor-fechar" aria-label="Fechar">✕</button></div>
-      <input type="text" id="cor-busca" placeholder="🔎 Digite para procurar (ex: preto)" autocomplete="off">
+      <input type="text" id="cor-busca" class="tk-busca" placeholder="Digite para procurar (ex: preto)" autocomplete="off">
       <div class="cat-lista" id="cor-lista"></div>
       <div class="nova-categoria" id="nova-cor-linha">
         <label for="input-nova-cor">Nome da nova cor/estampa</label>
@@ -1496,7 +1495,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
         <button type="button" class="cp-fechar tk-fechar" id="cp-fechar" aria-label="Fechar">✕</button>
       </div>
       <div class="cp-ferramentas">
-        <input type="search" id="cp-busca" placeholder="Buscar por nome ou código (ex.: TK-0555)" autocomplete="off" lang="pt-BR" aria-label="Buscar produto por nome ou código">
+        <input type="search" id="cp-busca" class="tk-busca" placeholder="Buscar por nome ou código (ex.: TK-0555)" autocomplete="off" lang="pt-BR" aria-label="Buscar produto por nome ou código">
         <div class="cp-linha" role="group" aria-label="Situação e ordem">
           <button type="button" class="cp-chip" data-cp-situ="ativas" aria-pressed="true">Ativas</button>
           <button type="button" class="cp-chip" data-cp-situ="arquivadas" aria-pressed="false">Arquivadas</button>
@@ -1656,7 +1655,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="sessao-rapida.js?v=7.50.0"></script>
-<script src="fila-lote.js?v=7.50.0"></script>
+<script src="fila-lote.js?v=7.61.0"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
 <script src="admin-tecidos.js?v=7.48.1" defer></script>
 <script src="icones.js?v=7.17.0"></script>
@@ -4788,7 +4787,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         <input type="checkbox" class="produto-chk" data-id="${idE}" aria-label="Selecionar ${escaparHtml(p.Nome)}" ${selecionadosBulk.has(String(p.ID)) ? 'checked' : ''}>
         <button type="button" class="foto-ampliar" data-ampliar-id="${idE}" aria-label="Ampliar a foto de ${escaparHtml(p.Nome)}${nFotos_ > 1 ? ' (' + nFotos_ + ' fotos)' : ''}"><img ${atribSrc(fotoMini(p.Foto_URL, 200))} alt="" loading="lazy" decoding="async" width="64" height="80">${nFotos_ > 1 ? `<span class="foto-qtd" aria-hidden="true">${icA_('camera', '📷')} ${nFotos_}</span>` : ''}</button>
         <div class="produto-info">
-          <div class="codigo-tecido"><div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
+          <div class="codigo-tecido"><div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
           <div class="preco">${ehConsulta(p) ? icA_('conversa', '💬') + ' <strong>Consulte valor</strong> <small>(sem preço)</small>' : formatarReal(p.Preco) + ' · à vista <span>' + formatarReal(p.Preco * (1 - DESCONTO_AVISTA)) + '</span>'}</div>
           ${tamanhosLinha_(p)}
@@ -4807,7 +4806,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
                 ${inativo
                   ? `<button type="button" class="btn-reativar" data-reativar-id="${idE}">${icA_('atualizar', '🔄')} Reativar</button>`
                   : `<button type="button" class="btn-arquivar" data-arquivar-id="${idE}">${icA_('arquivar', '🗃️')} Arquivar</button>`}
-                <button type="button" class="btn-excluir" data-excluir-id="${idE}" data-codigo="${escaparHtml(p.Codigo || '')}" style="background:#fde3e3;color:var(--vermelho)">${icA_('lixeira', '🗑️')} Excluir</button>
+                <button type="button" class="btn-excluir" data-excluir-id="${idE}" data-codigo="${escaparHtml(p.Codigo || '')}">${icA_('lixeira', '🗑️')} Excluir</button>
               </div>
             </details>
           </div>
@@ -5700,7 +5699,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       ctx.font = 'bold 34px sans-serif';
       const larguraTexto = ctx.measureText(config.selo).width;
       const larguraSelo = larguraTexto + 60;
-      ctx.fillStyle = '#ff7a1a';
+      ctx.fillStyle = '#E67E22';
       desenharRetanguloArredondado(ctx, 40, YTOPO, larguraSelo, 64, 10);
       ctx.fill();
       ctx.fillStyle = '#0d0d0d';
@@ -5721,13 +5720,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     }
 
     // faixa laranja separando foto do rodapé
-    ctx.fillStyle = '#ff7a1a';
+    ctx.fillStyle = '#E67E22';
     ctx.fillRect(0, areaFotoAltura, 1080, 8);
 
     // ---- rodapé: marca fixa + bloco dinâmico (nome / descrição / categoria / preço) ----
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ff7a1a';
+    ctx.fillStyle = '#E67E22';
     ctx.font = 'bold 42px sans-serif';
     ctx.fillText('TENKiTER MODAS', 540, areaFotoAltura + 70);
 
@@ -6145,7 +6144,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const painel = document.getElementById('painel-compartilhar-conteudo');
     painel.innerHTML = `
       <h3 class="aud-tit">📋 Auditoria / Histórico</h3>
-      <input type="search" id="busca-auditoria" placeholder="Produto, código ou ação" aria-label="Pesquisar na auditoria">
+      <input type="search" id="busca-auditoria" class="tk-busca" placeholder="Produto, código ou ação" aria-label="Pesquisar na auditoria">
       <div class="aud-datas">
         <label>De<input type="date" id="aud-data-de"></label>
         <label>Até<input type="date" id="aud-data-ate"></label>
@@ -6531,27 +6530,27 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 </script>
 <script src="admin-gestao.js?v=7.57.0"></script>
 <script src="admin-push.js?v=7.58.1"></script>
-<script src="admin-conexoes.js?v=7.57.0"></script>
+<script src="admin-conexoes.js?v=7.61.0"></script>
 <script src="mensagens-acessos.js?v=7.40.19"></script>
-<link rel="stylesheet" href="admin-disponibilidade.css?v=7.58.1">
+<link rel="stylesheet" href="admin-disponibilidade.css?v=7.61.0">
 <script src="admin-disponibilidade.js?v=7.58.1"></script>
 <script src="admin-familias.js?v=7.57.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
-<link rel="stylesheet" href="mensagens-gestor.css?v=7.58.1">
+<link rel="stylesheet" href="mensagens-gestor.css?v=7.61.0">
 <script src="mensagens-presenca.js?v=7.40.43"></script>
-<script src="mensagens-gestor.js?v=7.58.1"></script>
-<script src="admin-mensagens.js?v=7.58.1"></script>
-<script src="admin-instagram.js?v=7.58.1"></script>
+<script src="mensagens-gestor.js?v=7.61.0"></script>
+<script src="admin-mensagens.js?v=7.61.0"></script>
+<script src="admin-instagram.js?v=7.61.0"></script>
 <script src="admin-caixa-fotos.js?v=7.52.0"></script>
-<link rel="stylesheet" href="pedir-fotos.css?v=7.58.1">
+<link rel="stylesheet" href="pedir-fotos.css?v=7.61.0">
 <script src="pedir-fotos.js?v=7.58.1"></script>
 <script src="video-validation.js?v=7.58.1"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
-<script src="admin-postagens.js?v=7.58.1"></script>
+<script src="admin-postagens.js?v=7.61.0"></script>
 <script src="admin-fotoia.js?v=7.57.0"></script>
-<script src="admin-enquadrar.js?v=7.28.0"></script>
+<script src="admin-enquadrar.js?v=7.61.0"></script>
 <script src="admin-capa-video.js"></script>
-<script src="nav.js?v=7.58.1" data-ativo="gestao"></script>
+<script src="nav.js?v=7.61.0" data-ativo="gestao"></script>
 <script>
 /* v7.19: acabamento das ferramentas do gestor.
  * 1) Títulos das janelas: o emoji do começo vira ícone de linha (os títulos são escritos por vários scripts; aqui só troca a aparência).
@@ -6597,9 +6596,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   setTimeout(grupos, 0);
 })();
 </script>
-<script src="a11y.js"></script>
+<script src="a11y.js?v=7.61.0"></script>
 <script src="conta.js"></script>
-<script src="push.js?v=7.57.0"></script>
+<script src="push.js?v=7.61.0"></script>
 
 <script>
 /* Atalhos "O que fazer agora": só levam a funções que já existem (nada foi removido). */

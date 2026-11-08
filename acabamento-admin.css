@@ -13,15 +13,7 @@
  * `body` para vencer as regras antigas sem precisar de !important.
  * ==================================================================== */
 
-:root {
-  --tk-texto: #141414;
-  --tk-texto-2: #625c53;
-  --tk-borda: #e3ddd3;
-  --tk-fundo: #f6f3ee;
-  --tk-superficie: #ffffff;
-  --tk-raio: 8px;
-  --tk-raio-p: 6px;
-}
+/* cores, raio e alturas: ver tk-padrao.css (fonte única, carrega depois) */
 
 /* ---------- ícones ---------- */
 .tk-ico {
@@ -149,7 +141,7 @@ body .busca-admin-lupa {
 }
 body .busca-admin-lupa .tk-ico { width: 19px; height: 19px; }
 body .busca-admin-x {
-  width: 40px; height: 40px; min-height: 40px; right: 2px; border-radius: var(--tk-raio-p);
+  width: var(--tk-alvo); height: var(--tk-alvo); min-height: var(--tk-alvo); right: 0; border-radius: var(--tk-raio-p);
   background: transparent; color: var(--tk-texto-2); display: inline-flex; align-items: center; justify-content: center;
 }
 body .busca-admin-x[hidden] { display: none; }
@@ -160,7 +152,7 @@ body #fa-toggle {
 
 body .chip { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); font-weight: 500; color: var(--tk-texto); }
 body .chip.selecionado, body .chip[aria-pressed="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; font-weight: 600; }
-body .filtros-lista .chip { min-height: 40px; font-size: 0.82rem; padding: 6px 12px; }
+body .filtros-lista .chip { min-height: var(--tk-chip-h); font-size: 0.82rem; padding: 6px 12px; }
 body #form-produto .cad-vinculos button { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); }
 body #form-produto .cad-vinculos button.ativo { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
 
@@ -175,7 +167,7 @@ body .produto-info .preco .tk-ico { width: 16px; height: 16px; vertical-align: -
 body .produto-info .estoque-linha { font-size: 0.78rem; color: var(--tk-texto-2); }
 body .acoes-linha { gap: 6px; margin-top: 10px; }
 body .acoes-linha > button {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px;
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--tk-botao-h); padding: 0 12px;
   border-radius: var(--tk-raio-p); border: 1px solid var(--tk-borda);
   background: var(--tk-superficie); color: var(--tk-texto); font-size: 0.8rem; font-weight: 600;
 }
@@ -191,7 +183,7 @@ body .acoes-linha .btn-editar { background: var(--tk-texto); border-color: var(-
 body .acoes-linha .btn-editar:hover { background: #2a2a2a; }
 body .acoes-linha .btn-postar { background: var(--tk-superficie); color: #8a1259; border-color: #efcfe0; }
 body details.mais > summary {
-  width: 40px; height: 40px; border-radius: var(--tk-raio-p); background: transparent;
+  width: var(--tk-alvo); height: var(--tk-alvo); border-radius: var(--tk-raio-p); background: transparent;
   border: 1px solid var(--tk-borda); color: var(--tk-texto);
 }
 body .produto-info .codigo, body .produto-info .nome { padding-right: 46px; }
@@ -202,13 +194,13 @@ body .mais-menu button {
 }
 body .mais-menu button:hover { background: #f3efe8; }
 body .mais-menu button .tk-ico { width: 18px; height: 18px; }
-body .mais-menu .btn-excluir { background: transparent !important; color: var(--vermelho) !important; }
-body .mais-menu .btn-excluir:hover { background: #fdecec !important; }
+body .mais-menu .btn-excluir { background: transparent; color: var(--vermelho); }
+body .mais-menu .btn-excluir:hover { background: #fdecec; }
 
 /* ---------- barra de seleção em lote ---------- */
 body .bulk-bar { border-radius: var(--tk-raio); padding: 12px; }
 body .bulk-bar-header { font-size: 0.86rem; font-weight: 600; }
-body #btn-cancelar-bulk { min-height: 40px; padding: 0 12px !important; border-radius: var(--tk-raio-p); background: transparent; color: #fff; border: 1px solid #555; font-size: 0.8rem; }
+body #btn-cancelar-bulk { min-height: var(--tk-botao-h); padding: 0 12px !important; border-radius: var(--tk-raio-p); background: transparent; color: #fff; border: 1px solid #555; font-size: 0.8rem; }
 body .bulk-bar-actions button {
   display: block; align-items: center; justify-content: center; gap: 6px;
   border-radius: var(--tk-raio-p); background: #2a2a2a; border: 1px solid #3a3a3a; font-size: 0.8rem; font-weight: 600;
@@ -218,7 +210,7 @@ body #btn-bulk-postar { background: #8a1259; border-color: #8a1259; }
 
 /* ---------- avisos ---------- */
 body .aviso-gestao { border-radius: var(--tk-raio); font-size: 0.84rem; }
-body .aviso-gestao button { min-height: 40px; border-radius: var(--tk-raio-p); }
+body .aviso-gestao button { min-height: var(--tk-botao-h); border-radius: var(--tk-raio-p); }
 
 /* ---------- botões genéricos do painel: mesmo raio da vitrine ---------- */
 body main button { border-radius: var(--tk-raio-p); }
@@ -318,7 +310,8 @@ body .g-arquivo {
   display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px; min-height: 52px; cursor: pointer;
   border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: #fff; font-weight: 400;
 }
-body .g-arquivo-bt { flex: none; display: inline-flex; align-items: center; min-height: 42px; padding: 0 14px; border-radius: var(--tk-raio-p); background: var(--tk-texto); color: #fff; font-size: 0.86rem; font-weight: 600; }
+body .g-arquivo-inp:focus-visible + .g-arquivo { outline: 2px solid var(--tk-texto); outline-offset: 2px; }
+body .g-arquivo-bt { flex: none; display: inline-flex; align-items: center; min-height: var(--tk-botao-h); padding: 0 14px; border-radius: var(--tk-raio-p); background: var(--tk-texto); color: #fff; font-size: 0.86rem; font-weight: 600; }
 body .g-arquivo-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-texto-2); font-size: 0.86rem; }
 body .aud-usuarios > summary #aud-usuarios-resumo { margin-left: 0.3em; font-weight: 400; color: var(--tk-texto-2); }
 body .g-sec .tk-ico { width: 18px; height: 18px; vertical-align: -4px; }
@@ -350,7 +343,7 @@ body .cfg-sec { background: transparent; color: var(--tk-texto); border: 1px sol
 body .po-chips button, body .fia-filtros button, body .fia-papeis button { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); font-weight: 600; }
 body .po-chips button[aria-pressed="true"], body .fia-filtros button[aria-pressed="true"], body .fia-papeis button[aria-pressed="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
 body .fia-filtros button[aria-pressed="true"] small { color: #fff; }
-body #ped-atualizar { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: var(--tk-raio-p); background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 0.82rem; font-weight: 600; }
+body #ped-atualizar { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tk-botao-h); padding: 0 12px; border-radius: var(--tk-raio-p); background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 0.82rem; font-weight: 600; }
 body #ped-atualizar .tk-ico { width: 16px; height: 16px; }
 
 /* Editar peças e Alterar preços: escolha marcada no padrão (preto com texto branco; cartão marcado com borda preta) */
@@ -367,4 +360,4 @@ body #form-produto .foto-box > .btn-foto { flex-direction: column; gap: 6px; bor
 body #form-produto .btn-foto .ic .tk-ico { width: 24px; height: 24px; }
 body .cad-falta { border-radius: var(--tk-raio); }
 body #btn-cancelar-duplicar { background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); border-radius: var(--tk-raio-p); }
-body #btn-salvar { border-radius: var(--tk-raio-p); }
+body #btn-salvar { border-radius: var(--tk-botao-raio); }

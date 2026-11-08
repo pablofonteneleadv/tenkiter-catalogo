@@ -1,0 +1,316 @@
+/* ====================================================================
+ * TENKiTER — PADRÃO DE APARÊNCIA ÚNICO (v7.57.0)
+ *
+ * UM arquivo para tudo que precisa ser igual em todos os módulos (vitrine, Gestão, Esteira,
+ * Fotos IA, RH, Verificar): cores, alvo de toque, botão por papel, campo, chip, foco, foto 4:5 e selos.
+ * Carrega por ÚLTIMO em toda página (depois dos acabamentos e dos <style> locais).
+ *
+ * Regras (conferidas por tests/padrao_aparencia_ui.py):
+ *  R1 nenhum controle com menos de 44 px;    R2 campo 44 px / fonte 16 px / raio 8;
+ *  R3 foco: dono é janelas.css (token aqui); R4 tokens daqui, sem tons de laranja soltos;
+ *  R5 foto de produto 4:5;                    R6 chip marcado também em aria-pressed;
+ *  R7 botão por papel (.tk-btn-prim / -sec / -perigo / -texto): raio e altura únicos.
+ * Para uma tela nova: use as classes .tk-btn-*, .tk-chip, .tk-campo, .tk-selo, .tk-selo-foto
+ * ou os tokens --tk-*. Não crie cor, raio ou altura própria.
+ * ==================================================================== */
+
+:root {
+  /* cores da marca (fonte única; não escreva o hexadecimal em outro lugar) */
+  --preto: #0d0d0d;
+  --laranja: #E67E22;        /* preenchimento (botão principal, marca) */
+  --laranja-txt: #A85200;    /* texto e contorno laranja sobre claro (contraste 5,9:1) */
+  --ouro: #F39C12;
+  --branco: #ffffff;
+  --verde: #198754;
+  --vermelho: #c62828;
+  --amarelo: #8a6200;
+  --cinza: #F5F1E8;
+
+  /* superfície "Opção A" */
+  --tk-texto: #141414;
+  --tk-texto-2: #625c53;
+  --tk-borda: #e3ddd3;
+  --tk-borda-perigo: #f0c6c6;
+  --tk-fundo: #f6f3ee;
+  --tk-superficie: #ffffff;
+
+  /* forma: um raio só para botão, campo, chip e aba; cartão igual */
+  --tk-raio: 8px;
+  --tk-raio-p: 8px;
+  --tk-botao-raio: 8px;
+  --tk-campo-raio: 8px;
+  --tk-chip-raio: 8px;
+  --tk-selo-raio: 6px;
+
+  /* tamanho */
+  --tk-alvo: 44px;           /* piso de qualquer controle tocável */
+  --tk-botao-h: 44px;        /* secundária, perigosa, texto */
+  --tk-botao-prim-h: 48px;   /* ação principal */
+  --tk-campo-h: 44px;
+  --tk-campo-fonte: 16px;    /* 16 px: o iOS não dá zoom */
+  --tk-chip-h: 44px;
+
+  /* foco: mesmo valor de janelas.css (dona da regra): laranja, 3 px, afastado 2 px */
+  --tk-foco-w: 3px;
+  --tk-foco-off: 2px;
+  --tk-foco-cor: var(--laranja);
+
+  /* foto de produto */
+  --tk-foto: 4/5;
+}
+
+/* ---------- R1 alvo mínimo de toque ---------- */
+html body :is(button, [role="button"], [role="tab"], summary, select,
+  input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"])) {
+  min-height: var(--tk-alvo) !important;
+}
+html body :is(button, [role="button"], [role="tab"]) { min-width: var(--tk-alvo) !important; }
+/* resumo de <details> (rótulo de seção) é alvo também: a linha toda abre */
+html body summary { box-sizing: border-box; align-content: center; }
+/* links soltos de rodapé, barra e menu (links dentro de frase ficam de fora) */
+html body :is(footer a, .rodape a, nav a, .tk-nav a, header a) { min-height: var(--tk-alvo); display: inline-flex; align-items: center; box-sizing: border-box; }
+/* caixa de marcação: o rótulo inteiro é o alvo (linha de 44 px, texto ao lado) */
+html body label:has(> input[type="checkbox"], > input[type="radio"]) { min-height: var(--tk-alvo) !important; display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box; }
+html body .checkbox-linha { min-height: var(--tk-alvo); }
+html body .checkbox-linha label { min-height: var(--tk-alvo); display: flex; align-items: center; flex: 1; box-sizing: border-box; }
+html body input[type="checkbox"], html body input[type="radio"] { width: 22px; height: 22px; accent-color: var(--tk-texto); flex: none; }
+/* caixa sozinha sobre a foto (seleção na lista da Gestão): alvo de 44 px com a caixinha desenhada no meio */
+html body input.produto-chk {
+  -webkit-appearance: none; appearance: none; width: var(--tk-alvo); height: var(--tk-alvo); left: 4px; top: 4px;
+  background: transparent; border: 0; cursor: pointer;
+}
+html body input.produto-chk::before { content: ""; position: absolute; inset: 10px; border: 2px solid #fff; border-radius: 6px; background: rgba(13, 13, 13, .45); box-shadow: 0 0 0 1px rgba(13, 13, 13, .5); }
+html body input.produto-chk:checked::before {
+  background: var(--laranja) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230d0d0d' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+html body :is(.ig-meta a, .mt-link) { min-height: var(--tk-alvo); display: inline-flex; align-items: center; box-sizing: border-box; }
+
+/* ---------- R1b: o piso de 44 px nao rebaixa alvo que o modulo ja fez maior (45 px ou mais); gerado das regras originais ---------- */
+html body .acoes-card button,
+html body .filtros .busca-campo input[type=text],
+html body .btn-filtros-toggle,
+html body .sheet-mensagens .ms-gaveta-proposta .ms-filtro-select,
+html body .tkc-exist button,
+html body .cp-ferramentas input,
+html body .fam-campo input,
+html body .lote-campo input[type=text],
+html body .lote-campo input[type=number],
+html body .lote-campo select,
+html body .lote-campo textarea,
+html body .escolha .abrir { min-height: 46px !important; }
+html body .juntar-ok,
+html body .inst-btn,
+html body .btn-nova-peca,
+html body .barra-compra button,
+html body .btn-add-resultados,
+html body .sugestoes-busca .sug-zap,
+html body details.ferramentas > summary,
+html body.pg-curriculo button,
+html body.pg-legal .zap,
+html body .tk-disp-rodape button,
+html body .pf-folha button,
+html body.rh-admin .avatar-menu-btn,
+html body.rh-admin .admin-tab,
+html body.rh-admin .ac-ferramentas summary,
+html body #rh-modelos button,
+html body #rh-modelos .rp-perm,
+html body #tk-gestor button,
+html body #tk-gestor input,
+html body #tk-gestor select,
+html body #tk-gestor .tg-tempo summary,
+html body #tk-gestor .tg-score summary,
+html body .ms-bolha .ms-btn[data-ms=cortesia-rever],
+html body #tk-gestor .tg-check,
+html body .ms-gaveta[data-tipo=relacionamento] summary,
+html body .faixas-sum,
+html body .guia-medidas summary,
+html body .fx-busca-interna,
+html body .tut-apoio button,
+html body .tkp-pedido button,
+html body #menu-lateral .ml-ajuda button,
+html body .cx-grupo > summary,
+html body .ms-aba,
+html body .ms-espiando .ms-btn,
+html body .ms-notas-corpo > .ms-btn,
+html body .ms-prod-filtros summary,
+html body .ms-prod-chips .ms-btn,
+html body .ms-prod-refinos .ms-btn,
+html body .ms-auto-pe .ms-btn,
+html body details.ms-ficha-acao > summary,
+html body .ms-solicitacoes-corpo input[type=file],
+html body .ms-solicitacoes-corpo textarea,
+html body .sheet-mensagens .ms-fop,
+html body .ms-eq-pessoa,
+html body .ms-nav button,
+html body .ms-filtro-op,
+html body .ms-mais-item,
+html body .sheet-mensagens .ms-ficha select,
+html body .ms-fi-faceta summary,
+html body .sheet-mensagens .ms-gaveta-proposta .ms-filtros-pe .ms-btn,
+html body .sheet-mensagens .ms-gaveta-proposta .ms-mais-item,
+html body .ms-acomp-linha,
+html body .ms-expediente summary,
+html body .tmv-op,
+html body .tkc-box button,
+html body .tkc-faixa button,
+html body #overlay-postagens input[type=file],
+html body .po-video-item button,
+html body .po-video-recuperar>button,
+html body .po-midia-opcoes summary,
+html body .po-conf-b button,
+html body #overlay-postagens .po-rg-par input,
+html body .po-ajuda > button[data-a="retoma-abrir"],
+html body .qr-grande,
+html body details.manual-card>summary,
+html body .tk-tecido-gestao input,
+html body .tk-tecido-gestao select,
+html body .tk-tecido-gestao button,
+html body #form-produto #video-lista .video-capa,
+html body #form-produto .publico-seis .chip,
+html body button.bt,
+html body a.bt,
+html body .acoes-lista select { min-height: 48px !important; }
+html body .sair-sel button,
+html body .pills-categoria,
+html body .modal .barra-compra .bc-pedir,
+html body .modal .barra-compra .bc-aviso,
+html body #tkp-janela .tkp-btn,
+html body #menu-lateral .ml-item,
+html body .lote-rodape .btn-primario { min-height: 50px !important; }
+html body .fx-ver,
+html body .fx-busca-interna,
+html body details.cartao-cad > summary,
+html body details.extra:not(.ferramentas) > summary,
+html body .g-arquivo,
+html body .filtros .fx-ver,
+html body .sheet-mensagens .ms-nav button,
+html body .tmv-btn,
+html body .po-fg-h,
+html body #form-produto .publico-seis .chip { min-height: 52px !important; }
+html body .filtros .fx-ver { min-height: 54px !important; }
+html body #card-pedidos > summary,
+html body #rh-modelos .rp-grupo summary,
+html body .pills-genero,
+html body .ig-faixa-btn,
+html body .sheet-mensagens .ms-resp,
+html body .sheet-mensagens .ms-motivo,
+html body .po-peca,
+html body .menu-cad-item,
+html body #form-produto .publico-seis .chip,
+html body .fam .peca.tam,
+html body .fam .peca-linha.tam > .peca,
+html body .cx-modo { min-height: 56px !important; }
+html body .tut-full-form textarea.tut-input { min-height: 58px !important; }
+html body .item-sacola .mini-btn,
+html body .po-it-top,
+html body #form-produto #video-box>.btn-foto { min-height: 60px !important; }
+html body .menu-cad-item,
+html body .ig-faixa-btn,
+html body .ferr-tile,
+html body .tv-config textarea,
+html body .sheet-mensagens .ms-fcard,
+html body .sheet-mensagens .ms-agendar-item { min-height: 64px !important; }
+html body #form-produto #galeria-box>.btn-foto { min-height: 66px !important; }
+
+/* ---------- R2 campos ---------- */
+html body :is(input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="button"], [type="submit"]), select) {
+  min-height: var(--tk-campo-h) !important;
+  font-size: var(--tk-campo-fonte) !important;
+  border-radius: var(--tk-campo-raio) !important;
+  box-sizing: border-box;
+}
+html body textarea { font-size: var(--tk-campo-fonte) !important; }
+.tk-campo { min-height: var(--tk-campo-h); font-size: var(--tk-campo-fonte); border: 1px solid var(--tk-borda); border-radius: var(--tk-campo-raio); background: var(--tk-superficie); color: var(--tk-texto); padding: 8px 12px; box-sizing: border-box; }
+
+/* ---------- R3 foco ---------- */
+/* A regra do anel (3 px laranja, afastado 2 px) e o "Ir para o conteúdo" são de janelas.css (dona). Aqui só o token,
+   para os módulos que desenham foco próprio usarem o MESMO valor: var(--tk-foco-cor). */
+
+/* ---------- R7 botão por papel ---------- */
+.tk-btn-prim, .tk-btn-sec, .tk-btn-perigo, .tk-btn-texto {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box;
+  border-radius: var(--tk-botao-raio); font-family: inherit; font-size: 1rem; line-height: 1.2; cursor: pointer; text-decoration: none;
+}
+.tk-btn-prim { min-height: var(--tk-botao-prim-h); padding: 0 20px; background: var(--laranja); border: 1px solid var(--laranja); color: var(--preto); font-weight: 700; }
+.tk-btn-sec { min-height: var(--tk-botao-h); padding: 0 16px; background: var(--tk-superficie); border: 1px solid var(--tk-borda); color: var(--tk-texto); font-weight: 600; }
+.tk-btn-perigo { min-height: var(--tk-botao-h); padding: 0 16px; background: var(--tk-superficie); border: 1px solid var(--tk-borda-perigo); color: var(--vermelho); font-weight: 600; }
+.tk-btn-texto { min-height: var(--tk-botao-h); padding: 0 12px; background: transparent; border: 0; color: var(--laranja-txt); font-weight: 600; }
+.tk-btn-prim:disabled, .tk-btn-sec:disabled, .tk-btn-perigo:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ações principais já existentes nos módulos: mesmo formato (cor laranja, texto escuro, raio e altura únicos) */
+html body :is(.btn-nova-peca, .fx-ver, #btn-salvar, .btn-primario, .po-enviar, .ig-ok, .av-prim, .cx-prim, .fam-prim, .fam-novo, .fi-btn.principal, .bt.laranja, .btn-editar-peca) {
+  border-radius: var(--tk-botao-raio) !important;
+  min-height: var(--tk-botao-prim-h) !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+html body :is(.btn-nova-peca, .fx-ver, #btn-salvar, .btn-primario, .po-enviar, .ig-ok, .av-prim, .cx-prim, .fam-prim, .fam-novo, .fi-btn.principal, .bt.laranja, .btn-editar-peca):not(:disabled) {
+  background: var(--laranja); color: var(--preto);
+}
+html body .po-enviar { height: auto !important; }
+/* ações perigosas: sempre secundárias (branco, borda clara, texto vermelho), de largura natural: nunca mais forte que a principal */
+html body :is(.ig-ruim, .cx-perigo, .acoes .btn-excluir, .mais-menu .btn-excluir, .tk-btn-perigo) {
+  background: var(--tk-superficie) !important; color: var(--vermelho) !important;
+  border: 1px solid var(--tk-borda-perigo) !important; font-weight: 600 !important; box-shadow: none !important;
+  width: auto; border-radius: var(--tk-botao-raio);
+}
+html body .mais-menu .btn-excluir { background: transparent !important; border-color: transparent !important; }
+html body :is(.ig-ruim, .cx-perigo):disabled { opacity: .55; }
+
+/* ---------- R6/chips e abas ---------- */
+.tk-chip, html body :is(.chip, .pill-cat, .pill-gen, .po-chips button, .fia-filtros button, .fia-papeis button, .cp-chip, .lote-modo button, [role="tablist"] button, .tam-op) {
+  min-height: var(--tk-chip-h) !important; box-sizing: border-box;
+}
+html body :is(.chip, .pill-cat, .pill-gen, .cp-chip) { border-radius: var(--tk-chip-raio); }
+html body :is(.chip, .pill-cat, .pill-gen, .cp-chip)[aria-pressed="true"], html body .chip.selecionado { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+
+/* ---------- foto de produto 4:5 (vitrine, galeria, Gestão, Postagens, Esteira) ---------- */
+html body .card .img-wrap, html body .card img, html body .carrossel-wrap { aspect-ratio: var(--tk-foto); }
+html body .card img { object-fit: cover; }
+
+/* ---------- selos: um estilo, uma posição ---------- */
+/* texto (família, arquivada, postada): fundo claro, raio único */
+.tk-selo, html body :is(.fam-selo, .po-sinal, .selo-inativo, .sel-esg) {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; box-sizing: border-box;
+  border-radius: var(--tk-selo-raio); background: var(--tk-fundo); color: var(--tk-texto); border: 1px solid var(--tk-borda);
+  font-size: .75rem; font-weight: 700; line-height: 1.2;
+}
+html body .sel-esg { background: #fdecec; color: var(--vermelho); border-color: var(--tk-borda-perigo); }
+/* sobre a foto: escuro, embaixo à esquerda (contagem de fotos, "Postada há N dias") */
+.tk-selo-foto, html body :is(.mini-selo, .foto-ampliar .foto-qtd, .foto-bt .qtd-fotos, .po-m .po-postada, .po-m .po-c) {
+  background: rgba(13, 13, 13, .72); color: #fff; border: 0; border-radius: var(--tk-selo-raio);
+  font-size: .75rem; font-weight: 700; line-height: 1.2; padding: 3px 8px; text-align: left;
+}
+.tk-selo-foto { position: absolute; left: 6px; bottom: 6px; z-index: 2; pointer-events: none; display: inline-flex; align-items: center; gap: 4px; }
+html body :is(.foto-ampliar .foto-qtd, .foto-bt .qtd-fotos, .po-m .po-postada, .po-m .po-c) { position: absolute; left: 6px; bottom: 6px; right: auto; top: auto; width: auto; pointer-events: none; display: inline-flex; align-items: center; gap: 4px; max-width: calc(100% - 12px); box-sizing: border-box; }
+html body .mini-selos { left: 6px; bottom: 6px; }
+/* sobre a foto, estado (Novidade, Esgotado): canto de cima à esquerda, raio único */
+html body .selo-card { border-radius: var(--tk-selo-raio); font-size: .75rem; }
+
+/* ---------- busca: lupa à esquerda em TODA caixa de busca (microfone só onde já existe) ---------- */
+html body input.tk-busca {
+  padding-left: 40px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23625c53' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m20 20-4.2-4.2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 12px center; background-size: 19px 19px;
+}
+
+/* ---------- controles pequenos sobre a foto (Cadastro): desenho pequeno, área de toque de 44 px ---------- */
+html body .galeria-item .btn-remover {
+  width: var(--tk-alvo) !important; height: var(--tk-alvo) !important; right: -16px !important; top: -16px !important;
+  display: grid; place-items: center; line-height: 1 !important; font-size: .9rem;
+  background: radial-gradient(circle closest-side, var(--vermelho) 0 11px, transparent 11.5px) !important;
+}
+html body #form-produto .galeria-item .mover button { min-height: var(--tk-alvo) !important; height: var(--tk-alvo) !important; line-height: 1; background: rgba(13, 13, 13, .6); }
+html body #form-produto #galeria-grid .galeria-item { margin-bottom: 54px !important; }
+html body #form-produto #galeria-grid .galeria-item .btn-enq { height: var(--tk-alvo) !important; top: calc(100% + 4px) !important; font-size: .75rem !important; }
+
+/* ---------- um raio só para botão e chip (antes: 6, 10, 12, 14, 18, 20 e pílula) ---------- */
+html body :is(.bt, .chips button, .cx-filtro button, .cx-sel, .po-abas button, .po-chips button, .po-canal button, .ed-pill,
+  .pill-cat, .pill-gen, .btn-filtros-toggle, .aviso-selecao button, .btn-limpar-topo, .sug-chip, .fam-novo, .fam-tam,
+  .linha-share-busca button, .barra-filtros-flut button, .btn-editar-peca) {
+  border-radius: var(--tk-botao-raio) !important;
+}
+
+/* contagem + ordem + limpar filtros: com campo de 16 px a linha passa de 320 px; quebra em vez de alargar a página */
+html body .barra-lista { flex-wrap: wrap; row-gap: 8px; }
+html body .barra-lista #ordem { min-width: 0; max-width: 100%; }

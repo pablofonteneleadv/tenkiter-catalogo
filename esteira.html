@@ -13,7 +13,7 @@
 <title>Esteira — TENKiTER Modas</title>
 <style>
   /* v7.41.0 — Esteira de Produtos (7.42.0 preparação; 7.43.0 pedidos): celular primeiro, mesma identidade do painel (preto, laranja, areia) */
-  :root { --preto:#0d0d0d; --laranja:#E67E22; --laranja-txt:#A85200; --areia:#F5F1E8; --branco:#fff; --linha:#e5dfd3; --suave:#5c5650; --verde:#198754; --verde-fundo:#e6f4ec; --alerta:#8a4b00; --alerta-fundo:#fdf0dc; --vermelho:#c62828; --vermelho-fundo:#fdecea; }
+  :root { --preto:#0d0d0d; --areia:#F5F1E8; --branco:#fff; --linha:#e5dfd3; --suave:#5c5650; --verde:#198754; --verde-fundo:#e6f4ec; --alerta:#8a4b00; --alerta-fundo:#fdf0dc; --vermelho:#c62828; --vermelho-fundo:#fdecea; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   html, body { margin:0; }
@@ -263,10 +263,11 @@
   @media (min-width:700px) { .cx-barra .acoes-t .bt:not(.discreto) { flex:0 0 auto; padding:0 22px; } }
   @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } .acoes-t { justify-content:flex-end; } .acoes-t .bt:not(.discreto) { flex:0 0 200px; } .tarefa .acoes-t:has(.discreto) { justify-content:flex-start; } }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
-  #tkfg a.tkfg-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:10px;background:#fff;color:#0d0d0d;font-weight:700;text-decoration:none}#tkfg a.tkfg-link[hidden]{display:none}#tkfg a.tkfg-link:focus-visible{outline:3px solid #E67E22;outline-offset:2px}
+  #tkfg a.tkfg-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:10px;background:#fff;color:#0d0d0d;font-weight:700;text-decoration:none}#tkfg a.tkfg-link[hidden]{display:none}#tkfg a.tkfg-link:focus-visible{outline:3px solid var(--laranja);outline-offset:2px}
 .busca-res .t small{display:block;line-height:1.35;margin-top:4px}
 </style>
 <link rel="stylesheet" href="janelas.css?v=7.57.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.61.0">
 </head>
 <body>
 <header>
@@ -2145,6 +2146,6 @@
   iniciar();
 })();
 </script>
-<script src="a11y.js?v=7.57.0"></script>
+<script src="a11y.js?v=7.61.0"></script>
 </body>
 </html>

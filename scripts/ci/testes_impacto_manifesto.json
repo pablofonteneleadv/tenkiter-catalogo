@@ -116,9 +116,6 @@
     "tests/manual_rico.py": [
       "treinamentos"
     ],
-    "tests/prova_resiliente.py": [
-      "treinamentos"
-    ],
     "tests/mensagens_acesso_equipe.py": [
       "mensagens"
     ],
@@ -231,6 +228,9 @@
     ],
     "tests/produtos_busca_esteira_ia.py": [
       "esteira"
+    ],
+    "tests/prova_resiliente.py": [
+      "treinamentos"
     ],
     "tests/reparos_integrados_ui.py": [
       "esteira",
@@ -448,6 +448,14 @@
     "tests/worker_midia_mini.js": [
       "midia",
       "catalogo"
+    ],
+    "tests/padrao_aparencia_ui.py": [
+      "catalogo",
+      "mensagens",
+      "postagens",
+      "esteira",
+      "fotoia",
+      "treinamentos"
     ]
   },
   "evidencias": {

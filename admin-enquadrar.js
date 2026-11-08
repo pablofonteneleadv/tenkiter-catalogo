@@ -138,7 +138,7 @@
       '.enq-corpo{flex:1 1 auto;overflow-y:auto;padding:4px 16px 12px;-webkit-overflow-scrolling:touch}',
       '.enq-palco{position:relative;width:min(60vw,250px,calc(36dvh * .8));margin:2px auto 8px}',
       '.enq-palco canvas{display:block;width:100%;height:auto;aspect-ratio:4/5;border-radius:10px;border:2px solid var(--laranja,#E67E22);background:#eee;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}',
-      '.enq-palco canvas:focus-visible{outline:3px solid #0b57d0;outline-offset:2px}',
+      '.enq-palco canvas:focus-visible{outline:3px solid var(--tk-foco-cor,#A85200);outline-offset:2px}',
       '.enq-aviso{margin:8px 0;padding:8px 10px;border-radius:8px;background:#fdecea;color:#8a1c14;font-size:.85rem;line-height:1.35}',
       '.enq-aviso[hidden]{display:none}',
       '.enq-palco{width:min(78vw,360px,calc(53dvh * .8))}',

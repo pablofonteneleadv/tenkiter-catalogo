@@ -14,14 +14,7 @@
  * ==================================================================== */
 
 :root {
-  --tk-texto: #141414;
-  --tk-texto-2: #625c53;   /* 6,0:1 sobre o fundo creme; 6,6:1 sobre branco */
-  --tk-borda: #e3ddd3;
-  --tk-fundo: #f6f3ee;
-  --tk-superficie: #ffffff;
   --tk-zap: #0f6b3f;        /* mesmo verde de conversão da v7.0 (contraste 6,6:1 com branco) */
-  --tk-raio: 8px;
-  --tk-raio-p: 6px;
   --tk-cab: 56px;
 }
 
@@ -66,7 +59,7 @@ body .filtros .busca-campo input[type=text] {
 }
 body .filtros input[type=text]::placeholder, body .filtros input[type=number]::placeholder, body .filtros input[type=search]::placeholder { color: #736d63; }
 body .filtros input:focus { border-color: var(--tk-texto); }
-body .btn-voz { top: 3px; right: 3px; width: 40px; height: 40px; border-radius: var(--tk-raio-p); background: transparent; color: var(--tk-texto-2); }
+body .btn-voz { top: 3px; right: 3px; width: var(--tk-alvo); height: var(--tk-alvo); border-radius: var(--tk-raio-p); background: transparent; color: var(--tk-texto-2); }
 body .btn-voz .tk-ico { width: 20px; height: 20px; }
 body .btn-voz.ouvindo { background: var(--vermelho); color: #fff; }
 body .busca-limpar { background: transparent; color: var(--tk-texto-2); }
@@ -108,7 +101,7 @@ body .beneficios .tk-ico { width: 15px; height: 15px; }
 body .barra-lista { align-items: center; }
 body #contagem { font-size: 0.82rem; font-weight: 500; color: var(--tk-texto-2); }
 body #ordem {
-  min-height: 40px; height: 40px; padding: 0 30px 0 12px; border: 1px solid var(--tk-borda);
+  min-height: var(--tk-campo-h); height: var(--tk-campo-h); padding: 0 30px 0 12px; border: 1px solid var(--tk-borda);
   border-radius: var(--tk-raio); background-color: var(--tk-superficie); font-size: 0.84rem; font-weight: 600; color: var(--tk-texto);
 }
 
@@ -116,8 +109,8 @@ body #ordem {
 body .grid .card {
   border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); box-shadow: none; background: var(--tk-superficie);
 }
-body .card .img-wrap { aspect-ratio: 3 / 4; }
-body .card img { aspect-ratio: 3 / 4; }
+body .card .img-wrap { aspect-ratio: var(--tk-foto, 4 / 5); }
+body .card img { aspect-ratio: var(--tk-foto, 4 / 5); }
 body .selo-card {
   top: 8px; left: 8px; padding: 5px 7px; border-radius: 4px;
   font-size: 0.64rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
@@ -233,7 +226,7 @@ body .btn-secundario-cta { border-radius: var(--tk-raio); }
   body .filtros.aberto .filtros-extras, body .filtros.compacto.aberto .filtros-extras { border-radius: 14px 14px 0 0; }
   body .filtros .fx-topo strong { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
   body .fx-busca-interna { border-radius: var(--tk-raio); border-color: var(--tk-borda); background: var(--tk-superficie); min-height: 48px; }
-  body .fx-busca-interna button { border-radius: var(--tk-raio-p); background: transparent; width: 40px; height: 40px; color: var(--tk-texto-2); }
+  body .fx-busca-interna button { border-radius: var(--tk-raio-p); background: transparent; width: var(--tk-alvo); height: var(--tk-alvo); color: var(--tk-texto-2); }
   body .filtros .linha-preco input { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); }
   body .filtros #chips-extra .chip { border-radius: var(--tk-raio-p); }
   body .filtros details.selecao-expansivel { border-color: var(--tk-borda); border-radius: var(--tk-raio); }

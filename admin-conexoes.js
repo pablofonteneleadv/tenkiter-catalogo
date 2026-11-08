@@ -51,7 +51,7 @@
       .cx-grupo > summary::-webkit-details-marker { display: none; }
       .cx-grupo > summary::after { content: "▾"; transition: transform .15s; }
       .cx-grupo[open] > summary::after { transform: rotate(180deg); }
-      .cx-grupo > summary:focus-visible { outline: 3px solid #0b5d63; outline-offset: 2px; border-radius: 12px; }
+      .cx-grupo > summary:focus-visible { outline: 3px solid var(--tk-foco-cor,#A85200); outline-offset: 2px; border-radius: 12px; }
       .cx-grupo > .cx-bloco, .cx-grupo > .cx-grupo-ajuda { margin-left: 10px; margin-right: 10px; }
       .cx-grupo > .cx-grupo-ajuda { margin-top: 0; }
       .cx-grupo > .cx-bloco:last-child { margin-bottom: 12px; }

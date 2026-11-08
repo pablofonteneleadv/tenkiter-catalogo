@@ -53,6 +53,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("juntar_admin.py", lambda o: "FALHAS=0" in o),   # juntar produtos repetidos na lista do admin (v7.50.0: em segundo plano, retomável)
     ("gestao_unioes.py", lambda o: "FALHAS=0" in o),  # v7.50.0: uniões no cadastro, Separar, sessão rápida loja↔Gestão, seleção abre a peça, selo de fotos
     ("aparencia_aprovada_ui.py", lambda o: "PASS aparência aprovada" in o),
+    ("padrao_aparencia_ui.py", lambda o: "PASS padrão de aparência" in o),   # v7.57.0: alvos 44, campos, foco, tokens, 4:5 (base do enforcement)
     ("x_equipe.py", lambda o: "FALHAS=0" in o),   # X de arquivar na loja (Equipe do site)
     ("botao_voltar.py", lambda o: "FALHAS=0" in o),   # botão voltar fecha só a janela de cima
     ("janelas_padrao.py", lambda o: "FALHAS=0" in o),   # v7.57.0: ✕ único, abas, foco, Voltar/Esc e camadas em todas as janelas

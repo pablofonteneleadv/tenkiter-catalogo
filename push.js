@@ -296,23 +296,23 @@
       '#tkp-janela p{margin:8px 0;color:#333}' +
       '#tkp-janela .tkp-x{position:absolute;right:10px;top:10px}' +
       '#tkp-janela .tkp-topo{position:relative}' +
-      '#tkp-janela .tkp-btn{display:block;width:100%;min-height:50px;border:2px solid #E67E22;border-radius:12px;background:#E67E22;color:#0d0d0d;font:800 1rem system-ui,sans-serif;cursor:pointer;margin:12px 0 0;padding:10px 14px;box-sizing:border-box}' +
-      '#tkp-janela .tkp-btn.sec{background:#fff;border-color:#A85200;color:#A85200}' +
+      '#tkp-janela .tkp-btn{display:block;width:100%;min-height:50px;border:2px solid var(--laranja,#E67E22);border-radius:12px;background:var(--laranja,#E67E22);color:#0d0d0d;font:800 1rem system-ui,sans-serif;cursor:pointer;margin:12px 0 0;padding:10px 14px;box-sizing:border-box}' +
+      '#tkp-janela .tkp-btn.sec{background:#fff;border-color:var(--laranja-txt,#A85200);color:var(--laranja-txt,#A85200)}' +
       '#tkp-janela .tkp-btn.link{background:none;border:0;color:#555;font-weight:600;text-decoration:underline;min-height:44px}' +
       '#tkp-janela .tkp-btn[disabled]{opacity:.6;cursor:default}' +
       '#tkp-janela .tkp-sel{display:flex;gap:10px;align-items:center;margin:10px 0;min-height:44px}' +
       '#tkp-janela .tkp-sel input{width:22px;height:22px;flex:none}' +
       '#tkp-janela .tkp-chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}' +
-      '#tkp-janela .tkp-chip{min-height:40px;padding:6px 14px;border-radius:999px;border:2px solid #A85200;background:#fff;color:#A85200;font:700 .9rem system-ui,sans-serif;cursor:pointer}' +
-      '#tkp-janela .tkp-chip[aria-pressed="true"]{background:#E67E22;border-color:#E67E22;color:#0d0d0d}' +
+      '#tkp-janela .tkp-chip{min-height:40px;padding:6px 14px;border-radius:999px;border:2px solid var(--laranja-txt,#A85200);background:#fff;color:var(--laranja-txt,#A85200);font:700 .9rem system-ui,sans-serif;cursor:pointer}' +
+      '#tkp-janela .tkp-chip[aria-pressed="true"]{background:var(--laranja,#E67E22);border-color:var(--laranja,#E67E22);color:#0d0d0d}' +
       '#tkp-janela ol,#tkp-janela ul{margin:6px 0;padding-left:22px;color:#333}#tkp-janela li{margin:5px 0}' +
       '#tkp-janela .tkp-estado{display:inline-block;padding:3px 12px;border-radius:999px;font-weight:800;font-size:.85rem;background:#eee;color:#222}' +
       '#tkp-janela .tkp-estado.ok{background:#d8f3dc;color:#14532d}#tkp-janela .tkp-estado.ruim{background:#fde2e2;color:#7f1d1d}' +
       '#tkp-janela details{margin:12px 0;border:1px solid #ddd;border-radius:10px;padding:8px 12px}#tkp-janela summary{cursor:pointer;font-weight:700;min-height:32px}' +
       '#tkp-janela .tkp-peq{font-size:.85rem;color:#555}' +
       '#tkp-aviso{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:calc(var(--z-folha,100) + 1);background:#111;color:#fff;padding:12px 18px;border-radius:12px;font:600 .95rem system-ui,sans-serif;max-width:90vw;box-shadow:0 4px 18px rgba(0,0,0,.4)}' +
-      '.tkp-pedido{margin:12px 16px;padding:12px;border:2px dashed #A85200;border-radius:12px;background:#fff8f0;color:#1a1a1a;font:15px/1.4 system-ui,sans-serif}' +
-      '.tkp-pedido b{color:#111}.tkp-pedido button{display:block;width:100%;min-height:48px;margin-top:8px;border:0;border-radius:10px;background:#E67E22;color:#0d0d0d;font:800 .98rem system-ui,sans-serif;cursor:pointer}';
+      '.tkp-pedido{margin:12px 16px;padding:12px;border:2px dashed var(--laranja-txt,#A85200);border-radius:12px;background:#fff8f0;color:#1a1a1a;font:15px/1.4 system-ui,sans-serif}' +
+      '.tkp-pedido b{color:#111}.tkp-pedido button{display:block;width:100%;min-height:48px;margin-top:8px;border:0;border-radius:10px;background:var(--laranja,#E67E22);color:#0d0d0d;font:800 .98rem system-ui,sans-serif;cursor:pointer}';
     document.head.appendChild(s);
   }
   var janela = null, folha = null, voltaFoco = null;
@@ -513,7 +513,7 @@
           '#tk-placa-aviso b{display:block;font-size:15px;margin-bottom:2px}#tk-placa-aviso p{margin:0 0 10px;color:#e6e6e6}' +
           '#tk-placa-aviso .tkpl-l{display:flex;gap:8px;flex-wrap:wrap}' +
           '#tk-placa-aviso button{width:auto;font:inherit;cursor:pointer;border-radius:10px;padding:9px 14px;min-height:40px}' +
-          '#tk-placa-aviso .tkpl-p{background:#E67E22;color:#0d0d0d;border:0;font-weight:700}' +
+          '#tk-placa-aviso .tkpl-p{background:var(--laranja,#E67E22);color:#0d0d0d;border:0;font-weight:700}' +
           '#tk-placa-aviso .tkpl-s{background:transparent;color:#fff;border:1px solid #888}';
         document.head.appendChild(st);
       }

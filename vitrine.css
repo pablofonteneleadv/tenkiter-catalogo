@@ -48,7 +48,7 @@ main#pecas:focus { outline: none; }
 .tam-op:focus-visible,
 .op-btn:focus-visible,
 .thumb-card:focus-visible {
-  outline: 3px solid #E67E22;
+  outline: 3px solid var(--laranja);
   outline-offset: 2px;
 }
 
@@ -88,7 +88,7 @@ main#pecas:focus { outline: none; }
 .tk-nav a .tk-b {
   display: inline-block; min-width: 15px; height: 15px;
   margin-left: 3px; padding: 0 3px; border-radius: 8px;
-  background: #ff7a1a; color: #0d0d0d;
+  background: var(--laranja); color: #0d0d0d;
   font-size: .58rem; line-height: 15px; vertical-align: 1px; text-align: center;
 }
 
@@ -105,12 +105,12 @@ main#pecas:focus { outline: none; }
 .pills-genero::-webkit-scrollbar { display: none; }
 .pills-genero[hidden] { display: none; }
 .pill-gen {
-  flex-shrink: 0; min-height: 40px; padding: 7px 14px;
+  flex-shrink: 0; min-height: var(--tk-chip-h); padding: 7px 14px;
   border-radius: 18px; border: 1px solid #ddd; background: #fff;
   font-size: .78rem; font-weight: 700; color: #333; cursor: pointer; white-space: nowrap;
 }
 .pill-gen[aria-pressed="true"] {
-  background: #0d0d0d; border-color: #0d0d0d; color: #E67E22;
+  background: #0d0d0d; border-color: #0d0d0d; color: var(--laranja);
 }
 .pill-gen .pill-n { font-weight: 700; margin-left: 4px; opacity: .75; font-size: .92em; }
 
@@ -134,7 +134,7 @@ main#pecas:focus { outline: none; }
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 .thumb-card:hover { border-color: #c9bfa8; }
-.thumb-card.on { border-color: #E67E22; }
+.thumb-card.on { border-color: var(--laranja); }
 
 /* ---------- VIT-1: tamanho no cartão ----------
  * Tamanho em botões (não em texto corrido): a pessoa marca antes de
@@ -150,7 +150,7 @@ main#pecas:focus { outline: none; }
   font-size: .7rem; font-weight: 800; cursor: pointer;
 }
 .tam-op[aria-pressed="true"] {
-  background: #0d0d0d; border-color: #0d0d0d; color: #E67E22;
+  background: #0d0d0d; border-color: #0d0d0d; color: var(--laranja);
 }
 
 /* ---------- VIT-3: tamanho e cor em botões + guia de medidas ----------
@@ -169,7 +169,7 @@ main#pecas:focus { outline: none; }
   font-size: .84rem; font-weight: 800; cursor: pointer;
 }
 .op-btn[aria-pressed="true"] {
-  background: #0d0d0d; border-color: #0d0d0d; color: #E67E22;
+  background: #0d0d0d; border-color: #0d0d0d; color: var(--laranja);
 }
 .op-livre { font-size: .74rem; color: #666; margin-left: 2px; }
 .op-erro { flex: 1 0 100%; font-size: .74rem; font-weight: 700; color: #b3261e; margin: 2px 0 0; }
@@ -229,7 +229,7 @@ main#pecas:focus { outline: none; }
 /* Alvos de toque em tela pequena: o seletor do cartão encolhe para caber
  * em 2 colunas, mas continua com altura confortável para o dedo. */
 @media (max-width: 480px) {
-  .tam-op { min-width: 30px; min-height: 34px; font-size: .66rem; }
+  .tam-op { min-width: var(--tk-alvo); min-height: var(--tk-alvo); font-size: .66rem; }
   .thumbs-card { padding: 4px; gap: 3px; }
   .thumb-card { height: 28px; }
 }
