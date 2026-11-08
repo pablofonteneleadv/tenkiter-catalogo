@@ -80,7 +80,6 @@ body .btn-filtros-toggle .tk-ico { width: 19px; height: 19px; }
 body .filtros.aberto .btn-filtros-toggle, body .filtros.compacto.aberto .btn-filtros-toggle { background: var(--tk-texto); color: #fff; border-color: var(--tk-texto); }
 
 /* painel de filtros */
-body .fx-fechar { display: inline-flex; align-items: center; gap: 6px; }
 .fx-busca-interna .tk-ico { width: 18px; height: 18px; color: var(--tk-texto-2); }
 body .selecao-expansivel summary { font-weight: 600; }
 body .chip, body .pill-cat, body .pill-gen {
@@ -175,7 +174,6 @@ body .acoes-card .ac-sacola:hover { background: #fbf3ea; }
 
 /* ---------- peça aberta ---------- */
 body .modal { border-radius: 14px 14px 0 0; }
-body .btn-x-modal { background: rgba(255, 255, 255, 0.94); color: var(--tk-texto); width: 44px; height: 44px; display: grid; place-items: center; }
 body .btn-x-modal .tk-ico { width: 20px; height: 20px; }
 body .modal-conteudo .codigo { font-size: 0.75rem; font-weight: 500; color: var(--tk-texto-2); }
 body .modal-conteudo .nome { font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 1.25rem; font-weight: 700; line-height: 1.25; color: var(--tk-texto); }
@@ -234,7 +232,6 @@ body .btn-secundario-cta { border-radius: var(--tk-raio); }
 @media (max-width: 600px) {
   body .filtros.aberto .filtros-extras, body .filtros.compacto.aberto .filtros-extras { border-radius: 14px 14px 0 0; }
   body .filtros .fx-topo strong { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
-  body .filtros .fx-fechar { border-radius: var(--tk-raio); font-weight: 600; padding: 0 14px; min-height: 44px; }
   body .fx-busca-interna { border-radius: var(--tk-raio); border-color: var(--tk-borda); background: var(--tk-superficie); min-height: 48px; }
   body .fx-busca-interna button { border-radius: var(--tk-raio-p); background: transparent; width: 40px; height: 40px; color: var(--tk-texto-2); }
   body .filtros .linha-preco input { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); }

@@ -240,7 +240,6 @@ body input[type=text], body input[type=number], body select, body textarea {
 }
 body input[type=search], body input[type=date], body input[type=tel], body input[type=email], body input[type=password], body input[type=url],
 body input[type=text], body input[type=number], body select { min-height: 44px; padding: 8px 12px; font-size: 1rem; }
-body input:focus-visible, body select:focus-visible, body textarea:focus-visible { outline: 2px solid var(--tk-texto); outline-offset: 1px; border-color: var(--tk-texto); }
 
 /* ---------- painel "Ferramentas do gestor" ---------- */
 body details.ferramentas[open] > summary { border-bottom: 1px solid var(--tk-borda); margin-bottom: 12px; }
@@ -297,17 +296,7 @@ body .gestao-titulo, body .sheet-topo h2, body .sheet-topo h3, body .aud-tit {
 }
 body .tit-ic { display: inline-flex; flex: none; }
 body .tit-ic .tk-ico { width: 20px; height: 20px; }
-body .sheet-x, body .overlay-sheet .btn-fechar, body #po-fechar, body #cp-fechar {
-  flex: none; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: var(--tk-raio);
-  background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 1rem;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-body .sheet-x:hover, body .overlay-sheet .btn-fechar:hover { background: #f3efe8; }
-body .overlay-sheet [role=tablist] button {
-  border-radius: var(--tk-raio-p); border: 1px solid var(--tk-borda); background: var(--tk-superficie); color: var(--tk-texto);
-  font-weight: 600; min-height: 40px;
-}
-body .overlay-sheet [role=tablist] button[aria-selected="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+/* botão de fechar e abas das janelas: regra única em janelas.css (.tk-fechar / .tk-abas) */
 
 /* Auditoria */
 body .aud-tit { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--tk-borda); }
@@ -329,7 +318,6 @@ body .g-arquivo {
   display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px; min-height: 52px; cursor: pointer;
   border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: #fff; font-weight: 400;
 }
-body .g-arquivo-inp:focus-visible + .g-arquivo { outline: 2px solid var(--tk-texto); outline-offset: 2px; }
 body .g-arquivo-bt { flex: none; display: inline-flex; align-items: center; min-height: 42px; padding: 0 14px; border-radius: var(--tk-raio-p); background: var(--tk-texto); color: #fff; font-size: 0.86rem; font-weight: 600; }
 body .g-arquivo-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-texto-2); font-size: 0.86rem; }
 body .aud-usuarios > summary #aud-usuarios-resumo { margin-left: 0.3em; font-weight: 400; color: var(--tk-texto-2); }

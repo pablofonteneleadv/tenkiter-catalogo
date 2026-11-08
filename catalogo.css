@@ -51,7 +51,7 @@
     .filtros.aberto .filtros-extras, .filtros.compacto.aberto .filtros-extras { display: flex; flex-direction: column; position: fixed; inset: 0; top: 0; z-index: 100; background: var(--branco); padding: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; box-shadow: none; border-radius: 0; }
     .filtros.aberto .fx-topo { display: flex; }
     .filtros.aberto .fx-ver { display: block; }
-    .filtros.aberto { z-index: 100; }   /* o painel fixo vive dentro de #filtros (z 19): sem isto a barra de baixo (z 90) ficava por cima */
+    .filtros.aberto { z-index: var(--z-folha, 100); }   /* o painel fixo vive dentro de #filtros (z 19): sem isto a barra de baixo (z 90) ficava por cima */
     .fx-corpo { padding: 4px 14px 12px; }
     .fx-rodape { margin-top: auto; }
     .filtros.aberto .btn-filtros-toggle { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
@@ -99,7 +99,6 @@
   @media (min-width: 900px) { .grid { grid-template-columns: repeat(4, 1fr); } }
 
   /* v3.0: foco visível por teclado (acessibilidade) e cartões-esqueleto enquanto o catálogo carrega pela 1ª vez */
-  :focus-visible { outline: 2px solid var(--laranja); outline-offset: 2px; }
   .card.esqueleto { cursor: default; pointer-events: none; }
   .card.esqueleto .sk { background: linear-gradient(90deg, #ececec 25%, #f6f6f6 50%, #ececec 75%); background-size: 200% 100%; animation: sk-brilho 1.2s linear infinite; border-radius: 6px; }
   .card.esqueleto .sk-foto { width: 100%; aspect-ratio: 4 / 5; border-radius: 0; }
@@ -133,9 +132,9 @@
   #vazio { text-align: center; color: #666; padding: 40px 20px; font-size: 0.9rem; }
   .btn-carregar-mais { max-width: 300px; margin: 20px auto 0; display: block; background: var(--branco); color: var(--preto); border: 1px solid #ccc; padding: 12px; border-radius: 10px; font-weight: 700; cursor: pointer; }
 
-  #overlay, #overlay-sacola, .overlay-sheet-loja { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
+  #overlay, #overlay-sacola, .overlay-sheet-loja { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: var(--z-folha, 100); align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
   #overlay.aberto, #overlay-sacola.aberto, .overlay-sheet-loja.aberto { display: flex; }
-  .modal { background: var(--branco); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto; animation: subir 0.22s ease-out; position: relative; }
+  .modal { background: var(--branco); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; max-height: 92vh; max-height: 92dvh; overflow-y: auto; animation: subir 0.22s ease-out; position: relative; }
   @keyframes subir { from { transform: translateY(40px); opacity:0; } to { transform: translateY(0); opacity:1; } }
 
   .carrossel-wrap { position: relative; width: 100%; aspect-ratio: 4/5; background: #111; }
@@ -188,7 +187,7 @@
 
   .btn-icone-header.ativado { color: var(--laranja); }
   /* v2: conta de cliente */
-  #modal-conta { position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #modal-conta { position: fixed; inset: 0; z-index: var(--z-dialogo, 150); background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; padding: 16px; }
   #modal-conta.visivel { display: flex; }
   .conta-box { background: var(--branco); border-radius: 16px; padding: 20px; width: 100%; max-width: 380px; position: relative; max-height: 92vh; max-height: 92dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .conta-box h2 { margin: 0 0 4px; font-size: 1.1rem; }
@@ -196,13 +195,12 @@
   .conta-box input { width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 10px; font-size: 1rem; }
   .conta-box .conta-principal { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 1rem; cursor: pointer; }
   .conta-box .conta-secundario { width: 100%; padding: 11px; border: 1px solid #ccc; border-radius: 10px; background: #fff; font-weight: 700; cursor: pointer; }
-  .conta-abas { display: flex; gap: 6px; margin-bottom: 12px; }
-  .conta-abas button { flex: 1; padding: 8px; border: none; border-radius: 8px; background: #eee; font-weight: 700; cursor: pointer; }
-  .conta-abas button.ativa { background: var(--preto); color: var(--laranja); }
+  .conta-abas { margin-bottom: 12px; }
+  .conta-abas > button { flex: 1; }   /* aparência da aba: .tk-abas (janelas.css) */
   .conta-opc-txt { font-size: 0.8rem; color: #555; margin: 4px 0 8px; line-height: 1.35; }
   .conta-opc { border-top: 1px solid #ddd; margin-top: 12px; padding-top: 10px; }
   .conta-erro { color: #c62828; font-size: 0.85rem; min-height: 1.1em; margin-bottom: 6px; }
-  .conta-fechar { position: absolute; top: 8px; right: 12px; background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #666; }
+  .conta-topo { display: flex; justify-content: flex-end; margin: -8px -8px 4px 0; }
   /* ======================= v3.3 ======================= */
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   body.tem-aviso-offline { padding-bottom: 120px; }
@@ -241,7 +239,6 @@
   .barra-filtros-flut.so-botao button { background: #0d0d0d; color: #fff; border: 1px solid var(--laranja); font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,.3); border-radius: 999px; padding: 6px 14px; }
   .juntar-modal { padding: 16px; }
   .juntar-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 1.05rem; }
-  .juntar-topo .btn-fechar { width: 44px; min-height: 44px; border-radius: 50%; border: 0; background: #eee; font-size: 1.1rem; cursor: pointer; }
   .juntar-ajuda { font-size: .9rem; color: #444; margin: 0 0 10px; }
   .juntar-item { display: flex; gap: 10px; align-items: center; border: 1px solid #ccc; border-radius: 12px; padding: 8px; margin-bottom: 8px; cursor: pointer; }
   .juntar-item input { width: 22px; height: 22px; flex: none; }
@@ -332,10 +329,10 @@
   .btn-editar-peca:active { transform: scale(.97); }
   body.equipe-x .card .selo-card { top: 52px; }
   body.equipe-x .carrossel-wrap .selo-card { top: 56px !important; }
-  #toast-equipe { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 160; background: var(--preto); color: #fff; border-radius: 12px; padding: 12px 14px; font-size: .9rem; display: none; align-items: center; gap: 10px; justify-content: space-between; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  #toast-equipe { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: var(--z-dialogo-2, 160); background: var(--preto); color: #fff; border-radius: 12px; padding: 12px 14px; font-size: .9rem; display: none; align-items: center; gap: 10px; justify-content: space-between; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
   #toast-equipe.visivel { display: flex; }
   #toast-equipe button { background: var(--laranja); color: #0d0d0d; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; width: auto; }
-  .btn-x-modal { position: absolute; top: 10px; right: 10px; z-index: 6; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(0,0,0,0.65); color: #fff; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .btn-x-modal { position: absolute; top: 10px; right: 10px; z-index: 6; }
   .barra-compra { position: sticky; bottom: 0; z-index: 5; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--branco); border-top: 1px solid #eee; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); }
   .barra-compra .bc-linha { display: flex; gap: 8px; }
   .barra-compra button, .barra-compra a { min-height: 48px; border-radius: 12px; font-weight: 800; font-size: 0.92rem; cursor: pointer; border: none; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; }
@@ -352,7 +349,6 @@
   /* sacola / pedido / favoritos / rastreio / seleção */
   .sheet-topo { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 4px; gap: 8px; }
   .sheet-topo .nome { font-size: 1.1rem; font-weight: 800; }
-  .sheet-topo .x { background: #f0f0f0; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.05rem; cursor: pointer; flex: none; }
   .form-pedido { padding: 4px 16px 6px; }
   .form-pedido h3 { font-size: 0.95rem; margin: 10px 0 8px; font-family: "Inter", sans-serif; font-weight: 800; }
   .form-pedido label { display: block; font-size: 0.78rem; font-weight: 700; margin: 8px 0 3px; color: #333; }
@@ -647,7 +643,6 @@
 .fx-topo { display: none; position: sticky; top: 0; z-index: 2; align-items: center; gap: 10px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5dfd0; }
 .fx-topo strong { font-size: 1.1rem; }
 .fx-cont { flex: 1; color: #555; font-size: .85rem; }
-.fx-fechar { width: auto; min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; background: #0d0d0d; color: #fff; font-weight: 800; font-size: .9rem; cursor: pointer; }
 .fx-rodape { padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); background: #fff; }
 .fx-ver { display: none; width: 100%; min-height: 52px; margin-top: 8px; border: 0; border-radius: 14px; background: var(--laranja); color: #0d0d0d; font-size: 1rem; font-weight: 800; cursor: pointer; }
 @media (max-width: 600px) {
@@ -655,7 +650,6 @@
   .fx-rodape .btn-add-resultados { margin: 0 0 8px; }
   .selecao-expansivel .chips { max-height: none; }
 }
-html.fx-travado, html.fx-travado body { overflow: hidden; }
 .linha-share-busca .btn-add-resultados { width: auto; flex: 1 1 100%; margin: 0; min-height: 44px; }
 
 /* v6.6 — embaixo fica SÓ o botão laranja "Limpar filtros", bem rente à barra de navegação mas separado dela. */
@@ -674,7 +668,6 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
  .filtros.aberto .fx-topo{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:12px;padding:22px 16px 13px;background:#fff;border-bottom:0;min-height:82px}
  .filtros .fx-topo strong{font-size:1.55rem;font-weight:800;letter-spacing:-.04em;color:#101010}
  .filtros .fx-topo .fx-cont{font-size:.91rem;color:#777;margin-right:auto;white-space:nowrap}
- .filtros .fx-fechar{border-radius:15px;background:#0d0d0d;color:#fff;font-size:.91rem;font-weight:750;padding:12px 16px;min-height:46px;white-space:nowrap;border:0}
  .filtros .fx-corpo{padding:0 14px 16px;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
  .fx-busca-interna{display:flex;align-items:center;gap:9px;border:1px solid #d6d6d6;border-radius:16px;background:#f8f7f6;padding:6px 10px;margin:5px 0 14px;min-height:52px}
  .fx-busca-interna>span{font-size:1.9rem;line-height:1;color:#444}
@@ -701,7 +694,6 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 @media(max-width:360px){
  .filtros details.selecao-expansivel .chips{grid-template-columns:repeat(2,minmax(0,1fr))}
  .filtros .fx-topo strong{font-size:1.3rem}
- .filtros .fx-fechar{padding:10px}
 }
 @media(min-width:601px){.fx-busca-interna{display:none}}
 

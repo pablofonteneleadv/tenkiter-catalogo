@@ -33,7 +33,7 @@
     var s = document.createElement('style');
     s.id = 'tk-menu-css';
     s.textContent =
-      '#menu-lateral{position:fixed;inset:0;z-index:100;display:none}' +
+      '#menu-lateral{position:fixed;inset:0;z-index:var(--z-folha,100);display:none}' +
       '#menu-lateral.aberto{display:block}' +
       '#menu-lateral .ml-fundo{position:absolute;inset:0;background:rgba(44,44,44,.5)}' +
       '#menu-lateral .ml-painel{position:absolute;top:0;left:0;bottom:0;width:86%;max-width:330px;background:#fff;color:#2C2C2C;display:flex;flex-direction:column;box-shadow:4px 0 16px rgba(0,0,0,.14)}' +
@@ -51,9 +51,7 @@
       '#menu-lateral .ml-ajuda p{margin:0 0 4px;font:700 15px Poppins,Inter,sans-serif}' +
       '#menu-lateral .ml-ajuda span{display:block;margin:0 0 12px;font-size:13px;color:#4a4a46;line-height:1.5}' +
       '#menu-lateral .ml-ajuda button{width:100%;min-height:48px;border:0;border-radius:12px;background:#E67E22;color:#0d0d0d;font:800 15px Poppins,Inter,sans-serif;box-shadow:0 2px 0 #B85F12;cursor:pointer}' +
-      '#menu-lateral .ml-rodape{padding:12px 16px;border-top:1px solid #EFE8DA;font-size:12px;color:#4a4a46;line-height:1.5}' +
-      '#menu-lateral .ml-fechar{width:auto;flex:none;min-height:44px;min-width:44px;padding:0 12px;border-radius:999px;border:1px solid #2C2C2C;background:#fff;color:#2C2C2C;font:600 14px Inter,system-ui,sans-serif;cursor:pointer}' +
-      '#menu-lateral button:focus-visible{outline:2px solid #A85200;outline-offset:2px}';
+      '#menu-lateral .ml-rodape{padding:12px 16px;border-top:1px solid #EFE8DA;font-size:12px;color:#4a4a46;line-height:1.5}';
     document.head.appendChild(s);
   }
 
@@ -117,7 +115,7 @@
     var marca = no('div', 'ml-marca');
     var img = document.createElement('img'); img.src = 'logo-mark.png'; img.alt = ''; marca.appendChild(img);
     marca.appendChild(no('span', '', 'TENKiTER'));
-    var fechar = no('button', 'ml-fechar btn-fechar', 'Fechar'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar menu');
+    var fechar = no('button', 'ml-fechar tk-fechar', '✕'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar');
     fechar.addEventListener('click', function () { fecharEDepois(); });
     topo.appendChild(marca); topo.appendChild(fechar);
 

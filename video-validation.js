@@ -49,7 +49,7 @@
     if(op.perfil==='postagens'&&meta.ok&&meta.duration<3)throw Error('Para usar o mesmo vídeo em Status, Grupo e Story, escolha um vídeo de pelo menos 3 segundos.');
     const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buf)),x=>x.toString(16).padStart(2,'0')).join('');
     return new Promise((resolve,reject)=>{
-      const fundo=document.createElement('div');fundo.id='tk-video-preparo';fundo.style.cssText='position:fixed;inset:0;z-index:11000;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px';
+      const fundo=document.createElement('div');fundo.id='tk-video-preparo';fundo.style.cssText='position:fixed;inset:0;z-index:var(--z-processo-2,1100);background:#0009;display:flex;align-items:center;justify-content:center;padding:16px';
       const box=document.createElement('section');box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Preparar vídeo');box.style.cssText='width:min(100%,480px);max-height:90dvh;overflow:auto;padding:20px;border-radius:16px;background:#fff;color:#292b25;display:grid;gap:12px';
       const title=document.createElement('h3');title.textContent='Preparar vídeo';title.style.margin='0';
       const info=document.createElement('p');info.textContent=op.perfil==='mensageiro'?'Vamos preparar um MP4 compatível, preservando a duração inteira. O tamanho será ajustado quando necessário.':'Uma única mídia de 3 a 30 segundos, até 9,5 MiB, para Status, Grupo e Story.';info.style.margin='0';

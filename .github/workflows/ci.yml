@@ -159,6 +159,7 @@ jobs:
             tests/saida/reparos/
             tests/saida/fotoia-catalogo/
             tests/saida/pedir-fotos-lote/
+            tests/saida/janelas-padrao/
           if-no-files-found: ignore
 
       - name: Screenshots de fidelidade dos manuais

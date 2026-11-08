@@ -55,6 +55,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("aparencia_aprovada_ui.py", lambda o: "PASS aparência aprovada" in o),
     ("x_equipe.py", lambda o: "FALHAS=0" in o),   # X de arquivar na loja (Equipe do site)
     ("botao_voltar.py", lambda o: "FALHAS=0" in o),   # botão voltar fecha só a janela de cima
+    ("janelas_padrao.py", lambda o: "FALHAS=0" in o),   # v7.57.0: ✕ único, abas, foco, Voltar/Esc e camadas em todas as janelas
     ("selecao_link.py", lambda o: "RESULTADO:" in o and " 0 falhas" in o),   # compartilhar seleção leva as PEÇAS (?sel=…), não só a loja
     ("rolagem_infinita.py", lambda o: "FALHAS=0" in o),   # rolagem infinita + faixa flutuante de filtros
     ("central_avisos.py", lambda o: "FALHAS=0" in o),      # Central de avisos do lojista (público, {nome}, agendar, modelos, histórico, preparar)

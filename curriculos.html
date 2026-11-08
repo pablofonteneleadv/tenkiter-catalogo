@@ -26,7 +26,7 @@
   textarea { min-height:70px; resize:vertical; }
   button { border:0; border-radius:9px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--preto); color:var(--laranja); }
   button.sec { background:#eee; color:#333; } button:disabled { opacity:.6; }
-  .abas { display:flex; gap:8px; margin-bottom:12px; } .abas button { flex:1; background:#e7e2d6; color:#333; } .abas button.on { background:var(--laranja); color:var(--preto); }
+  .abas { margin-bottom:12px; } .abas > button { flex:1; }   /* aparência da aba: .tk-abas (janelas.css) */
   .filtros { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; } .filtros input { grid-column:1/-1; }
   .filtros button { grid-column:1/-1; background:#eee; color:#333; } .filtros button.on { background:var(--laranja); color:var(--preto); }
   .item { background:#fff; border-radius:12px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
@@ -53,6 +53,7 @@
   @media(max-width:560px){ dl { grid-template-columns:1fr; } }
 </style>
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
+<link rel="stylesheet" href="janelas.css?v=7.57.0">
 </head>
 <body class="pg-curriculos">
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
@@ -208,7 +209,7 @@ function wa(tel) { let d = String(tel || '').replace(/\D/g, ''); if (d.length <=
 function ig(h) { return 'https://instagram.com/' + String(h || '').replace(/^@/, ''); }
 
 function desenhar() {
-  $('app').innerHTML = `<div class="abas"><button id="t1" class="${aba === 'novos' ? 'on' : ''}">Currículos novos (${novos.length})</button><button id="t2" class="${aba === 'antigos' ? 'on' : ''}">Planilha antiga${carregou.antigos ? ' (' + totalAntigos + ')' : ''}</button></div>
+  $('app').innerHTML = `<div class="abas tk-abas" role="tablist" aria-label="Currículos"><button id="t1" role="tab" aria-selected="${aba === 'novos'}">Currículos novos (${novos.length})</button><button id="t2" role="tab" aria-selected="${aba === 'antigos'}">Planilha antiga${carregou.antigos ? ' (' + totalAntigos + ')' : ''}</button></div>
     <div class="filtros"><input id="q" type="search" placeholder="Buscar nome, telefone, texto…" value="${E(busca)}">
     ${aba === 'novos' ? `<select id="fs" aria-label="Filtrar por status" ${soAgenda ? 'disabled' : ''}><option value="">Todos os status (${novos.length})</option>${STATUS.map(s => `<option value="${E(s)}" ${s === fStatus ? 'selected' : ''}>${E(s)} (${novos.filter(r => (r.Status || 'Novo') === s).length})</option>`).join('')}</select>
     <select id="fe" aria-label="Filtrar por etapa" ${soAgenda ? 'disabled' : ''}>${['', 'Enviado', 'Perfil', 'Instagram', 'Sem Instagram', 'Menor de 18'].map(x => `<option value="${x}" ${x === fEtapa ? 'selected' : ''}>${x ? E(x) : 'Todas as etapas'}</option>`).join('')}</select>
@@ -441,7 +442,7 @@ function itemAntigo(r) {
 iniciar();
 </script>
 <script src="icones.js?v=7.17.0"></script>
-<script src="nav.js?v=7.38.2" data-ativo="curriculos"></script>
+<script src="nav.js?v=7.57.0" data-ativo="curriculos"></script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
 </body>

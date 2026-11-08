@@ -18,14 +18,14 @@
   [hidden] { display:none !important; }
   html, body { margin:0; }
   body { font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--areia); color:var(--preto); line-height:1.45; padding-bottom:calc(32px + env(safe-area-inset-bottom,0px)); }
-  header { position:sticky; top:0; z-index:20; background:var(--preto); color:#fff; padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); border-bottom:2px solid var(--laranja); }
+  header { position:sticky; top:0; z-index:var(--z-sticky,20); background:var(--preto); color:#fff; padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); border-bottom:2px solid var(--laranja); }
   .cab { display:flex; align-items:center; gap:10px; min-height:44px; }
+  .cab-voltar { display:inline-flex; align-items:center; min-height:44px; min-width:44px; color:#e6e0d5; text-decoration:none; font-weight:600; font-size:.95rem; }
   .cab h1 { font-family:"Poppins",sans-serif; font-size:1.25rem; margin:0; color:var(--laranja); flex:1; }
   .cab .quem { font-size:.85rem; color:#d9d2c5; }
-  nav.abas { display:flex; gap:4px; overflow-x:auto; padding:8px 0 0; }
-  nav.abas button { flex:none; min-height:44px; padding:0 11px; border:0; border-radius:10px 10px 0 0; background:transparent; color:#d9d2c5; font:600 .95rem "Inter",sans-serif; cursor:pointer; }
-  nav.abas button[aria-selected="true"] { background:var(--areia); color:var(--preto); }
-  nav.abas.curto { gap:2px; } nav.abas.curto button { padding:0 5px; min-width:44px; font-size:.86rem; }   /* v7.43.0: abas do Admin no celular (7.51.0: 6 abas com Fotos) */
+  /* faixa clara sob o título: as abas seguem o padrão único (.tk-abas em janelas.css) */
+  nav.abas { margin:8px calc(-1 * max(16px,env(safe-area-inset-right,0px))) 0 calc(-1 * max(16px,env(safe-area-inset-left,0px))); padding:8px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px)); background:var(--areia); }
+  nav.abas.tk-abas.curto { gap:2px; } nav.abas.tk-abas.curto > button { padding:0 5px; min-width:44px; font-size:.86rem; }   /* v7.43.0: abas do Admin no celular (7.51.0: 6 abas com Fotos) */
   nav.abas.curto .aba-num { min-width:8px; width:8px; height:8px; padding:0; margin-left:3px; font-size:0; vertical-align:top; }   /* no celular, só um ponto (o número vai no nome acessível) */
   main { max-width:760px; margin:0 auto; padding:16px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); display:grid; gap:14px; }
   #esteira-processos-abrir{min-height:44px;padding:6px 10px;background:transparent;color:#fff;border:1px solid #555;border-radius:8px;font:600 .8rem Inter,sans-serif;white-space:nowrap} #esteira-processos-abrir.com-aviso{border-color:var(--laranja);color:#ffd5a0}
@@ -73,7 +73,7 @@
   .ok { color:var(--verde); font-size:.9rem; }
   .vazio { text-align:center; padding:24px 12px; color:var(--suave); }
   /* folha de conferência */
-  .fundo { position:fixed; inset:0; z-index:50; background:rgba(13,13,13,.45); display:flex; align-items:flex-end; justify-content:center; }
+  .fundo { position:fixed; inset:0; z-index:var(--z-folha,100); background:rgba(13,13,13,.45); display:flex; align-items:flex-end; justify-content:center; }
   .folha { background:var(--areia); width:100%; max-width:560px; max-height:92dvh; border-radius:18px 18px 0 0; display:flex; flex-direction:column; }
   .folha .topo { display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--linha); }
   .folha .topo b { flex:1; font-size:1rem; overflow-wrap:anywhere; }
@@ -81,7 +81,6 @@
   .folha .pe { padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--linha); background:var(--branco); border-radius:0; }
   .folha .pe button { width:100%; }
   .folha h3, .folha p { margin:0; }
-  .fechar { min-width:44px; min-height:44px; border:0; border-radius:50%; background:var(--branco); font-size:1.2rem; cursor:pointer; }
   .datas { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:.78rem; }
   .datas div { background:var(--branco); border:1px solid var(--linha); border-radius:10px; padding:6px 8px; }
   .datas b { display:block; font-size:.9rem; }
@@ -267,11 +266,12 @@
   #tkfg a.tkfg-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:10px;background:#fff;color:#0d0d0d;font-weight:700;text-decoration:none}#tkfg a.tkfg-link[hidden]{display:none}#tkfg a.tkfg-link:focus-visible{outline:3px solid #E67E22;outline-offset:2px}
 .busca-res .t small{display:block;line-height:1.35;margin-top:4px}
 </style>
+<link rel="stylesheet" href="janelas.css?v=7.57.0">
 </head>
 <body>
 <header>
-  <div class="cab"><h1>Esteira</h1><span class="quem" id="quem"></span></div>
-  <nav class="abas" id="abas" role="tablist" aria-label="Áreas da Esteira" hidden></nav>
+  <div class="cab"><a class="cab-voltar" id="esteira-voltar" href="admin.html">‹ Gestão</a><h1>Esteira</h1><span class="quem" id="quem"></span></div>
+  <nav class="abas tk-abas" id="abas" role="tablist" aria-label="Áreas da Esteira" hidden></nav>
 </header>
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
 
@@ -555,11 +555,28 @@
     if (!(Number(String(preco).replace(',', '.')) > 0)) dados.consultarValor = true;
     return Object.assign(autenticacao(), dados);
   }
+  /* v7.57: não perder o que a pessoa fez. Folha com alteração pergunta antes de descartar (toque fora, Esc, ✕ e Voltar). */
+  /* só as folhas de edição perguntam; listas, buscas e escolhas (cada toque já vale na hora) fecham direto */
+  const FOLHAS_COM_GUARDA = new Set(['esteira-pedir-fotos', 'esteira-caixa-enviar', 'esteira-caixa-cadastro', 'esteira-descricao-lote', 'esteira-registro-editar', 'esteira-extra', 'esteira-fornecedor', 'esteira-produto-novo']);
+  const MSG_DESCARTAR = 'Descartar o que você alterou? O que ainda não foi salvo será perdido.';
+  function instantaneo(raiz) {
+    const campos = [...raiz.querySelectorAll('input:not([type=file]),select,textarea')].map((e) => (e.type === 'checkbox' || e.type === 'radio' ? e.checked : e.value)).join('\u0001');
+    const arqs = [...raiz.querySelectorAll('input[type=file]')].map((e) => e.files ? e.files.length : 0).join(',');
+    const marcas = [...raiz.querySelectorAll('[aria-pressed],.chips button,.mini')].map((e) => (e.getAttribute('aria-pressed') || '') + e.className).join('|');
+    return campos + '\u0002' + arqs + '\u0002' + marcas;
+  }
+  /* devolve { sujo(), tentar(fechar) }: tentar() só fecha se não houver alteração ou se a pessoa confirmar */
+  function guardaAlteracao(raiz) {
+    let base = instantaneo(raiz);
+    setTimeout(() => { base = instantaneo(raiz); }, 400);   // valores preenchidos logo depois de abrir não contam como alteração
+    const sujo = () => instantaneo(raiz) !== base;
+    return { sujo, ok: () => !sujo() || confirm(MSG_DESCARTAR) };
+  }
   function abrirConferencia(p) {
     if(processos.pendente('conferir:'+p.id)){processos.abrir();return;}
     const ant = document.activeElement;
     const fundo = el('div', 'fundo'), folha = el('div', 'folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-label', 'Conferir ' + p.nome);
-    const topo = el('div', 'topo'), fechar = el('button', 'fechar', '×'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar');
+    const topo = el('div', 'topo'), fechar = el('button', 'fechar tk-fechar', '✕'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar');
     topo.append(el('b', '', 'Conferir peça'), fechar);
     const corpo = el('div', 'corpo'), pe = el('div', 'pe');
     const id = el('div'); id.style.cssText = 'display:flex;gap:12px;align-items:center';
@@ -595,9 +612,14 @@
     const salvar = el('button', 'bt laranja', 'Salvar conferência'); salvar.type = 'button';
     corpo.append(id, atalhos, datas, tAchou, achou, detalhes, status); pe.append(salvar);
     folha.append(topo, corpo, pe); fundo.append(folha); marcarAchou(true);
-    const fecharTudo = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
-    fechar.onclick = fecharTudo; fundo.onclick = (e) => { if (e.target === fundo) fecharTudo(); };
-    fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fecharTudo(); } };
+    const guarda = guardaAlteracao(corpo);
+    const pj = window.TKJanela ? TKJanela.prender(fundo, { papel: false, camada: 'esteira-conferir', fechar: () => tentarFechar(), foco: () => bSim }) : null;
+    const limparTudo = () => { fundo.remove(); if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    const fecharTudo = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    const tentarFechar = () => { if (guarda.ok()) fecharTudo(); };
+    /* Voltar do Android: se há alteração e a pessoa não confirma, a folha volta para a pilha (sem perder nada) */
+    const aoVoltar = () => { if (!fundo.isConnected) return; if (guarda.ok()) { limparTudo(); return; } setTimeout(() => { if (fundo.isConnected && window.TKCamadas) TKCamadas.empilhar('esteira-conferir', aoVoltar); }, 0); };
+    fechar.onclick = tentarFechar; fundo.onclick = (e) => { if (e.target === fundo) tentarFechar(); };
     salvar.onclick = async () => {
       // v7.48.0: a contagem é opcional. Em branco: registra a conferência sem mexer no estoque do site.
       const contou = estado.achou && String(iEst.value).trim() !== '';
@@ -615,7 +637,7 @@
       } catch(e){salvar.disabled=false;status.className='erro';status.textContent=e.message||'Não consegui guardar a conferência.';}
 
     };
-    document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar('esteira-conferir', () => fundo.remove()); bSim.focus({ preventScroll: true });
+    document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar('esteira-conferir', aoVoltar); bSim.focus({ preventScroll: true });
   }
 
   /* ---------- v7.42.0: fotos da tarefa (mesmo caminho do painel: Worker tenkiter-midia /u com a sessão) ---------- */
@@ -1337,17 +1359,21 @@
   function abrirFolha(chave, titulo, montar) {
     const ant = document.activeElement;
     const fundo = el('div', 'fundo'), folha = el('div', 'folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-label', titulo);
-    const topo = el('div', 'topo'), x = el('button', 'fechar', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Fechar');
+    const topo = el('div', 'topo'), x = el('button', 'fechar tk-fechar', '✕'); x.type = 'button'; x.setAttribute('aria-label', 'Fechar');
     topo.append(el('b', '', titulo), x);
     const corpo = el('div', 'corpo'), pe = el('div', 'pe'); folha.append(topo, corpo, pe); fundo.append(folha);
-    const fechar = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (estava&&ant&&ant.isConnected) ant.focus({preventScroll:true}); };
+    const pj = window.TKJanela ? TKJanela.prender(fundo, { papel: false, camada: chave, fechar: () => tentarFechar(), foco: () => corpo.querySelector('input:not([type=file]), select, textarea') || x }) : null;
+    const devolver = () => { if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    /* fechar(): fecha de vez (usado depois de salvar). Voltar/Esc/✕/toque fora passam por tentarFechar() e perguntam se há alteração. */
+    const fechar = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (estava) devolver(); };
     fundo.esteiraFechar=fechar;
     fundo.esteiraDono=String(getSessao()?.whatsapp||'');
-    x.onclick = fechar; fundo.onclick = (e) => { if (e.target === fundo) fechar(); };
-    fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fechar(); } };
     montar({ corpo, pe, fechar }); pe.hidden = !pe.childNodes.length;
-    document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar(chave, () => fundo.remove());
-    const f = corpo.querySelector('input:not([type=file]), select, textarea'); if (f) f.focus({ preventScroll: true });
+    const guarda = FOLHAS_COM_GUARDA.has(chave) ? guardaAlteracao(corpo) : { ok: () => true };
+    const tentarFechar = () => { if (guarda.ok()) fechar(); };
+    const aoVoltar = () => { if (!fundo.isConnected) return; if (guarda.ok()) { fundo.remove(); devolver(); return; } setTimeout(() => { if (fundo.isConnected && window.TKCamadas) TKCamadas.empilhar(chave, aoVoltar); }, 0); };
+    x.onclick = tentarFechar; fundo.onclick = (e) => { if (e.target === fundo) tentarFechar(); };
+    document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar(chave, aoVoltar);
     return fechar;
   }
   function miniFotos(urls, aoTirar) {
@@ -2116,5 +2142,6 @@
   iniciar();
 })();
 </script>
+<script src="a11y.js?v=7.57.0"></script>
 </body>
 </html>

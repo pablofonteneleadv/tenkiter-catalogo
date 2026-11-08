@@ -410,6 +410,14 @@
     ],
     "tests/worker_mensagens_rapido.js": [
       "mensagens"
+    ],
+    "tests/janelas_padrao.py": [
+      "catalogo",
+      "mensagens",
+      "esteira",
+      "treinamentos",
+      "push",
+      "infra"
     ]
   },
   "evidencias": {

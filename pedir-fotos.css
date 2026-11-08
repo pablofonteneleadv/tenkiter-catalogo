@@ -1,11 +1,10 @@
-.pf-overlay { position: fixed; inset: var(--pf-viewport-top, 0px) 0 auto; height: var(--pf-altura, 100dvh); z-index: 20050; background: #0009; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+.pf-overlay { position: fixed; inset: var(--pf-viewport-top, 0px) 0 auto; height: var(--pf-altura, 100dvh); z-index: var(--z-processo-3, 1200); background: #0009; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
 .pf-overlay[hidden], .pf-overlay [hidden] { display: none !important; }
 .pf-folha { width: min(100%, 560px); max-height: calc(var(--pf-altura, 100dvh) - 32px); display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #fff; color: #171612; font: 400 1rem/1.5 Inter, Arial, sans-serif; }
 .pf-folha * { box-sizing: border-box; }
 .pf-topo { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 16px; border-bottom: 1px solid #dedbd5; flex-shrink: 0; }
 .pf-topo h2 { margin: 0; font: 700 1.125rem/1.4 Inter, Arial, sans-serif; }
 .pf-folha button { min-height: 48px; width: auto; margin: 0; padding: 8px 16px; border: 1px solid #aaa69f; border-radius: 8px; background: #fff; color: #171612; font: 600 1rem/1.35 Inter, Arial, sans-serif; cursor: pointer; }
-.pf-folha .pf-fechar { min-width: 48px; padding: 8px; flex-shrink: 0; }
 .pf-corpo { padding: 16px; display: grid; gap: 16px; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 .pf-resumo, .pf-status { margin: 0; font-weight: 600; }
 .pf-status:empty { display: none; }

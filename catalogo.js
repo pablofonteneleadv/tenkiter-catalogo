@@ -1086,7 +1086,7 @@ try { tkSelExpirar_(); } catch (e) {}
 
     document.getElementById('modal-conteudo').innerHTML = `
       <div class="sheet-handle" aria-hidden="true"></div>
-      <button type="button" class="btn-x-modal" id="btn-fechar-modal" aria-label="Fechar">${ic_('fechar', '✕')}</button>
+      <button type="button" class="btn-x-modal tk-fechar tk-fechar-foto" id="btn-fechar-modal" aria-label="Fechar">${ic_('fechar', '✕')}</button>
       <div class="carrossel-wrap">
         <div class="slide-area" id="slide-area"><img id="foto-principal-modal" alt="${escaparHtml(p.Nome)}"></div>
         ${equipe_.pode ? `<a class="btn-editar-peca" id="btn-editar-peca" href="admin.html?editar=${encodeURIComponent(p.ID)}">✎ Editar produto</a>` : ''}
@@ -1534,9 +1534,9 @@ try { tkSelExpirar_(); } catch (e) {}
       }
       corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Minha conta' }));
       corpo.appendChild(el('p', { text: 'Entre para guardar seus favoritos e sua sacola e vê-los em qualquer aparelho. Você continua podendo navegar sem conta.' }));
-      const abas = el('div', { className: 'conta-abas' });
+      const abas = el('div', { className: 'conta-abas tk-abas' }); abas.setAttribute('role', 'tablist'); abas.setAttribute('aria-label', 'Entrar ou criar conta');
       [['entrar', 'Entrar'], ['criar', 'Criar conta']].forEach(([id, rotulo]) => {
-        const b = el('button', { type: 'button', text: rotulo, className: aba === id ? 'ativa' : '' });
+        const b = el('button', { type: 'button', text: rotulo }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(aba === id));
         b.addEventListener('click', () => { aba = id; desenhar(); });
         abas.appendChild(b);
       });
@@ -1647,23 +1647,26 @@ try { tkSelExpirar_(); } catch (e) {}
   // v6.5: no celular o menu é um PAINEL de tela cheia (rolagem própria, topo e rodapé fixos); no computador continua sendo a gaveta.
   const painel_ = () => window.matchMedia('(max-width: 600px)').matches;
   const extras_ = document.getElementById('filtros-extras');
-  let voltarFoco_ = null;
+  let voltarFoco_ = null, pjFiltros_ = null;
   function abrir() {
     yAbertura = window.scrollY; f.classList.add('aberto'); btn.setAttribute('aria-expanded', 'true');
     if (painel_() && extras_) {
-      document.documentElement.classList.add('fx-travado');
+      document.documentElement.classList.add('tk-travado');
       extras_.setAttribute('role', 'dialog'); extras_.setAttribute('aria-modal', 'true'); extras_.setAttribute('aria-label', 'Filtros');
       voltarFoco_ = document.activeElement;
       if (window.TKCamadas && !TKCamadas.aberta('filtros-painel')) TKCamadas.empilhar('filtros-painel', fecharNoCore_);
+      /* Tab preso dentro do painel e foco devolvido ao fechar (TKJanela, a11y.js) */
+      if (window.TKJanela && !pjFiltros_) pjFiltros_ = TKJanela.prender(extras_, { papel: false, devolver: false, camada: 'filtros-painel', fechar: () => fechar(), foco: '#fx-fechar' });
       const x = document.getElementById('fx-fechar'); if (x) setTimeout(() => x.focus({ preventScroll: true }), 30);
     }
   }
   function fecharNoCore_() {
     f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'false');
-    document.documentElement.classList.remove('fx-travado');
+    document.documentElement.classList.remove('tk-travado');
     if (extras_) { extras_.removeAttribute('role'); extras_.removeAttribute('aria-modal'); extras_.removeAttribute('aria-label'); }
     try { if (voltarFoco_ && voltarFoco_.focus && document.contains(voltarFoco_)) voltarFoco_.focus({ preventScroll: true }); } catch (e) {}
     voltarFoco_ = null;
+    if (pjFiltros_) { pjFiltros_.soltar(); pjFiltros_ = null; }
   }
   // abre sozinho ao procurar e fecha ao sair (só se foi aberto por esta busca)
   let autoAberto = false;
@@ -1699,7 +1702,12 @@ try { tkSelExpirar_(); } catch (e) {}
   document.addEventListener('pointerdown', (ev) => {
     if (!painel_() && f.classList.contains('compacto') && f.classList.contains('aberto') && !ev.target.closest('#filtros')) fechar();
   });
-  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') fechar(); });
+  /* Esc só fecha os filtros quando eles são a janela do topo (outra janela aberta por cima fica com o Esc dela) */
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    if (window.TKCamadas && TKCamadas.total() > 0) { const st = window.history.state; if (!(st && st.overlay === 'filtros-painel')) return; }
+    fechar();
+  });
   ['fx-fechar', 'fx-ver'].forEach(id => { const b = document.getElementById(id); if (b) b.addEventListener('click', fechar); });
   // X dentro do campo: apaga o que foi digitado de uma vez (v6.4)
   const bX = document.getElementById('busca-limpar');
