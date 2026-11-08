@@ -19,7 +19,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## [7.57.0] - 2026-11-07
+## [7.58.0] - 2026-11-07
 
 - Regras iguais em todas as telas: a equipe só escolhe categoria já cadastrada (também na barra de seleção da Gestão); só o Admin total cria nome novo, e a trava agora vale no código, não só na aparência.
 - Postagens, pedir fotos e foto do cliente ganham chave de operação: tocar de novo depois de um "sem confirmação" não duplica; a tela manda conferir a Fila.
