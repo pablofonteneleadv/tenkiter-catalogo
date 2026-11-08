@@ -1655,6 +1655,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 
 <script src="common.js"></script>
+<script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="sessao-rapida.js?v=7.50.0"></script>
 <script src="fila-lote.js?v=7.61.0"></script>
@@ -1801,7 +1802,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     setTimeout(() => document.getElementById(document.getElementById('lo-whats').value ? 'lo-senha' : 'lo-whats').focus(), 50);
   }
 
-  function esconderLogin() { document.getElementById('login-overlay').classList.remove('visivel'); setTimeout(() => { try { restaurarEnvios_(); } catch (e) {} }, 400); }
+  /* v7.57: o painel só monta a lista (697 produtos = ~30 mil nós) e só baixa fotos DEPOIS que a janela de entrada sai. Antes disso, atrás dela, ficava tudo pronto
+   * e invisível: ~2,4 MB de fotos e a lista inteira desenhada para ninguém ver. `painelLiberado_` resolve quando o acesso foi decidido e não há janela de entrada aberta. */
+  let liberarPainel_ = null;
+  const painelLiberado_ = new Promise((ok) => { liberarPainel_ = ok; });
+  function talvezLiberarPainel_() { if (!document.getElementById('login-overlay').classList.contains('visivel')) liberarPainel_(); }
+  function esconderLogin() { document.getElementById('login-overlay').classList.remove('visivel'); liberarPainel_(); setTimeout(() => { try { restaurarEnvios_(); } catch (e) {} }, 400); }
 
   // v7.40.11 (app Mensagens): guarda quem está logado neste aparelho para abrir na hora, sem esperar o servidor de contas.
   const APP_MENSAGENS_ = new URLSearchParams(location.search).get('app') === 'mensagens';
@@ -1921,7 +1927,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   let acessoPronto_ = false, conferindoAcesso_ = false;
 
   (async function iniciarAcesso() {
-    try { await iniciarAcessoCorpo_(); } finally { acessoPronto_ = true; try { ligarFilaLote_(); } catch (e) {} }
+    try { await iniciarAcessoCorpo_(); } finally { acessoPronto_ = true; talvezLiberarPainel_(); try { ligarFilaLote_(); } catch (e) {} }
   })();
   async function iniciarAcessoCorpo_() {
     const pSessao = getSessao() ? conferirSessao() : null; // em paralelo com a versão: uma ida ao servidor a menos
@@ -4198,7 +4204,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
   async function subirMidia_(file, it, aoProgredir, tipoRecurso, rotulo) {
     if (podeR2_(file, tipoRecurso)) {
-      try { return await comTentativas_(it, () => subirParaR2_(file, aoProgredir, rotulo), rotulo + '→R2'); }
+      try {
+        const urlR2 = await comTentativas_(it, () => subirParaR2_(file, aoProgredir, rotulo), rotulo + '→R2');
+        if (tipoRecurso === 'image' && window.TKMiniFoto) window.TKMiniFoto.enviar(file, urlR2);   // cópia de 480 px ao lado da foto (a vitrine baixa ~8x menos); falhar aqui não atrapalha o envio
+        return urlR2;
+      }
       catch (e) { window.logDebug_('R2 não serviu (' + ((e && e.message) || e) + ') -- usando o Cloudinary'); it.progresso = null; it.etaSegundos = null; }
     }
     return comTentativas_(it, () => pedirAssinaturaVideo_(tipoRecurso).then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir, tipoRecurso, rotulo)), rotulo + '→Cloudinary');
@@ -4583,6 +4593,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     return Array.from({ length: 5 }, () => '<div class="produto sk"><div class="sk-b" style="width:64px;height:80px;flex:none"></div><div class="produto-info"><div class="sk-b" style="height:10px;width:35%"></div><div class="sk-b" style="height:12px;width:70%;margin-top:8px"></div><div class="sk-b" style="height:10px;width:50%;margin-top:8px"></div><div class="sk-b" style="height:28px;width:80%;margin-top:10px"></div></div></div>').join('');
   }
 
+  let listaPre_ = null;
+  function prebuscarLista_() { if (!listaPre_) { listaPre_ = fetch(API_URL + '?action=list&todos=true').then(r => r.json()); listaPre_.catch(() => {}); } return listaPre_; }
   async function carregarProdutos() {
     const jaTinha = produtos.length > 0;
     const cache = jaTinha ? null : lerCacheAdmin_(CACHE_ADMIN_PROD);
@@ -4590,7 +4602,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (temCache) { produtos = cache.produtos; renderizarProdutos(); avisoCache_('Atualizando a lista…'); }
     else if (!jaTinha) { document.getElementById('lista-produtos').innerHTML = esqueletoLista_(); }
     try {
-      const resp = await fetch(API_URL + '?action=list&todos=true').then(r => r.json());
+      const pre = listaPre_; listaPre_ = null;       // a busca adiantada vale uma vez só (a próxima chamada pede de novo ao servidor)
+      const resp = await (pre || fetch(API_URL + '?action=list&todos=true').then(r => r.json()));
       if (!resp || !Array.isArray(resp.produtos)) throw new Error('resposta inválida');
       produtos = resp.produtos.reverse();
       gravarCacheAdmin_(CACHE_ADMIN_PROD, { produtos: produtos, em: Date.now() });
@@ -4752,7 +4765,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   /** v7.50.0: quantas fotos a peça tem (capa + galeria, sem repetir). */
   function fotosDaPeca_(p) { const v = []; [p && p.Foto_URL].concat(String((p && p.Fotos_Galeria) || '').split(',')).forEach((u) => { u = String(u || '').trim(); if (u && v.indexOf(u) === -1) v.push(u); }); return v; }
   function qtdFotos_(p) { return window.TKPadrao ? TKPadrao.contarFotos(p) : fotosDaPeca_(p).length; }   // v7.57.0: mesma contagem da vitrine (padrao-dados.js)
-  function renderizarProdutos() {
+  /* v7.57: lista grande (centenas de produtos) aparece em duas etapas — os primeiros cartões na hora (a pessoa já pode buscar e tocar) e o resto logo em seguida.
+   * Desenhar os ~700 de uma vez custava ~0,7 s num celular simples antes de a lista responder. Qualquer novo desenho cancela a segunda etapa pendente. */
+  const LISTA_RAPIDA_MAX_ = 80;
+  let listaEtapa2_ = null;
+  function renderizarProdutos(completo) {
+    clearTimeout(listaEtapa2_); listaEtapa2_ = null;
     const busca = semAcento_(document.getElementById('busca-admin').value);
     const container = document.getElementById('lista-produtos');
 
@@ -4770,7 +4788,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
     if (!lista.length) { container.innerHTML = avisoFora + '<p style="text-align:center;color:#666;padding:18px 0;">' + (busca ? 'Nenhuma peça com esse nome ou código' + (filtroLista !== 'todas' ? ' em “' + rotuloFiltro_(filtroLista) + '”' : '') + '.' : 'Nenhuma peça nesta lista.') + '</p>'; return; }
 
-    container.innerHTML = avisoFora + lista.map(p => {
+    const emEtapas_ = completo !== true && lista.length > LISTA_RAPIDA_MAX_;
+    container.innerHTML = avisoFora + (emEtapas_ ? lista.slice(0, LISTA_RAPIDA_MAX_) : lista).map(p => {
       const inativo = ehInativo_(p);
       const esg = !inativo && estaEsgotado(p);
       const idE = escaparHtml(p.ID);
@@ -4831,6 +4850,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     container.querySelectorAll('[data-arquivar-id]').forEach(btn => btn.addEventListener('click', () => arquivarUnico(btn.dataset.arquivarId)));
     container.querySelectorAll('[data-reativar-id]').forEach(btn => btn.addEventListener('click', () => reativarUnico(btn.dataset.reativarId)));
     container.querySelectorAll('[data-excluir-id]').forEach(btn => btn.addEventListener('click', () => excluirPermanenteUnico(btn.dataset.excluirId, btn.dataset.codigo)));
+    if (emEtapas_) listaEtapa2_ = setTimeout(() => { listaEtapa2_ = null; renderizarProdutos(true); }, 60);
   }
 
   function atualizarBarraBulk() {
@@ -6506,6 +6526,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     atualizarBarraSync();
     // tudo ao mesmo tempo (antes era um depois do outro, somando as esperas); lista e categorias já aparecem do cache do aparelho
     if(new URLSearchParams(location.search).get('app')==='mensagens') return; // catálogo só quando abrir Produtos no app
+    // v7.57: quem já tem sessão neste aparelho provavelmente entra direto: a lista (só o texto, sem fotos) já vem a caminho enquanto o acesso é conferido.
+    // Quem não tem sessão vê a janela de entrada e NADA é pedido nem desenhado até entrar.
+    try { if (getSessao()) prebuscarLista_(); } catch (e) {}
+    setTimeout(talvezLiberarPainel_, 8000);   // servidor de contas muito lento e sem janela de entrada: não deixa o painel parado
+    await painelLiberado_;
     await Promise.all([carregarListas(), carregarProdutos(), carregarStats()]);
     aplicarPadroesNovo_();
   })();

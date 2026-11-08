@@ -30,6 +30,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Foto de produto 4:5 também na vitrine (cartão e galeria) e no Instagram; selos de foto e de estado com um estilo e uma posição.
 - Vitrine reserva a altura da grade e o deslocamento de layout em rede lenta cai de 0,155 para 0,025 no celular. Teste `tests/padrao_aparencia_ui.py` trava as regras.
 
+## [7.59.0] - 2026-11-08
+
+- Fotos leves: cada foto nova ganha, no momento do envio, cópias de 480 px e 240 px (feitas no aparelho, guardadas ao lado da original no Worker de mídia, contadas no limite de armazenamento). A vitrine, a lista do painel, as bolinhas de fotos e a seleção pedem a cópia (`?w=480`/`?w=240`); sem cópia, o Worker devolve a original. Vitrine em 390 px: de ~9,5 MB para ~0,5 MB de foto ao abrir (medido com fotos de 1080 px e serviços simulados).
+- Fotos antigas: workflow manual `Cópias reduzidas das fotos antigas` (`scripts/fotos/gerar_minis.py`) gera as cópias em lotes, sem apagar nada e sem segredo novo (identidade OIDC do GitHub).
+- Painel: a lista de produtos e as fotos só são montadas depois do login (antes: ~30 mil nós e ~2,4 MB de fotos atrás da janela de entrada). Lista grande aparece em duas etapas (80 primeiros cartões na hora).
+- `common.js` (`fotoMini`) entra no APK: Android 2.4.23 (versionCode 30), sem mudança de comportamento do aplicativo. Todas as páginas passam a carregar `common.js?v=` igual à versão do site.
+
 ## [7.58.0] - 2026-11-07
 
 - Regras iguais em todas as telas: a equipe só escolhe categoria já cadastrada (também na barra de seleção da Gestão); só o Admin total cria nome novo, e a trava agora vale no código, não só na aparência.
