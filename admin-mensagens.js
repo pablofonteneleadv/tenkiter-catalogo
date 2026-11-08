@@ -627,7 +627,7 @@
       .sheet-mensagens .ms-st-item { width: 100%; aspect-ratio: 3 / 4; min-height: 100px; border: 0; padding: 0; border-radius: 10px; background: #d9d2c2 center / cover no-repeat; cursor: pointer; font-size: 1.6rem; color: #333; }
       .sheet-mensagens .ms-ver-stories { border: 0; background: none; padding: 6px 0 0; min-height: 32px; font-size: 0.72rem; color: #7a4a1e; text-decoration: underline; cursor: pointer; display: block; }
       .ms-luz img, .ms-luz video { max-width: 100%; max-height: 100%; object-fit: contain; }
-      .sheet-mensagens .ms-luz-x { position: absolute; top: 10px; right: 10px; min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: #fff; color: #111; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+      .sheet-mensagens .ms-luz-x { position: absolute; top: 10px; right: 10px; }
       .ms-stage { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid #e6e1d6; background: #faf7f0; font-size: 0.82rem; }
       .ms-stage img, .ms-stage video { flex: none; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: #d9d2c2; } .ms-stage audio { flex: 1; min-width: 0; height: 40px; }
       .ms-stage .ms-stage-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -716,7 +716,7 @@
       }
       /* v7.40.35: em zoom alto o texto fica maior do que os 44px da aba. Em vez de
          cortar a palavra, a barra passa a rolar na horizontal (a altura não muda). */
-      .sheet-mensagens .ms-abas{padding:0 8px;gap:0;border-bottom:1px solid #e7e7e0;flex:none;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.sheet-mensagens .ms-aba{position:relative;border:0;border-radius:0;min-height:48px;padding:0 3px;font-size:.73rem;font-weight:650;color:#5c6455;background:#fff}#overlay-mensagens #ms-abas .ms-aba[aria-selected=true]{background:#fff!important;color:#23251f!important}#overlay-mensagens #ms-abas .ms-aba{border:0!important;border-radius:0!important}.sheet-mensagens .ms-aba[aria-selected=true]::after{content:'';position:absolute;bottom:0;left:9px;right:9px;height:3px;background:#d97116;border-radius:3px 3px 0 0}
+      .sheet-mensagens .ms-abas{padding:0 8px;flex:none;overflow-y:hidden}.sheet-mensagens .ms-aba{position:relative;min-height:44px;padding:0 3px;font-size:.73rem;font-weight:650}
       /* v7.40.35 — fluxo por abas. Quatro rótulos longos em 320px: a aba quebra em no
          máximo 2 linhas e a barra mantém os 48px, então o cabeçalho NÃO cresce. */
       /* v7.40.35: texto centralizado com folga de 6px no pé, para o indicador laranja
@@ -848,10 +848,10 @@
     const h = el('h2', 'ms-titulo', 'Mensagens'); h.id = 'ms-titulo';
     const live = el('span', 'ms-ao-vivo', ''); live.id = 'ms-vivo'; live.setAttribute('role', 'status');
     const mais = botao('ms-ico', '⋯', 'menu-geral'); mais.setAttribute('aria-label', 'Mais opções'); mais.setAttribute('aria-haspopup', 'dialog'); mais.id = 'ms-mais';mais.textContent='';mais.appendChild(iconeFluido_('mais'));
-    const x = botao('ms-ico', '✕', 'fechar'); x.id = 'ms-fechar'; x.setAttribute('aria-label', 'Fechar mensagens');
+    const x = botao('ms-ico tk-fechar', '✕', 'fechar'); x.id = 'ms-fechar'; x.setAttribute('aria-label', 'Fechar mensagens');
     topo.append(h, mais, x);
     const quem=el('small','ms-identidade');quem.id='ms-identidade';const identidade=el('span','ms-identidade-linha');identidade.append(quem,live);h.appendChild(identidade);atualizarIdentidade_();
-    const abas = el('div', 'ms-abas'); abas.id = 'ms-abas'; abas.setAttribute('role', 'tablist');
+    const abas = el('div', 'ms-abas tk-abas'); abas.id = 'ms-abas'; abas.setAttribute('role', 'tablist');
     const tiposEl=el('div','ms-tipos');tiposEl.id='ms-tipos';tiposEl.setAttribute('role','group');tiposEl.setAttribute('aria-label','Tipos de conversa');
     const buscaEscopo=el('p','ms-busca-escopo');buscaEscopo.id='ms-busca-escopo';buscaEscopo.hidden=true;
     const pendAviso=el('span','ms-sr-only');pendAviso.id='ms-pendentes-aviso';pendAviso.setAttribute('role','status');
@@ -1501,9 +1501,9 @@
   function gaveta_(titulo) {
     // v7.40.9: no celular, com a lista à mostra (ex.: gavetas abertas pelo menu ⋯), a gaveta cobre o app inteiro em vez da conversa escondida
     fecharGaveta_(); const cv = $('ms-conversa'), pai = cv && cv.getClientRects().length ? cv : $('ms-app'); if (!pai) return null;
-    const g = el('div', 'ms-gaveta'); g.id = 'ms-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-label', titulo);
+    const g = el('div', 'ms-gaveta'); g.id = 'ms-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-modal', 'true'); g.setAttribute('aria-label', titulo);
     const cab = el('div', 'ms-gaveta-cab'); cab.appendChild(el('h3', '', titulo));
-    const x = botao('ms-ico', '✕', 'gaveta-fechar'); x.setAttribute('aria-label', 'Fechar ' + titulo); cab.appendChild(x);
+    const x = botao('ms-ico tk-fechar', '✕', 'gaveta-fechar'); x.setAttribute('aria-label', 'Fechar ' + titulo); cab.appendChild(x);
     const corpo = el('div', 'ms-gaveta-corpo'); g.append(cab, corpo); g.dataset.gen = String(++genGaveta); pai.appendChild(g);
     if (window.TKCamadas && !TKCamadas.aberta('ms-gaveta')) TKCamadas.empilhar('ms-gaveta', removerAte_(genGaveta));
     x.focus();                    // o foco entra na gaveta (Esc e leitor de tela); Produtos depois leva o foco para a busca
@@ -2020,23 +2020,42 @@
     };
     if (obsMidia) obsMidia.observe(img); else img._carregar();
   }
-  function fecharLuz_() { const l = $('ms-luz'); if (l) l.remove(); }
+  /* Foto/vídeo ampliado e "Stories no ar": camada própria no histórico (TKCamadas). O Voltar do Android fecha só a foto;
+     a conversa continua aberta por baixo. Esc, Tab preso e foco devolvido seguem o mesmo padrão das outras janelas. */
+  let luzFoco_ = null;
+  function removerLuz_() { const l = $('ms-luz'); if (l) l.remove(); }
+  function devolverFocoLuz_() { const f = luzFoco_; luzFoco_ = null; if (f && f.isConnected && typeof f.focus === 'function') { try { f.focus({ preventScroll: true }); } catch (e) { /* ignora */ } } }
+  function fecharLuz_() { const l = $('ms-luz'); if (!l) return; removerLuz_(); devolverFocoLuz_(); if (window.TKCamadas && TKCamadas.aberta('ms-luz')) TKCamadas.desempilhar('ms-luz'); }
+  function prepararLuz_(l, x) {
+    if (!luzFoco_ || !luzFoco_.isConnected) luzFoco_ = document.activeElement;
+    l.setAttribute('aria-modal', 'true');
+    l.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Tab') return;
+      ev.stopPropagation();   // a folha de baixo (a11y.js) não pode puxar o foco para fora da foto
+      const f = [...l.querySelectorAll('button,video[controls],a[href]')].filter((e) => !e.disabled && (e.offsetWidth || e.offsetHeight));
+      if (!f.length) { ev.preventDefault(); return; }
+      const i = f.indexOf(document.activeElement);
+      if (ev.shiftKey && i <= 0) { ev.preventDefault(); f[f.length - 1].focus(); } else if (!ev.shiftKey && (i === f.length - 1 || i === -1)) { ev.preventDefault(); f[0].focus(); }
+    });
+    if (window.TKCamadas && !TKCamadas.aberta('ms-luz')) TKCamadas.empilhar('ms-luz', () => { removerLuz_(); devolverFocoLuz_(); });
+    x.focus();
+  }
   function abrirLuz_(tipo, url) {
-    fecharLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet) return;
+    removerLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet) return;
     const l = el('div', 'ms-luz'); l.id = 'ms-luz'; l.setAttribute('role', 'dialog'); l.setAttribute('aria-label', tipo === 'video' ? 'Vídeo' : 'Imagem ampliada');
     let m; if (tipo === 'video') { m = el('video'); m.controls = true; m.autoplay = true; m.playsInline = true; } else { m = el('img'); m.alt = 'Imagem ampliada'; }
-    m.src = url; const x = botao('ms-luz-x', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
-    l.append(m, x); sheet.appendChild(l); x.focus();
+    m.src = url; const x = botao('ms-luz-x tk-fechar tk-fechar-foto', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
+    l.append(m, x); sheet.appendChild(l); prepararLuz_(l, x);
   }
   /* Quando o contexto exato não veio, mostrar candidatos sem afirmar que são o status respondido. */
   async function abrirStories_(m) {
-    fecharLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet || !aberta) return;
+    removerLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet || !aberta) return;
     const l = el('div', 'ms-luz ms-stories'); l.id = 'ms-luz'; l.setAttribute('role', 'dialog'); l.setAttribute('aria-label', 'Stories no ar');
     const caixa = el('div', 'ms-st-caixa'); caixa.appendChild(el('b', '', 'Stories no ar antes desta mensagem'));
     caixa.appendChild(el('span', 'ms-ctx-det', 'O contexto exato desta mensagem não está disponível. Estes são candidatos publicados nas 26 h anteriores.'));
     const grade = el('div', 'ms-st-grade'); grade.appendChild(el('span', 'ms-vazio', 'Carregando…')); caixa.appendChild(grade);
-    const x = botao('ms-luz-x', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
-    l.append(caixa, x); sheet.appendChild(l); x.focus();
+    const x = botao('ms-luz-x tk-fechar tk-fechar-foto', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
+    l.append(caixa, x); sheet.appendChild(l); prepararLuz_(l, x);
     const r = await worker_('/msg/stories?conversa=' + encodeURIComponent(aberta.id) + '&em=' + encodeURIComponent(m.enviada_em || ''), 'GET');
     if (!$('ms-luz') || $('ms-luz') !== l) return;
     grade.textContent = '';
@@ -2777,11 +2796,11 @@
     encaminharFoco_=document.activeElement;
     encaminharPendente_ = { mensagem: m, origem: aberta.id };
     const fundo = el('div', 'ms-encaminhar-fundo'); fundo.id = 'ms-encaminhar-modal';
-    fundo.style.cssText = 'position:fixed;inset:0;z-index:10020;background:#0008;display:flex;align-items:center;justify-content:center;padding:12px';
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:var(--z-dialogo,150);background:#0008;display:flex;align-items:center;justify-content:center;padding:12px';
     const painel = el('section','ms-encaminhar-painel');
     painel.style.cssText = 'background:var(--ms-fundo,#fff);color:inherit;width:min(100%,480px);max-height:85dvh;display:flex;flex-direction:column;border-radius:14px;padding:16px;gap:10px';
     const topo = el('div','ms-linha');
-    const fechar = botao('ms-btn','✕','encaminhar-fechar'); fechar.setAttribute('aria-label','Fechar encaminhamento');fechar.style.minWidth='44px';
+    const fechar = botao('ms-btn tk-fechar','✕','encaminhar-fechar'); fechar.setAttribute('aria-label','Fechar encaminhamento');fechar.style.minWidth='44px';
     topo.append(el('strong','','Encaminhar para…'),fechar);
     painel.setAttribute('role','dialog'); painel.setAttribute('aria-modal','true'); painel.setAttribute('aria-label','Encaminhar mensagem');
     const campo = el('input','ms-input');campo.type='search';campo.placeholder='Buscar cliente ou telefone';campo.setAttribute('aria-label','Buscar conversa de destino');

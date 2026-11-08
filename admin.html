@@ -117,7 +117,6 @@
   #overlay-copiar .cp-sheet { position: relative; width: 100%; max-width: 900px; height: 100%; max-height: none; margin: 0 auto; border-radius: 0; padding: 0; animation: none; transform: none; display: flex; flex-direction: column; background: #f6f3ee; overflow: hidden; }
   .cp-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; padding: env(safe-area-inset-top, 0px) 6px 0 16px; background: #fff; border-bottom: 1px solid #e3ddd3; }
   .cp-topo strong { font-size: 1.02rem; }
-  .cp-fechar { width: auto; min-height: 44px; min-width: 44px; background: none; color: #141414; font-size: 1.15rem; border-radius: 8px; }
   .cp-ferramentas { background: #fff; padding: 10px 12px 4px; border-bottom: 1px solid #e3ddd3; display: grid; gap: 8px; }
   .cp-ferramentas input { width: 100%; min-height: 46px; border: 1px solid #e3ddd3; border-radius: 8px; padding: 0 12px; font-size: 1rem; background: #fff; }
   .cp-linha { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 6px; align-items: center; }
@@ -274,9 +273,9 @@
   .auditoria-item .linha1 { display: flex; justify-content: space-between; font-weight: 700; }
   .auditoria-item .linha2 { color: #666; font-size: 0.72rem; margin-top: 2px; }
 
-  #overlay-compartilhar { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
+  #overlay-compartilhar { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: var(--z-folha, 100); align-items: flex-end; justify-content: center; }
   #overlay-compartilhar.aberto { display: flex; }
-  .painel-compartilhar { background: var(--branco); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 16px; max-height: 90vh; overflow-y: auto; }
+  .painel-compartilhar { background: var(--branco); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 16px; max-height: 90vh; max-height: 90dvh; overflow-y: auto; }
 
   /* Prévia ao vivo da Arte para Stories */
   .arte-preview-card { width: 260px; margin: 0 auto; background: #0d0d0d; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.35); }
@@ -324,7 +323,7 @@
   .arte-thumb.selecionada { opacity: 1; border-color: var(--laranja); }
 
   /* v2: login único */
-  #login-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.88); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #login-overlay { position: fixed; inset: 0; z-index: var(--z-dialogo-2, 160); background: rgba(0,0,0,0.88); display: none; align-items: center; justify-content: center; padding: 16px; }
   #login-overlay.visivel { display: flex; }
   .lo-box { background: #fff; border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 380px; }
   .lo-box h2 { margin: 0 0 6px; font-size: 1.1rem; }
@@ -513,7 +512,7 @@
   .lista-topo { flex-wrap: wrap; gap: 8px; }
   .btn-fam-sug { width: auto; padding: 4px 10px; font-size: 0.78rem; min-height: 44px; background: #fff; color: #141414; border: 1px solid #cfc6b6; border-radius: 999px; font-weight: 700; }
   .sem-cadastrar #btn-bulk-familia, .sem-cadastrar #btn-fam-sugestoes, .sem-cadastrar #fam-form .fam-acoes { display: none !important; }
-  .overlay-sheet { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
+  .overlay-sheet { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: var(--z-folha, 100); align-items: flex-end; justify-content: center; }
   .overlay-sheet.aberto { display: flex; }
   .tam-linha { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 2px; font-size: .74rem; color: #555; align-items: center; }
   .tam-linha span { border: 1px solid #ccc; border-radius: 6px; padding: 1px 7px; background: #fff; font-weight: 700; color: #222; }
@@ -577,9 +576,8 @@
   .juntar-erro { background: #fdecea; color: #8a1c13; border-radius: 8px; padding: 8px 10px; font-size: .88rem; margin: 6px 0; }
   /* v4.10+: a lista de juntar rola sozinha e o botão "Juntar" fica sempre visível (celular) */
   .juntar-lista { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 4px 0 10px; padding-right: 2px; }
-  .sheet { background: var(--branco); width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 14px 16px 16px; height: 82vh; max-height: 82vh; display: flex; flex-direction: column; }
+  .sheet { background: var(--branco); width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 14px 16px 16px; height: 82vh; max-height: 82vh; height: 82dvh; max-height: 82dvh; display: flex; flex-direction: column; }
   .sheet-topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-family: "Poppins", sans-serif; font-size: 1.02rem; }
-  .sheet-x { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: #eee; color: #333; font-size: 1rem; }
   .cat-lista { flex: 1; overflow-y: auto; margin: 10px 0; border: 1px solid #eee; border-radius: 12px; -webkit-overflow-scrolling: touch; }
   .cat-item { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #fff; border: none; border-bottom: 1px solid #f0f0f0; border-radius: 0; padding: 14px 14px; font-size: 0.95rem; font-weight: 600; text-align: left; color: var(--preto); }
   .cat-item:last-child { border-bottom: none; }
@@ -1017,7 +1015,8 @@
 }
 
 </style>
-<link rel="stylesheet" href="acabamento-admin.css?v=7.23.0">
+<link rel="stylesheet" href="acabamento-admin.css?v=7.57.0">
+<link rel="stylesheet" href="janelas.css?v=7.57.0">
 <style id="atendimento-edicao-rapida">
 /* Mostra só as escolhas necessárias. Campos originais permanecem no DOM para
    a atualização usar validações, mídias, auditoria e permissão já existentes. */
@@ -1498,7 +1497,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
     <div class="sheet cp-sheet" role="dialog" aria-modal="true" aria-labelledby="cp-titulo">
       <div class="cp-topo">
         <strong id="cp-titulo">Escolher peça para copiar</strong>
-        <button type="button" class="cp-fechar" id="cp-fechar" aria-label="Fechar">✕</button>
+        <button type="button" class="cp-fechar tk-fechar" id="cp-fechar" aria-label="Fechar">✕</button>
       </div>
       <div class="cp-ferramentas">
         <input type="search" id="cp-busca" placeholder="Buscar por nome ou código (ex.: TK-0555)" autocomplete="off" lang="pt-BR" aria-label="Buscar peça por nome ou código">
@@ -6509,28 +6508,28 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   })();
 </script>
 <script src="admin-gestao.js?v=7.19.0"></script>
-<script src="admin-push.js?v=7.19.0"></script>
+<script src="admin-push.js?v=7.57.0"></script>
 <script src="admin-conexoes.js?v=7.38.2"></script>
 <script src="mensagens-acessos.js?v=7.40.19"></script>
-<link rel="stylesheet" href="admin-disponibilidade.css?v=7.40.28">
-<script src="admin-disponibilidade.js?v=7.41.0"></script>
+<link rel="stylesheet" href="admin-disponibilidade.css?v=7.57.0">
+<script src="admin-disponibilidade.js?v=7.57.0"></script>
 <script src="admin-familias.js?v=7.50.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
-<link rel="stylesheet" href="mensagens-gestor.css?v=7.40.45">
+<link rel="stylesheet" href="mensagens-gestor.css?v=7.57.0">
 <script src="mensagens-presenca.js?v=7.40.43"></script>
-<script src="mensagens-gestor.js?v=7.40.43"></script>
-<script src="admin-mensagens.js?v=7.56.2"></script>
-<script src="admin-instagram.js?v=7.52.0"></script>
+<script src="mensagens-gestor.js?v=7.57.0"></script>
+<script src="admin-mensagens.js?v=7.57.0"></script>
+<script src="admin-instagram.js?v=7.57.0"></script>
 <script src="admin-caixa-fotos.js?v=7.52.0"></script>
-<link rel="stylesheet" href="pedir-fotos.css?v=1">
-<script src="pedir-fotos.js?v=1"></script>
-<script src="video-validation.js?v=7.55.8"></script>
+<link rel="stylesheet" href="pedir-fotos.css?v=7.57.0">
+<script src="pedir-fotos.js?v=7.57.0"></script>
+<script src="video-validation.js?v=7.57.0"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
-<script src="admin-postagens.js?v=7.56.1"></script>
+<script src="admin-postagens.js?v=7.57.0"></script>
 <script src="admin-fotoia.js?v=7.53.0"></script>
 <script src="admin-enquadrar.js?v=7.28.0"></script>
 <script src="admin-capa-video.js"></script>
-<script src="nav.js?v=7.38.2" data-ativo="gestao"></script>
+<script src="nav.js?v=7.57.0" data-ativo="gestao"></script>
 <script>
 /* v7.19: acabamento das ferramentas do gestor.
  * 1) Títulos das janelas: o emoji do começo vira ícone de linha (os títulos são escritos por vários scripts; aqui só troca a aparência).

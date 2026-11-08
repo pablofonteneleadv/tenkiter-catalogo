@@ -226,7 +226,7 @@ th{background:var(--surface-2); font-weight:700;}
 .quiz-aviso{margin:10px 0; padding:12px 14px; border-radius:10px; background:var(--accent-soft); border:2px solid var(--accent-2); font-weight:700; color:var(--text);}
 .prova-bloco{margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);}
 .prova-t{margin:0 0 8px; font-size:0.95rem;}
-.tm-zerar{position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px;}
+.tm-zerar{position:fixed; inset:0; z-index:var(--z-folha); background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px;}
 .tm-zerar-box{background:var(--surface); color:var(--text); border-radius:14px; padding:18px; width:100%; max-width:460px; max-height:90dvh; overflow:auto; border:1px solid var(--border);}
 .ds-zerar{margin:8px 0 2px; padding:8px 12px; font-size:0.85rem;}
 .quiz-q .qn{font-size:0.78rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;}
@@ -264,9 +264,7 @@ th{background:var(--surface-2); font-weight:700;}
 .muted-note{color:var(--muted); font-size:0.85rem; margin-top:6px;}
 .admin-btn-topbar{background:var(--accent-2); color:#0d0d0d; border-color:var(--accent-2); font-weight:700;}
 .admin-shell{max-width:1100px; margin:0 auto; padding:20px; width:100%; min-width:0;}
-.admin-tabs{display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:18px; flex-wrap:wrap;}
-.admin-tab{padding:10px 16px; border:none; background:transparent; color:var(--muted); font-weight:600; cursor:pointer; border-bottom:2px solid transparent; font-size:0.92rem;}
-.admin-tab.active{color:var(--accent); border-bottom-color:var(--accent-2);}
+.admin-tabs{margin-bottom:18px; flex-wrap:wrap;}   /* aparência da aba: .tk-abas (janelas.css) */
 .admin-panel{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; overflow-x:auto;}
 .admin-table{width:100%; border-collapse:collapse; font-size:0.88rem; min-width:560px;}
 .admin-table th{text-align:left; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap;}
@@ -299,10 +297,10 @@ th{background:var(--surface-2); font-weight:700;}
 .ac-foto-col{flex:0 0 auto;}
 .ac-foto{width:54px; height:54px; border-radius:50%; object-fit:cover; display:block; background:var(--surface);}
 .ac-foto-vazia{display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--muted); border:1px solid var(--border);}
-.foto-grande{position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:14px;}
-.foto-grande-box{position:relative; max-width:96vw; max-height:94vh; display:flex; flex-direction:column; align-items:center; gap:8px;}
-.foto-grande-box img{max-width:96vw; max-height:84vh; object-fit:contain; border-radius:12px; background:#111;}
-.foto-grande-x{position:absolute; top:-6px; right:-6px; width:38px; height:38px; border-radius:50%; border:none; background:#fff; color:#111; font-size:1.1rem; font-weight:800; cursor:pointer; z-index:2;}
+.foto-grande{position:fixed; inset:0; z-index:var(--z-sobre-tudo); background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:14px;}
+.foto-grande-box{position:relative; max-width:96vw; max-height:94vh; max-height:94dvh; display:flex; flex-direction:column; align-items:center; gap:8px;}
+.foto-grande-box img{max-width:96vw; max-height:84vh; max-height:84dvh; object-fit:contain; border-radius:12px; background:#111;}
+.foto-grande-x{position:absolute; top:8px; right:8px; z-index:2;}
 .foto-grande-leg{color:#fff; font-size:.85rem;}
 .ac-filtro{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; margin:0 0 12px;}
 .ac-filtro-t{font-size:.8rem; color:var(--muted); font-weight:700;}
@@ -512,6 +510,7 @@ details.manual-card[open]>summary::after{content:'▴';}
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
 <link rel="stylesheet" href="rh-permissoes.css?v=7.55.1">
 <script src="rh-permissoes.js?v=7.55.1"></script>
+<link rel="stylesheet" href="janelas.css?v=7.57.0">
 </head>
 <body class="pg-treinamentos">
 
@@ -519,8 +518,8 @@ details.manual-card[open]>summary::after{content:'▴';}
 <div class="toast" id="toast"></div>
 
 <script id="app-data" type="application/json">{"manuals": {}, "titles": {"1": "TM Funcionário Iniciando", "2": "TM Funcionário Estágio", "3": "TM Funcionário Avançado"}, "blurbs": {"1": "Leitura rápida para quem vai ser entrevistado.", "2": "O manual completo de operação do dia a dia.", "3": "Responsabilidades ampliadas de apoio e coordenação."}, "quizzes": {}, "roster": [], "appsScriptUrl": "https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec", "appsScriptToken": "tenkiter2026"}</script>
-<script src="tm-verificado.js?v=7.2.1"></script>
-<script src="tutorial-app.js?v=7.14.11"></script>
+<script src="tm-verificado.js?v=7.57.0"></script>
+<script src="tutorial-app.js?v=7.57.0"></script>
 <script>
 (function(){
 "use strict";
@@ -2238,7 +2237,7 @@ function renderAdminPanel(){
   if (temPerm('dados_pessoais') || temPerm('gerir_acessos')) tabs.push({ id:'curriculos', label:'📄 Currículos' });
   if (!tabs.some(function(t){ return t.id === state.adminTab; })) state.adminTab = tabs.length ? tabs[0].id : 'equipe';
   var tabsHtml = tabs.map(function(t){
-    return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '"' + (state.adminTab===t.id?' aria-current="page"':'') + ' data-tab="' + t.id + '">' + t.label + '</button>';
+    return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '" role="tab" aria-selected="' + (state.adminTab===t.id) + '" data-tab="' + t.id + '">' + t.label + '</button>';
   }).join('');
   var body;
   if (state.adminTab === 'curriculos'){
@@ -2260,7 +2259,7 @@ function renderAdminPanel(){
   }
   return '<div class="admin-shell">' +
     '<div class="hero"><h1>Painel do RH / Admin</h1><p>Gestão da equipe, acompanhamento das avaliações e configuração dos manuais.</p></div>' +
-    '<nav class="admin-tabs" aria-label="Áreas do RH">' + tabsHtml + '</nav>' +
+    '<nav class="admin-tabs tk-abas" role="tablist" aria-label="Áreas do RH">' + tabsHtml + '</nav>' +
     body +
   '</div>';
 }
@@ -2928,7 +2927,8 @@ function abrirZerarPessoa(whats, nome){
       '</div>' +
     '</div>';
   document.body.appendChild(ov);
-  function fechar(){ var e = document.getElementById('tm-zerar'); if (e) e.remove(); }
+  var pj = window.TKJanela ? TKJanela.prender(ov, { fechar: function(){ sair(); }, foco: '#zr-leitura', camada: 'tm-zerar' }) : null;
+  function fechar(){ var e = document.getElementById('tm-zerar'); if (e) e.remove(); if (pj) pj.soltar(); }
   if (window.TKCamadas) TKCamadas.empilhar('tm-zerar', fechar);
   function sair(){ if (window.TKCamadas) TKCamadas.desempilhar('tm-zerar'); else fechar(); }
   document.getElementById('zr-cancelar').addEventListener('click', sair);
@@ -3034,13 +3034,15 @@ function acFotoHtml(p){
   return '<span class="ac-foto ac-foto-vazia">' + esc(avatarIniciais(p.nome)) + '</span>';
 }
 function abrirFotoGrande(url, legenda, alvoFoto){
-  var ov = document.createElement('div'); ov.className = 'foto-grande';
-  ov.innerHTML = '<div class="foto-grande-box"><button type="button" class="foto-grande-x" aria-label="Fechar">✕</button><img referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(url)) + '" onerror="fotoFallback(this,\'' + esc(alvoFoto || '') + '\',\'corpo\')"><div class="foto-grande-leg">' + esc(legenda || '') + '</div></div>';
-  function fechar(){ if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', tecla); }
-  function tecla(ev){ if (ev.key === 'Escape') fechar(); }
-  ov.addEventListener('click', function(ev){ if (ev.target === ov || ev.target.className === 'foto-grande-x') fechar(); });
-  document.addEventListener('keydown', tecla);
+  var ov = document.createElement('div'); ov.className = 'foto-grande'; ov.setAttribute('aria-label', legenda || 'Foto ampliada');
+  ov.innerHTML = '<div class="foto-grande-box"><button type="button" class="foto-grande-x tk-fechar tk-fechar-foto" aria-label="Fechar">✕</button><img referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(url)) + '" onerror="fotoFallback(this,\'' + esc(alvoFoto || '') + '\',\'corpo\')"><div class="foto-grande-leg">' + esc(legenda || '') + '</div></div>';
+  /* camada própria no histórico: o Voltar do Android fecha só a foto; Esc, Tab preso e foco devolvido pelo TKJanela (a11y.js) */
+  var pj = window.TKJanela ? TKJanela.prender(ov, { fechar: function(){ sair(); }, foco: '.foto-grande-x', camada: 'tm-foto' }) : null;
+  function fechar(){ if (ov.parentNode) ov.parentNode.removeChild(ov); if (pj) pj.soltar(); }
+  function sair(){ if (window.TKCamadas && TKCamadas.aberta('tm-foto')) TKCamadas.desempilhar('tm-foto'); else fechar(); }
+  ov.addEventListener('click', function(ev){ if (ev.target === ov || ev.target.classList.contains('foto-grande-x')) sair(); });
   document.body.appendChild(ov);
+  if (window.TKCamadas) TKCamadas.empilhar('tm-foto', fechar);
 }
 function baseDosPerfis(lista){
   var soma = {};
@@ -3436,7 +3438,7 @@ function telaSemConexao_(){
 </script>
 <script src="common.js"></script>
 <script src="icones.js?v=7.17.0"></script>
-<script src="nav.js?v=7.38.2" data-ativo="treinamentos"></script>
+<script src="nav.js?v=7.57.0" data-ativo="treinamentos"></script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
 <script src="push.js"></script>

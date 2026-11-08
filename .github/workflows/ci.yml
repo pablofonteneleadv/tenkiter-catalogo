@@ -359,6 +359,7 @@ jobs:
           python3 tests/aparencia_aprovada_ui.py
           python3 tests/juntar_admin.py
           python3 tests/selecao_botoes.py
+          python3 tests/janelas_padrao.py   # v7.57.0: janelas, abas, foco e camadas com uma só gramática
 
       - name: Evidências dos reparos integrados
         if: always() && github.event_name == 'pull_request'
@@ -371,6 +372,7 @@ jobs:
             tests/saida/reparos/
             tests/saida/fotoia-catalogo/
             tests/saida/pedir-fotos-lote/
+            tests/saida/janelas-padrao/
           if-no-files-found: ignore
 
       - name: Screenshots da edição rápida

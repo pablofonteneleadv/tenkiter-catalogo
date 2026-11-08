@@ -39,6 +39,6 @@ with sync_playwright() as p:
     chk("botão voltar do celular fecha só o painel", not pg.evaluate("document.getElementById('filtros').classList.contains('aberto')") and "index.html" in pg.url)
     pg.click("#btn-filtros-toggle"); pg.wait_for_timeout(300); pg.click("#fx-ver"); pg.wait_for_timeout(400)
     chk("'Ver N peças' fecha e mostra o resultado", not pg.evaluate("document.getElementById('filtros').classList.contains('aberto')"))
-    chk("página volta a rolar depois de fechar", not pg.evaluate("document.documentElement.classList.contains('fx-travado')"))
+    chk("página volta a rolar depois de fechar", not pg.evaluate("document.documentElement.classList.contains('tk-travado')"))
     b.close()
 print("FALHAS:", BAD); sys.exit(1 if BAD else 0)

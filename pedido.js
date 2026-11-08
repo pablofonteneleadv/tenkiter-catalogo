@@ -149,18 +149,18 @@ function abrirSacola() {
   var esgotados = todos.filter(estaEsgotado);
 
   if (carregando) {
-    container.innerHTML = '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
+    container.innerHTML = '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x tk-fechar" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
       '<p class="texto-pequeno" style="padding:20px 16px">Carregando as peças da sua seleção…</p>';
   } else if (!todos.length) {
     container.innerHTML =
-      '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
+      '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x tk-fechar" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
       '<div id="sacola-vazia">Sua seleção está vazia. Toque em <b>Selecionar</b> nas peças que você gostar e envie tudo de uma vez para a loja.</div>' +
       '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">' + icPed_('whatsapp', '💬') + ' Prefiro falar no WhatsApp</a>';
   } else {
     var d = dadosIniciaisCliente_();
     var total = totalAvista_(itens);
     container.innerHTML =
-      '<div class="sheet-topo"><div class="nome">Minha seleção (' + itens.length + ')</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
+      '<div class="sheet-topo"><div class="nome">Minha seleção (' + itens.length + ')</div><button type="button" class="x tk-fechar" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
       (sumiram > 0 ? '<p class="texto-pequeno" role="status">' + sumiram + (sumiram === 1 ? ' peça saiu' : ' peças saíram') + ' do catálogo e foi removida da sacola.</p>' : '') +
       itens.map(function (p) {
         // v7.50.0: tocar na miniatura ou no nome abre a peça (a seleção continua aberta por baixo; voltar retorna a ela)
@@ -302,7 +302,7 @@ function mostrarPedidoEnviado_(o) {
   var c = document.getElementById('sacola-conteudo');
   var link = o.codigo ? linkRastreio(o.codigo) : '';
   c.innerHTML =
-    '<div class="sheet-topo"><div class="nome">Pedido enviado</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
+    '<div class="sheet-topo"><div class="nome">Pedido enviado</div><button type="button" class="x tk-fechar" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
     '<div class="pedido-ok" id="pedido-ok">' +
       '<div class="selo-ok" aria-hidden="true">✓</div>' +
       (o.codigo ? '<div>Seu pedido é o</div><div class="codigo-pedido" id="codigo-pedido">' + escaparHtml(o.codigo) + '</div>' : '') +
@@ -333,7 +333,7 @@ function mostrarPedidoEnviado_(o) {
 function abrirRastreio(codigo, final4) {
   var c = document.getElementById('rastreio-conteudo');
   c.innerHTML =
-    '<div class="sheet-topo"><div class="nome">Acompanhar pedido</div><button type="button" class="x" id="btn-fechar-rastreio" aria-label="Fechar">✕</button></div>' +
+    '<div class="sheet-topo"><div class="nome">Acompanhar pedido</div><button type="button" class="x tk-fechar" id="btn-fechar-rastreio" aria-label="Fechar">✕</button></div>' +
     '<p class="texto-pequeno">Digite o código do pedido e os <b>4 últimos números</b> do WhatsApp usado nele.</p>' +
     '<form class="campo-rastreio" id="form-rastreio" novalidate>' +
       '<label for="rast-codigo">Código do pedido</label><input type="text" id="rast-codigo" placeholder="PED-0001" autocomplete="off" autocapitalize="characters" value="' + escaparHtml(codigo || '') + '">' +
@@ -406,7 +406,7 @@ function abrirFavoritos() {
   var ids = getFavoritos();
   var todos = ids.map(function (id) { return produtos.find(function (p) { return String(p.ID) === String(id); }); }).filter(Boolean);
   var disp = todos.filter(function (p) { return !estaEsgotado(p); });
-  var topo = '<div class="sheet-topo"><div class="nome">Seus favoritos (' + todos.length + ')</div><button type="button" class="x" id="btn-fechar-favoritos" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>';
+  var topo = '<div class="sheet-topo"><div class="nome">Seus favoritos (' + todos.length + ')</div><button type="button" class="x tk-fechar" id="btn-fechar-favoritos" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>';
   if (!produtos.length && ids.length) {
     c.innerHTML = topo + '<p class="texto-pequeno" style="padding:20px 16px">Carregando seus favoritos…</p>';
   } else if (!todos.length) {
@@ -525,7 +525,7 @@ function abrirSelecao(daSacola) {
     var link = linkDaSelecao_(fixa, lista);
     var msg = mensagemDaSelecao_(link, fixa, lista);
     c.innerHTML =
-      '<div class="sheet-topo"><div class="nome">Compartilhar seleção</div><button type="button" class="x" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
+      '<div class="sheet-topo"><div class="nome">Compartilhar seleção</div><button type="button" class="x tk-fechar" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
       '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(escolhaTripla ? (modo === 'sel' ? 'as peças da sua seleção' : (modo === 'lista' ? 'o que o filtro mostra' : descricaoDaSelecao_())) : (daSacola ? 'as peças que você marcou em “Selecionar”' : descricaoDaSelecao_())) + '</p>' +
       '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
       (escolhaTripla ? '<fieldset class="sel-modo"><legend>O que vai no link?</legend>' +

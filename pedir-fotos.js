@@ -36,7 +36,7 @@
     const anterior = document.activeElement, fundo = el('div', 'pf-overlay'); fundo.id = ID;
     const folha = el('section', 'pf-folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-labelledby', 'pf-titulo');
     const topo = el('header', 'pf-topo'), titulo = el('h2', '', 'Solicitar fotos'); titulo.id = 'pf-titulo';
-    const fechar = el('button', 'pf-fechar', '✕'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar solicitação de fotos');
+    const fechar = el('button', 'pf-fechar tk-fechar', '✕'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar solicitação de fotos');
     topo.append(titulo, fechar);
     const corpo = el('div', 'pf-corpo');
     corpo.append(el('p', 'pf-resumo', pecas.length === 1 ? '1 produto selecionado' : pecas.length + ' produtos selecionados'));
@@ -68,14 +68,14 @@
       fundo.style.setProperty('--pf-altura', (vv ? vv.height : innerHeight) + 'px');
       fundo.style.setProperty('--pf-viewport-top', (vv ? vv.offsetTop : 0) + 'px');
     };
-    let overflowAnterior = '', focoAnterior = anterior;
-    function sumir() { fundo.hidden = true; document.body.style.overflow = overflowAnterior; focoAnterior?.focus?.({ preventScroll: true }); }
+    let travavaAntes = false, focoAnterior = anterior;
+    function sumir() { fundo.hidden = true; document.documentElement.classList.toggle('tk-travado', travavaAntes); focoAnterior?.focus?.({ preventScroll: true }); }
     function sair() {
       if (window.TKCamadas && TKCamadas.aberta(ID)) TKCamadas.desempilhar(ID); else sumir();
     }
     estado.mostrar = () => {
-      focoAnterior = document.activeElement; overflowAnterior = document.body.style.overflow;
-      fundo.hidden = false; document.body.style.overflow = 'hidden';
+      focoAnterior = document.activeElement; travavaAntes = document.documentElement.classList.contains('tk-travado');
+      fundo.hidden = false; document.documentElement.classList.add('tk-travado');
       estado.ajustar();
       if (window.TKCamadas) TKCamadas.empilhar(ID, sumir);
       fechar.focus({ preventScroll: true });

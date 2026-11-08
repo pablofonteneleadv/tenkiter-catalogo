@@ -38,9 +38,9 @@
    '.tmv-btn.sec{background:var(--surface-2);color:var(--text);border:2px solid var(--border)}',
    '.tmv-tag-teste{display:inline-block;background:#2C2C2C;color:#F39C12;font-size:.72rem;font-weight:800;letter-spacing:.04em;padding:3px 8px;border-radius:999px;margin-left:6px;vertical-align:middle}',
    /* certificado */
-   '#tmv-cert{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);overflow:auto;padding:14px;display:flex;flex-direction:column;align-items:center}',
+   '#tmv-cert{position:fixed;inset:0;z-index:var(--z-sobre-tudo,2000);background:rgba(0,0,0,.75);overflow:auto;padding:14px;display:flex;flex-direction:column;align-items:center}',
    '.tmv-cert-bar{display:flex;gap:8px;flex-wrap:wrap;width:100%;max-width:760px;margin-bottom:10px}',
-   '.tmv-cert-bar button{flex:1 1 140px}',
+   '.tmv-cert-bar .tmv-btn{flex:1 1 140px;margin-top:0}',
    '.tmv-cert-page{position:relative;background:#F5F1E8;color:#2C2C2C;width:100%;max-width:760px;min-height:420px;border:10px solid #E67E22;outline:3px solid #F39C12;outline-offset:-18px;border-radius:6px;padding:34px 28px;text-align:center;display:flex;flex-direction:column;justify-content:space-between;font-family:Poppins,Inter,system-ui,sans-serif;box-sizing:border-box}',
    '.tmv-cert-page img.logo{height:44px;margin:0 auto}',
    '.tmv-cert-tit{font-size:clamp(1.1rem,4.6vw,1.9rem);font-weight:800;letter-spacing:.14em;color:#E67E22;margin:6px 0}',
@@ -244,18 +244,25 @@
       document.head.appendChild(s);
     });
   };
+  var pjCert = null;
+  function limparCert(){ var w = document.getElementById('tmv-cert'); if (w) w.remove(); document.body.classList.remove('tmv-imprimindo'); if (pjCert) { pjCert.soltar(); pjCert = null; } }
+  function sairCert(){ if (window.TKCamadas && TKCamadas.aberta('tmv-cert')) TKCamadas.desempilhar('tmv-cert'); else limparCert(); }
   TMV.mostrarCertificado = function(c){
     var velho = document.getElementById('tmv-cert'); if (velho) velho.remove();
     var wrap = document.createElement('div'); wrap.id = 'tmv-cert'; wrap.setAttribute('role', 'dialog'); wrap.setAttribute('aria-label', 'Certificado de conclusão');
     var url = TMV.urlVerificar(c.codigo);
-    wrap.innerHTML = '<div class="tmv-cert-bar"><button type="button" class="tmv-btn" id="tmv-imp">Imprimir / salvar PDF</button><button type="button" class="tmv-btn sec" id="tmv-fechar">Fechar</button></div>' +
+    wrap.innerHTML = '<div class="tmv-cert-bar"><button type="button" class="tmv-btn" id="tmv-imp">Imprimir / salvar PDF</button><button type="button" class="tk-fechar tk-fechar-foto" id="tmv-fechar" aria-label="Fechar">✕</button></div>' +
       '<div class="tmv-cert-page"><div><img class="logo" src="logo-mark.png" alt="TENKiTER Modas" onerror="this.style.display=\'none\'"><div class="tmv-cert-tit">CERTIFICADO DE CONCLUSÃO</div></div>' +
       '<div><p class="tmv-cert-txt">A TENKiTER Modas certifica que</p><div class="tmv-cert-nome">' + E(c.nome) + '</div>' +
       '<p class="tmv-cert-txt">concluiu o treinamento</p><p class="tmv-cert-treino">' + E(c.titulo) + '</p>' +
       '<p class="tmv-cert-txt">em ' + E(dataExtenso(c.emitidoEm)) + ', com prática validada por <b>' + E(c.validadoPor || 'a gestão') + '</b>.</p></div>' +
       '<div class="tmv-cert-rod"><div>Código de verificação<br><span class="tmv-cert-cod">' + E(c.codigo) + '</span><div class="tmv-cert-nota">Certificado interno da TENKiTER Modas.<br>Confira em ' + E(siteUrl().replace(/^https?:\/\//, '')) + 'verificar.html</div></div><div class="tmv-cert-qr" id="tmv-qr" aria-label="QR code de verificação"></div></div></div>';
     document.body.appendChild(wrap);
-    wrap.querySelector('#tmv-fechar').addEventListener('click', function(){ wrap.remove(); document.body.classList.remove('tmv-imprimindo'); });
+    /* camada própria: Voltar do Android e Esc fecham só o certificado; Tab preso e foco devolvido (TKJanela, a11y.js) */
+    if (pjCert) { pjCert.soltar(); pjCert = null; }
+    pjCert = window.TKJanela ? TKJanela.prender(wrap, { fechar: sairCert, foco: '#tmv-fechar', camada: 'tmv-cert' }) : null;
+    if (window.TKCamadas && !TKCamadas.aberta('tmv-cert')) TKCamadas.empilhar('tmv-cert', limparCert);
+    wrap.querySelector('#tmv-fechar').addEventListener('click', sairCert);
     wrap.querySelector('#tmv-imp').addEventListener('click', function(){ document.body.classList.add('tmv-imprimindo'); setTimeout(function(){ window.print(); }, 50); });
     window.addEventListener('afterprint', function(){ document.body.classList.remove('tmv-imprimindo'); });
     carregarQr().then(function(ok){

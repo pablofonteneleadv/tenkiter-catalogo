@@ -19,6 +19,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.57.0 — janelas e navegação com uma só gramática
+
+- Toda janela do site fecha igual: botão ✕ de 44 px contornado no canto superior direito (`janelas.css`, classe `tk-fechar`), inclusive Minha conta, Seleção, Rastreio, Compartilhar, menu lateral e Filtros.
+- Voltar do Android, Esc, foco inicial/devolvido e Tab preso valem também para a foto ampliada de Mensagens, foto de perfil, certificado, "Zerar dados" e tutorial de Treinamentos, "Escolher capa do vídeo" (agora fecha ao tocar fora), folhas da Esteira e painel de Filtros. O Esc dos Filtros só age quando eles são a janela do topo.
+- Disponibilidade e as folhas de edição da Esteira perguntam antes de descartar o que foi alterado (toque fora, Esc, ✕ e Voltar).
+- Aba/segmento ativo único (preto, `aria-selected`) em Avisos, Instagram, Postagens, Mensagens, Gestão do atendimento, Esteira, Fotos com IA, Treinamentos, Currículos e Minha conta. Fim do laranja que nunca valia.
+- Altura das folhas em `dvh` (com reserva em `vh`) no painel, no detalhe do produto e na janela de avisos; fundo da página travado de um jeito só (`tk-travado`).
+- Escala de camadas nomeada (`--z-*`) no lugar dos números soltos.
+- Esteira ganha "‹ Gestão" para voltar; "Ir para o conteúdo" e foco laranja de 3 px em todas as páginas.
+
 ## [7.56.2] - 2026-11-07
 
 - Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.
