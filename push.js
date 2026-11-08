@@ -385,8 +385,8 @@
       titulo = 'Abra no navegador do celular';
       conteudo.push(el('p', { text: 'Você está dentro do navegador do Instagram, WhatsApp ou outro aplicativo, e ele não permite avisos. Toque nos três pontinhos (⋯ ou ⋮) e escolha “Abrir no navegador” (Chrome no Android, Safari no iPhone). Depois é só ativar.' }));
       conteudo.push(btn('Copiar o endereço do site', function () {
-        var fim = function (ok) { aviso(ok ? 'Endereço copiado. Cole no navegador.' : 'Endereço: ' + location.origin + '/'); };
-        try { navigator.clipboard.writeText(location.origin + '/').then(function () { fim(true); }, function () { fim(false); }); } catch (e) { fim(false); }
+        var fim = function (ok) { aviso(ok ? 'Endereço copiado. Cole no navegador.' : 'Endereço: ' + (typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/')); };
+        try { navigator.clipboard.writeText((typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/')).then(function () { fim(true); }, function () { fim(false); }); } catch (e) { fim(false); }
       }, 'sec'));
     } else if (motivo === 'bloqueado') {
       titulo = 'Os avisos foram bloqueados';

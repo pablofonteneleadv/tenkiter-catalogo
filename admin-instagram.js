@@ -157,7 +157,7 @@
     rodarIA();
   }
   const ORIGEM = { feed: '📷 Feed', carrossel: '🖼️ Carrossel', reel: '🎬 Reel', story: '⏱️ Story', avulsa: '📎 Avulsa' };
-  function dataBr(iso) { try { const d = new Date(iso); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+  function dataBr(iso) { try { return TKPadrao.dataHora(iso, 'curta'); } catch (e) { return ''; } }   // v7.57.0: relógio de Fortaleza
   function miniaturas(r, max) {
     const ms = r.midias || [];
     return '<div class="ig-fotos">' + ms.slice(0, max || 3).map((m, i) => '<div class="ig-th"><img loading="lazy" decoding="async" alt="" ' + atribSrc(m.mini || m.url) + '>' + (m.tipo === 'video' ? '<span class="ig-play">▶ vídeo</span>' : '') + (i === (max || 3) - 1 && ms.length > (max || 3) ? '<span class="ig-mais">+' + (ms.length - (max || 3)) + '</span>' : '') + '</div>').join('') + '</div>';

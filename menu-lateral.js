@@ -165,7 +165,7 @@
     var rod = no('div', 'ml-rodape');
     rod.appendChild(document.createTextNode('Rua Dr. Moreira da Rocha, 759 · Crateús-CE'));
     rod.appendChild(document.createElement('br'));
-    rod.appendChild(document.createTextNode('Retire na loja. 10% de desconto à vista.'));
+    rod.appendChild(document.createTextNode('Retire na loja. '+(window.TKPadrao?TKPadrao.descontoTxt():'10%')+' de desconto à vista.'));
 
     painel.appendChild(topo); painel.appendChild(corpo); painel.appendChild(rod);
     var fundo = no('div', 'ml-fundo'); fundo.setAttribute('aria-hidden', 'true');

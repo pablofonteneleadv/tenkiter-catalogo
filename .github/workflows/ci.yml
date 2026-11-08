@@ -47,6 +47,8 @@ jobs:
       so_docs: ${{ steps.calc.outputs.so_docs }}
       suite_completa: ${{ steps.calc.outputs.suite_completa }}
       modulos: ${{ steps.calc.outputs.modulos }}
+      shards: ${{ steps.calc.outputs.shards }}
+      shard_count: ${{ steps.calc.outputs.shard_count }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -117,10 +119,14 @@ jobs:
           echo "scripts de shell: sintaxe OK"
 
   testes:
-    name: Testes rápidos ou bateria completa
+    name: Testes rápidos ou bateria completa (parte ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     needs: escopo
     if: needs.escopo.outputs.so_docs != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.escopo.outputs.shards) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -138,13 +144,15 @@ jobs:
         if: needs.escopo.outputs.suite_completa != 'true'
         env:
           MODULOS: ${{ needs.escopo.outputs.modulos }}
-        run: python3 scripts/ci/testes_impacto.py executar --modulos "$MODULOS"
+          SHARDS: ${{ needs.escopo.outputs.shard_count }}
+          SHARD_ID: ${{ matrix.shard }}
+        run: python3 scripts/ci/testes_impacto.py executar --modulos "$MODULOS" --shard "$SHARD_ID" --shards "$SHARDS"
 
       - name: Evidências dos reparos integrados
         if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v6
         with:
-          name: evidencias-reparos-integrados
+          name: evidencias-reparos-integrados-${{ matrix.shard }}
           path: |
             tests/saida/rh-permissoes/
             tests/saida/aparencia-aprovada/
@@ -158,7 +166,7 @@ jobs:
         if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v6
         with:
-          name: evidencias-fidelidade-manual
+          name: evidencias-fidelidade-manual-${{ matrix.shard }}
           path: tests/saida/manual-fidelidade/
           if-no-files-found: ignore
 
@@ -166,7 +174,7 @@ jobs:
         if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v6
         with:
-          name: evidencias-edicao-rapida
+          name: evidencias-edicao-rapida-${{ matrix.shard }}
           path: tests/evidencias_edicao/
           if-no-files-found: ignore
 

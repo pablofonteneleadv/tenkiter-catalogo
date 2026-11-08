@@ -58,7 +58,7 @@
   .linha2 { display:flex; gap:10px; } .linha2 > * { flex:1; }
 </style>
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
-<link rel="stylesheet" href="janelas.css?v=7.57.0">
+<link rel="stylesheet" href="janelas.css?v=7.58.1">
 </head>
 <body class="pg-curriculo">
 <header><img src="logo-mark.png" alt="" onerror="this.style.display='none'"><h1>TENKiTER Modas · Trabalhe com a gente</h1></header>
@@ -484,7 +484,7 @@ function viewFoto(msg) {
     try {
       const dataUrl = await reduzirImagem(f, 640, 0.82);
       const r = await api('enviar_foto_perfil', { whatsapp: S.whats, senha: S.sessao, tipo: 'perfil', fotoBase64: dataUrl });
-      if (!r.ok) throw new Error(r.erro || 'Não foi possível enviar a foto agora.');
+      if (!r.ok) throw new Error(TKPadrao.erro(r, 'Não foi possível enviar a foto agora.'));
       S.fotoUrl = r.url; document.getElementById('prev').innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover" alt="">`;
       document.getElementById('ok').disabled = false;
     } catch (x) { erroBox(x.message === 'imagem' ? 'Não foi possível ler essa imagem. Tente outra foto.' : x.message); }
@@ -657,8 +657,9 @@ function viewFim() {
 })();
 </script>
 <script src="icones.js?v=7.17.0"></script>
-<script src="nav.js?v=7.57.0" data-ativo="candidatura"></script>
+<script src="nav.js?v=7.58.1" data-ativo="candidatura"></script>
 <script src="a11y.js"></script>
+<script src="padrao-dados.js?v=7.57.0"></script>
 <script src="conta.js"></script>
 </body>
 </html>

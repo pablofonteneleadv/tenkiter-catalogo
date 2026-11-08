@@ -276,6 +276,7 @@
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
 
 <script src="common.js?v=7.48.0"></script>
+<script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
 <script src="conta.js"></script>
 <script src="esteira-fluidez.js?v=7.53.3"></script>
@@ -308,6 +309,7 @@
       const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:corpo ? undefined : AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, ...(op?{'X-TK-Operacao':op}:{}) }, body: corpo ? JSON.stringify(corpo) : undefined });
       const j = await r.json().catch(() => ({ ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' }));
       if (r.status === 401) j.exigeLogin = true;
+      if (j && j.ok === false && window.TKPadrao) j.erro = TKPadrao.erro(j, 'Não consegui agora. Tente de novo.');   // v7.57.0: nunca JSON nem código na tela
       return j;
     } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
   }
@@ -1538,7 +1540,7 @@
     desenharEditor(ped, cat);
   }
   let FORNECEDORES = null;
-  const foneBR = (d) => { const s = String(d || '').replace(/\D/g, ''); return s.length === 11 ? '(' + s.slice(0, 2) + ') ' + s.slice(2, 7) + '-' + s.slice(7) : s.length === 10 ? '(' + s.slice(0, 2) + ') ' + s.slice(2, 6) + '-' + s.slice(6) : s; };
+  const foneBR = (d) => TKPadrao.telefone(d);   // v7.57.0: uma função só (padrao-dados.js); o 55 do Brasil nunca aparece cru
   const foneValido = (v) => { const s = String(v || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''); return !String(v || '').trim() || s.length === 10 || s.length === 11; };
   /** Cadastrar ou editar fornecedor: nome (obrigatório), endereço e até 3 telefones. aoSalvar(fornecedor) recebe o que o servidor gravou. */
   function folhaFornecedor(f, aoSalvar) {

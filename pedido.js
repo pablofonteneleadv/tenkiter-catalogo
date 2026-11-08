@@ -165,7 +165,7 @@ function abrirSacola() {
       itens.map(function (p) {
         // v7.50.0: tocar na miniatura ou no nome abre a peça (a seleção continua aberta por baixo; voltar retorna a ela)
         return '<div class="item-sacola">' +
-          '<button type="button" class="mini-btn" data-abrir-id="' + escaparHtml(p.ID) + '" aria-label="Ver a peça ' + escaparHtml(p.Nome) + '"><img src="' + escaparHtml(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + '" alt="" width="48" height="60" loading="lazy"></button>' +
+          '<button type="button" class="mini-btn" data-abrir-id="' + escaparHtml(p.ID) + '" aria-label="Ver a peça ' + escaparHtml(p.Nome) + '"><img ' + atribSrc(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + ' alt="" width="48" height="60" loading="lazy"></button>' +
           '<div class="info"><button type="button" class="nome-btn nome" data-abrir-id="' + escaparHtml(p.ID) + '">' + escaparHtml(p.Nome) + '</button>' +
           (p.Codigo ? '<div class="codigo">' + escaparHtml(p.Codigo) + '</div>' : '') +
           '<div class="preco">' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista') + '</div></div>' +
@@ -416,7 +416,7 @@ function abrirFavoritos() {
     c.innerHTML = topo +
       todos.map(function (p) {
         var esg = estaEsgotado(p);
-        return '<div class="fav-linha"><img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="" width="48" height="60" loading="lazy">' +
+        return '<div class="fav-linha"><img ' + atribSrc(fotoMini(p.Foto_URL, 160)) + ' alt="" width="48" height="60" loading="lazy">' +
           '<div class="info"><button type="button" class="nome-btn" data-abrir-id="' + escaparHtml(p.ID) + '" style="all:unset;cursor:pointer;font-weight:700;font-size:.85rem">' + escaparHtml(p.Nome) + '</button>' +
           '<div class="fav-preco' + (esg ? ' esgotado' : '') + '">' + (esg ? 'Esgotado' : (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista')) + '</div></div>' +
           '<div class="acoes">' + (esg ? '' : '<button type="button" data-sac-id="' + escaparHtml(p.ID) + '" aria-label="' + (estaNaSacola(p.ID) ? 'Já está na sacola: ' : 'Adicionar à sacola: ') + escaparHtml(p.Nome) + '">' + (estaNaSacola(p.ID) ? icPed_('certo', '✓') : icPed_('sacola', '🛍️')) + '</button>') +
@@ -527,7 +527,7 @@ function abrirSelecao(daSacola) {
     c.innerHTML =
       '<div class="sheet-topo"><div class="nome">Compartilhar seleção</div><button type="button" class="x tk-fechar" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
       '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(escolhaTripla ? (modo === 'sel' ? 'as peças da sua seleção' : (modo === 'lista' ? 'o que o filtro mostra' : descricaoDaSelecao_())) : (daSacola ? 'as peças que você marcou em “Selecionar”' : descricaoDaSelecao_())) + '</p>' +
-      '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
+      '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img ' + atribSrc(fotoMini(p.Foto_URL, 160)) + ' alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
       (escolhaTripla ? '<fieldset class="sel-modo"><legend>O que vai no link?</legend>' +
         '<label><input type="radio" name="sel-modo" value="sel"' + (modo === 'sel' ? ' checked' : '') + '> <span>🛍️ Só a minha seleção (' + listaSac.length + (listaSac.length === 1 ? ' peça' : ' peças') + ')</span></label>' +
         '<label><input type="radio" name="sel-modo" value="lista"' + (modo === 'lista' ? ' checked' : '') + '> <span>📋 As ' + listaFil.length + ' peças que o filtro mostra agora (lista fixa)</span></label>' +

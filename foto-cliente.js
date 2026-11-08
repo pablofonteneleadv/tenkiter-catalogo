@@ -27,6 +27,18 @@
       img.src = url;
     });
   }
+  /* v7.57.0: chave de operação guardada no aparelho. Recarregar a página ou tocar de novo depois de um "sem confirmação" reusa a mesma chave
+   * (mesma foto, mesma conta) e o servidor não registra a foto duas vezes. Sai daqui quando o servidor confirma. */
+  const OP_KEY = 'tk_fc_op_v1', OP_VALE_MS = 24 * 3600 * 1000;
+  function opDaFoto(s, assinatura) {
+    const sig = [String(s && s.whatsapp || '').replace(/\D/g, ''), assinatura].join('|');
+    try { const o = JSON.parse(localStorage.getItem(OP_KEY) || 'null'); if (o && o.sig === sig && /^[A-Za-z0-9_-]{8,64}$/.test(String(o.op)) && Date.now() - (o.em || 0) < OP_VALE_MS) return o.op; } catch (e) {}
+    const op = 'fc-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+    try { localStorage.setItem(OP_KEY, JSON.stringify({ sig: sig, op: op, em: Date.now() })); } catch (e) {}
+    return op;
+  }
+  function opConfirmada() { try { localStorage.removeItem(OP_KEY); } catch (e) {} }
+  function frase(x, padrao) { return window.TKPadrao ? TKPadrao.erro(x, padrao) : (x && x.erro && !/^[\s]*[\[{<]/.test(String(x.erro)) ? String(x.erro) : padrao); }
   function bloco() {
     const caixa = el('div', { className: 'conta-opc', id: 'foto-cli' });
     caixa.appendChild(el('h3', { text: '📸 Já usou uma peça nossa? Mande sua foto!', style: 'margin:0 0 4px;font-size:1rem' }));
@@ -40,10 +52,11 @@
     const autL = el('label', { htmlFor: 'foto-cli-ok', style: 'display:flex;gap:8px;align-items:flex-start;font-size:0.82rem;margin:8px 0;line-height:1.3' }, [aut, el('span', { text: 'Autorizo a TENKiTER Modas a publicar esta foto nos Stories.' })]);
     const msg = el('div', { className: 'conta-erro', id: 'foto-cli-msg', role: 'status', 'aria-live': 'polite' });
     const env = el('button', { type: 'button', className: 'conta-principal', id: 'foto-cli-enviar', text: 'Enviar foto' });
-    let blobPronto = null;
+    let blobPronto = null, assinaturaArq = '';
     arq.addEventListener('change', async () => {
       msg.textContent = ''; msg.style.color = ''; blobPronto = null; previa.style.display = 'none';
       const f = arq.files && arq.files[0]; if (!f) return;
+      assinaturaArq = [f.name, f.size].join(':');
       try { blobPronto = await reduzir(f); previa.src = URL.createObjectURL(blobPronto); previa.style.display = 'block'; }
       catch (e) { msg.textContent = e.message; arq.value = ''; }
     });
@@ -54,12 +67,12 @@
       if (!aut.checked) { msg.textContent = 'Marque a autorização para usarmos a foto nos Stories.'; return; }
       env.disabled = true; env.textContent = 'Enviando…';
       try {
-        const q = '?aceito=1&obs=' + encodeURIComponent(obs.value.trim()) + '&ig=' + encodeURIComponent(ig.value.trim());
+        const q = '?aceito=1&op=' + encodeURIComponent(opDaFoto(s, assinaturaArq)) + '&obs=' + encodeURIComponent(obs.value.trim()) + '&ig=' + encodeURIComponent(ig.value.trim());
         const r = await fetch(INSTAGRAM_URL + '/cliente/foto' + q, { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'image/jpeg' }, body: blobPronto });
         let j = null; try { j = await r.json(); } catch (e) { j = null; }
-        if (r.ok && j && j.ok) { msg.style.color = '#1b5e20'; msg.textContent = 'Recebemos! Muito obrigada 🧡 Se a gente usar, você aparece nos nossos Stories.'; arq.value = ''; obs.value = ''; previa.style.display = 'none'; blobPronto = null; aut.checked = false; }
-        else msg.textContent = (j && j.erro) || 'Não consegui enviar agora. Tente de novo em instantes.';
-      } catch (e) { msg.textContent = 'Sem conexão agora. Tente de novo.'; }
+        if (r.ok && j && j.ok) { msg.style.color = '#1b5e20'; msg.textContent = 'Recebemos! Muito obrigada 🧡 Se a gente usar, você aparece nos nossos Stories.'; arq.value = ''; obs.value = ''; previa.style.display = 'none'; blobPronto = null; aut.checked = false; opConfirmada(); }
+        else msg.textContent = frase(j, 'Não consegui enviar a foto agora. Tente de novo em instantes.');
+      } catch (e) { msg.textContent = 'Sem confirmação de que a foto chegou. Toque em Enviar foto de novo: ela não é registrada duas vezes.'; }
       env.disabled = false; env.textContent = 'Enviar foto';
     });
     [rotulo, arq, previa, obs, ig, autL, msg, env].forEach((n) => caixa.appendChild(n));
