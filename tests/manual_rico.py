@@ -218,7 +218,7 @@ with sync_playwright() as p:
     chk("Doc novo avisa das 10 perguntas de exemplo até sincronizar", "10 perguntas de exemplo" in c_a.inner_text() and "(Modelo)" in c_a.inner_text())
     chk("manual SEM prova também mostra o bloco, com 'Criar Doc da prova'", c_b.locator(".prova-bloco").count() == 1 and c_b.locator(".prova-criar-btn").count() == 1)
     c_a.locator(".prova-sync-btn").click(); pg.wait_for_timeout(600)
-    chk("sincronizar avisa que ainda restam perguntas de exemplo", "EXEMPLO" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    chk("sincronizar avisa que ainda restam perguntas de exemplo", "EXEMPLO" in pg.inner_text("#tk-avisos"), pg.inner_text("#tk-avisos"))
     shot(pg, "r4-card-prova", full=True)
     g = pg.locator("#guia-formatar"); g.locator("summary").click(); pg.wait_for_timeout(300)
     chk("o guia 'Como formatar' existe e mostra exemplos de verdade", g.locator(".guia-par").count() >= 9 and g.locator(".aviso").count() == 5 and g.locator("mark.rh").count() >= 1 and g.locator(".manual-img-wrap.lado-esq").count() == 1 and g.locator(".tmv-chk").count() == 1)
@@ -238,7 +238,7 @@ with sync_playwright() as p:
     pg.fill("#manual-doc-existente", "https://docs.google.com/document/d/EXEMPLO_ID_PARA_TESTE_123/edit")
     pg.locator("#btn-importar-manual").click(); pg.wait_for_timeout(700)
     chamadas_importar = [x for x in st["log"] if x.get("action") == "importar_manual_doc"]
-    chk("importa Doc com sessão do gestor e informa revisão privada", len(chamadas_importar) == 1 and chamadas_importar[0].get("docUrl", "").endswith("/edit") and "revisão" in pg.inner_text("#toast").lower())
+    chk("importa Doc com sessão do gestor e informa revisão privada", len(chamadas_importar) == 1 and chamadas_importar[0].get("docUrl", "").endswith("/edit") and "revisão" in pg.inner_text("#tk-avisos").lower())
     chk("sem erro de JavaScript (gestão)", not erros, erros)
     ctx.close(); b.close()
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD)); sys.exit(1 if BAD else 0)

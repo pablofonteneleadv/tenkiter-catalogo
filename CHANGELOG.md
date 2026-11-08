@@ -25,6 +25,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Registrar pedido ou fotos de cliente guarda tudo no aparelho e libera a conversa: o envio segue em segundo plano com um indicador flutuante (enviando, concluído ou precisa de atenção) e um painel para acompanhar, minimizar e tentar de novo.
 - Reenvio seguro: o pedido e cada foto usam sempre os mesmos identificadores; fotos já confirmadas não sobem de novo e, se a página fechar, os envios guardados retomam ao reabrir o Mensageiro na mesma conta. Nenhuma mensagem é enviada ao cliente.
 
+## [7.63.0] - 2026-11-08
+
+Pagamento de dívida de padrão (catraca de `check_padroes.py`: 387 para 351 ocorrências), uma regra por commit, sem mudar `common.js`.
+
+- `common.js?v=` igual em todas as páginas (7.59.0): só o parâmetro dos HTML mudou (index, esteira, fotos-ia, admin, treinamentos, currículos).
+- 404, manual (redirecionamento), treino de cadastro (simulação) e fotos-ia passam a carregar `janelas.css`, `a11y.js` e `tk-padrao.css`. Na simulação a Escolha de categoria mantém os 52 px de antes e o "Preciso de uma ajudinha" ganhou área de toque de 44 px.
+- Postagens: o fechar da Colagem e do menu "Adicionar à arte" usa `tk-fechar` (✕ 44 por 44 contornado; a Colagem deixou de ter o texto "✕ Fechar").
+- Erro de envio ao Cloudinary e diagnóstico do Zernio sem "HTTP" na tela (o código aparece como "código 404").
+- Treinamentos e Instagram (Descartar com Desfazer) usam `TKAviso` no lugar de aviso próprio; o teste local do push usa `SITE_URL`.
+- `z-index` 20, 80 e 100 viraram `var(--z-sticky|menu|folha, N)` com o mesmo número (ordem das camadas igual, conferida por estilo calculado nas páginas tocadas).
+
 ## 7.62.2 — janelas sempre cabem na tela e arquivos novos chegam certos
 
 - `janelas.css` e `a11y.js` agora têm `?v=` novo em todas as páginas (a correção das abas foi publicada sem trocar o número e o celular podia montar HTML novo com CSS velho).

@@ -7,21 +7,8 @@
    "common.js": 1,
    "curriculo.html": 2
   },
-  "common-versao": {
-   "admin.html": 1,
-   "curriculos.html": 1,
-   "esteira.html": 1,
-   "fotos-ia.html": 1,
-   "index.html": 1,
-   "treinamentos.html": 1
-  },
   "fechar-sem-tk-fechar": {
-   "admin-postagens.js": 2,
    "common.js": 1
-  },
-  "http-na-tela": {
-   "admin-conexoes.js": 2,
-   "admin.html": 1
   },
   "laranja-solto": {
    "404.html": 1,
@@ -61,33 +48,15 @@
    "vitrine-v71.js": 2,
    "vitrine.css": 1
   },
-  "location-origin": {
-   "push.js": 1
-  },
-  "pagina-sem-padrao": {
-   "404.html": 2,
-   "fotos-ia.html": 1,
-   "manual.html": 3,
-   "treinamento-cadastro-simulacao.html": 3
-  },
-  "toast-proprio": {
-   "admin-instagram.js": 1,
-   "treinamentos.html": 2
-  },
   "z-index": {
    "admin-mensagens.js": 1,
-   "admin-postagens.js": 1,
-   "admin.html": 8,
-   "catalogo.css": 10,
+   "admin.html": 6,
+   "catalogo.css": 7,
    "common.js": 1,
-   "curriculos.html": 1,
    "fila-lote.js": 1,
-   "fotos-ia.css": 1,
    "nav.js": 1,
    "pedido.js": 1,
-   "push.js": 1,
-   "pwa.js": 1,
-   "treinamentos.html": 3,
+   "treinamentos.html": 1,
    "tutorial-app.js": 5
   }
  }

@@ -198,7 +198,7 @@
     if ($('tk-convite-app') || !podeConvidar()) return;
     if (!$('tk-convite-css')) {
       var st = document.createElement('style'); st.id = 'tk-convite-css';
-      st.textContent = '#tk-convite-app{position:fixed;left:12px;right:12px;bottom:84px;z-index:80;max-width:460px;margin:0 auto;background:#111;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);font:14px/1.35 system-ui,sans-serif}' +
+      st.textContent = '#tk-convite-app{position:fixed;left:12px;right:12px;bottom:84px;z-index: var(--z-menu, 80);max-width:460px;margin:0 auto;background:#111;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);font:14px/1.35 system-ui,sans-serif}' +
         '#tk-convite-app b{display:block;font-size:15px;margin-bottom:2px}#tk-convite-app p{margin:0 0 10px;color:#e6e6e6}' +
         '#tk-convite-app .tkcv-l{display:flex;gap:8px;flex-wrap:wrap;align-items:center}' +
         '#tk-convite-app button{width:auto;font:inherit;cursor:pointer;border-radius:10px;padding:9px 14px;min-height:40px}' +
