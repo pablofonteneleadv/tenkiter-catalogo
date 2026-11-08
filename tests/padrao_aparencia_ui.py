@@ -162,7 +162,8 @@ def estatico():
     rx = re.compile(r'focus[^{}]*\{[^{}]*?outline:\s*\d+px\s+(?:solid|dashed)\s+(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))', re.I)
     for f in list(ROOT.glob('*.css')) + list(ROOT.glob('*.js')) + list(ROOT.glob('*.html')):
         if f.name in ('vendor-qrcode.js', 'tk-padrao.css'): continue
-        achou = [c for c in rx.findall(f.read_text(encoding='utf-8', errors='ignore')) if c.lower() not in ('#a85200', '#e67e22')]
+        ok_cores = ('#a85200', '#e67e22') + (('#fff', '#ffffff') if f.name == 'avisos.js' else ())   # avisos.js: anel branco sobre a faixa escura
+        achou = [c for c in rx.findall(f.read_text(encoding='utf-8', errors='ignore')) if c.lower() not in ok_cores]
         if achou: foco_proprio[f.name] = achou
     chk('R3 sem regra de foco com cor própria', not foco_proprio, foco_proprio)
 
