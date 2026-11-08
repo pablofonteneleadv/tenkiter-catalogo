@@ -35,6 +35,18 @@ As categorias iniciais são `catalogo`, `mensagens`, `postagens`, `esteira`, `fo
 
 Os exemplos são **piso**, não teto. Se `treinamentos.html` começar a usar um recurso de mídia compartilhada, a IA deve adicionar `midia` no plano.
 
+## Metadados de entrega não disparam a bateria (08/11/2026)
+
+Subir o número de versão não muda o que a loja faz, então **não deve** custar a plataforma inteira. `classificar()` trata assim:
+
+| Arquivo | Cobertura |
+|---|---|
+| `VERSION`, `scripts/ci/testes_impacto_manifesto.json`, `tests/rodar_tudo.py` | módulo `ci` (o seletor e o inventário validam o mapa), somado ao que o resto da PR já exigir |
+| `OneSignalSDKWorker.js` (número do service worker) | `push` + `infra` (testes de instalação e do service worker) |
+| `CHANGELOG.md` e demais `.md` | documentação, sem navegador |
+
+Continuam amplos (fail-safe): `common.js`, `nav.js`, workflows, `scripts/ci/testes_impacto.py` e qualquer arquivo novo ou desconhecido. `tests/mock.py` e outros utilitários compartilhados de teste também seguem amplos de propósito: quem precisar de um ajuste só para um teste deve fazê-lo dentro do próprio teste, não no utilitário compartilhado. A PR que muda produto declara em `CI-EXTRA:` o que mais merece ser testado.
+
 ## Exceção segura para a PR que modifica o próprio seletor de testes
 
 **Motivo:** classificar toda mudança em `ci.yml` como risco de produto dispara os ~115 testes mapeados até quando a PR apenas otimiza a maneira de escolher os testes. Era exatamente o gargalo de 15–20+ minutos observado na primeira execução da PR #389.
