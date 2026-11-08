@@ -93,6 +93,8 @@ jobs:
         run: python3 scripts/ci/check_html.py
       - name: Skill obrigatória de estética humana
         run: python3 scripts/ci/check_ux_skill.py
+      - name: Padrões obrigatórios do site (catraca; docs/ia/padroes-site.md)
+        run: python3 scripts/ci/check_padroes.py
       - name: Contrato de onboarding Graphify
         run: python3 scripts/ci/check_graphify.py
       - name: Variáveis dos Workers declaradas (wrangler.toml)
@@ -100,6 +102,7 @@ jobs:
       - name: Regressões internas de distribuição e contratos
         run: |
           python3 tests/testes_impacto_seletor.py
+          python3 tests/padroes_check_teste.py
           python3 tests/auditoria_interna.py
           python3 tests/worker_credenciais.py
           node tests/estoque_opcional.js

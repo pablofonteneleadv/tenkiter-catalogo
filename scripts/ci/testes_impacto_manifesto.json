@@ -11,6 +11,7 @@
     "treinamentos",
     "push",
     "infra",
+    "padroes",
     "ci"
   ],
   "tests": {
@@ -33,7 +34,8 @@
     "tests/avisos_padrao.py": [
       "catalogo",
       "treinamentos",
-      "infra"
+      "infra",
+      "padroes"
     ],
     "tests/cadastro_vinculos.js": [
       "catalogo",
@@ -201,7 +203,8 @@
       "fotoia",
       "treinamentos",
       "push",
-      "infra"
+      "infra",
+      "padroes"
     ],
     "tests/pedir_fotos_lote.py": [
       "esteira"
@@ -415,7 +418,8 @@
       "esteira",
       "postagens",
       "treinamentos",
-      "push"
+      "push",
+      "padroes"
     ],
     "tests/postagens_chave_ui.py": [
       "postagens"
@@ -432,7 +436,8 @@
       "esteira",
       "treinamentos",
       "push",
-      "infra"
+      "infra",
+      "padroes"
     ],
     "tests/fotos_mini_script.py": [
       "midia"
@@ -455,7 +460,8 @@
       "postagens",
       "esteira",
       "fotoia",
-      "treinamentos"
+      "treinamentos",
+      "padroes"
     ]
   },
   "evidencias": {

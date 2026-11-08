@@ -19,9 +19,9 @@ def select(files, event="pull_request", suite="rapido", labels=None):
     return I.plano(files, event, suite, labels or [])
 
 p = select(["treinamentos.html","tm-verificado.js"])
-check(p["modulos"] == ["treinamentos"], "Manual/Google Docs não roda Esteira, Fotos IA ou vídeos")
+check(p["modulos"] == ["treinamentos", "padroes"], "Manual/Google Docs não roda Esteira, Fotos IA ou vídeos (soma só os padrões de interface)")
 p = select(["mensagens.html"])
-check(set(p["modulos"]) == {"mensagens"}, "Mensagens recebe módulo apropriado")
+check(set(p["modulos"]) == {"mensagens", "padroes"}, "Mensagens recebe módulo apropriado (+ padrões de interface)")
 p = select(["postagens.html","midia-worker/src/index.js"])
 check({"postagens","midia","esteira","fotoia","infra"}.issubset(set(p["modulos"])), "Duas áreas e Worker expandem impacto")
 p = select(["common.js"])
@@ -35,13 +35,13 @@ check(p["so_docs"] and not p["modulos"], "Só documentação não consome bateri
 p = select(["docs/operacao.md"], suite="completo")
 check(not p["so_docs"] and set(p["modulos"]) == m, "Completo manual não é ignorado por docs")
 p = I.plano(["treinamentos.html"], "pull_request", "rapido", [], "CI-EXTRA: postagens,midia")
-check(set(p["modulos"]) == {"treinamentos","postagens","midia"}, "PR descreve módulos extras sem precisar criar labels")
+check(set(p["modulos"]) == {"treinamentos","postagens","midia","padroes"}, "PR descreve módulos extras sem precisar criar labels")
 p = I.plano(["treinamentos.html"], "pull_request", "rapido", [], "CI-EXTRA: todos")
 check(set(p["modulos"]) == m and p["suite_completa"], "CI-EXTRA: todos força máxima cobertura")
 p = I.plano(["treinamentos.html"], "pull_request", "rapido", [], "CI-EXTRA: modulo-invalido")
 check(set(p["modulos"]) == m, "Módulo extra desconhecido amplia por prudência")
 p = select(["treinamentos.html"], labels=["ci:postagens"])
-check(set(p["modulos"]) == {"treinamentos","postagens"}, "Rótulo manual acrescenta testes sem remover cobertura automática")
+check(set(p["modulos"]) == {"treinamentos","postagens","padroes"}, "Rótulo manual acrescenta testes sem remover cobertura automática")
 p = select(["treinamentos.html"], labels=["ci:todos"])
 check(set(p["modulos"]) == m and p["suite_completa"], "Rótulo de prudência amplia todos")
 p = select(["treinamentos.html"], event="schedule")
@@ -57,9 +57,10 @@ ci_files = [".github/workflows/ci.yml", "scripts/ci/testes_impacto.py",
             "docs/ia/testes-por-impacto.md", "AGENTS.md", "CLAUDE.md"]
 # Metadados de entrega: o número de versão, o mapa de testes e o runner não disparam a bateria inteira.
 p = select(["treinamentos.html", "VERSION", "CHANGELOG.md", "scripts/ci/testes_impacto_manifesto.json", "tests/rodar_tudo.py"])
-check(set(p["modulos"]) == {"treinamentos", "ci"}, "Versão, changelog, mapa de testes e runner somam só o módulo ci")
+check(set(p["modulos"]) == {"treinamentos", "ci", "padroes"}, "Versão, changelog, mapa de testes e runner somam só o módulo ci")
 p = select(["instagram-worker/worker.js", "VERSION"])
 check("treinamentos" not in p["modulos"] and "catalogo" not in p["modulos"], "Worker de mensagens + versão não roda treinamentos nem catálogo")
+check("padroes" not in p["modulos"], "Worker (sem arquivo de interface) NÃO roda os padrões de interface")
 p = select(["OneSignalSDKWorker.js"])
 check(set(p["modulos"]) == {"push", "infra"}, "Número do service worker roda push e infra, não tudo")
 p = select(["scripts/ci/testes_impacto.py", "VERSION"])
@@ -111,3 +112,46 @@ for indice,total in ((-1,4),(4,4),(0,0)):
         raise AssertionError("Shard inválido aceito")
 
 print("SELETOR CI: regressões de segurança e cobertura aprovadas.")
+
+# ---- Padrões obrigatórios do site (docs/ia/padroes-site.md): módulo "padroes" para QUALQUER arquivo de interface ----
+TESTES_PADROES = {"tests/padrao_aparencia_ui.py", "tests/janelas_padrao.py", "tests/padrao_vocabulario.py",
+                  "tests/avisos_padrao.py", "tests/padrao_regras_dados.py"}
+check("padroes" in m, "módulo padroes existe no manifesto")
+check({t for t, tags in I.M["tests"].items() if "padroes" in tags} == TESTES_PADROES, "módulo padroes mapeia exatamente os 5 testes de padrão em navegador")
+check(all((BASE / t).is_file() for t in TESTES_PADROES), "os 5 testes de padrão existem")
+p = select(["treinamentos.html"])
+check(set(p["modulos"]) == {"treinamentos", "padroes"}, "treinamentos.html roda treinamentos + padroes")
+p = select(["mensagens-ficha.js"])
+check("padroes" in p["modulos"] and "mensagens" in p["modulos"], "JS de interface de Mensagens soma padroes")
+p = select(["catalogo.css"])
+check("padroes" in p["modulos"], "CSS de interface soma padroes")
+p = select(["nova-pagina.html"])
+check(set(p["modulos"]) == m, "página nova e desconhecida continua fail-safe (todos)")
+p = select(["instagram-worker/worker.js"])
+check("padroes" not in p["modulos"], "PR só de worker NÃO roda padroes")
+p = select(["midia-worker/worker.js", "VERSION"])
+check("padroes" not in p["modulos"], "worker + VERSION NÃO roda padroes")
+p = select(["VERSION", "CHANGELOG.md", "scripts/ci/testes_impacto_manifesto.json"])
+check(p["modulos"] == ["ci"], "só VERSION/CHANGELOG/manifesto: módulo ci, sem padroes")
+p = select(["docs/ia/padroes-site.md", "README.md"])
+check(p["so_docs"] and not p["modulos"], "só documentação NÃO roda padroes nem navegador")
+p = select(["tests/janelas_padrao.py"])
+check("padroes" in p["modulos"], "mudar um dos 5 testes de padrão roda o módulo padroes")
+p = select(["OneSignalSDKWorker.js"])
+check("padroes" not in p["modulos"], "número do service worker NÃO é interface")
+# Plano executável: o módulo padroes escolhe exatamente os 5 testes (sem rodar a plataforma inteira)
+escolhidos = {t for t, tags in I.M["tests"].items() if "padroes" in tags}
+check(escolhidos == TESTES_PADROES and I.numero_shards(I.plano(["treinamentos.html"], "pull_request", "rapido", [])) >= 1, "plano de uma página de interface é finito")
+# A trava estática dos padrões é coberta pelo módulo ci e pela lista do CI isolado (não dispara a plataforma)
+for arq in ("scripts/ci/check_padroes.py", "scripts/ci/padroes-baseline.json", "tests/padroes_check_teste.py"):
+    check(I.classificar(arq) == {"ci"}, "classificado como ci (estático): " + arq)
+p = select(ci_files + ["scripts/ci/check_padroes.py", "scripts/ci/padroes-baseline.json", "tests/padroes_check_teste.py",
+                       "docs/ia/padroes-site.md", ".claude/skills/tenkiter-estetica-humana/SKILL.md",
+                       ".agents/skills/tenkiter-estetica-humana/SKILL.md",
+                       ".claude/skills/tenkiter-estetica-humana/references/contrato-visual.md",
+                       ".agents/skills/tenkiter-estetica-humana/references/contrato-visual.md"])
+check(p["modulos"] == ["ci"], "PR só de CI + padrões estáticos + instruções: perfil ci isolado")
+p = select(["scripts/ci/padroes-baseline.json", "admin-postagens.js"])
+check("padroes" in p["modulos"] and "ci" in p["modulos"] and "postagens" in p["modulos"], "pagar dívida (baseline + JS de interface) roda os padrões, não tudo")
+check(set(p["modulos"]) != m, "pagar dívida não aciona a plataforma inteira")
+print("seletor de padrões: OK")

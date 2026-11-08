@@ -19,6 +19,10 @@ Reutilize o componente existente quando ele atende à tarefa. Quando não atende
 
 Referências externas, incluindo UI/UX Pro Max, são repertório: não estão instaladas por esta skill e não prevalecem sobre as instruções do proprietário, a identidade TENKiTER, acessibilidade ou o comportamento validado. Não adicionar biblioteca, fonte, tema ou serviço externo apenas para imitar uma referência.
 
+## Padrões obrigatórios do site
+
+Antes de desenhar, leia `docs/ia/padroes-site.md`: para cada tema (janelas, aparência, avisos, dados, vocabulário) ele diz o padrão, o arquivo DONO, o que é proibido e como o CI confere. Reutilize o componente dono; não crie botão, janela, aviso, cor, camada ou frase de erro próprios em um módulo. Exceção ou componente novo: a PR altera o padrão primeiro, em lugar único. O CI trava a regressão com `scripts/ci/check_padroes.py` (catraca, baseline `scripts/ci/padroes-baseline.json`) e, em PR de interface, com os testes de padrão em navegador (módulo `padroes`). Passar nessas travas não substitui a revisão estética abaixo.
+
 ## Processo obrigatório
 
 1. Defina em uma frase a tarefa humana principal da tela e o elemento que precisa receber atenção primeiro. Registre quem usa, decisão/ação esperada, o que preservar e critérios observáveis de sucesso. Para telas novas ou mudanças estruturais, faça um esboço com conteúdo realista antes de implementar; peça escolha somente quando houver uma decisão de produto realmente pendente.

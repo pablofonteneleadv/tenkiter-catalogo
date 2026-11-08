@@ -39,12 +39,33 @@ ARQUIVOS_CI_ISOLADO = frozenset({
     "tests/testes_impacto_seletor.py",
     "docs/ia/testes-por-impacto.md",
     "agents.md", "claude.md",
+    # Trava dos padrões do site e suas instruções: estática, sem navegador (docs/ia/padroes-site.md).
+    "scripts/ci/check_padroes.py", "scripts/ci/padroes-baseline.json", "tests/padroes_check_teste.py",
+    "docs/ia/padroes-site.md",
+    ".claude/skills/tenkiter-estetica-humana/skill.md", ".agents/skills/tenkiter-estetica-humana/skill.md",
+    ".claude/skills/tenkiter-estetica-humana/references/contrato-visual.md",
+    ".agents/skills/tenkiter-estetica-humana/references/contrato-visual.md",
 })
 
 def somente_ci_isolado(arquivos: list[str]) -> bool:
     return bool(arquivos) and all(a.replace("\\", "/").removeprefix("./").lower() in ARQUIVOS_CI_ISOLADO for a in arquivos)
 
+# Arquivos estáticos de interface: html, css e js na RAIZ do repositório (workers ficam em pastas próprias; testes e docs
+# em tests/ e docs/). Toda PR que mexe neles soma o módulo "padroes" (docs/ia/padroes-site.md): os testes de padrão em
+# navegador já existentes (aparência, janelas, avisos, vocabulário, regras e dados), sem rodar a plataforma inteira.
+# OneSignalSDKWorker.js (só o número do service worker) e sw.js não são interface.
+NAO_INTERFACE = frozenset({"onesignalsdkworker.js", "sw.js", "service-worker.js"})
+
+def eh_interface(p: str) -> bool:
+    return "/" not in p and p.endswith((".html", ".css", ".js")) and p not in NAO_INTERFACE
+
 def classificar(arquivo: str) -> set[str]:
+    """Módulos de impacto do arquivo; interface (html/css/js da raiz) soma sempre o módulo "padroes"."""
+    p = arquivo.replace("\\", "/").removeprefix("./").lower()
+    base = _classificar_base(arquivo)
+    return base | {"padroes"} if eh_interface(p) else base
+
+def _classificar_base(arquivo: str) -> set[str]:
     """Caminhos compartilhados/novos retornam TODOS; primeiro a segurança."""
     p = arquivo.replace("\\", "/").removeprefix("./").lower()
     nome = p.rsplit("/", 1)[-1]
@@ -54,6 +75,10 @@ def classificar(arquivo: str) -> set[str]:
     # ou trocar o número do service worker não deve rodar a plataforma inteira (era a espera desnecessária de toda PR).
     # O seletor e o inventário (módulo "ci") validam o mapa; o service worker tem testes próprios (push/infra).
     if p in ("version", "scripts/ci/testes_impacto_manifesto.json", "tests/rodar_tudo.py"):
+        return {"ci"}
+    # A trava dos padrões (check_padroes) é estática e já roda em TODA PR no job estático; o teste dela e o baseline
+    # são cobertos pelo módulo "ci" (nenhum navegador). Mudar o baseline junto com arquivo de interface soma "padroes".
+    if p in ("scripts/ci/check_padroes.py", "scripts/ci/padroes-baseline.json", "tests/padroes_check_teste.py"):
         return {"ci"}
     if p == "onesignalsdkworker.js":
         return {"push", "infra"}
