@@ -364,8 +364,10 @@ try { tkSelExpirar_(); } catch (e) {}
     const passaFiltros = (p, sem) => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
       if (soSelecao_ && !estaNaSacola(p.ID)) return false;
-      if (!isNaN(min) && (ehConsulta(p) || Number(p.Preco) < min)) return false;   // "Consulte valor" não entra em filtro de preço
-      if (!isNaN(max) && (ehConsulta(p) || Number(p.Preco) > max)) return false;
+      // v7.57.0: o filtro compara o MESMO valor que o cartão mostra como preço principal (à vista, com DESCONTO_AVISTA); o rótulo do filtro diz "à vista".
+      const avistaFiltro = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      if (!isNaN(min) && (ehConsulta(p) || avistaFiltro < min)) return false;   // "Consulte valor" não entra em filtro de preço
+      if (!isNaN(max) && (ehConsulta(p) || avistaFiltro > max)) return false;
       if (apenasNovidades && !ehNovidade(p)) return false;
       if (apenasFavoritos && !ehFavorito(p.ID)) return false;
       if (sem !== 'cat') if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
@@ -430,7 +432,7 @@ try { tkSelExpirar_(); } catch (e) {}
     filtroTecidos.forEach(t => itens.push(['Tecido: ' + t, () => { filtroTecidos.delete(t); }]));
     if (min !== '' || max !== '') {
       const rot = min !== '' && max !== '' ? 'R$ ' + min + ' a ' + max : (min !== '' ? 'a partir de R$ ' + min : 'até R$ ' + max);
-      itens.push(['Preço: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
+      itens.push(['Preço à vista: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
     }
     box.textContent = '';
     box.hidden = !itens.length;
@@ -757,7 +759,7 @@ try { tkSelExpirar_(); } catch (e) {}
       const disp = nivelDisponibilidade(p);
       const favoritado = ehFavorito(p.ID);
       const naSacola = estaNaSacola(p.ID);
-      const nFotos = 1 + String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean).length;
+      const nFotos = window.TKPadrao ? TKPadrao.contarFotos(p) : 1 + String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean).length;   // v7.57.0: mesma contagem da Gestão
       const temVideo = !!idVideoSeguro(p.Video_URL);
       const ultimas = estoqueInformado(p) && !esgotado && Number(p.Estoque) <= 2;
       return `
@@ -1018,6 +1020,7 @@ try { tkSelExpirar_(); } catch (e) {}
   // Título, descrição e dados estruturados da peça aberta (buscadores e abas do navegador); volta ao normal ao fechar.
   const META_PADRAO_ = { titulo: document.title, descricao: (document.querySelector('meta[name="description"]') || {}).content || '' };
   function definirMetaPeca_(p, avista) {
+    // Dados estruturados (Google): price = preço de tabela, igual ao og-worker e ao feed do Merchant; o desconto à vista aparece só no texto.
     const cod = p.Codigo ? ' [' + p.Codigo + ']' : '';
     document.title = p.Nome + cod + ' — ' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(avista) + ' à vista') + ' | TENKiTER Modas';
     const d = document.querySelector('meta[name="description"]');
@@ -1028,7 +1031,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const dados = {
       '@context': 'https://schema.org', '@type': 'Product', name: p.Nome, image: imgs, description: p.Descricao || p.Nome,
       sku: p.Codigo || String(p.ID), brand: { '@type': 'Brand', name: 'TENKiTER Modas' }, url: linkProduto(p),
-      offers: { '@type': 'Offer', url: linkProduto(p), priceCurrency: 'BRL', price: Number(avista).toFixed(2), availability: estaEsgotado(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock', itemCondition: 'https://schema.org/NewCondition', seller: { '@type': 'Organization', name: 'TENKiTER Modas' } }
+      offers: { '@type': 'Offer', url: linkProduto(p), priceCurrency: 'BRL', price: Number(p.Preco).toFixed(2), availability: estaEsgotado(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock', itemCondition: 'https://schema.org/NewCondition', seller: { '@type': 'Organization', name: 'TENKiTER Modas' } }
     };
     if (ehConsulta(p)) delete dados.offers;   // sem preço não há oferta para os buscadores
     ld.textContent = JSON.stringify(dados);

@@ -19,6 +19,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.58.0] - 2026-11-07
+
+- Regras iguais em todas as telas: a equipe só escolhe categoria já cadastrada (também na barra de seleção da Gestão); só o Admin total cria nome novo, e a trava agora vale no código, não só na aparência.
+- Postagens, pedir fotos e foto do cliente ganham chave de operação: tocar de novo depois de um "sem confirmação" não duplica; a tela manda conferir a Fila.
+- Preço: o filtro da vitrine compara o preço à vista (o mesmo do cartão) e o rótulo diz isso; o Google recebe o preço de tabela, igual ao compartilhamento da peça.
+- Erros sempre em português (foto do cliente, famílias, treinamentos, currículo, Esteira, editor de visual): nunca JSON nem código HTTP. Telefone, contagem de fotos e data/hora de Fortaleza passam por funções únicas (padrao-dados.js).
+- Disponibilidade mostra "R$ 89,90"; Gestão em "Mais recentes" sobe peça com foto nova; "Enviar para modelo IA" segue a mesma permissão do cartão; links compartilháveis usam o endereço oficial; desconto à vista lido de uma só constante.
+
 ## [7.56.4] - 2026-11-08
 
 - Mensagens: o envio deixa de demorar vários segundos. Cada mensagem fazia até 3 conferências seguidas de sessão no Google (2 a 3,5 s cada); agora faz no máximo 1, e as ações de rotina do atendimento (enviar, marcar como lida, encerrar, assumir, notas, ficha, agendar) aproveitam o cache de 2 minutos da leitura das conversas. Configurações e acessos continuam conferindo a sessão na hora.

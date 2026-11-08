@@ -266,9 +266,6 @@
     "tests/worker_citar_mensagem.js": [
       "mensagens"
     ],
-    "tests/worker_mensagens_rapido.js": [
-      "mensagens"
-    ],
     "tests/worker_contatos_r2.js": [
       "mensagens"
     ],
@@ -398,8 +395,21 @@
       "treinamentos",
       "ci"
     ],
-    "tests/prova_resiliente.py": [
-      "treinamentos"
+    "tests/padrao_regras_dados.py": [
+      "catalogo",
+      "esteira",
+      "postagens",
+      "treinamentos",
+      "push"
+    ],
+    "tests/postagens_chave_ui.py": [
+      "postagens"
+    ],
+    "tests/worker_post_chave.js": [
+      "postagens"
+    ],
+    "tests/worker_mensagens_rapido.js": [
+      "mensagens"
     ]
   },
   "evidencias": {

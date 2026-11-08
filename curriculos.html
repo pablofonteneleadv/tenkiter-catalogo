@@ -60,6 +60,7 @@
 <main id="app"><div class="card">Carregando…</div></main>
 
 <script src="common.js"></script>
+<script src="padrao-dados.js?v=7.57.0"></script>
 <script>
 const TREIN_URL = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (treinamentos.html)
 const TREIN_TOKEN = 'tenkiter2026';
@@ -181,8 +182,8 @@ function fmtData(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); re
 function fmtDataHora(dt) {
   // datas do servidor vêm em UTC (terminam em Z): mostra no horário do aparelho (antes aparecia 3 h adiantado, ex. 22:26 em vez de 19:26)
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}.*(Z|[+-]\d{2}:?\d{2})$/.test(dt || '')) {
-    const d = new Date(dt);
-    if (!isNaN(d)) { const z = n => String(n).padStart(2, '0'); return `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()} ${z(d.getHours())}:${z(d.getMinutes())}`; }
+    const f = TKPadrao.dataHora(dt, 'completa');   // v7.57.0: relógio de Fortaleza, seja qual for o fuso do aparelho
+    if (f) return f;
   }
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(dt || ''); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : (dt || ''); }
 function corStatus(s) { return s === 'Contratada' ? 'ok' : (s === 'Descartada' || s === 'Desistiu' || s === 'Demitida' ? 'ru' : ((s === 'Agendada' || s === 'Estagiando') ? 'al' : '')); }
@@ -195,7 +196,7 @@ function historicoHtml(r) {
     q = String(q || '');
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(q)) return fmtDataHora(q);
     if (/^\d{4}-\d{2}-\d{2}$/.test(q)) return fmtData(q);
-    if (q) { try { return new Date(q).toLocaleString('pt-BR'); } catch (e) { return q; } }
+    if (q) { try { return TKPadrao.dataHora(q, 'completa') || q; } catch (e) { return q; } }
     return '';
   };
   const linhas = hist.slice().sort((a, b) => String(a.quando || a.registradoEm || '').localeCompare(String(b.quando || b.registradoEm || ''))).map(h =>
@@ -306,7 +307,7 @@ function linkCobrarCurriculo(r) {
   const nome = primeiroNome(r.Nome);
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas de Crateús\n\n' +
     'Vi que seu currículo ainda está em andamento — *falta só ' + faltaTexto(r.Etapa) + '.*\n\n' +
-    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/treinamentos.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
+    'É rapidinho: entra no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
     'Na tela inicial vai aparecer um aviso *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
     'Qualquer dúvida, é só chamar por aqui que te ajudo!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
@@ -315,14 +316,14 @@ function linkCobrarLeitura(r, m) {
   const nome = primeiroNome(r.Nome);
   const motivo = m.precisamReler ? ('tem um trecho atualizado do manual "' + m.titulo + '" pra você reler') : ('falta ler uma parte do manual "' + m.titulo + '"');
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que ainda ' + motivo + '.\n\n' +
-    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e continue de onde parou.\n\n' +
+    'É rapidinho: entra no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e continue de onde parou.\n\n' +
     'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }
 function linkCobrarProva(r, m) {
   const nome = primeiroNome(r.Nome);
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que você já terminou de ler o manual "' + m.titulo + '" mas ainda não fez a prova dele.\n\n' +
-    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e faz a avaliação quando puder.\n\n' +
+    'É rapidinho: entra no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e faz a avaliação quando puder.\n\n' +
     'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }
@@ -383,8 +384,8 @@ function itemNovo(r) {
   const diasParada = (r.Status || 'Novo') === 'Novo' ? diasDesde(r.Criado) : null;
   const paradaTxt = (diasParada !== null && diasParada >= 3) ? ` <span class="tag al" style="padding:1px 7px">⏳ ${diasParada}d parada</span>` : '';
   const etapaBloqueiaCobranca = r.Etapa === 'Enviado' || r.Etapa === 'Menor de 18';
-  d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${criadoTxt ? 'Cadastrada ' + criadoTxt + ' · ' : ''}${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}${paradaTxt}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span>${desistiuAntes(r) ? ' <span class="tag ru">↩️ já desistiu antes</span>' : ''}</div></div>
-    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">Cobrar currículo</a>` : ''}</div>
+  d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img ${atribSrc(fotoUrlOk(r.FotoUrl))} onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${criadoTxt ? 'Cadastrada ' + criadoTxt + ' · ' : ''}${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}${paradaTxt}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span>${desistiuAntes(r) ? ' <span class="tag ru">↩️ já desistiu antes</span>' : ''}</div></div>
+    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img ${atribSrc(fotoUrlOk(r.FotoUrl))} onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">Cobrar currículo</a>` : ''}</div>
     ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
     <div class="grupo">Treinamento</div><div data-k="treino" style="margin:4px 0 12px">Abra o card pra ver.</div>
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
