@@ -19,6 +19,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.60.0] - 2026-11-08
+
+- Avisos que não travam a tela: novo `avisos.js` (região única empilhada, sucesso some em 6 s, erro fica até fechar, "Desfazer" quando reversível). Substitui os `alert()` de sucesso/informação da Gestão, Instagram, Conexões, Mensageiro, Postagens, Avisos e Pedir fotos; o aviso não cobre mais a faixa de juntar/separar.
+- Confirmações: "toque de novo" da Esteira e das Famílias viram `confirm()` com a consequência; exclusões dizem "Não dá para desfazer"; nova senha em campo de senha numa janela (Treinamentos).
+- Arquivar/reativar produto: botão travado, aviso de sucesso com Desfazer e motivo do erro. Treinamentos: aviso anunciado por leitor de tela e foto de perfil só aparece após o servidor confirmar.
+- Vocabulário único: produto, seleção, Gestão, Pedir fotos, Público, Tentar de novo, "…", MB, você; plurais corretos. Telas vazias dizem o que fazer.
+- Testes `padrao_vocabulario.py` e `avisos_padrao.py`.
+
 ## [7.59.0] - 2026-11-08
 
 - Fotos leves: cada foto nova ganha, no momento do envio, cópias de 480 px e 240 px (feitas no aparelho, guardadas ao lado da original no Worker de mídia, contadas no limite de armazenamento). A vitrine, a lista do painel, as bolinhas de fotos e a seleção pedem a cópia (`?w=480`/`?w=240`); sem cópia, o Worker devolve a original. Vitrine em 390 px: de ~9,5 MB para ~0,5 MB de foto ao abrir (medido com fotos de 1080 px e serviços simulados).

@@ -98,7 +98,7 @@ with sync_playwright() as p:
     foto(pg, "03-produtos-390.png")
     pg.click("#ms-prod-lista [data-ms=prod-usar]"); pg.wait_for_timeout(300)
     txt = pg.input_value("#ms-texto")
-    chk("'Colocar na mensagem' junta ao que já estava escrito: nome em negrito, preço, tamanhos e o link da peça", txt.startswith("Oi!\n\n*Vestido Liso*") and "à vista" in txt and "Tamanhos: P, M, G" in txt and "tenkitermodas.com.br/p/TK-0005" in txt and not pg.locator("#ms-gaveta").count(), txt)
+    chk("'Colocar na mensagem' junta ao que já estava escrito: nome em negrito, preço, tamanhos e o link do produto", txt.startswith("Oi!\n\n*Vestido Liso*") and "à vista" in txt and "Tamanhos: P, M, G" in txt and "tenkitermodas.com.br/p/TK-0005" in txt and not pg.locator("#ms-gaveta").count(), txt)
     chk("o botão Enviar fica liberado e o texto pode ser editado antes", pg.locator("#ms-enviar").is_enabled())
     print("== Respostas rápidas ==")
     pg.fill("#ms-texto", ""); pg.click("[data-ms=gaveta-respostas]"); pg.wait_for_selector("#ms-gaveta", timeout=3000)

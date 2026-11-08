@@ -20,7 +20,7 @@ with sync_playwright() as p:
     pg.goto(BASE + "index.html"); pg.wait_for_timeout(2500)
     pg.click("#btn-conta-header"); pg.wait_for_timeout(600)
     t = pg.inner_text("#conta-corpo")
-    chk("na conta aparece o convite 'Já usou uma peça nossa? Mande sua foto!'", "Mande sua foto" in t and pg.locator("#foto-cli-arq").count() == 1, t[:200])
+    chk("na conta aparece o convite 'Já usou um produto nossa? Mande sua foto!'", "Mande sua foto" in t and pg.locator("#foto-cli-arq").count() == 1, t[:200])
     chk("pede pouco: foto, observação, Instagram opcional e a autorização", all(pg.locator(x).count() == 1 for x in ["#foto-cli-obs", "#foto-cli-ig", "#foto-cli-ok"]) and "opcional" in pg.get_attribute("#foto-cli-ig", "placeholder").lower())
     chk("cada campo tem rótulo ou nome acessível", pg.eval_on_selector_all("#foto-cli input", "e=>e.every(i=>i.type==='file'?!!document.querySelector('label[for='+i.id+']'):(!!document.querySelector('label[for='+i.id+']')||!!i.placeholder))"))
     pg.click("#foto-cli-enviar"); pg.wait_for_timeout(200)

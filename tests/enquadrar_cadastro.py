@@ -1,4 +1,4 @@
-"""v4.32: janela "✂ Enquadrar" do cadastro de peça (admin-enquadrar.js): abrir pela miniatura, mover/zoom/girar (dedo via CDP, roda, teclado),
+"""v4.32: janela "✂ Enquadrar" do cadastro de produto (admin-enquadrar.js): abrir pela miniatura, mover/zoom/girar (dedo via CDP, roda, teclado),
 Cortar × Encaixar, prévias Site / Feed-Carrossel / Story, "Usar esta foto" (JPEG 4:5 de verdade, sobe de novo), "↩ Voltar à original", Cancelar,
 botão voltar do navegador, foto salva (Cloudinary) e foto sem CORS (frase, nunca JSON), axe. O Apps Script e a internet são SIMULADOS.
     python3 tests/enquadrar_cadastro.py"""
@@ -134,7 +134,7 @@ with sync_playwright() as p:
     pg.click("#enq-ok"); pg.wait_for_timeout(1800)
     chk("a janela fechou", not aberta() and not pg.evaluate("TKCamadas.aberta('enq')"))
     r1 = px_img(pg, "#galeria-grid img", 540, 60); r2 = px_img(pg, "#galeria-grid img", 540, 1290)
-    chk("a foto da peça agora é 1080×1350", r1["w"] == 1080 and r1["h"] == 1350, r1)
+    chk("a foto do produto agora é 1080×1350", r1["w"] == 1080 and r1["h"] == 1350, r1)
     chk("girou 90°: o vermelho foi para cima e o azul para baixo", verm(r1["p"]) and azul(r2["p"]), (r1, r2))
     chk("sem borda branca nos cantos", all(sum(px_img(pg, "#galeria-grid img", x, y)["p"]) < 700 for x, y in [(2, 2), (1077, 2), (2, 1347), (1077, 1347)]))
     chk("selo '✂ ajustada' na miniatura", pg.locator("#galeria-grid .selo-enq").count() == 1)
@@ -185,11 +185,11 @@ with sync_playwright() as p:
     chk("foto salva no Cloudinary abre e libera o botão", pg.locator("#enq-ok").is_enabled() and pg.locator("#enq-aviso").is_hidden(), pg.inner_text("#enq-aviso"))
     pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
 
-    print("== K. editar peça já cadastrada (foto salva) ==")
+    print("== K. editar produto já cadastrado (foto salva) ==")
     pg.evaluate("document.getElementById('card-form').open=false")
     pg.locator(".btn-editar").nth(1).click(); pg.wait_for_timeout(900)
     n_it = pg.locator("#galeria-grid .galeria-item").count()
-    chk("a peça editada mostra a foto salva com o botão Enquadrar", n_it >= 1 and pg.locator("#galeria-grid .btn-enq").count() == n_it, n_it)
+    chk("o produto editado mostra a foto salva com o botão Enquadrar", n_it >= 1 and pg.locator("#galeria-grid .btn-enq").count() == n_it, n_it)
     abrir(0); chk("foto salva abre na janela", aberta() and pg.locator("#enq-ok").is_enabled(), pg.inner_text("#enq-aviso"))
     pg.click("[data-enq=g][data-v='90']"); pg.click("#enq-ok"); pg.wait_for_timeout(1500)
     chk("depois de usar, a foto da edição vira a nova (selo 'ajustada') e continua sendo a capa", pg.locator("#galeria-grid .selo-enq").count() == 1 and pg.locator("#galeria-grid .galeria-item.capa").count() == 1)
@@ -200,7 +200,7 @@ with sync_playwright() as p:
     pg.click("#btn-salvar"); pg.wait_for_timeout(3000)
     ups = [x for x in log if x.get("action") == "update"]
     chk("salvar a edição manda a foto enquadrada (endereço novo do R2) como capa", len(ups) == 1 and str(ups[0].get("fotoUrlExistente", "")).startswith("https://tenkiter-midia."), ups[-1:] )
-    chk("a foto antiga não fica na galeria da peça", len(ups) == 1 and not ups[0].get("fotosGaleriaExistentes"), ups[-1:])
+    chk("a foto antiga não fica na galeria do produto", len(ups) == 1 and not ups[0].get("fotosGaleriaExistentes"), ups[-1:])
 
     print("== L. acessibilidade ==")
     pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)

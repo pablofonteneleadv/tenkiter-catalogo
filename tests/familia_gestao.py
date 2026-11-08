@@ -1,6 +1,7 @@
 """Família de produtos na Gestão (v7.44.0/v7.47.0): família = mesmo produto (estampa ou tamanho). Nada é digitado à parte.
 "+ Nova variação desta família" (pré-preenchido, sem fotos/tamanhos/cores, liga ao salvar), "Ligar como família" na seleção em lote (só confirma), "Sugestões de famílias" (Ligar/Ignorar) e "Tirar da família". Apps Script e Worker SIMULADOS.
     python3 tests/familia_gestao.py"""
+DLG = []
 import sys, os, json
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
@@ -35,12 +36,12 @@ with sync_playwright() as p:
         ctx.add_init_script(SESSION); log = []
         st = install(ctx, log=log, versao="4.19"); st["midia"]["modo"] = "ok"; P = preparar(st)
         orig = P[0]["ID"]
-        pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
+        pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: (DLG.append(d.message), d.accept()))
         pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2500)
 
         # ---- edição: família da peça + "+ Nova variação desta família" (estampa nova: nada é digitado à parte) ----
         pg.evaluate(f"editarProduto('{orig}')"); pg.wait_for_selector("#fam-form:not([hidden]) .fam-novo", timeout=6000)
-        chk(f"{w}: na edição aparece a família da peça e o botão '+ Nova variação desta família'", "ainda não está ligada" in pg.inner_text("#fam-form") and pg.locator("#fam-form .fam-novo").inner_text() == "+ Nova variação desta família")
+        chk(f"{w}: na edição aparece a família do produto e o botão '+ Nova variação desta família'", "ainda não está ligado" in pg.inner_text("#fam-form") and pg.locator("#fam-form .fam-novo").inner_text() == "+ Nova variação desta família")
         pg.locator("#fam-form").scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"gestao_edicao_familia_{w}.png"))
         pg.click("#fam-form .fam-novo"); pg.wait_for_function("document.getElementById('titulo-form').textContent.startsWith('Nova variação')", timeout=4000)
         v = pg.evaluate("({nome: nome.value, tam: tamanhos.value, cores: cores.value, est: estoque.value, fotos: fotosItens.length, preco: preco.value, cat: [...selecionadasCategorias].join(), gen: [...selecionadosGeneros].join(), id: document.getElementById('produto-id').value, tit: document.getElementById('titulo-form').textContent})")
@@ -55,9 +56,9 @@ with sync_playwright() as p:
         pg.wait_for_timeout(4500)
         cr = [x for x in log if x.get("action") == "create"]
         c = cr[-1] if cr else {}
-        chk(f"{w}: cadastra a peça nova com o mesmo nome e sem tamanhos/cores copiados", len(cr) == n0 + 1 and c.get("nome") == "Conjunto longo Farm" and c.get("tamanhos") == "" and c.get("cores") == "", {k: c.get(k) for k in ["nome", "tamanhos", "cores"]})
+        chk(f"{w}: cadastra o produto novo com o mesmo nome e sem tamanhos/cores copiados", len(cr) == n0 + 1 and c.get("nome") == "Conjunto longo Farm" and c.get("tamanhos") == "" and c.get("cores") == "", {k: c.get(k) for k in ["nome", "tamanhos", "cores"]})
         lg = chamadas(st, "/familias/ligar")
-        chk(f"{w}: ao salvar, liga a peça nova à família (cria a família com a original), sem rótulo digitado", lg and lg[-1]["corpo"]["produtos"] == [orig, "999"] and lg[-1]["corpo"]["rotulos"] == {} and lg[-1]["corpo"].get("nome") == "Conjunto longo Farm" and lg[-1]["sessao"], lg[-1] if lg else None)
+        chk(f"{w}: ao salvar, liga o produto novo à família (cria a família com a original), sem rótulo digitado", lg and lg[-1]["corpo"]["produtos"] == [orig, "999"] and lg[-1]["corpo"]["rotulos"] == {} and lg[-1]["corpo"].get("nome") == "Conjunto longo Farm" and lg[-1]["sessao"], lg[-1] if lg else None)
         chk(f"{w}: avisa que a variação entrou na família", "Variação cadastrada e ligada à família" in pg.inner_text("#status"), pg.inner_text("#status"))
 
         # ---- lote: "Ligar como família" só confirma (não pede nem muda nada) ----
@@ -65,22 +66,22 @@ with sync_playwright() as p:
         for nome in ["Vestido festa 2 anos", "Vestido festa 4 anos"]:
             pg.locator(f'#lista-produtos .produto:has-text("{nome}") input[type=checkbox]').first.check()
         pg.wait_for_timeout(200)
-        chk(f"{w}: com 2 peças marcadas aparece 'Ligar como família'", pg.locator("#btn-bulk-familia").is_visible())
+        chk(f"{w}: com 2 produtos marcados aparece 'Ligar como família'", pg.locator("#btn-bulk-familia").is_visible())
         pg.click("#btn-bulk-familia"); pg.wait_for_selector("#overlay-familias.aberto", timeout=4000)
         chk(f"{w}: a janela não tem nenhum campo para digitar (nome, tamanho, idade)", pg.locator("#fam-corpo input, #fam-corpo textarea").count() == 0)
-        chk(f"{w}: a janela mostra as peças com foto, nome e código", pg.locator("#fam-corpo .fam-membro").count() == 2 and "Vestido festa 2 anos" in pg.inner_text("#fam-corpo") and "VF-4" in pg.inner_text("#fam-corpo") and "Nada nelas muda" in pg.inner_text("#fam-corpo"))
+        chk(f"{w}: a janela mostra os produtos com foto, nome e código", pg.locator("#fam-corpo .fam-membro").count() == 2 and "Vestido festa 2 anos" in pg.inner_text("#fam-corpo") and "VF-4" in pg.inner_text("#fam-corpo") and "Nada neles muda" in pg.inner_text("#fam-corpo"))
         chk(f"{w}: nomes do mesmo produto não geram alerta", pg.locator("#fam-corpo .fam-alerta").count() == 0)
         pg.screenshot(path=str(OUT / f"gestao_ligar_lote_{w}.png"))
         pg.click("#fam-pe .fam-prim"); pg.wait_for_timeout(800)
         lg = chamadas(st, "/familias/ligar")[-1]["corpo"]
-        chk(f"{w}: ligar em lote manda só as peças (rótulos tirados do nome, sem nome digitado)", lg["produtos"] == [P[1]["ID"], P[2]["ID"]] and lg["rotulos"] == {P[1]["ID"]: "2 anos", P[2]["ID"]: "4 anos"} and "nome" not in lg, lg)
-        chk(f"{w}: depois de ligar a janela fecha, a seleção limpa e o aviso aparece", pg.locator("#overlay-familias.aberto").count() == 0 and not pg.locator("#bulk-bar.ativa").count() and "ligada com 2 peças" in pg.inner_text("#status"), pg.inner_text("#status"))
+        chk(f"{w}: ligar em lote manda só os produtos (rótulos tirados do nome, sem nome digitado)", lg["produtos"] == [P[1]["ID"], P[2]["ID"]] and lg["rotulos"] == {P[1]["ID"]: "2 anos", P[2]["ID"]: "4 anos"} and "nome" not in lg, lg)
+        chk(f"{w}: depois de ligar a janela fecha, a seleção limpa e o aviso aparece", pg.locator("#overlay-familias.aberto").count() == 0 and not pg.locator("#bulk-bar.ativa").count() and "ligada com 2 produtos" in pg.inner_text("#status"), pg.inner_text("#status"))
 
         # ---- v7.47.1: selo de família nos cards da lista ----
         pg.wait_for_timeout(300)
         selo = pg.locator('#lista-produtos .produto:has-text("Vestido festa 2 anos") .fam-selo')
-        chk(f"{w}: card da lista mostra o selo 'Família · 2 peças'", selo.count() == 1 and selo.inner_text().strip() == "Família · 2 peças", selo.all_inner_texts())
-        chk(f"{w}: peça sem família não tem selo", pg.locator('#lista-produtos .produto:has-text("Vestido festa 6 anos") .fam-selo').count() == 0)
+        chk(f"{w}: card da lista mostra o selo 'Família · 2 produtos'", selo.count() == 1 and selo.inner_text().strip() == "Família · 2 produtos", selo.all_inner_texts())
+        chk(f"{w}: produto sem família não tem selo", pg.locator('#lista-produtos .produto:has-text("Vestido festa 6 anos") .fam-selo').count() == 0)
         pg.locator('#lista-produtos .produto:has-text("Vestido festa 2 anos")').first.scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"gestao_lista_selo_{w}.png"))
 
         # ---- v7.47.1: peça que já tem família não é ligada de novo sem a pessoa resolver ----
@@ -92,14 +93,14 @@ with sync_playwright() as p:
         n_lig = len(chamadas(st, "/familias/ligar"))
         marcar("Vestido festa 2 anos", "Vestido festa 6 anos", "Vestido festa 8 anos")
         tf = pg.locator("#fam-corpo .fam-membro.tem-fam")
-        chk(f"{w}: conflito: indica qual peça já tem família e em qual", tf.count() == 1 and "VF-2" in tf.inner_text() and "Já está na família “Vestido festa 2 anos” · 2 peças" in tf.inner_text(), tf.all_inner_texts())
-        chk(f"{w}: conflito: não oferece criar família nova; oferece juntar todas (4 peças)", pg.inner_text("#fam-pe .fam-prim") == "Juntar todas na família “Vestido festa 2 anos” (4 peças)" and "Ligar 3" not in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
-        chk(f"{w}: conflito: cada peça com família tem 'Tirar desta seleção' e 'Tirar da família'", tf.locator("button").all_inner_texts() == ["Tirar desta seleção", "Tirar da família “Vestido festa 2 anos”"], tf.locator("button").all_inner_texts())
+        chk(f"{w}: conflito: indica qual produto já tem família e em qual", tf.count() == 1 and "VF-2" in tf.inner_text() and "Já está na família “Vestido festa 2 anos” · 2 produtos" in tf.inner_text(), tf.all_inner_texts())
+        chk(f"{w}: conflito: não oferece criar família nova; oferece juntar todas (4 produtos)", pg.inner_text("#fam-pe .fam-prim") == "Juntar todos na família “Vestido festa 2 anos” (4 produtos)" and "Ligar 3" not in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
+        chk(f"{w}: conflito: cada produto com família tem 'Tirar desta seleção' e 'Tirar da família'", tf.locator("button").all_inner_texts() == ["Tirar desta seleção", "Tirar da família “Vestido festa 2 anos”"], tf.locator("button").all_inner_texts())
         alv = pg.evaluate("[...document.querySelectorAll('#overlay-familias button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")
         chk(f"{w}: conflito: botões com pelo menos 44 px", all(x >= 43.5 for x in alv), alv)
         pg.screenshot(path=str(OUT / f"gestao_conflito_{w}.png"))
         tf.locator("button", has_text="Tirar desta seleção").click(); pg.wait_for_timeout(300)
-        chk(f"{w}: 'Tirar desta seleção' tira a peça e libera criar a família nova com as outras", pg.locator("#fam-corpo .fam-membro").count() == 2 and pg.locator("#fam-corpo .tem-fam").count() == 0 and pg.inner_text("#fam-pe .fam-prim") == "Ligar 2 peças como família" and "VF-2 saiu desta seleção" in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
+        chk(f"{w}: 'Tirar desta seleção' tira o produto e libera criar a família nova com as outras", pg.locator("#fam-corpo .fam-membro").count() == 2 and pg.locator("#fam-corpo .tem-fam").count() == 0 and pg.inner_text("#fam-pe .fam-prim") == "Ligar 2 produtos como família" and "VF-2 saiu desta seleção" in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
         chk(f"{w}: 'Tirar desta seleção' desmarca também na lista", pg.evaluate("[...selecionadosBulk].length") == 2)
         chk(f"{w}: nada foi ligado enquanto havia conflito", len(chamadas(st, "/familias/ligar")) == n_lig)
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
@@ -107,7 +108,7 @@ with sync_playwright() as p:
         marcar("Vestido festa 2 anos", "Vestido festa 6 anos")
         pg.click("#fam-pe .fam-prim"); pg.wait_for_timeout(700)
         lg = chamadas(st, "/familias/ligar")[-1]["corpo"]
-        chk(f"{w}: 'Juntar todas' manda juntar e a família passa a ter 3 peças", lg.get("juntar") is True and lg["produtos"] == [P[1]["ID"], P[9]["ID"]] and "agora tem 3 peças" in pg.inner_text("#status"), [lg, pg.inner_text("#status")])
+        chk(f"{w}: 'Juntar todas' manda juntar e a família passa a ter 3 produtos", lg.get("juntar") is True and lg["produtos"] == [P[1]["ID"], P[9]["ID"]] and "agora tem 3 produtos" in pg.inner_text("#status"), [lg, pg.inner_text("#status")])
         # todas já na mesma família: nada a ligar
         marcar("Vestido festa 2 anos", "Vestido festa 6 anos")
         chk(f"{w}: todas já na mesma família: avisa e não deixa ligar de novo", "Não há nada para ligar" in pg.inner_text("#fam-corpo") and pg.locator("#fam-pe .fam-prim").count() == 0 and pg.locator("#fam-pe button", has_text="Fechar").count() == 1)
@@ -116,22 +117,21 @@ with sync_playwright() as p:
         # tirar da família onde está para colocar na nova
         marcar("Vestido festa 4 anos", "Vestido festa 8 anos")
         btf = pg.locator("#fam-corpo .tem-fam button", has_text="Tirar da família")
-        btf.click()
-        chk(f"{w}: 'Tirar da família' pede um segundo toque", btf.inner_text() == "Toque de novo para tirar da família" and not any(c["corpo"].get("produto") == P[2]["ID"] for c in chamadas(st, "/familias/desligar")))
         btf.click(); pg.wait_for_timeout(600)
-        chk(f"{w}: depois de tirar da família, a peça fica livre e dá para ligar a família nova", any(c["corpo"].get("produto") == P[2]["ID"] for c in chamadas(st, "/familias/desligar")) and pg.locator("#fam-corpo .tem-fam").count() == 0 and pg.inner_text("#fam-pe .fam-prim") == "Ligar 2 peças como família" and "saiu da família" in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
+        chk(f"{w}: 'Tirar da família' pede confirm() com a consequência", any("Tirar este produto da família" in m and "continua no site" in m for m in DLG), DLG)
+        chk(f"{w}: depois de tirar da família, o produto fica livre e dá para ligar a família nova", any(c["corpo"].get("produto") == P[2]["ID"] for c in chamadas(st, "/familias/desligar")) and pg.locator("#fam-corpo .tem-fam").count() == 0 and pg.inner_text("#fam-pe .fam-prim") == "Ligar 2 produtos como família" and "saiu da família" in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
         pg.click("#fam-pe .fam-prim"); pg.wait_for_timeout(700)
         lg = chamadas(st, "/familias/ligar")[-1]["corpo"]
-        chk(f"{w}: família nova criada sem 'juntar'", lg["produtos"] == [P[2]["ID"], P[10]["ID"]] and "juntar" not in lg and "ligada com 2 peças" in pg.inner_text("#status"), [lg, pg.inner_text("#status")])
+        chk(f"{w}: família nova criada sem 'juntar'", lg["produtos"] == [P[2]["ID"], P[10]["ID"]] and "juntar" not in lg and "ligada com 2 produtos" in pg.inner_text("#status"), [lg, pg.inner_text("#status")])
         pg.wait_for_function("!document.querySelector('#overlay-familias.aberto') && TKCamadas.total() === 0", timeout=4000)
 
         # ---- v7.47.1: na edição, tocar na foto de outra peça da família abre a edição dela ----
         pg.evaluate("selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos()")
         pg.evaluate(f"editarProduto('{P[1]['ID']}')"); pg.wait_for_selector("#fam-form .fam-tam.atual", timeout=6000)
         outra = pg.locator("#fam-form button.fam-tam")
-        chk(f"{w}: a outra peça da família é um botão com nome acessível", outra.count() == 1 and (outra.get_attribute("aria-label") or "") == "Abrir VF-6 Vestido festa 6 anos, 6 anos", outra.get_attribute("aria-label") if outra.count() else None)
+        chk(f"{w}: o outro produto da família é um botão com nome acessível", outra.count() == 1 and (outra.get_attribute("aria-label") or "") == "Abrir VF-6 Vestido festa 6 anos, 6 anos", outra.get_attribute("aria-label") if outra.count() else None)
         outra.click(); pg.wait_for_timeout(500)
-        chk(f"{w}: tocar na foto abre a edição daquela peça", pg.input_value("#produto-id") == P[9]["ID"] and pg.locator("#fam-form .fam-tam.atual").count() == 1 and "Vestido festa 6 anos" in pg.inner_text("#titulo-form"), [pg.input_value("#produto-id"), pg.inner_text("#titulo-form")])
+        chk(f"{w}: tocar na foto abre a edição daquele produto", pg.input_value("#produto-id") == P[9]["ID"] and pg.locator("#fam-form .fam-tam.atual").count() == 1 and "Vestido festa 6 anos" in pg.inner_text("#titulo-form"), [pg.input_value("#produto-id"), pg.inner_text("#titulo-form")])
         pg.locator("#fam-form button.fam-tam").click(); pg.wait_for_timeout(500)
         chk(f"{w}: e volta para a outra pela foto dela", pg.input_value("#produto-id") == P[1]["ID"])
         pg.evaluate("document.getElementById('btn-cancelar-duplicar').click()")
@@ -140,10 +140,10 @@ with sync_playwright() as p:
         pg.click("#btn-fam-sugestoes"); pg.wait_for_selector("#overlay-familias.aberto .fam-sug", timeout=4000)
         chk(f"{w}: sugestões listam os grupos com fotos e tamanhos", pg.locator(".fam-sug").count() == 3 and "38 · 40" in pg.inner_text(".fam-sug >> nth=0") and pg.locator(".fam-sug >> nth=0").locator("img").count() == 2)
         est = pg.locator('.fam-sug[data-chave="blusa ciganinha"]')
-        chk(f"{w}: sugestão de estampas (mesmo nome, sem tamanho) mostra '2 peças' e o código de cada foto", "2 peças" in est.inner_text() and est.locator("figcaption").all_inner_texts() == ["BC-1", "BC-2"], est.inner_text())
+        chk(f"{w}: sugestão de estampas (mesmo nome, sem tamanho) mostra '2 produtos' e o código de cada foto", "2 produtos" in est.inner_text() and est.locator("figcaption").all_inner_texts() == ["BC-1", "BC-2"], est.inner_text())
         est.locator("button", has_text="Ligar").click(); pg.wait_for_timeout(600)
         lg = chamadas(st, "/familias/ligar")[-1]["corpo"]
-        chk(f"{w}: ligar estampas manda as peças sem rótulo", lg["produtos"] == [P[7]["ID"], P[8]["ID"]] and lg["rotulos"] == {}, lg)
+        chk(f"{w}: ligar estampas manda os produtos sem rótulo", lg["produtos"] == [P[7]["ID"], P[8]["ID"]] and lg["rotulos"] == {}, lg)
         alvos = pg.evaluate("[...document.querySelectorAll('#overlay-familias button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")
         chk(f"{w}: botões da gaveta com pelo menos 44 px", all(x >= 43.5 for x in alvos), alvos)
         pg.screenshot(path=str(OUT / f"gestao_sugestoes_{w}.png"))
@@ -158,14 +158,13 @@ with sync_playwright() as p:
         # ---- tirar da família ----
         pg.evaluate("document.getElementById('btn-cancelar-duplicar').click()")
         pg.evaluate(f"editarProduto('{orig}')"); pg.wait_for_selector("#fam-form .fam-tirar", timeout=6000)
-        chk(f"{w}: edição mostra a família com a foto de cada peça e esta marcada", "Família: Conjunto longo Farm · 2 peças" in pg.inner_text("#fam-form") and pg.locator("#fam-form .fam-tam").count() == 2 and pg.locator("#fam-form .fam-tam.atual[aria-current=true]").count() == 1 and pg.locator("#fam-form .fam-tam.atual").inner_text() == "esta", pg.inner_text("#fam-form"))
+        chk(f"{w}: edição mostra a família com a foto de cada produto e esta marcada", "Família: Conjunto longo Farm · 2 produtos" in pg.inner_text("#fam-form") and pg.locator("#fam-form .fam-tam").count() == 2 and pg.locator("#fam-form .fam-tam.atual[aria-current=true]").count() == 1 and pg.locator("#fam-form .fam-tam.atual").inner_text() == "esta", pg.inner_text("#fam-form"))
         pg.locator("#fam-form").scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"gestao_edicao_com_familia_{w}.png"))
         alv = pg.evaluate("[...document.querySelectorAll('#fam-form button')].map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")
         chk(f"{w}: botões da caixa Família com pelo menos 44 px", all(x >= 43.5 for x in alv), alv)
-        pg.click("#fam-form .fam-tirar")
-        chk(f"{w}: 'Tirar da família' pede um segundo toque antes", pg.locator("#fam-form .fam-tirar").inner_text() == "Toque de novo para tirar" and not any(c["corpo"].get("produto") == orig for c in chamadas(st, "/familias/desligar")))
         pg.click("#fam-form .fam-tirar"); pg.wait_for_timeout(600)
-        chk(f"{w}: tirar da família chama o servidor e atualiza a caixa", chamadas(st, "/familias/desligar")[-1]["corpo"] == {"produto": orig} and "ainda não está ligada" in pg.inner_text("#fam-form") and "família foi desfeita" in pg.inner_text("#status"), pg.inner_text("#status"))
+        chk(f"{w}: 'Tirar da família' pede confirm() antes", any("Tirar este produto da família" in m for m in DLG), DLG)
+        chk(f"{w}: tirar da família chama o servidor e atualiza a caixa", chamadas(st, "/familias/desligar")[-1]["corpo"] == {"produto": orig} and "ainda não está ligado" in pg.inner_text("#fam-form") and "família foi desfeita" in pg.inner_text("#status"), pg.inner_text("#status"))
         chk(f"{w}: sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
         chk(f"{w}: sem erro de JavaScript", not errs, errs)
         ctx.close()
@@ -174,13 +173,13 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     ctx.add_init_script(SESSION); log = []
     st = install(ctx, log=log, versao="4.19"); st["midia"]["modo"] = "ok"; P = preparar(st)
-    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: (DLG.append(d.message), d.accept()))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2500)
     st["ig"]["fora"] = True
     pg.evaluate(f"editarProduto('{P[0]['ID']}')"); pg.wait_for_selector("#fam-form .fam-novo", timeout=6000)
     pg.click("#fam-form .fam-novo"); pg.wait_for_timeout(300); pg.set_input_files("#galeria-input", FOTO); pg.wait_for_timeout(1500)
     pg.click("#btn-salvar"); pg.wait_for_timeout(4500)
-    chk("servidor fora: a peça é cadastrada e o aviso diz que a ligação será refeita", any(x.get("nome") == "Conjunto longo Farm" for x in log if x.get("action") == "create") and "tento de novo sozinho" in pg.inner_text("#status"), pg.inner_text("#status"))
+    chk("servidor fora: o produto é cadastrado e o aviso diz que a ligação será refeita", any(x.get("nome") == "Conjunto longo Farm" for x in log if x.get("action") == "create") and "tento de novo sozinho" in pg.inner_text("#status"), pg.inner_text("#status"))
     st["ig"]["fora"] = False
     pg.reload(); pg.wait_for_timeout(3000)
     chk("na próxima abertura a ligação pendente é feita", any(c["corpo"].get("produtos") == [P[0]["ID"], "999"] for c in chamadas(st, "/familias/ligar")) and pg.evaluate("localStorage.getItem('tk_fam_pendentes_v1')") == "[]")

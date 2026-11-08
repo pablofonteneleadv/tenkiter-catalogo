@@ -1,11 +1,11 @@
 """v7.50.0 — Pedidos do Pablo (03/11/2026), com Apps Script e Worker SIMULADOS (mock.py). Nada toca em serviço real.
  1. Cadastro "vários produtos": UNIÕES de fotos (grupo = 1 produto com capa + galeria; fotos soltas = 1 produto cada).
  2. Juntar na loja (index) em segundo plano, com aviso discreto do resultado.
- 3. Minha seleção: tocar na miniatura/nome abre a peça.
+ 3. Minha seleção: tocar na miniatura/nome abre o produto.
  4. Login instantâneo entre loja e Gestão (sessão guardada no aparelho; servidor confere por trás; sessão inválida desloga com aviso).
- 5. Card da Gestão mostra quantas fotos a peça tem ("📷 6").
+ 5. Card da Gestão mostra quantas fotos o produto tem ("📷 6").
  6. Separar: cada foto vira um produto (família nova/atual ou soltos), prévia "Vai virar N produtos", em segundo plano e retomável.
- 7. "Cadastrar peça" saiu do "O que fazer agora".
+ 7. "Cadastrar produto" saiu do "O que fazer agora".
     TK_BASE=http://localhost:8796/ python3 tests/gestao_unioes.py      (TK_EVID=pasta grava as capturas .jpg)"""
 import sys, os, re, io, hashlib
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -73,7 +73,7 @@ with sync_playwright() as p:
         P[22].update(Nome="Blusa Ciganinha", Codigo="TK-0822", Fotos_Galeria="https://res.cloudinary.com/z/image/upload/v1/tk822_2.jpg,https://res.cloudinary.com/z/image/upload/v1/tk822_3.jpg")
         pg, errs, msgs = pagina(ctx, "admin.html"); pg.wait_for_selector("#lista-produtos .produto"); pg.wait_for_timeout(1500)
         # 7
-        chk(f"{w} item 7: 'Cadastrar peça' saiu do 'O que fazer agora'", pg.locator("#atalhos-hoje [data-atalho=cadastrar]").count() == 0 and "Cadastrar peça" not in pg.inner_text("#atalhos-hoje") and pg.locator("#card-menu-cadastro > summary").is_visible())
+        chk(f"{w} item 7: 'Cadastrar produto' saiu do 'O que fazer agora'", pg.locator("#atalhos-hoje [data-atalho=cadastrar]").count() == 0 and "Cadastrar produto" not in pg.inner_text("#atalhos-hoje") and pg.locator("#card-menu-cadastro > summary").is_visible())
         chk(f"{w} item 7: os outros atalhos continuam", pg.locator("#atalhos-hoje [data-atalho=postagens], #atalhos-hoje [data-atalho=lista], #atalhos-hoje [data-atalho=ferramentas]").count() == 3)
         pg.evaluate("window.scrollTo(0,0)"); evid(pg, "gestao-topo-%d.jpg" % w)
         # 5
@@ -82,7 +82,7 @@ with sync_playwright() as p:
         selo = card.locator(".foto-qtd")
         chk(f"{w} item 5: card do TK-0821 mostra '📷 6' na miniatura", selo.count() == 1 and selo.inner_text().strip().endswith("6") and "6 fotos" in card.locator(".foto-ampliar").get_attribute("aria-label"), selo.count() and selo.inner_text())
         um = pg.locator(".produto", has=pg.locator(".codigo", has_text="TK-0001")).first
-        chk(f"{w} item 5: peça de 1 foto não ganha selo", um.locator(".foto-qtd").count() == 0)
+        chk(f"{w} item 5: produto de 1 foto não ganha selo", um.locator(".foto-qtd").count() == 0)
         r = pg.evaluate("(()=>{const s=document.querySelector('.foto-qtd').getBoundingClientRect(),i=document.querySelector('.foto-qtd').closest('.foto-ampliar').getBoundingClientRect();return {dentro:s.left>=i.left&&s.right<=i.right&&s.bottom<=i.bottom&&s.top>=i.top, w:s.width, iw:i.width}})()")
         chk(f"{w} item 5: selo cabe dentro da miniatura (não cobre a foto toda)", r["dentro"] and r["w"] < r["iw"] * 0.8, r)
         pg.evaluate("window.scrollBy(0,-80)"); evid(pg, "gestao-card-fotos-%d.jpg" % w)
@@ -91,10 +91,10 @@ with sync_playwright() as p:
         assert not pg.locator("#btn-bulk-mais").count()  # Separar fica na grade permanente
         chk(f"{w} item 6: com o TK-0821 marcado, 'Mais ações' oferece 'Separar em 6 produtos'", pg.locator("#btn-bulk-separar").is_visible() and "Separar em 6 produtos" in pg.inner_text("#btn-bulk-separar"))
         um.locator(".produto-chk").check(); pg.wait_for_timeout(250)
-        chk(f"{w} item 6: com 2 peças marcadas o Separar some", pg.locator("#btn-bulk-separar").is_hidden())
+        chk(f"{w} item 6: com 2 produtos marcados o Separar some", pg.locator("#btn-bulk-separar").is_hidden())
         pg.click("#btn-cancelar-bulk"); pg.wait_for_timeout(200)
         um.locator(".produto-chk").check(); pg.wait_for_timeout(250)
-        chk(f"{w} item 6: peça de 1 foto não oferece Separar", pg.locator("#btn-bulk-separar").is_hidden())
+        chk(f"{w} item 6: produto de 1 foto não oferece Separar", pg.locator("#btn-bulk-separar").is_hidden())
         pg.click("#btn-cancelar-bulk"); pg.wait_for_timeout(200)
         # 6 — menu ⋯ do card, prévia e família nova
         card = pg.locator(".produto", has=pg.locator(".codigo", has_text="TK-0821")).first
@@ -128,7 +128,7 @@ with sync_playwright() as p:
         up = [x for x in log if x.get("action") == "update" and str(x.get("id")) == P[23]["ID"]]
         chk(f"{w} item 6: a original fica com a 1ª foto (e os mesmos dados); nada apagado", up and up[-1]["fotoUrlExistente"] == P[23]["Foto_URL"] and up[-1]["fotosGaleriaExistentes"] == "" and up[-1]["nome"] == "Vestido Midi Floral" and P[23]["Status"] == "Ativo", up[-1] if up else None)
         lg = [c for c in st["fam_chamadas"] if c["path"] == "/familias/ligar"]
-        chk(f"{w} item 6: família nova com as 6 peças (original + 5 novas)", lg and len(lg[-1]["corpo"]["produtos"]) == 6 and lg[-1]["corpo"]["produtos"][0] == P[23]["ID"] and lg[-1]["corpo"].get("juntar") is True and lg[-1]["corpo"].get("nome") == "Vestido Midi Floral", lg[-1] if lg else None)
+        chk(f"{w} item 6: família nova com as 6 produtos (original + 5 novas)", lg and len(lg[-1]["corpo"]["produtos"]) == 6 and lg[-1]["corpo"]["produtos"][0] == P[23]["ID"] and lg[-1]["corpo"].get("juntar") is True and lg[-1]["corpo"].get("nome") == "Vestido Midi Floral", lg[-1] if lg else None)
         pg.wait_for_timeout(600)
         chk(f"{w} item 6: a lista recarregou e o TK-0821 não tem mais selo de várias fotos", pg.locator(".produto", has=pg.locator(".codigo", has_text="TK-0821")).first.locator(".foto-qtd").count() == 0)
         # 6 — "deixar soltos"
@@ -240,15 +240,15 @@ with sync_playwright() as p:
         nome1 = pg.evaluate("produtos[1].Nome")
         pg.wait_for_timeout(600); evid(pg, "selecao-%d.jpg" % w)
         mb = pg.locator("#sacola-conteudo .item-sacola .mini-btn").nth(1)
-        chk(f"{w} item 3: miniatura da seleção é um botão 'Ver a peça …' (≥44 px)", mb.get_attribute("aria-label") == "Ver a peça " + nome1 and mb.bounding_box()["height"] >= 44, mb.get_attribute("aria-label"))
+        chk(f"{w} item 3: miniatura da seleção é um botão 'Ver o produto …' (≥44 px)", mb.get_attribute("aria-label") == "Ver o produto " + nome1 and mb.bounding_box()["height"] >= 44, mb.get_attribute("aria-label"))
         mb.click(); pg.wait_for_timeout(700)
         top = pg.evaluate("(()=>{const o=document.getElementById('overlay'),r=o.querySelector('.modal').getBoundingClientRect(),el=document.elementFromPoint(r.left+r.width/2,r.top+40);return {aberto:o.classList.contains('aberto'),porCima:o.contains(el),nome:(document.querySelector('#modal-conteudo h2, #modal-conteudo .nome')||{}).textContent||''}})()")
-        chk(f"{w} item 3: tocar na miniatura abre a peça POR CIMA da seleção", top["aberto"] and top["porCima"] and nome1 in pg.inner_text("#modal-conteudo"), top)
+        chk(f"{w} item 3: tocar na miniatura abre o produto POR CIMA da seleção", top["aberto"] and top["porCima"] and nome1 in pg.inner_text("#modal-conteudo"), top)
         evid(pg, "selecao-abriu-peca-%d.jpg" % w)
         pg.go_back(); pg.wait_for_timeout(500)
-        chk(f"{w} item 3: voltar fecha a peça e a seleção continua aberta", not pg.evaluate("document.getElementById('overlay').classList.contains('aberto')") and pg.locator("#overlay-sacola.aberto").count() == 1)
+        chk(f"{w} item 3: voltar fecha o produto e a seleção continua aberta", not pg.evaluate("document.getElementById('overlay').classList.contains('aberto')") and pg.locator("#overlay-sacola.aberto").count() == 1)
         pg.locator("#sacola-conteudo .item-sacola .nome-btn").nth(0).click(); pg.wait_for_timeout(400)
-        chk(f"{w} item 3: tocar no nome também abre a peça", pg.evaluate("document.getElementById('overlay').classList.contains('aberto')") and pg.evaluate("produtos[0].Nome") in pg.inner_text("#modal-conteudo"))
+        chk(f"{w} item 3: tocar no nome também abre o produto", pg.evaluate("document.getElementById('overlay').classList.contains('aberto')") and pg.evaluate("produtos[0].Nome") in pg.inner_text("#modal-conteudo"))
         pg.go_back(); pg.wait_for_timeout(300); pg.go_back(); pg.wait_for_timeout(400)
         # 2: juntar na loja em segundo plano
         st["segurar_juntar"] = True
@@ -257,9 +257,9 @@ with sync_playwright() as p:
         cod = pg.evaluate("produtos[2].Codigo")
         pg.click("#juntar-ok"); pg.wait_for_timeout(400)
         a = aviso(pg)
-        chk(f"{w} item 2 (loja): a janela fecha na hora e o aviso mostra 'Juntando 2 peças em {cod}…'", pg.locator("#overlay-juntar.aberto").count() == 0 and a and a["estado"] == "rodando" and ("Juntando 2 peças em " + cod) in a["txt"], a)
+        chk(f"{w} item 2 (loja): a janela fecha na hora e o aviso mostra 'Juntando 2 produtos em {cod}…'", pg.locator("#overlay-juntar.aberto").count() == 0 and a and a["estado"] == "rodando" and ("Juntando 2 produtos em " + cod) in a["txt"], a)
         pg.wait_for_timeout(400); evid(pg, "loja-juntando-%d.jpg" % w)
-        chk(f"{w} item 2 (loja): a pessoa continua usando a loja (abrir uma peça funciona)", (pg.evaluate("abrirDetalhe(produtos[5].ID)") or True) and pg.evaluate("document.getElementById('overlay').classList.contains('aberto')"))
+        chk(f"{w} item 2 (loja): a pessoa continua usando a loja (abrir um produto funciona)", (pg.evaluate("abrirDetalhe(produtos[5].ID)") or True) and pg.evaluate("document.getElementById('overlay').classList.contains('aberto')"))
         pg.go_back(); pg.wait_for_timeout(300)
         rt, bd = st["juntar_pendentes"].pop(0); rt.fulfill(json=st["_post"](bd)); st["segurar_juntar"] = False
         a = esperar_aviso(pg, "ok"); pg.wait_for_timeout(400)

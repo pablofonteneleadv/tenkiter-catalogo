@@ -55,7 +55,7 @@ with sync_playwright() as p:
 
     print("== Prévia do público ==")
     pg.select_option("#av-publico", "g:alunos"); pg.wait_for_timeout(900)
-    chk("prévia conta as pessoas do grupo (2) e mostra nomes", "2 pessoa(s)" in pg.inner_text("#av-previa") and "Bia Aluna" in pg.inner_text("#av-previa"), pg.inner_text("#av-previa"))
+    chk("prévia conta as pessoas do grupo (2) e mostra nomes", "2 pessoas" in pg.inner_text("#av-previa") and "Bia Aluna" in pg.inner_text("#av-previa"), pg.inner_text("#av-previa"))
     pg.select_option("#av-publico", "todos"); pg.wait_for_timeout(900)
     chk("'todos' explica que o número exato vem depois do envio", "Quem já ativou" in pg.inner_text("#av-previa"), pg.inner_text("#av-previa"))
 
@@ -89,7 +89,7 @@ with sync_playwright() as p:
     DIALOGOS.clear(); log.clear()
     pg.click("#av-enviar"); pg.wait_for_timeout(1100)
     u = st.get("ultimo_push", {})
-    chk("pediu confirmação citando o público", DIALOGOS and DIALOGOS[0][0] == "confirm" and "Promoção de sábado" in DIALOGOS[0][1] and "pessoa(s)" in DIALOGOS[0][1], DIALOGOS)
+    chk("pediu confirmação citando o público", DIALOGOS and DIALOGOS[0][0] == "confirm" and "Promoção de sábado" in DIALOGOS[0][1] and "pessoas" in DIALOGOS[0][1], DIALOGOS)
     chk("a confirmação mostra público, título, mensagem, link e horário", all(x in DIALOGOS[0][1] for x in ("Público:", "Título: Promoção de sábado", "Mensagem: Oi, {nome}! 20% off.", "Ao tocar abre: " + SITE, "Quando: agora")), DIALOGOS[0][1])
     chk("enviou audiência 'grupo alunos' com título, mensagem e link", u.get("audiencia") == {"tipo": "grupo", "grupo": "alunos"} and u.get("titulo") == "Promoção de sábado 🎉" and u.get("mensagem") == "Oi, {nome}! 20% off." and u.get("url") == SITE, u)
     chk("validade de 24 h vai junto (ttlHoras)", u.get("ttlHoras") == 24, u)
@@ -114,7 +114,7 @@ with sync_playwright() as p:
     chk("enviou interesse com chave e rótulo", st["ultimo_push"]["audiencia"] == {"tipo": "interesse", "chaves": ["infantil-menina"], "rotulos": ["Infantil Menina"]}, st["ultimo_push"]["audiencia"])
     pg.select_option("#av-publico", "perfil"); pg.wait_for_timeout(500)
     pg.check('#av-sub [data-perfil="Aluno"]'); pg.check('#av-sub [data-perfil="Cliente"]'); pg.wait_for_timeout(700)
-    chk("prévia do perfil", "2 pessoa(s)" in pg.inner_text("#av-previa"), pg.inner_text("#av-previa"))
+    chk("prévia do perfil", "2 pessoas" in pg.inner_text("#av-previa"), pg.inner_text("#av-previa"))
     pg.click("#av-enviar"); pg.wait_for_timeout(900)
     chk("enviou perfis escolhidos", st["ultimo_push"]["audiencia"] == {"tipo": "perfil", "perfis": ["Aluno", "Cliente"]}, st["ultimo_push"]["audiencia"])
     pg.select_option("#av-publico", "acesso"); pg.wait_for_timeout(500)
@@ -170,10 +170,10 @@ with sync_playwright() as p:
     chk("erro aparece como frase, nunca JSON", "❌" in r and "plataforma Web" in r and '"ok"' not in r and "{" not in r, r)
     st["pushcfg"].pop("falhar")
 
-    print("== Peça como atalho ==")
+    print("== Produto como atalho ==")
     cod = st["produtos"][2]["Codigo"]
     pg.fill("#av-peca-in", cod); pg.dispatch_event("#av-peca-in", "change"); pg.wait_for_timeout(300)
-    chk("escolher a peça põe o link curto dela", pg.input_value("#av-url-in").startswith(SITE + "p/" + cod), pg.input_value("#av-url-in"))
+    chk("escolher o produto põe o link curto dela", pg.input_value("#av-url-in").startswith(SITE + "p/" + cod), pg.input_value("#av-url-in"))
 
     print("== Modelos ==")
     aba(pg, "modelos")

@@ -46,13 +46,13 @@
     if(carregando&&!forcar)return carregando;
     if(!endpoint()||typeof fetch!=='function')return cadastro;
     carregando=(async function(){var r=await fetch(endpoint(),{signal:AbortSignal.timeout(8000)});var c=await r.json();if(!r.ok||!c.ok)throw new Error(c.erro||'Não foi possível carregar os tecidos.');aplicar(c);return cadastro;})();
-    try{return await carregando;}catch(e){throw new Error('Não foi possível carregar os tecidos. Tente novamente.');}finally{carregando=null;}
+    try{return await carregando;}catch(e){throw new Error('Não foi possível carregar os tecidos. Tente de novo.');}finally{carregando=null;}
   }
   function opcoes(produtos){var nomes=cadastro.itens.map(function(x){return x.nome;}).concat((produtos||[]).map(ler)).filter(Boolean);return [...new Set(nomes)].sort(function(a,b){return a.localeCompare(b,'pt-BR');});}
   async function salvar(de,nome){
     await carregar(true);
     var sess=typeof getSessao==='function'&&getSessao();if(!sess)throw new Error('Entre na sua conta de administrador.');
-    var r;try{r=await fetch(endpoint(),{method:'POST',headers:{'Content-Type':'application/json','X-TK-Whats':sess.whatsapp,'X-TK-Sessao':sess.sessao},body:JSON.stringify({de:de||'',nome:nome,versao:cadastro.versao}),signal:AbortSignal.timeout(15000)});}catch(e){throw new Error('Sem conexão para salvar o tecido. Tente novamente.');}var c=await r.json().catch(function(){return {ok:false,erro:'Não foi possível ler a resposta. Tente novamente.'};});
+    var r;try{r=await fetch(endpoint(),{method:'POST',headers:{'Content-Type':'application/json','X-TK-Whats':sess.whatsapp,'X-TK-Sessao':sess.sessao},body:JSON.stringify({de:de||'',nome:nome,versao:cadastro.versao}),signal:AbortSignal.timeout(15000)});}catch(e){throw new Error('Sem conexão para salvar o tecido. Tente de novo.');}var c=await r.json().catch(function(){return {ok:false,erro:'Não foi possível ler a resposta. Tente de novo.'};});
     if(!r.ok||!c.ok)throw new Error(c.erro||'Não foi possível salvar o tecido.');aplicar(c);return cadastro;
   }
   function serializar(descricao, tecido) {
@@ -66,6 +66,6 @@
 
   var api = { ler: ler, semDescricao: semDescricao, serializar: serializar, resolver:resolver, carregar:carregar, salvar:salvar, opcoes:opcoes, aplicar:aplicar };
   root.TKTecido = api;
-  if(root.document)carregar().catch(function(){/* cadastro continua utilizável com os nomes gravados nas peças */});
+  if(root.document)carregar().catch(function(){/* cadastro continua utilizável com os nomes gravados nos produtos */});
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

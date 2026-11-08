@@ -1,5 +1,5 @@
 """Gancho da LISTA RÁPIDA (LISTA_RAPIDA_URL em common.js): desligado por padrão; ligado, o catálogo pega a lista do Worker da Cloudflare e,
-se o Worker falhar / demorar / devolver lixo, cai sozinho no Apps Script (a loja nunca fica sem peças).
+se o Worker falhar / demorar / devolver lixo, cai sozinho no Apps Script (a loja nunca fica sem produtos).
 O common.js é trocado em memória (o arquivo do repositório não muda) para ligar o endereço do Worker de mentira."""
 import sys, os, json, time
 AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +48,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     print("== Desligado (padrão do repositório) ==")
     c, ch, er = cenario(b, "desligado", None)
-    chk("catálogo normal: peças do Apps Script", len(c) >= 10 and not any("DO WORKER" in x for x in c), c[:3])
+    chk("catálogo normal: produtos do Apps Script", len(c) >= 10 and not any("DO WORKER" in x for x in c), c[:3])
     chk("busca no Apps Script e não toca no Worker", ch["apps"] >= 1 and ch["worker"] == 0, ch)
     chk("sem erro de JavaScript", not er, er)
 
@@ -61,7 +61,7 @@ with sync_playwright() as p:
     for modo, rotulo in (("erro500", "Worker responde erro 502"), ("lixo", "Worker devolve algo que não é JSON"), ("vazio", "Worker devolve JSON sem a lista"), ("fora", "Worker fora do ar (conexão cai)")):
         print("== " + rotulo + " ==")
         c, ch, er = cenario(b, modo, modo)
-        chk("cai no Apps Script e mostra as peças da loja", len(c) >= 10 and not any("DO WORKER" in x for x in c), c[:3])
+        chk("cai no Apps Script e mostra os produtos da loja", len(c) >= 10 and not any("DO WORKER" in x for x in c), c[:3])
         chk("tentou o Worker e depois o Apps Script", ch["worker"] >= 1 and ch["apps"] >= 1, ch)
         chk("sem erro de JavaScript", not er, er)
 

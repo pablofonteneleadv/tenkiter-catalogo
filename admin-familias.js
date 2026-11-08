@@ -35,7 +35,7 @@
   /* ---------- servidor ---------- */
   async function srv(caminho, corpo) {
     const s = typeof getSessao === 'function' ? getSessao() : null;
-    if (!s && caminho !== '/familias') return { ok: false, erro: 'Entre na sua conta para organizar as famílias de peças.' };
+    if (!s && caminho !== '/familias') return { ok: false, erro: 'Entre na sua conta para organizar as famílias de produtos.' };
     try {
       const h = { 'Content-Type': 'application/json' }; if (s) { h['X-TK-Whats'] = s.whatsapp; h['X-TK-Sessao'] = s.sessao; }
       const r = await fetch(INSTAGRAM_URL + caminho, { method: corpo ? 'POST' : 'GET', headers: h, body: corpo ? JSON.stringify(corpo) : undefined, cache: 'no-store' });
@@ -43,7 +43,7 @@
       if (!j) return { ok: false, erro: 'O servidor das famílias não respondeu direito. Tente de novo.' };
       if (!j.ok) j.erro = window.TKPadrao ? TKPadrao.erro(j, 'Não consegui agora. Tente de novo.') : (j.erro || 'Não consegui agora. Tente de novo.');   // v7.57.0: nunca JSON nem código na tela
       return j;
-    } catch (e) { return { ok: false, erro: 'Sem conexão com o servidor das famílias. Verifique a internet e tente de novo.' }; }
+    } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
   }
   let familias = [], carregou = false, carregando = null;
   /** v7.47.1: selo "Família · N peças" nos cards da lista (depois de cada desenho da lista e quando as famílias chegam). */
@@ -53,7 +53,7 @@
       const card = chk.closest('.produto'); if (!card) return;
       const velho = card.querySelector('.fam-selo'); if (velho) velho.remove();
       const f = familiaDe(chk.dataset.id); if (!f) return;
-      const s = el('span', 'fam-selo', 'Família · ' + f.membros.length + ' peças'); s.title = 'Família “' + (f.nome || '') + '”';
+      const s = el('span', 'fam-selo', 'Família · ' + f.membros.length + ' produtos'); s.title = 'Família “' + (f.nome || '') + '”';
       const nome = card.querySelector('.produto-info .nome'); if (nome) nome.after(s); else card.querySelector('.produto-info')?.append(s);
     });
   }
@@ -73,7 +73,7 @@
   const aviso = (txt) => { const s = $('status'); if (s) s.textContent = txt; };
 
   /* ---------- formulário: família da peça aberta, "+ Novo tamanho" e "Tirar da família" ---------- */
-  let pecaForm = null, tirarConfirma = false;
+  let pecaForm = null;
   window.__familiaNova = null;
   function caixaForm() {
     let box = $('fam-form');
@@ -82,11 +82,11 @@
   }
   function pintarForm() {
     const box = caixaForm(); if (!box) return;
-    box.replaceChildren(); tirarConfirma = false;
+    box.replaceChildren();
     const nova = window.__familiaNova;
     if (nova) {   // cadastrando um tamanho novo
       box.hidden = false; box.classList.add('nova');
-      box.append(el('b', 'fam-tit', 'Nova variação da família “' + nova.base + '”'), el('p', 'fam-sub', 'Fotos, tamanhos, cores e quantidade ficam vazios: escolha o que é desta peça. O resto veio da peça original. Ao cadastrar, ela entra na família.'));
+      box.append(el('b', 'fam-tit', 'Nova variação da família “' + nova.base + '”'), el('p', 'fam-sub', 'Fotos, tamanhos, cores e quantidade ficam vazios: escolha o que é deste produto. O resto veio do produto original. Ao cadastrar, ele entra na família.'));
       return;
     }
     box.classList.remove('nova');
@@ -94,33 +94,33 @@
     if (!p) { box.hidden = true; return; }
     box.hidden = false;
     const f = familiaDe(p.ID);
-    if (!carregou) box.append(el('p', 'fam-sub', 'Conferindo a família desta peça…'));
+    if (!carregou) box.append(el('p', 'fam-sub', 'Conferindo a família deste produto…'));
     else if (f) {
-      box.append(el('b', 'fam-tit', 'Família: ' + (f.nome || 'peças ligadas') + ' · ' + f.membros.length + ' peças'));
-      const tams = el('div', 'fam-tams'); tams.setAttribute('role', 'group'); tams.setAttribute('aria-label', 'Peças desta família');
+      box.append(el('b', 'fam-tit', 'Família: ' + (f.nome || 'produtos ligados') + ' · ' + f.membros.length + ' produtos'));
+      const tams = el('div', 'fam-tams'); tams.setAttribute('role', 'group'); tams.setAttribute('aria-label', 'Produtos desta família');
       f.membros.forEach((m, k) => {
         const q = peca_(m.produto), atual = String(m.produto) === String(p.ID);
-        const desc = (q ? (q.Codigo ? q.Codigo + ' ' : '') + q.Nome : 'peça ' + m.produto) + (m.rotulo ? ', ' + m.rotulo : '');
+        const desc = (q ? (q.Codigo ? q.Codigo + ' ' : '') + q.Nome : 'produto ' + m.produto) + (m.rotulo ? ', ' + m.rotulo : '');
         // v7.47.1: tocar na foto de outra peça abre a edição dela
         const t = el(atual || !q ? 'figure' : 'button', 'fam-tam' + (atual ? ' atual' : ''));
-        if (atual) { t.setAttribute('aria-current', 'true'); t.setAttribute('aria-label', 'Esta peça: ' + desc); }
-        else if (q) { t.type = 'button'; t.setAttribute('aria-label', 'Abrir ' + desc); t.title = 'Abrir esta peça'; t.addEventListener('click', () => abrirOutra(m.produto)); }
+        if (atual) { t.setAttribute('aria-current', 'true'); t.setAttribute('aria-label', 'Este produto: ' + desc); }
+        else if (q) { t.type = 'button'; t.setAttribute('aria-label', 'Abrir ' + desc); t.title = 'Abrir este produto'; t.addEventListener('click', () => abrirOutra(m.produto)); }
         else t.setAttribute('aria-label', desc + ' (fora desta lista)');
         t.append(foto(q && q.Foto_URL), el(atual || !q ? 'figcaption' : 'span', '', m.rotulo || (atual ? 'esta' : String(k + 1))));
         tams.append(t);
       });
       box.append(tams);
-    } else box.append(el('p', 'fam-sub', 'Esta peça ainda não está ligada a outras do mesmo produto.'));
+    } else box.append(el('p', 'fam-sub', 'Este produto ainda não está ligado a outras do mesmo produto.'));
     const acoes = el('div', 'fam-acoes');
     acoes.append(botao('+ Nova variação desta família', 'fam-novo', () => novaVariacao(p.ID)));
     if (f) {
       const tirar = botao('Tirar da família', 'fam-tirar');
       tirar.addEventListener('click', async () => {
-        if (!tirarConfirma) { tirarConfirma = true; tirar.textContent = 'Toque de novo para tirar'; st.textContent = 'A peça continua no site; só deixa de aparecer junto das outras da família.'; return; }
+        if (!confirm('Tirar este produto da família? Ele continua no site; só deixa de aparecer junto dos outros da família.')) return;
         tirar.disabled = true; st.className = 'fam-st'; st.textContent = 'Tirando da família…';
         const r = await srv('/familias/desligar', { produto: String(p.ID) });
         if (!r.ok) { tirar.disabled = false; st.className = 'fam-st erro'; st.textContent = r.erro; return; }
-        usarFamilia(r.familia, p.ID); aviso(r.dissolvida ? 'Peça tirada da família. Como sobrou só uma peça, a família foi desfeita.' : 'Peça tirada da família.');
+        usarFamilia(r.familia, p.ID); aviso(r.dissolvida ? 'Produto tirado da família. Como sobrou só um produto, a família foi desfeita.' : 'Produto tirado da família.');
         pintarForm();
       });
       acoes.append(tirar);
@@ -194,9 +194,9 @@
     const x = { origem: fam.origem, novo: String(novoId), rotulo: fam.rotulo, rotuloOrigem: fam.rotuloOrigem, familia: fam.familia, base: fam.base };
     const r = await ligarNova(x);
     if (r.ok) { aviso('Variação cadastrada e ligada à família “' + ((r.familia && r.familia.nome) || x.base) + '”.'); return; }
-    if (r.erro && /outra família|famílias diferentes/.test(r.erro)) { aviso('A peça foi cadastrada, mas não entrou na família: ' + r.erro); return; }
+    if (r.erro && /outra família|famílias diferentes/.test(r.erro)) { aviso('O produto foi cadastrado, mas não entrou na família: ' + r.erro); return; }
     gravarPend(lerPend().concat([x]));
-    aviso('A peça foi cadastrada. Não consegui ligar à família agora; tento de novo sozinho na próxima vez que a Gestão abrir.');
+    aviso('O produto foi cadastrado. Não consegui ligar à família agora; tento de novo sozinho na próxima vez que a Gestão abrir.');
   };
   async function tentarPendentes() {
     const l = lerPend(); if (!l.length) return;
@@ -239,7 +239,7 @@
   /** Linha de uma peça (só leitura): foto, nome e código. Ligar não pede nem muda nada na peça. */
   function linhaMembro(p) {
     const li = el('div', 'fam-membro'); li.dataset.produto = String(p.ID);
-    const t = el('div', 'fam-mt'); t.append(el('b', '', p.Nome || 'Peça sem nome'));
+    const t = el('div', 'fam-mt'); t.append(el('b', '', p.Nome || 'Produto sem nome'));
     const info = [p.Codigo, separarNome(p.Nome).rotulo ? 'tamanho ' + separarNome(p.Nome).rotulo : '', estoqueInfo_(p)].filter(Boolean).join(' · ');
     if (info) t.append(el('small', 'fam-info', info));
     li.append(foto(p.Foto_URL), t); return li;
@@ -252,7 +252,7 @@
    * da família onde ela está, ou (quando é uma família só) juntar todas nela. */
   function ligarSelecionadas() {
     const ids = typeof selecionadosBulk !== 'undefined' ? Array.from(selecionadosBulk).map(String) : [];
-    if (ids.length < 2) { aviso('Marque pelo menos duas peças do mesmo produto para ligar como família.'); return; }
+    if (ids.length < 2) { aviso('Marque pelo menos dois produtos do mesmo produto para ligar como família.'); return; }
     const { corpo, pe } = janela('Ligar como família');
     desenharLigar(corpo, pe);
   }
@@ -263,42 +263,41 @@
     const st = el('p', 'fam-st'); st.setAttribute('role', 'status'); if (msg) st.textContent = msg;
     const redesenhar = (m) => { try { atualizarBarraBulk(); renderizarProdutos(); } catch (e) {} desenharLigar(corpo, pe, m); };
     if (ps.length < 2) {
-      corpo.append(el('p', 'fam-sub', 'Sobrou menos de duas peças marcadas. Marque pelo menos duas peças do mesmo produto para ligar como família.'));
+      corpo.append(el('p', 'fam-sub', 'Sobrou menos de dois produtos marcados. Marque pelo menos dois produtos do mesmo produto para ligar como família.'));
       pe.append(st, botao('Fechar', 'fam-sec', fecharJanela)); return;
     }
     const famIds = [...new Set(ps.map((p) => familiaDe(p.ID)).filter(Boolean).map((f) => f.id))];
     const livres = ps.filter((p) => !familiaDe(p.ID));
     const famUnica = famIds.length === 1 ? familias.find((f) => f.id === famIds[0]) : null;
-    corpo.append(el('p', 'fam-sub', 'Estas peças são o mesmo produto (mudando estampa ou tamanho). Nada nelas muda: cada uma continua com as próprias fotos, estoque e link. No site elas aparecem juntas.'));
+    corpo.append(el('p', 'fam-sub', 'Estes produtos são o mesmo produto (mudando estampa ou tamanho). Nada neles muda: cada um continua com as próprias fotos, estoque e link. No site elas aparecem juntas.'));
     const bases = [...new Set(ps.map((p) => semAcento(separarNome(p.Nome).base)))];
-    if (bases.length > 1) corpo.append(el('p', 'fam-alerta', 'Atenção: os nomes dessas peças são diferentes. Confira se são mesmo o mesmo produto.'));
+    if (bases.length > 1) corpo.append(el('p', 'fam-alerta', 'Atenção: os nomes desses produtos são diferentes. Confira se são mesmo o mesmo produto.'));
     if (famUnica && !livres.length) {
-      corpo.append(el('p', 'fam-alerta', 'Todas essas peças já estão juntas na família “' + famUnica.nome + '” (' + famUnica.membros.length + ' peças). Não há nada para ligar.'));
+      corpo.append(el('p', 'fam-alerta', 'Todos esses produtos já estão juntos na família “' + famUnica.nome + '” (' + famUnica.membros.length + ' produtos). Não há nada para ligar.'));
       ps.forEach((p) => corpo.append(linhaMembro(p)));
       pe.append(st, botao('Fechar', 'fam-sec', fecharJanela)); return;
     }
     if (famIds.length) {
       const nj = ps.length - livres.length;
       corpo.append(el('p', 'fam-alerta', famUnica
-        ? (nj === 1 ? '1 peça já está' : nj + ' peças já estão') + ' na família “' + famUnica.nome + '” (' + famUnica.membros.length + ' peças). Para continuar, escolha: juntar todas nessa família, ou tirar desta seleção / tirar da família as peças que já têm família.'
-        : 'Há peças em famílias diferentes. Tire da seleção ou tire da família as peças marcadas até sobrar no máximo uma família.'));
+        ? (nj === 1 ? '1 produto já está' : nj + ' produtos já estão') + ' na família “' + famUnica.nome + '” (' + famUnica.membros.length + ' produtos). Para continuar, escolha: juntar todos nessa família, ou tirar desta seleção / tirar da família os produtos que já têm família.'
+        : 'Há produtos em famílias diferentes. Tire da seleção ou tire da família os produtos marcados até sobrar no máximo uma família.'));
     }
     ps.forEach((p) => {
       const li = linhaMembro(p), f = familiaDe(p.ID);
       if (f) {
         li.classList.add('tem-fam');
-        li.querySelector('.fam-mt').append(el('span', 'fam-ja', 'Já está na família “' + f.nome + '” · ' + f.membros.length + ' peças'));
+        li.querySelector('.fam-mt').append(el('span', 'fam-ja', 'Já está na família “' + f.nome + '” · ' + f.membros.length + ' produtos'));
         const res = el('div', 'fam-res');
         const sair = botao('Tirar desta seleção', '', () => { selecionadosBulk.delete(String(p.ID)); redesenhar((p.Codigo || p.Nome) + ' saiu desta seleção.'); });
         const tirar = botao('Tirar da família “' + f.nome + '”', '');
-        let conf = false;
         tirar.addEventListener('click', async () => {
-          if (!conf) { conf = true; tirar.textContent = 'Toque de novo para tirar da família'; st.className = 'fam-st'; st.textContent = 'A peça continua no site; só sai da família “' + f.nome + '”.'; return; }
+          if (!confirm('Tirar este produto da família “' + f.nome + '”? Ele continua no site; só sai da família.')) return;
           tirar.disabled = sair.disabled = true; st.className = 'fam-st'; st.textContent = 'Tirando da família…';
           const r = await srv('/familias/desligar', { produto: String(p.ID) });
           if (!r.ok) { tirar.disabled = sair.disabled = false; st.className = 'fam-st erro'; st.textContent = r.erro; return; }
           usarFamilia(r.familia, p.ID);
-          redesenhar((p.Codigo || p.Nome) + ' saiu da família “' + f.nome + '”' + (r.dissolvida ? ' (a família foi desfeita, pois sobrou uma peça só).' : '.'));
+          redesenhar((p.Codigo || p.Nome) + ' saiu da família “' + f.nome + '”' + (r.dissolvida ? ' (a família foi desfeita, pois sobrou um produto só).' : '.'));
         });
         res.append(sair, tirar); li.append(res);
       }
@@ -315,30 +314,30 @@
       usarFamilia(r.familia);
       if (typeof selecionadosBulk !== 'undefined') selecionadosBulk.clear();
       try { atualizarBarraBulk(); renderizarProdutos(); } catch (e) {}
-      fecharJanela(); aviso('Família “' + r.familia.nome + '” ' + (juntar ? 'agora tem ' : 'ligada com ') + r.familia.membros.length + ' peças.');
+      fecharJanela(); aviso('Família “' + r.familia.nome + '” ' + (juntar ? 'agora tem ' : 'ligada com ') + r.familia.membros.length + ' produtos.');
     };
     let ok;
-    if (!famIds.length) ok = botao('Ligar ' + ps.length + ' peças como família', 'fam-prim', () => ligar(false));
+    if (!famIds.length) ok = botao('Ligar ' + ps.length + ' produtos como família', 'fam-prim', () => ligar(false));
     else if (famUnica) {
       const total = new Set(famUnica.membros.map((m) => String(m.produto)).concat(ps.map((p) => String(p.ID)))).size;
-      ok = botao('Juntar todas na família “' + famUnica.nome + '” (' + total + ' peças)', 'fam-prim', () => ligar(true));
-    } else { ok = botao('Resolva as peças com família para continuar', 'fam-prim'); ok.disabled = true; }
+      ok = botao('Juntar todos na família “' + famUnica.nome + '” (' + total + ' produtos)', 'fam-prim', () => ligar(true));
+    } else { ok = botao('Resolva os produtos com família para continuar', 'fam-prim'); ok.disabled = true; }
     pe.append(st, ok);
   }
 
   /** "Sugestões de famílias": nomes iguais tirando o tamanho, com fotos; "Ligar" ou "Ignorar". */
   async function abrirSugestoes() {
     const { corpo } = janela('Sugestões de famílias');
-    corpo.append(el('p', 'fam-sub', 'Peças com o mesmo nome (mudando só a estampa, o tamanho ou a idade). Ligue as que forem o mesmo produto: no site elas aparecem juntas. Nada nas peças muda.'));
+    corpo.append(el('p', 'fam-sub', 'Produtos com o mesmo nome (mudando só a estampa, o tamanho ou a idade). Ligue os que forem o mesmo produto: no site eles aparecem juntos. Nada nos produtos muda.'));
     const box = el('div', 'fam-sugs'); box.setAttribute('aria-live', 'polite'); box.append(el('p', 'fam-sub', 'Procurando…')); corpo.append(box);
     const r = await srv('/familias/sugestoes');
     box.replaceChildren();
     if (!r.ok) { box.append(el('p', 'fam-st erro', r.erro), botao('Tentar de novo', 'fam-sec', abrirSugestoes)); return; }
     const vazio = () => { if (!box.querySelector('.fam-sug')) box.replaceChildren(el('p', 'fam-vazio', 'Nenhuma sugestão agora: os nomes repetidos já estão ligados ou foram ignorados.')); };
     (r.sugestoes || []).forEach((g) => {
-      const c = el('section', 'fam-sug'); c.dataset.chave = g.chave; c.setAttribute('aria-label', g.nome + ', ' + g.membros.length + ' peças');
+      const c = el('section', 'fam-sug'); c.dataset.chave = g.chave; c.setAttribute('aria-label', g.nome + ', ' + g.membros.length + ' produtos');
       const rots = g.membros.map((m) => m.rotulo).filter(Boolean);
-      c.append(el('b', 'fam-tit', g.nome), el('p', 'fam-sub', g.membros.length + ' peças' + (rots.length ? ': ' + rots.join(' · ') : '')));
+      c.append(el('b', 'fam-tit', g.nome), el('p', 'fam-sub', g.membros.length + ' produtos' + (rots.length ? ': ' + rots.join(' · ') : '')));
       const fotos = el('div', 'fam-fotos'); g.membros.forEach((m) => { const f = el('figure', 'fam-fig'); f.append(foto(m.foto), el('figcaption', '', m.rotulo || m.codigo || '')); fotos.append(f); });
       const st = el('p', 'fam-st'); st.setAttribute('role', 'status');
       const acoes = el('div', 'fam-acoes');

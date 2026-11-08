@@ -19,7 +19,7 @@ def foto(pg, nome):
     if EVID: pg.screenshot(path=os.path.join(EVID, nome))
 ATALHOS = [{"t": "/oi", "x": "Oi, tudo bem? Aqui é a [nome], da TENKiTER 😊 Me diz o que você tá procurando que eu te mostro."},
            {"t": "/preco", "x": "Esse sai por R$ [valor no Pix] no Pix ou dinheiro, ou R$ [valor no cartão] em até 10x sem juros. Qual tamanho você usa? Vejo aqui se tem."},
-           {"t": "/pix", "x": "Pode fazer o Pix nessa chave: [chave Pix] ([nome]). Quando pagar, me manda o comprovante que eu já separo sua peça."}]
+           {"t": "/pix", "x": "Pode fazer o Pix nessa chave: [chave Pix] ([nome]). Quando pagar, me manda o comprovante que eu já separo seu produto."}]
 
 def tela(b, w, h, mob):
     ctx = b.new_context(viewport={"width": w, "height": h}, is_mobile=mob, has_touch=mob, service_workers="block")

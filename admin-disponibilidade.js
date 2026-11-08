@@ -43,7 +43,7 @@
         for(const job of trabalhos()) {
           if(job.invalido)continue;
           if(ctx.conta()!==dono||!ctx.pode())break;
-          if(job.erro)break; // manter a ordem; a pessoa decide quando tentar novamente
+          if(job.erro)break; // manter a ordem; a pessoa decide quando tentar de novo
           try {
             while(job.indice<job.ops.length) {
               if(ctx.conta()!==dono||!ctx.pode())return;
@@ -62,7 +62,7 @@
           } catch(_) {
             job.erro=true;
             try{localStorage.setItem(job.chave,JSON.stringify(job));}catch(_){}
-            if(ctx.conta()===dono){ctx.avisar('Alteração pendente. Em Produtos, toque em Tentar novamente.');notificar();}
+            if(ctx.conta()===dono){ctx.avisar('Alteração pendente. Em Produtos, toque em Tentar de novo.');notificar();}
             break;
           }
         }
@@ -79,10 +79,10 @@
     function atualizarAviso(box) {
       const jobs=trabalhos();box.hidden=!jobs.length;box.replaceChildren();if(!jobs.length)return;
       const invalidos=jobs.filter(j=>j.invalido);
-      if(invalidos.length){box.append(novo('span','','Um registro local não pôde ser lido. Reabra a peça e confira a disponibilidade.'));const limpar=novo('button','','Descartar registro inválido');limpar.type='button';limpar.onclick=()=>{try{invalidos.forEach(j=>localStorage.removeItem(j.chave));notificar();}catch(_){ctx.avisar('Não consegui limpar o registro local.');}};box.append(limpar);return;}
+      if(invalidos.length){box.append(novo('span','','Um registro local não pôde ser lido. Reabra o produto e confira a disponibilidade.'));const limpar=novo('button','','Descartar registro inválido');limpar.type='button';limpar.onclick=()=>{try{invalidos.forEach(j=>localStorage.removeItem(j.chave));notificar();}catch(_){ctx.avisar('Não consegui limpar o registro local.');}};box.append(limpar);return;}
       const erro=jobs.some(j=>j.erro);
       box.append(novo('span','',erro?'Não foi possível salvar. Alterações guardadas neste aparelho.':navigator.onLine?'Salvando disponibilidade… Você pode continuar.':'Sem conexão. Alterações guardadas neste aparelho.'));
-      if(erro||!navigator.onLine){const b=novo('button','','Tentar novamente');b.type='button';b.onclick=tentar;box.append(b);}
+      if(erro||!navigator.onLine){const b=novo('button','','Tentar de novo');b.type='button';b.onclick=tentar;box.append(b);}
     }
     function abrir(p) {
       if(!ctx.pode()){ctx.avisar('Seu acesso não permite alterar a disponibilidade.');return;}
@@ -101,7 +101,7 @@
       const painel=novo('section','tk-disp-painel');painel.setAttribute('role','dialog');painel.setAttribute('aria-modal','true');painel.setAttribute('aria-labelledby','tk-disp-titulo');
       const cab=novo('header','tk-disp-cab'), titulo=novo('h3','','Disponibilidade');titulo.id='tk-disp-titulo';
       const fechar=novo('button','tk-disp-fechar tk-fechar','✕');fechar.type='button';fechar.setAttribute('aria-label','Fechar sem salvar');cab.append(titulo,fechar);
-      const corpo=novo('div','tk-disp-corpo'), nome=novo('strong','',p.Nome||'Peça');
+      const corpo=novo('div','tk-disp-corpo'), nome=novo('strong','',p.Nome||'Produto');
       corpo.append(nome,novo('small','tk-disp-info',[p.Codigo,typeof window.TKTecido!=='undefined'&&TKTecido.ler(p)].filter(Boolean).join(' · ')));
       const status=novo('p','tk-disp-status','Retire o que acabou. As outras informações ficam como estão.');status.setAttribute('role','status');
       function grupo(rotulo,itens,tipo,midia) {
@@ -114,16 +114,16 @@
           const b=novo('button','','×');b.type='button';b.setAttribute('aria-label','Retirar '+(midia?rotulo.toLowerCase()+' '+(i+1):valor));
           b.onclick=()=>{removidos[tipo].add(valor);const prox=item.nextElementSibling?.querySelector('button')||item.previousElementSibling?.querySelector('button');item.remove();(prox||salvar).focus();
             if(!box.childElementCount)box.append(novo('small','','Nenhuma opção restante.'));
-            status.textContent=precisaArquivar()?(fotos.length&&removidos.foto.size===fotos.length?'Sem fotos: a peça inteira será arquivada ao salvar.':'Sem disponibilidade restante: a peça será arquivada ao salvar.'):'Retirada preparada. Toque em Salvar alterações.';};
+            status.textContent=precisaArquivar()?(fotos.length&&removidos.foto.size===fotos.length?'Sem fotos: o produto inteiro será arquivado ao salvar.':'Sem disponibilidade restante: o produto será arquivado ao salvar.'):'Retirada preparada. Toque em Salvar alterações.';};
           item.append(b);box.append(item);
         });
       }
       const precisaArquivar=()=>arquivar||(fotos.length>0&&removidos.foto.size===fotos.length)||(tamanhos.length>0&&removidos.tamanho.size===tamanhos.length)||(cores.length>0&&removidos.cor.size===cores.length);
       grupo('Fotos',fotos,'foto',true);grupo('Vídeos',videos,'video',true);
       grupo('Tamanhos e idades',tamanhos,'tamanho');grupo('Cores e estampas',cores,'cor');
-      const detalhes=novo('details','tk-disp-detalhes'), resumo=novo('summary','','Informações da peça');detalhes.append(resumo);
-      const dl=novo('dl');for(const [r,v] of [['Categoria',p.Categoria],['Gênero',p.Genero],['Descrição',window.TKTecido?TKTecido.semDescricao(p.Descricao):p.Descricao],['Preço',typeof ehConsulta==='function'&&ehConsulta(p)?(typeof TEXTO_CONSULTA==='string'?TEXTO_CONSULTA:'Consulte valor'):typeof formatarReal==='function'&&Number(p.Preco)>0?formatarReal(p.Preco):''],['Estoque',p.Estoque]]){if(v!==''&&v!=null){dl.append(novo('dt','',r),novo('dd','',String(v)));}}detalhes.append(dl);corpo.append(detalhes);
-      const arq=novo('button','tk-disp-arquivar','× Arquivar produto inteiro');arq.type='button';arq.onclick=()=>{arquivar=!arquivar;arq.setAttribute('aria-pressed',String(arquivar));arq.textContent=arquivar?'↶ Manter produto':'× Arquivar produto inteiro';status.textContent=arquivar?'A peça inteira será arquivada ao salvar.':'Produto mantido. Confira as retiradas antes de salvar.';};arq.setAttribute('aria-pressed','false');corpo.append(arq);
+      const detalhes=novo('details','tk-disp-detalhes'), resumo=novo('summary','','Informações do produto');detalhes.append(resumo);
+      const dl=novo('dl');for(const [r,v] of [['Categoria',p.Categoria],['Público',p.Genero],['Descrição',window.TKTecido?TKTecido.semDescricao(p.Descricao):p.Descricao],['Preço',typeof ehConsulta==='function'&&ehConsulta(p)?(typeof TEXTO_CONSULTA==='string'?TEXTO_CONSULTA:'Consulte valor'):typeof formatarReal==='function'&&Number(p.Preco)>0?formatarReal(p.Preco):''],['Estoque',p.Estoque]]){if(v!==''&&v!=null){dl.append(novo('dt','',r),novo('dd','',String(v)));}}detalhes.append(dl);corpo.append(detalhes);
+      const arq=novo('button','tk-disp-arquivar','× Arquivar produto inteiro');arq.type='button';arq.onclick=()=>{arquivar=!arquivar;arq.setAttribute('aria-pressed',String(arquivar));arq.textContent=arquivar?'↶ Manter produto':'× Arquivar produto inteiro';status.textContent=arquivar?'O produto inteiro será arquivado ao salvar.':'Produto mantido. Confira as retiradas antes de salvar.';};arq.setAttribute('aria-pressed','false');corpo.append(arq);
       const rodape=novo('footer','tk-disp-rodape'), cancelar=novo('button','','Cancelar'), salvar=novo('button','tk-disp-salvar','Salvar alterações');cancelar.type=salvar.type='button';rodape.append(cancelar,salvar);painel.append(cab,corpo,status,rodape);fundo.append(painel);
       function encerrar(){fundo.remove();if(window.TKCamadas&&TKCamadas.aberta('ms-edicao-tamanhos'))TKCamadas.desempilhar('ms-edicao-tamanhos');if(anterior?.isConnected)anterior.focus({preventScroll:true});}
       /* v7.57: não perder o que a pessoa marcou. ✕, toque fora, Esc e Voltar perguntam antes de descartar; "Cancelar" é escolha explícita. */
@@ -150,7 +150,7 @@
           const chave=PREFIXO+dono+':'+Date.now()+':'+crypto.randomUUID();
           localStorage.setItem(chave,JSON.stringify({id,ops,indice:0,erro:false}));
           guardado=true;aplicar(p,ops);encerrar();notificar();ctx.avisar('Alteração guardada. Salvando em segundo plano…');void processar();
-        }catch(_){status.textContent='Não consegui guardar a alteração neste aparelho. Libere espaço e tente salvar novamente.';}
+        }catch(_){status.textContent='Não consegui guardar a alteração neste aparelho. Libere espaço e tente salvar de novo.';}
       };
       document.body.append(fundo);if(window.TKCamadas)TKCamadas.empilhar('ms-edicao-tamanhos',aoVoltar);fechar.focus({preventScroll:true});
     }

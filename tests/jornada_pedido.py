@@ -36,7 +36,7 @@ with sync_playwright() as p:
     pg = nova_pagina(ctx, erros, csp)
     print("== Catálogo: ordenar, cartão, rodapé ==")
     pg.goto(BASE + "index.html"); pg.wait_for_timeout(1800)
-    n0 = pg.locator(".card:not(.esqueleto)").count(); chk("catálogo mostra peças", n0 >= 10, n0)
+    n0 = pg.locator(".card:not(.esqueleto)").count(); chk("catálogo mostra produtos", n0 >= 10, n0)
     def precos():
         return pg.evaluate("""()=>[...document.querySelectorAll('.card .preco')].map(e=>parseFloat((e.childNodes[0].textContent||'').replace(/[^0-9,]/g,'').replace(',','.')))""")
     pg.select_option("#ordem", "menor"); pg.wait_for_timeout(400)
@@ -58,11 +58,11 @@ with sync_playwright() as p:
     chk("link do rodapé 'WhatsApp da loja' aponta para a loja", ZAP in (pg.get_attribute("#rod-zap", "href") or ""))
 
     print("== Ações rápidas no cartão ==")
-    D = ".card:not(.esqueleto):has(.ac-sacola)"   # só peças disponíveis (as esgotadas não têm botão de sacola)
+    D = ".card:not(.esqueleto):has(.ac-sacola)"   # só produtos disponíveis (as esgotadas não têm botão de sacola)
     card = pg.locator(D).nth(1)
     cid = card.get_attribute("data-id")
     card.locator(".ac-sacola").click(); pg.wait_for_timeout(250)
-    chk("'Sacola' no cartão põe a peça na sacola (sem abrir a peça)", pg.locator("#badge-sacola").inner_text() == "1" and pg.locator("#foto-principal-modal").count() == 0)
+    chk("'Sacola' no cartão põe o produto na sacola (sem abrir o produto)", pg.locator("#badge-sacola").inner_text() == "1" and pg.locator("#foto-principal-modal").count() == 0)
     chk("botão do cartão vira 'Na sacola' (aria-pressed)", pg.locator('.card[data-id="%s"] .ac-sacola' % cid).get_attribute("aria-pressed") == "true")
     card2 = pg.locator(D).nth(2); cid2 = card2.get_attribute("data-id")
     card2.locator(".btn-favorito-card").click(); pg.wait_for_timeout(200)
@@ -78,7 +78,7 @@ with sync_playwright() as p:
     pg.click("#fav-pedir"); pg.wait_for_timeout(300)
     op = abertos(pg)
     chk("pedir lista de favoritos abre o WhatsApp DA LOJA", len(op) == 1 and ("wa.me/" + ZAP) in op[0], op)
-    chk("mensagem dos favoritos traz o link completo da peça (https://…/p/TK-)", bool(op) and (SITE + "p/TK-") in op[0], op[:1])
+    chk("mensagem dos favoritos traz o link completo do produto (https://…/p/TK-)", bool(op) and (SITE + "p/TK-") in op[0], op[:1])
     chk("mensagem não traz &amp; escapado", bool(op) and "&amp;" not in op[0])
     pg.click("#fav-mover"); pg.wait_for_timeout(800)
     chk("'Adicionar todos à sacola' abre a sacola com os itens", pg.locator("#overlay-sacola.aberto").count() == 1 and pg.locator("#sacola-conteudo .item-sacola").count() == 3, pg.locator("#sacola-conteudo .item-sacola").count())
@@ -105,7 +105,7 @@ with sync_playwright() as p:
     if cria:
         c = cria[0]
         chk("pedido leva nome, whatsapp só dígitos, entrega, endereço e observação", c.get("nome") == "Maria Souza" and c.get("whatsapp") == "88998765432" and c.get("entrega") == "entrega" and "Flores" in c.get("endereco", "") and c.get("obs") == "Preciso até sexta", c)
-        chk("pedido leva só os ids das 3 peças (preço é calculado no servidor)", len(c.get("itens", [])) == 3 and all(set(i.keys()) == {"id"} for i in c["itens"]), c.get("itens"))
+        chk("pedido leva só os ids das 3 produtos (preço é calculado no servidor)", len(c.get("itens", [])) == 3 and all(set(i.keys()) == {"id"} for i in c["itens"]), c.get("itens"))
     chk("tela 'Pedido enviado' com o código", pg.locator("#codigo-pedido").count() == 1 and pg.inner_text("#codigo-pedido") == "PED-0001")
     op = abertos(pg)
     chk("abriu o WhatsApp DA LOJA com a mensagem", len(op) == 1 and ("wa.me/" + ZAP) in op[0], op)
@@ -113,7 +113,7 @@ with sync_playwright() as p:
         m = op[0]
         chk("mensagem tem o código do pedido", "PED-0001" in m)
         chk("mensagem tem o endereço COMPLETO de acompanhamento (https://tenkitermodas.com.br/?pedido=PED-0001)", (SITE + "?pedido=PED-0001") in m, m[-200:])
-        chk("mensagem tem os links completos das peças", (SITE + "p/TK-") in m)
+        chk("mensagem tem os links completos dos produtos", (SITE + "p/TK-") in m)
         chk("mensagem tem nome, endereço e observação", "Maria Souza" in m and "Rua das Flores" in m and "Preciso até sexta" in m)
         chk("mensagem sem &amp;", "&amp;" not in m)
     chk("link de acompanhamento na tela é completo", (pg.get_attribute("#link-rastreio-ok", "href") or "").startswith(SITE + "?pedido=PED-0001"))

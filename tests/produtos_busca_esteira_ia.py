@@ -9,7 +9,7 @@ with sync_playwright() as pw:
  b=pw.chromium.launch(args=['--no-sandbox'])
  for w,h in [(320,700),(390,844),(412,915),(1440,900)]:
   c=b.new_context(viewport={'width':w,'height':h},service_workers='block');st=ns['instalar'](c);ns['fotos_srv'](c,st)
-  c.route('**/catalogo/fotos-novas',lambda r:r.fulfill(json={'ok':True,'fotosNovas':{'1002':'2026-11-04T00:00:00Z'}}));pg=c.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.goto(BASE+'esteira.html');pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1');pg.wait_for_selector('.peca');pg.click('[data-aba=fotos]');pg.wait_for_selector('text=Pedir fotos de uma peça');pg.click('text=Pedir fotos de uma peça');pg.wait_for_selector('.busca-res [data-escolher]')
+  c.route('**/catalogo/fotos-novas',lambda r:r.fulfill(json={'ok':True,'fotosNovas':{'1002':'2026-11-04T00:00:00Z'}}));pg=c.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.goto(BASE+'esteira.html');pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1');pg.wait_for_selector('.peca');pg.click('[data-aba=fotos]');pg.wait_for_selector('text=Pedir fotos de um produto');pg.click('text=Pedir fotos de um produto');pg.wait_for_selector('.busca-res [data-escolher]')
   # A lista inicial aparece antes da revalidação das fotos; aguarda a ordem final, sem relaxar o resultado.
   expect(pg.locator('.busca-res [data-escolher]').first).to_have_attribute('data-escolher','1002')
   pg.fill('#pf-busca','Verde');pg.wait_for_timeout(350);pg.wait_for_selector('[data-escolher="1003"]');assert pg.locator('.busca-res [data-escolher]').count()==1

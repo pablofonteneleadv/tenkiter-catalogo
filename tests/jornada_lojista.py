@@ -35,7 +35,7 @@ with sync_playwright() as p:
     ctx.route("**script.google.com/**",assin)
     print("== Jornada do lojista ==")
     pg.goto(BASE+"admin.html"); pg.wait_for_timeout(1500)
-    chk("lista abre com peças ativas", pg.locator("#lista-produtos .produto").count()>=10, pg.locator("#lista-produtos .produto").count())
+    chk("lista abre com produtos ativos", pg.locator("#lista-produtos .produto").count()>=10, pg.locator("#lista-produtos .produto").count())
     pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
     chk("passo 7 (vídeo) está visível sem abrir 'Mais detalhes'", pg.locator("#passo-video").is_visible())
     chk("botão de vídeo visível", pg.locator("label[for=video-input]").is_visible())

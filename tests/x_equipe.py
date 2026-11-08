@@ -1,4 +1,4 @@
-"""X de arquivar no catálogo (v3.7): só Equipe do site (catalogo_cadastrar) ou maior vê; arquiva a peça, uma foto ou o vídeo, com confirmação e Desfazer.
+"""X de arquivar no catálogo (v3.7): só Equipe do site (catalogo_cadastrar) ou maior vê; arquiva o produto, uma foto ou o vídeo, com confirmação e Desfazer.
 O Apps Script e a internet são SIMULADOS (mock.py, versao 3.7)."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -32,22 +32,22 @@ with sync_playwright() as p:
     print("== Equipe do site vê o X na grade ==")
     ctx, pg, st, msgs, erros = abrir(b, PERMS_ALL)
     n = pg.locator(".card").count()
-    chk("equipe vê o botão ➕ Cadastrar nova peça, que leva ao MESMO cadastro do painel", pg.locator("#btn-nova-peca:visible").count() == 1 and pg.get_attribute("#btn-nova-peca", "href") == "admin.html?novo=1")
+    chk("equipe vê o botão ➕ Cadastrar novo produto, que leva ao MESMO cadastro do painel", pg.locator("#btn-nova-peca:visible").count() == 1 and pg.get_attribute("#btn-nova-peca", "href") == "admin.html?novo=1")
     chk("um X diferenciado em cada card da grade", pg.locator(".card .x-equipe").count() == n and n > 3, (pg.locator(".card .x-equipe").count(), n))
     chk("o X fica no canto esquerdo de cima da foto", pg.evaluate("(()=>{const x=document.querySelector('.card .x-equipe').getBoundingClientRect(), c=document.querySelector('.card .img-wrap').getBoundingClientRect(); return x.left-c.left<20 && x.top-c.top<20})()"))
-    chk("tocar no X NÃO abre a peça", (pg.locator(".card .x-equipe").first.click(), pg.wait_for_timeout(400), pg.locator("#overlay.aberto").count() == 0)[2])
-    chk("pediu confirmação com o nome da peça", msgs and "Arquivar a peça" in msgs[-1], msgs)
+    chk("tocar no X NÃO abre o produto", (pg.locator(".card .x-equipe").first.click(), pg.wait_for_timeout(400), pg.locator("#overlay.aberto").count() == 0)[2])
+    chk("pediu confirmação com o nome do produto", msgs and "Arquivar o produto" in msgs[-1], msgs)
     c = [x for x in st.get("x_chamadas", []) if x["action"] == "arquivarRapido"]
     chk("chamou arquivarRapido com a sessão (token, nunca senha)", len(c) == 1 and str(c[0].get("sessao", "")).startswith("tk") and c[0].get("whatsapp") == "88999999999", c)
     pg.wait_for_timeout(300)
-    chk("a peça sumiu da grade", pg.locator(".card").count() == n - 1 and pg.locator("#toast-equipe.visivel").count() == 1)
+    chk("o produto sumiu da grade", pg.locator(".card").count() == n - 1 and pg.locator("#toast-equipe.visivel").count() == 1)
     st["aceitar"] = False; antes = len(st["x_chamadas"])
     pg.locator(".card .x-equipe").first.click(); pg.wait_for_timeout(300)
     chk("cancelar a confirmação não chama o servidor nem tira nada", len(st["x_chamadas"]) == antes and pg.locator(".card").count() == n - 1)
     st["aceitar"] = True
     ctx.close()
 
-    print("== X em cada foto e no vídeo dentro da peça ==")
+    print("== X em cada foto e no vídeo dentro do produto ==")
     ctx, pg, st, msgs, erros = abrir(b, PERMS_ALL)
     pg.locator(".card", has_text=st["produtos"][0]["Codigo"]).first.locator(".abrir-peca").click(); pg.wait_for_selector("#overlay.aberto"); pg.wait_for_timeout(300)
     chk("X grande sobre a foto que está na tela", pg.locator("#x-slide").count() == 1)
@@ -64,22 +64,22 @@ with sync_playwright() as p:
     pg.locator(".thumb-wrap .x-equipe").nth(4).click(); pg.wait_for_timeout(700)
     c = [x for x in st["x_chamadas"] if x["action"] == "arquivarMidia"]
     chk("X do vídeo: confirmação de VÍDEO e tipo video", "VÍDEO" in msgs[-1] and c[-1]["tipo"] == "video", (msgs[-1], c[-1]))
-    chk("o vídeo saiu da peça", pg.locator(".thumb-video").count() == 0)
+    chk("o vídeo saiu do produto", pg.locator(".thumb-video").count() == 0)
     pg.click("#x-slide"); pg.wait_for_timeout(700)
     c = [x for x in st["x_chamadas"] if x["action"] == "arquivarMidia"]
-    chk("X grande tira a foto que está na tela (foto, de dentro da peça)", c[-1]["tipo"] == "foto" and c[-1]["url"] in G, c[-1])
+    chk("X grande tira a foto que está na tela (foto, de dentro do produto)", c[-1]["tipo"] == "foto" and c[-1]["url"] in G, c[-1])
     chk("sem erro de JavaScript", not erros, erros)
     ctx.close()
 
-    print("== Única foto = arquiva a PEÇA (v4.18) ==")
+    print("== Única foto = arquiva o PRODUTO (v4.18) ==")
     ctx, pg, st, msgs, erros = abrir(b, PERMS_ALL)
     cod = st["produtos"][1]["Codigo"]
     pg.locator(".card", has_text=cod).first.locator(".abrir-peca").click(); pg.wait_for_selector("#overlay.aberto"); pg.wait_for_timeout(300)
     n0 = len([x for x in st.get("x_chamadas", []) if x["action"] == "arquivarMidia"])
     pg.click("#x-slide"); pg.wait_for_timeout(600)
-    chk("peça com 1 foto só: pergunta se arquiva a PEÇA (não mostra o alerta antigo)", msgs and "Arquivar a peça" in msgs[-1] and "única foto" not in msgs[-1], msgs)
+    chk("produto com 1 foto só: pergunta se arquiva o PRODUTO (não mostra o alerta antigo)", msgs and "Arquivar o produto" in msgs[-1] and "única foto" not in msgs[-1], msgs)
     chk("chamou arquivarRapido e NÃO arquivarMidia", any(x["action"] == "arquivarRapido" for x in st.get("x_chamadas", [])) and len([x for x in st.get("x_chamadas", []) if x["action"] == "arquivarMidia"]) == n0, st.get("x_chamadas"))
-    chk("a peça saiu da grade e a janela fechou", pg.locator(".card", has_text=cod).count() == 0 and pg.locator("#overlay.aberto").count() == 0)
+    chk("o produto saiu da grade e a janela fechou", pg.locator(".card", has_text=cod).count() == 0 and pg.locator("#overlay.aberto").count() == 0)
     ctx.close()
 
     print("== Visualização não é contada de novo ==")
@@ -88,7 +88,7 @@ with sync_playwright() as p:
     v0 = len([e for e in st.get("eventos", []) if e.get("tipo") == "visualizacao"]) if isinstance(st.get("eventos"), list) else None
     pg.locator(".thumb-wrap .x-equipe").nth(1).click(); pg.wait_for_timeout(800)
     v1 = len([e for e in st.get("eventos", []) if e.get("tipo") == "visualizacao"]) if isinstance(st.get("eventos"), list) else None
-    chk("tirar uma foto não conta outra visualização da peça", v0 == v1, (v0, v1))
+    chk("tirar uma foto não conta outra visualização do produto", v0 == v1, (v0, v1))
     ctx.close(); b.close()
 
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))

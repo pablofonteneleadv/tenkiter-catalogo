@@ -1,4 +1,4 @@
-"""v4.21 — a busca do admin RESPEITA o filtro Ativas/Esgotadas/Arquivadas/Todas (pedido do Pablo) e avisa quantas peças de outros filtros também combinam;
+"""v4.21 — a busca do admin RESPEITA o filtro Ativas/Esgotadas/Arquivadas/Todas (pedido do Pablo) e avisa quantos produtos de outros filtros também combinam;
 os botões da linha (Stories/Link/Postar) mostram o emoji certo (\\u1F3A8 sem chaves virava "ˮ18").   python3 tests/admin_busca_status.py"""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -19,14 +19,14 @@ with sync_playwright() as p:
     pg.fill("#busca-admin", "cargo"); pg.wait_for_timeout(500)
     nomes = pg.evaluate("[...document.querySelectorAll('#lista-produtos .produto .nome')].map(e=>e.textContent)")
     chk("com 'Ativas' marcado, a busca mostra SÓ as ativas (2)", len(nomes) == 2, nomes)
-    chk("nenhuma peça arquivada aparece", pg.locator("#lista-produtos .produto.arquivado").count() == 0)
+    chk("nenhum produto arquivado aparece", pg.locator("#lista-produtos .produto.arquivado").count() == 0)
     aviso = pg.inner_text("#lista-produtos .aviso-busca") if pg.locator(".aviso-busca").count() else ""
-    chk("avisa que mais 4 peças fora de 'Ativas' também combinam", "4 peças" in aviso and "Ativas" in aviso, aviso)
+    chk("avisa que mais 4 produtos fora de 'Ativas' também combinam", "4 produtos" in aviso and "Ativas" in aviso, aviso)
     pg.click("#busca-ver-todas"); pg.wait_for_timeout(500)
     chk("'Ver em Todas' troca o filtro e mostra as 6", pg.locator("#lista-produtos .produto").count() == 6 and "selecionado" in (pg.get_attribute('#filtros-lista [data-f=todas]', 'class') or ""), pg.locator("#lista-produtos .produto").count())
     chk("em 'Todas' não aparece mais o aviso", pg.locator(".aviso-busca").count() == 0)
     pg.click("#filtros-lista [data-f=arquivadas]"); pg.wait_for_timeout(400)
-    chk("filtro 'Arquivadas' + busca: só as 4 arquivadas e aviso das 2 ativas", pg.locator("#lista-produtos .produto").count() == 4 and "2 peças" in pg.inner_text(".aviso-busca"))
+    chk("filtro 'Arquivadas' + busca: só as 4 arquivadas e aviso das 2 ativas", pg.locator("#lista-produtos .produto").count() == 4 and "2 produtos" in pg.inner_text(".aviso-busca"))
     pg.click("#filtros-lista [data-f=ativas]"); pg.fill("#busca-admin", "zzzz"); pg.wait_for_timeout(400)
     chk("busca sem resultado diz o filtro em que procurou", "em “Ativas”" in pg.inner_text("#lista-produtos"), pg.inner_text("#lista-produtos"))
     pg.fill("#busca-admin", ""); pg.wait_for_timeout(400)

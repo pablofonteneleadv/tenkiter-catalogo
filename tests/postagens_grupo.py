@@ -1,4 +1,4 @@
-"""Aba Postagens (admin-postagens.js, v4.6): escolher peça/mídias, tipo (Feed, Carrossel, Reels, Story), Original/Templates (canvas -> JPEG -> R2), legenda, agora x agendado,
+"""Aba Postagens (admin-postagens.js, v4.6): escolher produto/mídias, tipo (Feed, Carrossel, Reels, Story), Original/Templates (canvas -> JPEG -> R2), legenda, agora x agendado,
 fila (cancelar / tentar de novo), Story com link = tarefa manual (baixar, copiar, "Já postei"), quem pode ver o botão, teclado e axe. Worker do Instagram e R2 simulados (mock.py)."""
 import sys, os, json, datetime
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)

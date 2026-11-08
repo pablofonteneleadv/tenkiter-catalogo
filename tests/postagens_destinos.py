@@ -1,4 +1,4 @@
-"""Aba Postagens (admin-postagens.js, v4.6): escolher peça/mídias, tipo (Feed, Carrossel, Reels, Story), Original/Templates (canvas -> JPEG -> R2), legenda, agora x agendado,
+"""Aba Postagens (admin-postagens.js, v4.6): escolher produto/mídias, tipo (Feed, Carrossel, Reels, Story), Original/Templates (canvas -> JPEG -> R2), legenda, agora x agendado,
 fila (cancelar / tentar de novo), Story com link = tarefa manual (baixar, copiar, "Já postei"), quem pode ver o botão, teclado e axe. Worker do Instagram e R2 simulados (mock.py)."""
 import sys, os, json, datetime
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -83,7 +83,7 @@ with sync_playwright() as p:
     enviado=[x['corpo'] for x in st['ig']['post_chamadas'] if x['path']=='/post'][-1]
     chk('Story só no grupo é automático mesmo após usar link do Instagram',enviado['posts'][0]['canal']=='grupo' and enviado['posts'][0]['modo']=='auto')
     aba(pg,'nova');preparar(pg)
-    chk('com peça e legenda aparece o aviso e o Recomeçar do zero',pg.locator('[data-a=recomecar]').count()==1)
+    chk('com produto e legenda aparece o aviso e o Recomeçar do zero',pg.locator('[data-a=recomecar]').count()==1)
     pg.once('dialog',lambda d:d.accept());pg.click('[data-a=recomecar]');pg.wait_for_timeout(600)
     chk('depois de recomeçar o aviso some, pois não há o que zerar',pg.locator('[data-a=recomecar]').count()==0 and 'Rascunho salvo' not in pg.inner_text('#po-corpo'))
     ctx3,st3=novo(b);st3['ig']['status2_bloq']=True;pg3=ctx3.new_page();pg3.goto(BASE+'admin.html');pg3.wait_for_timeout(2600);abrir(pg3)

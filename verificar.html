@@ -47,7 +47,7 @@ small{color:var(--muted)}
       if (!j.encontrado){ r.innerHTML = '<div class="res ruim"><b class="big">Código não encontrado</b>Confira se digitou certo. Se o problema continuar, fale com a TENKiTER Modas.</div>'; return; }
       if (!j.valido){ r.innerHTML = '<div class="res ruim"><b class="big">Certificado cancelado</b>Este código existe, mas foi cancelado pela TENKiTER Modas.</div>'; return; }
       r.innerHTML = '<div class="res ok"><b class="big">Certificado verificado ✓</b><p><b>' + E(j.nome) + '</b><br>concluiu o treinamento<br><b>' + E(j.titulo) + '</b><br>em ' + E(dataExt(j.emitidoEm)) + '</p><small>Prática validada por ' + E(j.validadoPor || 'a gestão') + ' · código ' + E(j.codigo) + '</small></div>';
-    }catch(e){ r.innerHTML = '<div class="res ruim">Sem conexão. Tente de novo.</div>'; }
+    }catch(e){ r.innerHTML = '<div class="res ruim">Sem conexão. Verifique a internet e tente de novo.</div>'; }
   }
   document.getElementById('f').addEventListener('submit', function(e){ e.preventDefault(); if (c.value.trim()) verificar(c.value.trim()); });
   var q = new URLSearchParams(location.search).get('c'); if (q){ c.value = q; verificar(q); }

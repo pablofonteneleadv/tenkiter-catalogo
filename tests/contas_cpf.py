@@ -144,7 +144,7 @@ with sync_playwright() as p:
     ctx,cfg=novo(b); pg=ctx.new_page(); falas=[]
     pg.on("dialog",lambda d:(falas.append(d.message),d.dismiss()))
     pg.goto(BASE+"admin.html"); pg.wait_for_timeout(1200)
-    pg.evaluate("window.TKSairBloqueio=()=>'Ainda faltam 2 peças. Se sair, se perde.'")
+    pg.evaluate("window.TKSairBloqueio=()=>'Ainda faltam 2 produtos. Se sair, se perde.'")
     url0=pg.url; pg.evaluate("document.querySelector('a[data-nav]:not([data-nav=gestao])').click()"); pg.wait_for_timeout(500)
     chk("sair pela barra com envio pendente mostra o aviso e Cancelar fica na página",falas and "faltam 2" in falas[0] and pg.url==url0,(falas,pg.url))
     pg.evaluate("window.TKSairBloqueio=()=>''"); n=len(falas)

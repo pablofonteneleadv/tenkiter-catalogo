@@ -34,7 +34,7 @@ with sync_playwright() as p:
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')
    assert not pg.evaluate("async()=> (await axe.run(document.querySelector('.ms-gaveta-painel'))).violations.filter(x=>['serious','critical'].includes(x.impact)).map(x=>x.id)")
    pg.screenshot(path=str(OUT/f'detalhe-{w}-{zoom}.png'))
-  pg.get_by_text('Como a nota foi calculada',exact=True).click();assert '15 ocorrência(s)' in pg.inner_text('#ms-gaveta');assert '5 conta(m)' in pg.inner_text('#ms-gaveta')
+  pg.get_by_text('Como a nota foi calculada',exact=True).click();assert '15 ocorrências' in pg.inner_text('#ms-gaveta');assert '5 conta(m)' in pg.inner_text('#ms-gaveta')
   pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached');pg.wait_for_function("document.activeElement&&document.activeElement.matches('.ms-relacionamento-abrir')",timeout=3000);   # foco volta depois do popstate (assíncrono)
   assert s['lidas']==lidas;assert not s['envios']
   if w==390:

@@ -28,12 +28,12 @@
   $('tecidos-salvar').addEventListener('click',async()=>{
    if(!admin())return;const b=$('tecidos-salvar'),i=$('tecidos-novo'),sel=$('tecidos-antigo');b.disabled=true;i.disabled=true;sel.disabled=true;$('tecidos-status').textContent='Salvando…';
    try{const nome=i.value.trim();if(!nome)throw new Error('Escreva o nome do tecido.');await api.salvar(sel.value,nome);const f=$('tecido');if(f.value)f.value=api.resolver(f.value);popular(nome);$('tecidos-status').textContent='Nome salvo. Produtos e filtros usam o nome atualizado.';}
-   catch(e){$('tecidos-status').textContent=e.message||'Não foi possível salvar. Tente novamente.';}
+   catch(e){$('tecidos-status').textContent=e.message||'Não foi possível salvar. Tente de novo.';}
    finally{b.disabled=false;i.disabled=false;sel.disabled=false;b.focus();}
   });
  }
  function popular(valor){const sel=$('tecidos-antigo');sel.replaceChildren();const novo=document.createElement('option');novo.value='';novo.textContent='Adicionar novo tecido';sel.appendChild(novo);api.opcoes(produtos()).forEach(nome=>{const o=document.createElement('option');o.value=nome;o.textContent=nome;sel.appendChild(o);});sel.value=valor||'';$('tecidos-novo').value=valor||'';}
- $('tecidos-gerenciar').addEventListener('click',async()=>{if(!admin())return;anterior=document.activeElement;montar();popular(api.resolver($('tecido').value));$('tecidos-status').textContent='';if(typeof abrirComHistorico_==='function')abrirComHistorico_('overlay-tecidos');else overlay.classList.add('aberto');$('tecidos-antigo').focus();const escolhaInicial=$('tecidos-antigo').value,nomeInicial=$('tecidos-novo').value;try{await api.carregar();if(overlay.classList.contains('aberto')&&$('tecidos-antigo').value===escolhaInicial&&$('tecidos-novo').value===nomeInicial)popular(api.resolver(escolhaInicial));}catch(_){$('tecidos-status').textContent='Não foi possível atualizar a lista agora. Tente novamente ao salvar.';}});
+ $('tecidos-gerenciar').addEventListener('click',async()=>{if(!admin())return;anterior=document.activeElement;montar();popular(api.resolver($('tecido').value));$('tecidos-status').textContent='';if(typeof abrirComHistorico_==='function')abrirComHistorico_('overlay-tecidos');else overlay.classList.add('aberto');$('tecidos-antigo').focus();const escolhaInicial=$('tecidos-antigo').value,nomeInicial=$('tecidos-novo').value;try{await api.carregar();if(overlay.classList.contains('aberto')&&$('tecidos-antigo').value===escolhaInicial&&$('tecidos-novo').value===nomeInicial)popular(api.resolver(escolhaInicial));}catch(_){$('tecidos-status').textContent='Não foi possível atualizar a lista agora. Tente de novo ao salvar.';}});
  $('tecido').addEventListener('input',desenhar);
  window.addEventListener('tk:tecidos-atualizados',()=>{desenhar();if(typeof renderizarProdutos==='function')renderizarProdutos();});
  // A lista do catálogo chega depois do login e também é atualizada por cópia/edição.

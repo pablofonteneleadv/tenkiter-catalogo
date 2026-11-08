@@ -57,7 +57,7 @@ with sync_playwright() as p:
     produto(pg); pg.check("#ms-previa-chk"); foto(pg, "02-marcada-390.png")
     pg.click("#ms-enviar"); pg.wait_for_timeout(500)
     e = S["envios"][-1]
-    chk("marcada: envia com prévia, título = nome da peça e descrição com preço e tamanhos",
+    chk("marcada: envia com prévia, título = nome do produto e descrição com preço e tamanhos",
         e.get("previa") is True and e.get("previaTitulo") == nome and "à vista" in e.get("previaDescricao", "") and "/p/" in e.get("texto", ""), e)
     produto(pg)
     chk("a escolha fica lembrada no próximo link do mesmo canal", pg.is_checked("#ms-previa-chk"))
@@ -66,7 +66,7 @@ with sync_playwright() as p:
     for i in range(2): pg.locator("#ms-prod-lista .ms-prod-marca").nth(i).tap()
     pg.click("[data-ms=prodsel-usar]"); pg.wait_for_timeout(250); pg.click("#ms-enviar"); pg.wait_for_timeout(500)
     e = S["envios"][-1]
-    chk("seleção com prévia: cartão 'Peças separadas para você · 2 peças'", e.get("previa") is True and e.get("previaTitulo") == "Peças separadas para você" and e.get("previaDescricao") == "2 peças na TENKiTER Modas", e)
+    chk("seleção com prévia: cartão 'Produtos separados para você · 2 produtos'", e.get("previa") is True and e.get("previaTitulo") == "Produtos separados para você" and e.get("previaDescricao") == "2 produtos na TENKiTER Modas", e)
     pg.fill("#ms-texto", "Olha https://exemplo.com/x"); pg.wait_for_timeout(100); pg.click("#ms-enviar"); pg.wait_for_timeout(500)
     e = S["envios"][-1]
     chk("link de fora: prévia sem inventar título (o WhatsApp decide)", e.get("previa") is True and e.get("previaTitulo") == "" and e.get("previaDescricao") == "", e)

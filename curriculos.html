@@ -60,6 +60,7 @@
 <header><h1>Currículos</h1></header>
 <main id="app"><div class="card">Carregando…</div></main>
 
+<script src="avisos.js?v=7.60.0"></script>
 <script src="common.js"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script>
@@ -308,7 +309,7 @@ function linkCobrarCurriculo(r) {
   const nome = primeiroNome(r.Nome);
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas de Crateús\n\n' +
     'Vi que seu currículo ainda está em andamento — *falta só ' + faltaTexto(r.Etapa) + '.*\n\n' +
-    'É rapidinho: entra no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
+    'É rapidinho: entre no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
     'Na tela inicial vai aparecer um aviso *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
     'Qualquer dúvida, é só chamar por aqui que te ajudo!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
@@ -317,14 +318,14 @@ function linkCobrarLeitura(r, m) {
   const nome = primeiroNome(r.Nome);
   const motivo = m.precisamReler ? ('tem um trecho atualizado do manual "' + m.titulo + '" pra você reler') : ('falta ler uma parte do manual "' + m.titulo + '"');
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que ainda ' + motivo + '.\n\n' +
-    'É rapidinho: entra no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e continue de onde parou.\n\n' +
+    'É rapidinho: entre no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e continue de onde parou.\n\n' +
     'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }
 function linkCobrarProva(r, m) {
   const nome = primeiroNome(r.Nome);
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que você já terminou de ler o manual "' + m.titulo + '" mas ainda não fez a prova dele.\n\n' +
-    'É rapidinho: entra no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e faz a avaliação quando puder.\n\n' +
+    'É rapidinho: entre no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e faça a avaliação quando puder.\n\n' +
     'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }

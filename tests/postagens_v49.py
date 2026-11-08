@@ -1,4 +1,4 @@
-"""Postagens v4.9: escolher VÁRIAS peças (grade com filtros), Ela usa TM com seletor de fotos de clientes (marcar todas), ocultar texto, 10 posições do Clássico,
+"""Postagens v4.9: escolher VÁRIOS produtos (grade com filtros), Ela usa TM com seletor de fotos de clientes (marcar todas), ocultar texto, 10 posições do Clássico,
 faixa do link no Story (só na prévia) e Livre com os mesmos visuais."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -27,12 +27,12 @@ with sync_playwright() as p:
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250); pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(800)
 
-    print("== Com peça: grade, filtros, várias de uma vez ==")
+    print("== Com produto: grade, filtros, várias de uma vez ==")
     n0 = pg.locator(".po-card").count()
-    chk("a grade mostra várias peças de uma vez", n0 >= 3, n0)
+    chk("a grade mostra vários produtos de uma vez", n0 >= 3, n0)
     chk("há filtros de gênero e categoria", pg.locator("#po-fg").count() == 1 and pg.locator("#po-fc").count() == 1)
     pg.click(".po-card >> nth=0"); pg.click(".po-card >> nth=1"); pg.wait_for_timeout(150)
-    chk("marca duas peças e o botão diz quantas", pg.locator(".po-card[aria-pressed=true]").count() == 2 and "2 peças" in corpo(pg))
+    chk("marca dois produtos e o botão diz quantas", pg.locator(".po-card[aria-pressed=true]").count() == 2 and "2 produtos" in corpo(pg))
     pg.click("[data-a=pecas-todas]"); pg.wait_for_timeout(150)
     chk("'Marcar todas' marca a lista inteira", pg.locator(".po-card[aria-pressed=true]").count() == n0)
     pg.click("[data-a=pecas-todas]"); pg.wait_for_timeout(150)
@@ -43,7 +43,7 @@ with sync_playwright() as p:
         chk("filtro por gênero reduz a lista", 0 < pg.locator(".po-card").count() <= n0)
         pg.select_option("#po-fg", ""); pg.wait_for_timeout(200)
     pg.click(".po-card >> nth=0"); pg.click(".po-card >> nth=1"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(900)
-    chk("segue para as escolhas da 1ª peça", "O que postar?" in corpo(pg) and "Visual" in corpo(pg))
+    chk("segue para as escolhas da 1ª produto", "O que postar?" in corpo(pg) and "Visual" in corpo(pg))
 
     print("== 10 visuais: nada sobreposto nem fora da imagem; ocultar ==")
     TPLS = ["classico", "promo", "minimal", "rodape", "lateral", "cabecalho", "energia", "blocos", "editorial", "cartao"]
@@ -57,7 +57,7 @@ with sync_playwright() as p:
         chk("visual %s: tem zona de link, tudo dentro da imagem e nenhum texto por cima de outro" % tp, any(x["k"] == "zona" for x in bs) and dentro and not cruz, (cruz, [x["k"] for x in bs]))
     print("== Sem preço: Consulte valor ==")
     pg.click("[data-tpl=classico]"); pg.wait_for_timeout(500)
-    chk("há a opção 'Sem preço' por peça", pg.locator("[data-sp]").count() >= 1)
+    chk("há a opção 'Sem preço' por produto", pg.locator("[data-sp]").count() >= 1)
     pg.locator("[data-sp]").first.check(); pg.wait_for_timeout(700)
     chk("com 'sem preço' a arte ainda tem o item de preço (agora Consulte valor) e a legenda avisa", pg.evaluate("(()=>{const c=document.querySelector('#po-previa canvas');return !!(c._boxes||[]).find(x=>x.k==='preco')})()") and "Consulte valor" in pg.input_value("#po-leg"))
     pg.locator("[data-sp]").first.uncheck(); pg.wait_for_timeout(500)
@@ -199,7 +199,7 @@ with sync_playwright() as p:
     print("== Postagem livre usa os mesmos visuais ==")
     pg.click("[data-modo=livre]"); pg.wait_for_timeout(300)
     chk("Livre oferece Clássico, Promoção e os demais visuais", all(pg.locator("[data-tpl=%s]" % t).count() == 1 for t in ("original", "classico", "promo", "minimal", "rodape", "elausa")))
-    chk("perfil comum de vídeo: 3 a 30 s e 9,5 MiB", "partes automáticas de até 30 s" in corpo(pg) and "9,5 MiB" in corpo(pg))
+    chk("perfil comum de vídeo: 3 a 30 s e 9,5 MB", "partes automáticas de até 30 s" in corpo(pg) and "9,5 MB" in corpo(pg))
     chk("nenhum erro de JavaScript", not erros, erros[:3])
     b.close()
 print("\nOK=%d FALHAS=%d" % (len(OK), len(BAD)), BAD); sys.exit(1 if BAD else 0)

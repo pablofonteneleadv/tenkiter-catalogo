@@ -51,7 +51,7 @@ with sync_playwright() as p:
     page.evaluate('iniciarVarias_()')
     assert page.input_value('#cores') == 'Consulte cor/estampa disponível'
     assert page.input_value('#tamanhos') == 'Consultar tamanhos disponíveis'
-    page.evaluate('envios.push({chave: 1, k: "teste-local", titulo: "Peça de teste", estado: "erro", msg: "Não consegui enviar a foto", dados: {}, etapa: "fila"}); desenharEnvios(); document.getElementById("card-form").open = false')
+    page.evaluate('envios.push({chave: 1, k: "teste-local", titulo: "Produto de teste", estado: "erro", msg: "Não consegui enviar a foto", dados: {}, etapa: "fila"}); desenharEnvios(); document.getElementById("card-form").open = false')
     assert page.locator('#cad-envios').is_visible()
     assert page.locator('#fila-envios button', has_text='Tentar de novo').is_visible()
     assert 'Não consegui enviar a foto' in page.inner_text('#fila-envios')

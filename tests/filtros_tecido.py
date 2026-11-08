@@ -52,7 +52,7 @@ with sync_playwright() as p:
  pg.locator('#chips-tecido .chip',has_text='Linho').click();pg.locator('#chips-tamanho .chip',has_text='M').click();pg.locator('#chips-genero .chip',has_text='Feminino Adulto').click();pg.locator('#chips-categoria .chip',has_text='Vestido').click();pg.locator('#chips-cor .chip',has_text='Azul').click();pg.wait_for_timeout(400)
  nomes=pg.locator('#grid .card .nome').all_inner_texts()
  chk('Tecido combina com tamanho, gênero, categoria e cor',nomes==['Vestido Linho'],nomes)
- chk('contador reflete o resultado combinado', 'Ver 1 peça' in pg.inner_text('#fx-ver'),pg.inner_text('#fx-ver'))
+ chk('contador reflete o resultado combinado', 'Ver 1 produto' in pg.inner_text('#fx-ver'),pg.inner_text('#fx-ver'))
  chk('filtro tecido entra na URL compartilhável', 'tec=Linho' in pg.evaluate('location.search'),pg.evaluate('location.search'))
  chk('etiqueta de filtro permite remover tecido',pg.locator('#etiquetas-ativas button[aria-label="Tirar o filtro Tecido: Linho"]').count()==1)
  foto=OUT/'vitrine-390.png';pg.screenshot(path=str(foto),full_page=True)

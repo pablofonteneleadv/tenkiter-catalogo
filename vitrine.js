@@ -67,7 +67,7 @@
     a.id = 'pular-pecas';
     a.className = 'tk-pular';
     a.href = '#' + main.id;
-    a.textContent = 'Pular para as peças';
+    a.textContent = 'Pular para os produtos';
     a.addEventListener('click', () => {
       // O href já move o foco; isto garante o comportamento mesmo se o
       // navegador não focar elementos com tabindex=-1 pelo fragmento.
@@ -177,7 +177,7 @@
         s.textContent = n;
         s.setAttribute('aria-hidden', 'true');
         b.appendChild(s);
-        b.setAttribute('aria-label', rotulo + ': ' + n + (n === 1 ? ' peça' : ' peças'));
+        b.setAttribute('aria-label', rotulo + ': ' + n + (n === 1 ? ' produto' : ' produtos'));
       }
       b.addEventListener('click', aoClicar);
       faixa.appendChild(b);
@@ -205,7 +205,7 @@
       if (genero) {
         const n = contar(valor, 'Categoria', (prod) => listaDeTags(prod.Genero).includes(genero));
         p.hidden = n === 0;
-        p.setAttribute('aria-label', valor + ': ' + n + (n === 1 ? ' peça' : ' peças'));
+        p.setAttribute('aria-label', valor + ': ' + n + (n === 1 ? ' produto' : ' produtos'));
       } else {
         p.hidden = false;
       }
@@ -221,9 +221,9 @@
    * dizer se aquilo é categoria, gênero, cor ou tamanho.
    * ================================================================== */
   const GRUPOS = [
-    ['pills-genero', 'Filtrar por gênero'],
+    ['pills-genero', 'Filtrar por público'],
     ['pills-categoria', 'Filtrar por categoria'],
-    ['chips-genero', 'Gênero'],
+    ['chips-genero', 'Público'],
     ['chips-categoria', 'Categoria'],
     ['chips-cor', 'Cor'],
     ['chips-tamanho', 'Tamanho']
@@ -381,9 +381,9 @@
       if (tem('ehFavorito') && ehFavorito(id)) n += 1;
       if (tem('estaNaSacola') && estaNaSacola(id)) n += 1;
     } catch (e) {}
-    if (v >= 2) return 'Você já viu esta peça ' + v + ' vezes';
-    if (n >= 2) return 'Você já guardou esta peça';
-    if (n === 1 || v === 1) return 'Você já se interessou por esta peça';
+    if (v >= 2) return 'Você já viu este produto ' + v + ' vezes';
+    if (n >= 2) return 'Você já guardou este produto';
+    if (n === 1 || v === 1) return 'Você já se interessou por este produto';
     return '';
   }
 
@@ -418,10 +418,10 @@
         if (window.TKIcone) pedir.innerHTML = window.TKIcone('whatsapp') + ' '; else pedir.textContent = '\u{1F4AC} ';
         const span = document.createElement('span');
         span.className = 'v7-rot';
-        span.textContent = 'Consulte esta peça';
+        span.textContent = 'Consulte este produto';
         pedir.appendChild(span);
       }
-      pedir.setAttribute('aria-label', 'Consulte esta peça: ' + nome);
+      pedir.setAttribute('aria-label', 'Consulte este produto: ' + nome);
     }
 
     // VIT-5 — prova social (só com sinal real).
@@ -749,7 +749,7 @@
     }
     if (nome === 'atendente') {
       const num = (typeof window.WHATSAPP_NUMERO !== 'undefined' && window.WHATSAPP_NUMERO) || '5588993223998';
-      const txt = encodeURIComponent('Olá! Vim pelo catálogo e quero ajuda para escolher uma peça.');
+      const txt = encodeURIComponent('Olá! Vim pelo catálogo e quero ajuda para escolher um produto.');
       window.open('https://wa.me/' + num + '?text=' + txt, '_blank', 'noopener');
     }
   }

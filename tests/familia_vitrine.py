@@ -1,5 +1,5 @@
 """Família de produtos na vitrine (v7.44.0): um card por tamanho, cards da mesma família sempre juntos e na ordem da família,
-filtro parcial, "Outras opções" na peça aberta, e /familias com erro ou lento = vitrine como antes. Apps Script e Worker SIMULADOS."""
+filtro parcial, "Outras opções" no produto aberto, e /familias com erro ou lento = vitrine como antes. Apps Script e Worker SIMULADOS."""
 import os, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -23,7 +23,7 @@ def preparar(st, familias=True):
     for pos, (t, preco) in zip([3, 10, 16], [('G', 59.9), ('P', 39.9), ('M', 44.9)]):
         P[pos].update(Nome='Sunga infantil masculino ' + t, Tamanhos=t, Preco=preco, Categoria='Moda praia', Codigo='SU-' + t)
         SUNGA[t] = P[pos]['ID']
-    P[12].update(Preco=41.9, Nome='Short barato')   # peça barata entre os tamanhos: não pode entrar no meio da família
+    P[12].update(Preco=41.9, Nome='Short barato')   # produto barata entre os tamanhos: não pode entrar no meio da família
     if familias:
         st['familias'] = [{'id': 'fsunga', 'nome': 'Sunga infantil masculino', 'membros': [{'produto': SUNGA['P'], 'rotulo': 'P', 'ordem': 0}, {'produto': SUNGA['M'], 'rotulo': 'M', 'ordem': 1}, {'produto': SUNGA['G'], 'rotulo': 'G', 'ordem': 2}]}]
     # v7.47.0: família de estampas — mesmo nome, sem tamanho no fim, rótulo vazio
@@ -73,7 +73,7 @@ with sync_playwright() as p:
         # peça aberta: "Outros tamanhos"
         pg.locator(f'#grid .card[data-id="{SUNGA["M"]}"] .abrir-peca').click(); pg.wait_for_selector('#outros-tamanhos:not([hidden])', timeout=5000)
         ot = pg.locator('#outros-tamanhos')
-        chk(f'{w}: peça aberta mostra "Outras opções" com foto e tamanho (P · M · G) e o M marcado', 'Outras opções' in ot.inner_text() and ot.locator('button').all_inner_texts() == ['P', 'M', 'G'] and ot.locator('button img').count() == 3 and ot.locator('button[aria-current="true"]').inner_text() == 'M', ot.inner_text())
+        chk(f'{w}: produto aberto mostra "Outras opções" com foto e tamanho (P · M · G) e o M marcado', 'Outras opções' in ot.inner_text() and ot.locator('button').all_inner_texts() == ['P', 'M', 'G'] and ot.locator('button img').count() == 3 and ot.locator('button[aria-current="true"]').inner_text() == 'M', ot.inner_text())
         alvos = ot.locator('button').evaluate_all('bs => bs.map(b => { const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); })')
         chk(f'{w}: botões de tamanho com pelo menos 44 px', all(x >= 43.5 for x in alvos), alvos)
         pg.wait_for_timeout(450); ot.evaluate("e => e.scrollIntoView({block: 'center'})"); pg.wait_for_timeout(150)
@@ -89,12 +89,12 @@ with sync_playwright() as p:
         bt = ot.locator('button')
         chk(f'{w}: estampas: "Outras opções" com 2 fotos, sem texto inventado', bt.count() == 2 and ot.locator('button img').count() == 2 and [x.strip() for x in bt.all_inner_texts()] == ['', ''] and bt.nth(0).get_attribute('aria-label') == 'opção 1: aberta agora' and bt.nth(1).get_attribute('aria-label') == 'Ver opção 2', [bt.nth(i).get_attribute('aria-label') for i in range(bt.count())])
         bt.nth(1).click(); pg.wait_for_timeout(300)
-        chk(f'{w}: tocar na outra estampa abre a peça dela', 'CF-RS' in pg.url, pg.url)
+        chk(f'{w}: tocar na outra estampa abre o produto dele', 'CF-RS' in pg.url, pg.url)
         pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
         pg.goto(BASE + 'index.html'); pg.wait_for_selector('#grid .card[data-id]')
         outra = next(x['ID'] for x in st['produtos'] if x['Nome'] == 'Short barato')
         pg.locator(f'#grid .card[data-id="{outra}"] .abrir-peca').click(); pg.wait_for_selector('#overlay.aberto', timeout=5000)
-        chk(f'{w}: peça fora de família: sem "Outros tamanhos"', pg.locator('#outros-tamanhos').is_hidden())
+        chk(f'{w}: produto fora de família: sem "Outros tamanhos"', pg.locator('#outros-tamanhos').is_hidden())
         chk(f'{w}: sem rolagem horizontal', pg.evaluate('document.documentElement.scrollWidth <= innerWidth'))
         chk(f'{w}: sem erro de JavaScript', not erros, erros)
         ctx.close()
@@ -107,7 +107,7 @@ with sync_playwright() as p:
         ids = ids_na_grade(pg)
         base = [x['ID'] for x in reversed(st['produtos'])][:len(ids)]
         chk(f'/familias {modo}: vitrine pinta sem esperar ({t1:.1f} s) e fica na ordem de sempre', t1 < 2.4 and ids == base, (t1, ids[:8], base[:8]))
-        chk(f'/familias {modo}: abrir peça da família funciona, sem "Outros tamanhos"', (pg.locator(f'#grid .card[data-id="{SUNGA["M"]}"] .abrir-peca').click() or True) and pg.wait_for_selector('#overlay.aberto') and pg.locator('#outros-tamanhos').is_hidden())
+        chk(f'/familias {modo}: abrir produto da família funciona, sem "Outros tamanhos"', (pg.locator(f'#grid .card[data-id="{SUNGA["M"]}"] .abrir-peca').click() or True) and pg.wait_for_selector('#overlay.aberto') and pg.locator('#outros-tamanhos').is_hidden())
         chk(f'/familias {modo}: sem erro de JavaScript', not erros, erros)
         for r in st.get('fam_pendentes', []):
             try: r.abort()

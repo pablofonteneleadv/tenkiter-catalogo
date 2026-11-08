@@ -10,7 +10,7 @@ HTML='''<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="view
 BOOT='''() => {
 window.f={conta:'5588999999999',pode:true,online:false,modo:'ok',calls:[],notices:[]};
 Object.defineProperty(navigator,'onLine',{get:()=>f.online,configurable:true});
-window.p={ID:'teste-123',Nome:'Conjunto 3 peças temático UV masculino infantil',Codigo:'TK-0786',Categoria:'Conjunto',Genero:'Infantil Menino',Preco:24.99,Estoque:3,Status:'Ativo',Foto_URL:'/tests/a.png',Fotos_Galeria:'/tests/b.png,/tests/c.png',Video_URL:'/tests/v.mp4',Videos:[],Tamanhos:'M, Etiqueta: M, Idade: 2 anos, Idade: 3 anos, Idade: 4 anos',Cores:'Azul, Floral',Descricao:'Tecido: Crepe Dior\\nLeve e confortável'};
+window.p={ID:'teste-123',Nome:'Conjunto 3 produtos temático UV masculino infantil',Codigo:'TK-0786',Categoria:'Conjunto',Genero:'Infantil Menino',Preco:24.99,Estoque:3,Status:'Ativo',Foto_URL:'/tests/a.png',Fotos_Galeria:'/tests/b.png,/tests/c.png',Video_URL:'/tests/v.mp4',Videos:[],Tamanhos:'M, Etiqueta: M, Idade: 2 anos, Idade: 3 anos, Idade: 4 anos',Cores:'Azul, Floral',Descricao:'Tecido: Crepe Dior\\nLeve e confortável'};
 window.api=TKDisponibilidade.criar({conta:()=>f.conta,pode:()=>f.pode,enviar:async op=>{f.calls.push(op);if(f.modo==='lento')return await new Promise(resolve=>f.resolver=resolve);if(f.modo==='erro')return {ok:false,erro:'Sem permissão.'};return {ok:true};},atualizar:()=>{api.atualizarAviso(document.getElementById('aviso'));},avisar:t=>f.notices.push(t)});
 document.getElementById('aviso').replaceWith(api.aviso());document.querySelector('.tk-disp-pendente').id='aviso';
 document.getElementById('abrir').onclick=()=>api.abrir(p);
@@ -60,7 +60,7 @@ with sync_playwright() as pw:
     pg.get_by_role('button',name='Descartar registro inválido').click()
     check(jobs(pg)[0]['indice']==1,'Sucesso parcial registra progresso antes da próxima retirada')
     pg.screenshot(path=str(EVID/'disponibilidade-erro.png'))
-    pg.evaluate("f.modo='ok'");pg.get_by_role('button',name='Tentar novamente').click()
+    pg.evaluate("f.modo='ok'");pg.get_by_role('button',name='Tentar de novo').click()
     pg.wait_for_function("!Object.keys(localStorage).some(k=>k.startsWith('tk_disponibilidade_v1:'))")
     check(pg.evaluate("f.calls.filter(c=>c.action==='update').length")==1,'Retentativa não repete etapa já salva')
     check(pg.evaluate("f.calls.filter(c=>c.action==='arquivarMidia').length")==2,'Retenta somente mídia que falhou')
@@ -84,10 +84,10 @@ with sync_playwright() as pw:
     pg.keyboard.press('Tab');check(pg.locator('.tk-disp-fechar').evaluate('(e)=>e===document.activeElement'),'Tab retorna ao fechamento')
     pg.keyboard.press('Escape');check(pg.locator('#ms-edicao-tamanhos').count()==0,'Escape fecha e devolve o foco')
     abrir(pg);pg.get_by_role('button',name='Retirar Único',exact=True).click();salvar(pg)
-    check(jobs(pg)[0]['ops'][0]['action']=='arquivarRapido','Último tamanho arquiva a peça')
+    check(jobs(pg)[0]['ops'][0]['action']=='arquivarRapido','Último tamanho arquiva o produto')
     pg.evaluate('localStorage.clear();p.Status="Ativo"');abrir(pg)
     pg.get_by_role('button',name='Retirar Azul',exact=True).click();salvar(pg)
-    check(jobs(pg)[0]['ops'][0]['action']=='arquivarRapido','Última cor arquiva a peça')
+    check(jobs(pg)[0]['ops'][0]['action']=='arquivarRapido','Última cor arquiva o produto')
     pg.evaluate('localStorage.clear();p.Status="Ativo";p.Tamanhos="P, M"');abrir(pg)
     pg.get_by_role('button',name='Retirar P',exact=True).click()
     pg.evaluate("() => {window.setOriginal=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('tk_disponibilidade_v1:'))throw Error('quota');return setOriginal.call(this,k,v)}}")

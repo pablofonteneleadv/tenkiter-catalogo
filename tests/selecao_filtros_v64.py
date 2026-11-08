@@ -48,6 +48,6 @@ with sync_playwright() as p:
     l2 = pg.input_value("#sel-link")
     chk("opção filtro = link com a busca", "sel=" not in l2 and "q=" in l2, l2)
     pg.evaluate("document.querySelector('input[name=sel-modo][value=lista]').click()"); pg.wait_for_timeout(200)
-    chk("opção lista fixa = ?sel= com as peças do filtro", "?sel=" in pg.input_value("#sel-link"))
+    chk("opção lista fixa = ?sel= com os produtos do filtro", "?sel=" in pg.input_value("#sel-link"))
     b.close()
 print("FALHAS:", BAD); sys.exit(1 if BAD else 0)

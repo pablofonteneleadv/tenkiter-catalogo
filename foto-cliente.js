@@ -41,7 +41,7 @@
   function frase(x, padrao) { return window.TKPadrao ? TKPadrao.erro(x, padrao) : (x && x.erro && !/^[\s]*[\[{<]/.test(String(x.erro)) ? String(x.erro) : padrao); }
   function bloco() {
     const caixa = el('div', { className: 'conta-opc', id: 'foto-cli' });
-    caixa.appendChild(el('h3', { text: '📸 Já usou uma peça nossa? Mande sua foto!', style: 'margin:0 0 4px;font-size:1rem' }));
+    caixa.appendChild(el('h3', { text: '📸 Já usou um produto nossa? Mande sua foto!', style: 'margin:0 0 4px;font-size:1rem' }));
     caixa.appendChild(el('p', { className: 'conta-opc-txt', text: 'Sua foto pode aparecer nos Stories da loja 🧡 É só escolher e enviar.' }));
     const rotulo = el('label', { htmlFor: 'foto-cli-arq', text: 'Escolher foto', style: 'display:block;font-weight:700;font-size:0.85rem;margin:6px 0 4px' });
     const arq = el('input', { type: 'file', id: 'foto-cli-arq', accept: 'image/jpeg,image/png,image/webp,image/*' });
@@ -66,6 +66,7 @@
       if (!blobPronto) { msg.textContent = 'Escolha a foto primeiro.'; return; }
       if (!aut.checked) { msg.textContent = 'Marque a autorização para usarmos a foto nos Stories.'; return; }
       env.disabled = true; env.textContent = 'Enviando…';
+      const fimOcupado = window.TKOcupado ? TKOcupado.inicio() : function () {};
       try {
         const q = '?aceito=1&op=' + encodeURIComponent(opDaFoto(s, assinaturaArq)) + '&obs=' + encodeURIComponent(obs.value.trim()) + '&ig=' + encodeURIComponent(ig.value.trim());
         const r = await fetch(INSTAGRAM_URL + '/cliente/foto' + q, { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'image/jpeg' }, body: blobPronto });

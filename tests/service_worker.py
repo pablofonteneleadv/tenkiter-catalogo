@@ -1,7 +1,7 @@
 """Service worker único (OneSignalSDKWorker.js): instala, guarda o site, abre SEM internet de verdade, o link curto /p/<código> sem internet
 leva ao catálogo, admin/treinamentos nunca entram no cache e o worker NÃO morre quando o endereço do OneSignal está bloqueado.
 
-Como simula "sem internet": o navegador é fechado e aberto de novo com o MESMO perfil (o cache do worker e a lista de peças ficam no aparelho),
+Como simula "sem internet": o navegador é fechado e aberto de novo com o MESMO perfil (o cache do worker e a lista de produtos ficam no aparelho),
 e então o servidor é desligado (teste local) ou o nome do site deixa de resolver (teste no ar). Só desligar a rede da página não serve:
 o service worker faz as próprias requisições e não seria afetado.
 Aqui o service worker fica LIGADO (nos outros testes ele é bloqueado)."""
@@ -56,9 +56,9 @@ try:
         chk("admin / treinamentos / currículos NÃO ficam no cache", not [x for x in guardados if any(k in x for k in ("admin", "treinamentos", "curriculo", "manual"))], guardados)
         chk("o cache não guarda chamadas do Apps Script", not [x for x in guardados if "macros" in x])
         n_on = pg.locator(".card:not(.esqueleto)").count()
-        chk("catálogo com internet mostra as peças", n_on >= 10, n_on)
+        chk("catálogo com internet mostra os produtos", n_on >= 10, n_on)
         pg.goto(BASE + "privacidade.html"); pg.wait_for_timeout(800)
-        pg.goto(BASE + "index.html"); pg.wait_for_timeout(2500)   # deixa a lista de peças guardada no aparelho
+        pg.goto(BASE + "index.html"); pg.wait_for_timeout(2500)   # deixa a lista de produtos guardado no aparelho
         ctx.close()
 
         print("== Sem internet (navegador reaberto com o mesmo perfil) ==")
@@ -70,16 +70,16 @@ try:
         off_err = []; off.on("pageerror", lambda e: off_err.append(str(e)))
         off.goto(BASE + "index.html"); off.wait_for_timeout(3000)
         n = off.locator(".card:not(.esqueleto)").count()
-        chk("catálogo abre sem internet e mostra as peças salvas", n >= 10, n)
+        chk("catálogo abre sem internet e mostra os produtos salvos", n >= 10, n)
         chk("aparece o aviso 'Sem internet'", off.locator("#aviso-offline").is_visible())
         chk("sem erro de JavaScript offline", not off_err, off_err)
         off.locator(".card:not(.esqueleto) .abrir-peca").first.click(); off.wait_for_timeout(900)
-        chk("abrir uma peça offline funciona", off.locator("#overlay.aberto").count() == 1)
+        chk("abrir um produto offline funciona", off.locator("#overlay.aberto").count() == 1)
         off.keyboard.press("Escape"); off.wait_for_timeout(400)
         off.goto(BASE + "privacidade.html"); off.wait_for_timeout(1200)
         chk("política de privacidade também abre offline", "Política de privacidade" in off.inner_text("h1"))
         off.goto(BASE + "p/TK-0007"); off.wait_for_timeout(3000)
-        chk("link curto /p/TK-0007 sem internet cai no catálogo com a peça aberta", "c=TK-0007" in off.url and off.locator("#overlay.aberto").count() == 1, off.url)
+        chk("link curto /p/TK-0007 sem internet cai no catálogo com o produto aberto", "c=TK-0007" in off.url and off.locator("#overlay.aberto").count() == 1, off.url)
         try:
             off.goto(BASE + "admin.html"); off.wait_for_timeout(1500)
             admin_abriu = off.locator("#lista-produtos").count() > 0

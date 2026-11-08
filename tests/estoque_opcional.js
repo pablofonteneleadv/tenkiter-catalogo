@@ -11,7 +11,7 @@ for(const [value,known,soldOut]of [['',false,false],[null,false,false],[undefine
 const workerContext={Response,URL,module:{exports:{}},fetch:async()=>{throw Error('não usar rede')}};
 vm.runInNewContext(fs.readFileSync('og-worker/worker.js','utf8').replace('export default','module.exports ='),workerContext);
 for(const value of ['',null,undefined]){
- const item=workerContext.itemFeed({ID:1,Nome:'Peça simulada',Preco:10,Estoque:value});
+ const item=workerContext.itemFeed({ID:1,Nome:'Produto simulada',Preco:10,Estoque:value});
  assert.equal(item.quantity_to_sell_on_facebook,'');assert.notEqual(item.availability,'out of stock');checks+=2;
 }
 console.log('PASS estoque opcional: '+checks+' verificações; vazio não é zero nem indisponível.');
