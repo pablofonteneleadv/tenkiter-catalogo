@@ -50,8 +50,26 @@ p = select([])
 check(set(p["modulos"]) == m, "Diff ausente não aprova sem validar")
 p = select(["AGENTS.md"])
 check(p["graphify_alterado"], "Instruções da IA acionam Graphify")
-p = select([".github/workflows/ci.yml"])
-check(set(p["modulos"]) == m, "Alterações do CI são de alto risco")
+# O CI sozinho é validado pelo seletor + smoke de setores distintos; não roda
+# 115 testes por mudar a própria regra de escolha de testes.
+ci_files = [".github/workflows/ci.yml", "scripts/ci/testes_impacto.py",
+            "scripts/ci/testes_impacto_manifesto.json", "tests/testes_impacto_seletor.py",
+            "docs/ia/testes-por-impacto.md", "AGENTS.md", "CLAUDE.md"]
+p = select(ci_files)
+check(p["modulos"] == ["ci"] and not p["suite_completa"], "CI isolado executa smoke dirigido, não a plataforma inteira")
+p = select(ci_files + ["common.js"])
+check(set(p["modulos"]) == m, "CI com código compartilhado mantém cobertura total")
+p = select([".github/workflows/deploy.yml"])
+check(set(p["modulos"]) == m, "Alteração em deploy continua de alto risco")
+p = select(["scripts/ci/check_secrets.sh"])
+check(set(p["modulos"]) == m, "Mudança de segurança do CI continua ampla")
+p = I.plano(ci_files, "pull_request", "rapido", [], "CI-EXTRA: mensagens")
+check(set(p["modulos"]) == {"ci","mensagens"}, "CI isolado admite cobertura adicional por dúvida")
+p = select(ci_files, labels=["ci:todos"])
+check(set(p["modulos"]) == m and p["suite_completa"], "CI isolado permite forçar todos manualmente")
+p = select(ci_files, suite="completo")
+check(set(p["modulos"]) == m and p["suite_completa"], "Modo completo nunca vira smoke")
+check(len([k for k, v in I.M["tests"].items() if "ci" in v]) >= 4, "CI executa pelo menos quatro testes independentes")
 p = select(["tests/manual_fidelidade_ui.py"])
 check(p["modulos"] == ["treinamentos"], "Testes existentes mantêm classificação explícita")
 check(len(I.M["tests"]) >= 110, "Inventário abrange bateria antiga e testes dirigidos")
