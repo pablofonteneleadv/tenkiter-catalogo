@@ -6,6 +6,10 @@ Leia a skill `.agents/skills/graphify/SKILL.md`. Execute `python3 scripts/graphi
 
 Use o grafo para reduzir releituras e localizar relações; confirme os trechos nas fontes e faça os testes. Respeite as instruções atuais do Cofre. O perfil é local, sem LLM/IA paga, e o cache não é versionado. Em caso de falha ou cobertura parcial, registre o limite e use fontes/testes diretamente. Registre a consulta útil no PR. Veja `docs/ia/graphify.md`.
 
+## CI por impacto — regra obrigatória para qualquer IA
+
+Antes de abrir PR, leia [a política de testes por impacto](docs/ia/testes-por-impacto.md) e consulte o plano automático no GitHub Actions. Rode os testes do módulo afetado, **amplie por prudência** em fluxos compartilhados ou quando houver dúvida, usando os rótulos `ci:<módulo>` ou `ci:todos`. Testes de segurança e sintaxe continuam em toda PR; bateria completa permanece diária/manual. Nunca desative testes, contorne o portão do CI nem reduza a cobertura só para acelerar. Código novo/desconhecido recebe cobertura total até ser mapeado em `scripts/ci/testes_impacto.py` e `scripts/ci/testes_impacto_manifesto.json`.
+
 ## Regras existentes
 
 Para qualquer alteração visual ou de comportamento da interface, leia e aplique `.agents/skills/tenkiter-estetica-humana/SKILL.md` antes de editar e novamente antes de aprovar merge/deploy.
