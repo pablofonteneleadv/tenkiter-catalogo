@@ -3,7 +3,7 @@
 - se o servidor recusa ou some, a tela diz o MOTIVO em português, guarda a nota no aparelho e oferece 'Enviar de novo';
 - a nota guardada é reenviada sozinha ao entrar de novo.
 Apps Script SIMULADO.   python3 tests/prova_resiliente.py"""
-import sys, os
+import sys, os, json
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
 from playwright.sync_api import sync_playwright
@@ -13,9 +13,29 @@ def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)[:300]) if (e and not c) else ""))
 ESTAGIARIO = ["portal", "manual_1", "manual_2", "avaliacoes", "catalogo_admin", "catalogo_cadastrar", "cliente"]
 
+# Ajustes só deste teste (não mexem no utilitário compartilhado mock.py): o fetch da página é embrulhado para
+# (1) acrescentar perguntas à prova e (2) fazer o servidor recusar a nota quando window.__resErro estiver definido.
+INIT = """
+(function(){
+  var orig = window.fetch.bind(window);
+  window.fetch = async function(url, init){
+    var corpo = {}; try { corpo = JSON.parse((init && init.body) || '{}'); } catch(e) {}
+    if (corpo.action === 'resultado' && window.__resErro) return new Response(JSON.stringify(window.__resErro), {status:200});
+    var r = await orig(url, init);
+    if (corpo.action === 'treinamento_conteudo' && window.__provaExtra) {
+      var j = await r.clone().json();
+      Object.keys(window.__provaExtra).forEach(function(k){ if (j.provas && j.provas[k]) j.provas[k].questions = j.provas[k].questions.concat(window.__provaExtra[k]); });
+      return new Response(JSON.stringify(j), {status:200});
+    }
+    return r;
+  };
+})();
+"""
 def abrir(b, st_extra):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
-    log = []; st = install(ctx, perms=ESTAGIARIO, log=log, versao="3.7", protegido=True); st.update(st_extra)
+    log = []; st = install(ctx, perms=ESTAGIARIO, log=log, versao="3.7", protegido=True)
+    ctx.add_init_script("window.__provaExtra = %s; window.__resErro = %s;" % (json.dumps(st_extra.get("provas_extra")), json.dumps(st_extra.get("resultado_erro"))))
+    ctx.add_init_script(INIT)
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
     return ctx, pg, log, st, errs
 
@@ -51,7 +71,7 @@ with sync_playwright() as p:
     chk("tem o botão 'Enviar de novo'", pg.locator("#reenviar-resultado").count() == 1)
     chk("a nota ficou guardada no aparelho", pg.evaluate("Object.keys(localStorage).some(k => k.startsWith('tm_resultado_pend_'))"))
     chk("nota pendente sem credenciais", pg.evaluate("""() => Object.keys(localStorage).filter(k => k.startsWith('tm_resultado_pend_')).every(k => (JSON.parse(localStorage.getItem(k) || '[]')).every(x => !('senha' in x) && !('sessao' in x) && !('token' in x)))"""))
-    st["resultado_erro"] = None
+    pg.evaluate("window.__resErro = null")
     pg.click("#reenviar-resultado"); pg.wait_for_timeout(900)
     chk("Enviar de novo funciona quando o servidor volta", pg.locator("#reenviar-resultado").count() == 0 and "avaliação 1 de 3" in pg.inner_text("#quiz-result"), pg.inner_text("#quiz-result")[:300])
     chk("nota guardada some depois de confirmada", not pg.evaluate("Object.keys(localStorage).some(k => k.startsWith('tm_resultado_pend_') && JSON.parse(localStorage.getItem(k) || '[]').length)"))
@@ -63,7 +83,7 @@ with sync_playwright() as p:
     entrar_na_prova(pg); responder(pg); pg.click("#quiz-corrigir"); pg.wait_for_timeout(1200)
     chk("sem conexão: mensagem amigável", "conexão" in pg.inner_text("#quiz-result").lower() and "{" not in pg.inner_text("#quiz-result"))
     n_antes = len([x for x in log if x.get("action") == "resultado"])
-    st["resultado_erro"] = None
+    ctx.add_init_script("window.__resErro = null;")   # o servidor "volta" a responder nas próximas páginas
     pg.goto(BASE + "treinamentos.html"); pg.wait_for_timeout(2500)
     if pg.locator("#login-whats").count():
         pg.fill("#login-whats", "88999999999"); pg.fill("#login-pass", "1234"); pg.keyboard.press("Enter"); pg.wait_for_timeout(2500)
