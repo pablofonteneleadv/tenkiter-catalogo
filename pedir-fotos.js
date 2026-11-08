@@ -13,9 +13,24 @@
   function sessao() { return typeof getSessao === 'function' ? getSessao() : null; }
   function mesmaConta(a, b) { return !!(a && b && normalizarWhats(a.whatsapp) === normalizarWhats(b.whatsapp)); }
   function mensagem(erro) {
+    const padrao = 'Não consegui registrar o pedido. Tente de novo.';
+    if (window.TKPadrao) { const t = TKPadrao.erro(erro, padrao); return t.length <= 350 ? t : padrao; }
     const t = String(erro || '').trim();
-    return t && t.length <= 350 && !/^[\[{<]/.test(t) ? t : 'Não consegui registrar o pedido. Tente novamente.';
+    return t && t.length <= 350 && !/^[\[{<]/.test(t) ? t : padrao;
   }
+  /* v7.57.0: a chave de operação de cada produto fica NO APARELHO (não só na memória): recarregar a página ou tocar de novo depois de um
+   * "sem confirmação" reusa a mesma chave, e o servidor não cria um segundo pedido. Sai daqui quando o servidor confirma. */
+  const OPS_KEY = 'tk_pf_ops_v1', OPS_VALE_MS = 24 * 3600 * 1000;
+  function opsLer() { try { const o = JSON.parse(localStorage.getItem(OPS_KEY) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+  function opsGravar(o) { try { localStorage.setItem(OPS_KEY, JSON.stringify(o)); } catch (e) {} }
+  function assinaturaOp(conta, id, pedido) { return [normalizarWhats(conta && conta.whatsapp), id, JSON.stringify(pedido || {})].join('|'); }
+  function opDe(conta, id, pedido) {
+    const sig = assinaturaOp(conta, id, pedido), o = opsLer(), agora = Date.now();
+    Object.keys(o).forEach(k => { if (!o[k] || agora - (o[k].em || 0) > OPS_VALE_MS) delete o[k]; });
+    if (!o[sig]) o[sig] = { op: 'pf-' + (window.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)), em: agora };
+    opsGravar(o); return o[sig].op;
+  }
+  function opConfirmada(conta, id, pedido) { const o = opsLer(); delete o[assinaturaOp(conta, id, pedido)]; opsGravar(o); }
   function abrir(lista, origem) {
     const s = sessao();
     if (!s) { alert('Entre na sua conta da equipe para solicitar fotos.'); return; }
@@ -107,7 +122,7 @@
         const agora = sessao();
         if (!mesmaConta(s, agora)) { estado.falhas.set(id, 'Sua conta mudou. Entre novamente para continuar.'); break; }
         status.textContent = 'Solicitando fotos: ' + estado.confirmados.size + ' de ' + pecas.length + ' produtos confirmados…';
-        if (!estado.ops.has(id)) estado.ops.set(id, 'pf-' + (window.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)));
+        if (!estado.ops.has(id)) estado.ops.set(id, opDe(s, id, estado.pedido));
         const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25000);
         try {
           const resposta = await fetch(INSTAGRAM_URL + '/esteira/fotos/pedir', {
@@ -117,18 +132,18 @@
           });
           const r = await resposta.json().catch(() => null);
           if (!resposta.ok || !r?.ok) throw Error(mensagem(r?.erro));
-          estado.confirmados.add(id);
+          estado.confirmados.add(id); opConfirmada(s, id, estado.pedido);
         } catch (e) {
-          estado.falhas.set(id, e.name === 'AbortError' || e instanceof TypeError ? 'Não houve confirmação. Confira a conexão e tente novamente.' : mensagem(e.message));
+          estado.falhas.set(id, e.name === 'AbortError' || e instanceof TypeError ? 'Sem confirmação do servidor. Confira a conexão e toque de novo: o pedido não é duplicado.' : mensagem(e.message));
         } finally { clearTimeout(timer); }
       }
       estado.enviando = false; folha.removeAttribute('aria-busy');
       const n = estado.confirmados.size, faltam = pecas.length - n;
       if (!faltam) { status.textContent = n === 1 ? 'Pedido registrado. A equipe pode vê-lo em Fotos, na Esteira.' : 'Pedidos registrados para os ' + n + ' produtos. A equipe pode vê-los em Fotos, na Esteira.'; enviar.textContent = 'Concluído'; enviar.disabled = true; }
       else {
-        status.textContent = n + ' de ' + pecas.length + ' produtos confirmados. Faltam ' + faltam + '. Tente novamente para enviar apenas os que faltam.';
+        status.textContent = n + ' de ' + pecas.length + ' produtos confirmados. ' + (faltam === 1 ? 'Falta 1' : 'Faltam ' + faltam) + '. Toque em tentar de novo para enviar ' + (faltam === 1 ? 'só o que falta' : 'apenas os que faltam') + '; o que já foi confirmado não é repetido.';
         estado.falhas.forEach((erro, id) => { const p = pecas.find(x => String(x.ID) === id); falhas.append(el('li', '', (p.Codigo || p.Nome || 'Produto') + ': ' + erro)); });
-        falhas.hidden = false; enviar.textContent = 'Tentar os ' + faltam + ' restantes'; enviar.disabled = false;
+        falhas.hidden = false; enviar.textContent = faltam === 1 ? 'Tentar o que falta' : 'Tentar os ' + faltam + ' restantes'; enviar.disabled = false;
       }
     };
     estado.mostrar();
