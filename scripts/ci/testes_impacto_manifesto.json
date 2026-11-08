@@ -433,6 +433,21 @@
       "treinamentos",
       "push",
       "infra"
+    ],
+    "tests/fotos_mini_script.py": [
+      "midia"
+    ],
+    "tests/midia_r2.py": [
+      "midia",
+      "catalogo"
+    ],
+    "tests/painel_leve.py": [
+      "catalogo",
+      "midia"
+    ],
+    "tests/worker_midia_mini.js": [
+      "midia",
+      "catalogo"
     ]
   },
   "evidencias": {

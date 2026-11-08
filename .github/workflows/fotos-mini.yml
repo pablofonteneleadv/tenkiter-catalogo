@@ -1,0 +1,35 @@
+name: Cópias reduzidas das fotos antigas
+# Gera a cópia de 480 px (30–60 KB) de cada foto antiga do R2 para a vitrine baixar menos dados.
+# Aditivo e idempotente: nunca apaga nem troca a original; quem já tem cópia é pulado; cada execução faz até `maximo` fotos.
+# Sem segredo novo: usa a identidade OIDC do próprio workflow (o Worker `tenkiter-midia` confere repositório, branch main e este arquivo).
+# Disparo: manual (Actions > Cópias reduzidas das fotos antigas > Run workflow). Repita até o resumo mostrar "cópias criadas 0".
+on:
+  workflow_dispatch:
+    inputs:
+      somente_saude:
+        type: boolean
+        default: false
+        description: 'Só conferir identidade e armazenamento (não gera nada)'
+      maximo:
+        type: string
+        default: '300'
+        description: 'Máximo de fotos nesta execução'
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: fotos-mini-r2
+  cancel-in-progress: false
+jobs:
+  gerar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Instalar Pillow
+        run: python3 -m pip install --quiet pillow
+      - name: Gerar cópias reduzidas (só acrescenta)
+        env:
+          MINI_SO_SAUDE: ${{ inputs.somente_saude && '1' || '0' }}
+          MINI_MAX: ${{ inputs.maximo }}
+        run: python3 scripts/fotos/gerar_minis.py

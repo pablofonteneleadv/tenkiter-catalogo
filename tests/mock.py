@@ -870,6 +870,9 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if route.request.method=="POST" and "/u?poster=" in u:
                 m.setdefault("posters",[]).append({"chave":u.split("poster=")[1],"tam":len(route.request.post_data_buffer or b""),"ctype":route.request.headers.get("content-type")})
                 return route.fulfill(json={"ok":True,"url":"x"})
+            if route.request.method=="POST" and "/u?mini=" in u:     # cópia reduzida (480 px) da foto nova
+                m.setdefault("minis",[]).append({"chave":u.split("mini=")[1].split("&")[0],"w":int(u.split("w=")[1]) if "w=" in u else 480,"tam":len(route.request.post_data_buffer or b"")})
+                return route.fulfill(json={"ok":True})
             if route.request.method=="POST" and u.endswith("/u"):
                 m["envios"].append({"tam":len(route.request.post_data_buffer or b""),"whats":route.request.headers.get("x-tk-whats"),"sessao":route.request.headers.get("x-tk-sessao")})
                 if m["modo"]=="ok":
