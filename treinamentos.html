@@ -351,6 +351,18 @@ th{background:var(--surface-2); font-weight:700;}
 .chapter mark.rh.rc{color:var(--c-l) !important;}
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .chapter .rc{color:var(--c-d);} }
 :root[data-theme="dark"] .chapter .rc{color:var(--c-d);}
+/* 2026-11 — fidelidade ao Google Docs: fundo do parágrafo, sem alterar avisos especiais. */
+.chapter p.fundo-doc,.chapter li.fundo-doc,.chapter blockquote.fundo-doc{
+  padding:8px 10px; border-radius:6px; max-width:68ch;
+  box-decoration-break:clone; -webkit-box-decoration-break:clone;
+  overflow-wrap:anywhere;
+}
+.chapter ul li.fundo-doc{margin-left:0;}
+@media(max-width:480px){
+  .chapter p.fundo-doc,.chapter li.fundo-doc,.chapter blockquote.fundo-doc{padding:8px;max-width:100%;}
+  .manual-img-wrap.lado-esq,.manual-img-wrap.lado-dir{max-width:42%;}
+}
+
 /* caixas coloridas (Relaxa / Atenção / Dica / Exemplo / Regra de ouro) -- cada uma com cor e ícone próprios, para não ficar tudo texto igual */
 .aviso{border:1px solid; border-left-width:6px; border-radius:12px; padding:12px 14px; margin:14px 0; max-width:68ch; line-height:1.55;}
 .aviso .aviso-tag{display:block; font-size:.78rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; margin-bottom:3px;}
@@ -1075,6 +1087,16 @@ function sincronizarProgressoLote(level){
 /* ---------------- render: blocks ---------------- */
 /** texto com formatação por trecho (cor, marca-texto, negrito, links...) -- tm-verificado.js; sem ele, texto simples */
 function ricoHtml_(texto, runs){ return (window.TMV && TMV.rico) ? TMV.rico(texto, runs) : esc(texto); }
+/** Fundo do Google Docs: usa apenas #RRGGBB validado, com tinta contrastante.
+ * As caixas Dica/Atenção/Checagem são renderizadas por TMV e não passam por aqui. */
+function fundoDoc_(b){
+  var fundo = String(b && b.bg || '');
+  if (!/^#[0-9a-f]{6}$/i.test(fundo)) return { cls:'', sty:'' };
+  var r=parseInt(fundo.substr(1,2),16)/255,g=parseInt(fundo.substr(3,2),16)/255,bl=parseInt(fundo.substr(5,2),16)/255;
+  var l=0.2126*r+0.7152*g+0.0722*bl;
+  var tinta=l<0.42?'#ffffff':'#191919';
+  return {cls:' fundo-doc',sty:' style="background-color:'+fundo+';color:'+tinta+'"'};
+}
 /** vídeo da lição: só endereços que a gente monta a partir de um id/endereço validado (nunca HTML do Doc) */
 function videoHtml_(b){
   var id = String(b.id || ''), src = '', link = '', tag = '';
@@ -1102,13 +1124,16 @@ function renderBlocks(blocks, chaveCap){
       var lvl = b.level || 0;
       while(listStack.length <= lvl){ html += '<ul>'; listStack.push(lvl); }
       while(listStack.length > lvl+1){ html += '</ul>'; listStack.pop(); }
-      html += '<li>' + esc(b.text) + '</li>';
+      var fi = fundoDoc_(b);
+      html += '<li' + (fi.cls ? ' class="' + fi.cls.trim() + '"' : '') + fi.sty + '>' + ricoHtml_(b.text,b.runs) + '</li>';
     } else {
       closeLists(null);
       if (b.type === 'p'){
-        html += '<p class="' + (b.bold ? 'p-bold' : '') + (b.al === 'c' ? ' al-c' : b.al === 'r' ? ' al-r' : '') + '">' + ricoHtml_(b.text, b.runs) + '</p>';
+        var fp = fundoDoc_(b);
+        html += '<p class="' + (b.bold ? 'p-bold' : '') + (b.al === 'c' ? ' al-c' : b.al === 'r' ? ' al-r' : '') + fp.cls + '"' + fp.sty + '>' + ricoHtml_(b.text,b.runs) + '</p>';
       } else if (b.type === 'quote'){
-        html += '<blockquote class="quote">' + ricoHtml_(b.text, b.runs) + '</blockquote>';
+        var fq = fundoDoc_(b);
+        html += '<blockquote class="quote' + fq.cls + '"' + fq.sty + '>' + ricoHtml_(b.text,b.runs) + '</blockquote>';
       } else if (b.type === 'checagem' || b.type === 'facaagora' || b.type === 'aviso'){
         html += TMV.renderBloco(b, chaveCap || 'x');
       } else if (b.type === 'video'){
