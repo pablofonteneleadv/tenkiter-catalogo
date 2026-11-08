@@ -8,6 +8,6 @@ with sync_playwright() as p:
  b=p.chromium.launch(args=['--no-sandbox']);c=b.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True);c.add_init_script(SESSION);install(c);pg=c.new_page();pg.goto(BASE+'admin.html');pg.wait_for_timeout(1200)
  assert pg.locator('#arquivar-depois').count()==1
  assert not pg.locator('#arquivar-depois').is_checked()
- assert 'peça de teste' in pg.locator('#linha-arquivar-depois').inner_text().lower()
+ assert 'produto de teste' in pg.locator('#linha-arquivar-depois').inner_text().lower()
  c.close();b.close()
 print('arquivar_apos_cadastrar: OK')

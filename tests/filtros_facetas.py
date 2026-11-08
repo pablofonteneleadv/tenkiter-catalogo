@@ -1,4 +1,4 @@
-"""v6.7: opções dos menus somem/voltam ao vivo conforme os OUTROS filtros marcados (só peças ativas)."""
+"""v6.7: opções dos menus somem/voltam ao vivo conforme os OUTROS filtros marcados (só produtos ativos)."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
@@ -31,7 +31,7 @@ with sync_playwright() as p:
         c0 = sorted(esperado)[0]
         pg.evaluate("(c)=>{[...document.querySelectorAll('#chips-categoria .chip')].find(x=>(x.dataset.filterValue||x.textContent)===c).click()}", c0); pg.wait_for_timeout(500)
         n = pg.evaluate("listaFiltradaAtual.length")
-        chk("combinação gênero + categoria tem peças", n > 0, n)
+        chk("combinação gênero + categoria tem produtos", n > 0, n)
         # tira o gênero: volta tudo
         pg.evaluate("(g)=>{[...document.querySelectorAll('#chips-genero .chip')].find(c=>(c.dataset.filterValue||c.textContent)===g).click()}", alvo); pg.wait_for_timeout(500)
         vis2 = pg.evaluate(JS_VIS, "chips-categoria")

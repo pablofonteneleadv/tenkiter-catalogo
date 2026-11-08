@@ -28,11 +28,11 @@
     try {
       const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo, headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
       return await r.json();
-    } catch (e) { return { ok: false, erro: 'Sem conexão agora. Tente de novo.', semRede: true }; }
+    } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
   }
   function erroTxt(r) {
     if (r && r.erro) return r.erro;
-    return r && r.semRede ? 'Sem conexão agora. Tente de novo.' : 'Não foi possível agora. Tente de novo.';
+    return r && r.semRede ? 'Sem conexão. Verifique a internet e tente de novo.' : 'Não foi possível agora. Tente de novo.';
   }
   function podeGerir() {
     try { return typeof temPermissao === 'function' && typeof usuarioAdmin !== 'undefined' && !!usuarioAdmin && !!temPermissao(usuarioAdmin, 'gerir_acessos'); } catch (e) { return false; }
@@ -139,7 +139,7 @@
       '<label for="cx-chave-' + nome + '">' + (c.temChave ? 'Trocar a chave' : 'Colar a chave') + '</label>' +
       '<input type="password" id="cx-chave-' + nome + '" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole aqui — a chave não aparece depois">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="guardar" data-nome="' + nome + '">Testar e guardar</button>' +
-      (c.temChave ? '<button type="button" class="cx-btn cx-perigo" data-cx="apagar" data-nome="' + nome + '">Apagar a chave guardada</button>' : '') + '</div>' +
+      (c.temChave ? '<button type="button" class="cx-btn cx-perigo" data-cx="apagar" data-nome="' + nome + '">Excluir a chave guardada</button>' : '') + '</div>' +
       (depois || '') +
       '<div class="cx-msg" id="cx-msg-' + nome + '" role="status"></div>' +
     '</div>';
@@ -157,7 +157,7 @@
       '<div id="cx-passos-onesignal" aria-live="polite"></div>';
     return blocoChave('onesignal', 'OneSignal — avisos (notificações)',
       'No OneSignal: <b>⚙️ Settings → Organization settings → Security → Keys &amp; IDs → Add Key</b> (nome: <i>TENKiTER site</i>, deixe a lista de IPs vazia). O <b>Organization ID</b> aparece na mesma tela. O painel testa tudo antes de guardar e depois liga a plataforma Web do app e cria a chave de envio.',
-      '⚠️ A chave da organização manda em <b>todos os apps</b> da sua conta do OneSignal. Ela só fica no servidor e só o Admin total mexe. Se desconfiar de vazamento, apague aqui <b>e</b> apague a chave no OneSignal. Nunca cole essa chave em conversa: cole só aqui.',
+      '⚠️ A chave da organização manda em <b>todos os apps</b> da sua conta do OneSignal. Ela só fica no servidor e só o Admin total mexe. Se desconfiar de vazamento, exclua aqui <b>e</b> exclua a chave no OneSignal. Nunca cole essa chave em conversa: cole só aqui.',
       antes, depois);
   }
   function mostrarPassos(passos) {
@@ -193,7 +193,7 @@
       '</div>'
       ], true) +
       grupo_('android', 'Aplicativo Android · Mensagens', 'Avisos nativos do atendimento.', [
-        '<div class="cx-bloco"><p id="cx-mobile-status" role="status">Conferindo…</p><p class="g-nota">Primeiro configure Google Android (FCM) no OneSignal com a conta de serviço do Firebase. Depois cole aqui a App API Key do aplicativo da TENKiTER, em OneSignal → Settings → Keys & IDs. A chave fica somente no servidor.</p><label for="cx-mobile-key">OneSignal · App API Key</label><input id="cx-mobile-key" type="password" autocomplete="new-password" placeholder="Cole a chave de envio aqui"><div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="mobile-guardar">Salvar chave</button><button type="button" class="cx-btn cx-sec" data-cx="mobile-apagar">Remover chave</button></div><p id="cx-mobile-msg" class="cx-msg" role="status"></p><p class="g-nota">Ter a chave salva não comprova a entrega no Android. Instale o APK, entre na conta, ative Avisos e confira uma nova mensagem com o app fechado.</p></div>'
+        '<div class="cx-bloco"><p id="cx-mobile-status" role="status">Conferindo…</p><p class="g-nota">Primeiro configure Google Android (FCM) no OneSignal com a conta de serviço do Firebase. Depois cole aqui a App API Key do aplicativo da TENKiTER, em OneSignal → Settings → Keys & IDs. A chave fica somente no servidor.</p><label for="cx-mobile-key">OneSignal · App API Key</label><input id="cx-mobile-key" type="password" autocomplete="new-password" placeholder="Cole a chave de envio aqui"><div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="mobile-guardar">Salvar chave</button><button type="button" class="cx-btn cx-sec" data-cx="mobile-apagar">Excluir chave</button></div><p id="cx-mobile-msg" class="cx-msg" role="status"></p><p class="g-nota">Ter a chave salva não comprova a entrega no Android. Instale o APK, entre na conta, ative Avisos e confira uma nova mensagem com o app fechado.</p></div>'
       ], false) +
       grupo_('instagram', '📸 Instagram', 'Conexão do importador e das mensagens, e leitura das fotos por IA.', [
         blocoInstagramWorker_(),
@@ -253,7 +253,7 @@
       '<label for="cx-fc-chave">Chave da API FreeConvert</label>' +
       '<input type="password" id="cx-fc-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a nova chave aqui">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="fc-guardar">Salvar chave</button>' +
-      '<button type="button" class="cx-btn cx-perigo" data-cx="fc-apagar">Remover chave</button></div>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="fc-apagar">Excluir chave</button></div>' +
       '<div id="cx-fc-msg" class="cx-msg" role="status"></div>' +
       '<p class="g-nota">Use uma chave nova; revogue a que foi compartilhada na conversa. A conversão depende da cota disponível na FreeConvert.</p></div>'
       ], false) +
@@ -396,12 +396,12 @@
     conferir();
   }
   async function apagar(nome) {
-    if (!confirm('Apagar a chave guardada no servidor? O painel deixa de conseguir cuidar disso até você colar outra. (Se quiser, revogue-a também no site do serviço.)')) return;
+    if (!confirm('Excluir a chave guardada no servidor? O painel deixa de conseguir cuidar disso até você colar outra. (Se quiser, revogue-a também no site do serviço.)')) return;
     if (nome === 'instagram') await igWorker_('/token', 'DELETE');
     const r = await chamar({ action: 'salvarConexao', nome, apagar: true });
     if (!r || !r.ok) { msg('cx-msg-' + nome, erroTxt(r), 'erro'); return; }
     status = r; desenhar();
-    msg('cx-msg-' + nome, 'Chave apagada do servidor.', 'ok');
+    msg('cx-msg-' + nome, 'Chave excluída do servidor.', 'ok');
     conferir();
   }
   async function criarRegras() {
@@ -475,7 +475,7 @@
     else msg('cx-fc-msg',erroTxt(r),'erro');
   }
   async function apagarFreeConvert_(){
-    if(!confirm('Remover a chave FreeConvert da Gestão?'))return;
+    if(!confirm('Excluir a chave FreeConvert da Gestão?'))return;
     const r=await igWorker_('/post/freeconvert/config','POST',{apagar:true});
     msg('cx-fc-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok)conferirFreeConvert_();
@@ -555,7 +555,7 @@
     box.innerHTML = '<h3>Pixel, API de Conversões e busca</h3>' +
       '<p class="g-nota">Tudo aqui fica pronto, mas <b>desligado</b>: com os campos vazios, nada é enviado para a Meta e o aviso de cookies nem aparece para o cliente.</p>' +
       '<label for="int-pixel">ID do Pixel da Meta (só números)</label><input type="text" id="int-pixel" class="cx-campo" inputmode="numeric" autocomplete="off" value="' + esc(r.pixelId) + '" placeholder="Ex.: 1234567890123456">' +
-      '<p class="g-nota">Quando preenchido, o catálogo pede a autorização do cliente (aviso de cookies) e só então liga o Pixel. Eventos: ver peça, sacola, WhatsApp e pedido enviado.</p>' +
+      '<p class="g-nota">Quando preenchido, o catálogo pede a autorização do cliente (aviso de cookies) e só então liga o Pixel. Eventos: ver produto, seleção, WhatsApp e pedido enviado.</p>' +
       '<p class="' + (r.capiConfigurado ? 'cx-chave-ok' : 'cx-chave-sem') + '" id="int-capi-status">' + (r.capiConfigurado ? '✓ Token da API de Conversões configurado (guardado só no servidor)' : '✗ Sem token da API de Conversões') + '</p>' +
       '<label for="int-token">Token de acesso da Meta (API de Conversões, opcional)</label><input type="password" id="int-token" autocomplete="new-password" placeholder="' + (r.capiConfigurado ? 'deixe vazio para manter o atual' : 'cole aqui o token') + '">' +
       '<label for="int-teste">Código de teste de eventos (opcional)</label><input type="text" id="int-teste" class="cx-campo" autocomplete="off" value="' + esc(r.testeCodigo) + '" placeholder="Ex.: TEST12345">' +
@@ -564,7 +564,7 @@
       '<p class="g-nota">Usado só quando o cliente digita algo que não acha nada. Já existem sinônimos padrão (camisa/camiseta, calça/jeans…).</p>' +
       '<label for="int-seg">Segmentos dos avisos (OneSignal), separados por vírgula</label><input type="text" id="int-seg" class="cx-campo" autocomplete="off" value="' + esc(r.segmentosPush) + '" placeholder="Ex.: Clientes Infantil, Clientes Feminino">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="int-salvar">Salvar</button>' +
-      (r.capiConfigurado ? '<button type="button" class="cx-btn cx-perigo" data-cx="int-limpar">Remover o token guardado</button>' : '') + '</div>' +
+      (r.capiConfigurado ? '<button type="button" class="cx-btn cx-perigo" data-cx="int-limpar">Excluir o token guardado</button>' : '') + '</div>' +
       '<div class="cx-msg" id="int-msg" role="status"></div>';
   }
   async function salvarIntegracoes_(extra) {
@@ -622,7 +622,7 @@
       '<div class="cx-linha" id="cx-zr-ligar" hidden><button type="button" class="cx-btn cx-prim" data-cx="zr-ligar">Ligar mensagens do Direct</button></div>' +
       '<ol class="g-nota cx-passos"><li>Crie a conta em <b>zernio.com</b> (grátis até 2 contas).</li><li>No Zernio, conecte o Instagram da loja (conta Empresa ou Criador).</li><li>Em <b>Settings → API Keys</b>, crie uma chave e cole aqui.</li></ol>' +
       '<label for="cx-zr-key">Zernio · chave de API</label><input id="cx-zr-key" type="password" autocomplete="new-password" placeholder="Cole a chave aqui">' +
-      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="zr-guardar">Salvar e conferir</button><button type="button" class="cx-btn cx-sec" data-cx="zr-apagar">Remover chave</button></div>' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="zr-guardar">Salvar e conferir</button><button type="button" class="cx-btn cx-sec" data-cx="zr-apagar">Excluir chave</button></div>' +
       '<p id="cx-zr-msg" class="cx-msg" role="status"></p>' +
       '<div class="cx-linha" id="cx-zr-diag-l" hidden><button type="button" class="cx-btn cx-sec" data-cx="zr-diag">Conferir entregas</button><button type="button" class="cx-btn cx-sec" data-cx="zr-testar">Testar aviso</button></div>' +
       '<div id="cx-zr-diag" class="cx-zr-diag" role="status"></div>' +
@@ -706,20 +706,20 @@
   }
   async function configurarZernio_(apagar) {
     const input = $('cx-zr-key'); if (!input) return;
-    if (apagar && !confirm('Remover a chave do Zernio do servidor? Nada muda no Instagram.')) return;
+    if (apagar && !confirm('Excluir a chave do Zernio do servidor? Nada muda no Instagram.')) return;
     if (!apagar && !input.value.trim()) return msg('cx-zr-msg', 'Cole a chave do Zernio antes de salvar.', 'erro');
     msg('cx-zr-msg', apagar ? 'Removendo…' : 'Conferindo a chave no Zernio…', '');
     const r = await igWorker_('/msg/zernio/config', 'POST', apagar ? { apagar: true } : { chave: input.value.trim() });
     if (r && r.ok) {
       input.value = '';
       const avisoTxt = r.aviso ? (r.aviso.ok ? ' As mensagens do Direct passam a chegar em Mensagens → Instagram.' : ' ' + r.aviso.erro) : '';
-      msg('cx-zr-msg', apagar ? 'Chave removida e aviso de mensagens desligado.' : (r.conta ? 'Chave conferida e guardada no servidor.' + avisoTxt + (r.contas && r.contas.length > 1 ? ' Há mais de um Instagram: confira qual é o da loja abaixo.' : '') : 'Chave guardada. Agora conecte o Instagram no Zernio e toque em “Salvar e conferir” de novo.'), r.aviso && !r.aviso.ok ? 'erro' : 'ok');
+      msg('cx-zr-msg', apagar ? 'Chave excluída e aviso de mensagens desligado.' : (r.conta ? 'Chave conferida e guardada no servidor.' + avisoTxt + (r.contas && r.contas.length > 1 ? ' Há mais de um Instagram: confira qual é o da loja abaixo.' : '') : 'Chave guardada. Agora conecte o Instagram no Zernio e toque em “Salvar e conferir” de novo.'), r.aviso && !r.aviso.ok ? 'erro' : 'ok');
       conferirZernio_();
     }
     else msg('cx-zr-msg', erroTxt(r), 'erro');
   }
   async function conferirMobile_(){const el=$('cx-mobile-status');if(!el)return;const r=await igWorker_('/msg/mobile/config','GET');el.textContent=r&&r.ok?(r.configurada?'Chave de envio salva. Falta conferir a entrega no aparelho.':'Chave de envio Android ainda não configurada.'):erroTxt(r);}
-  async function configurarMobile_(apagar){const input=$('cx-mobile-key');if(apagar&&!confirm('Desativar o envio de avisos Android pelo servidor?'))return;const r=await igWorker_('/msg/mobile/config','POST',apagar?{apagar:true}:{chave:input.value.trim()});if(r&&r.ok){input.value='';msg('cx-mobile-msg',apagar?'Chave removida.':'Chave conferida e salva no servidor.','ok');conferirMobile_();}else msg('cx-mobile-msg',erroTxt(r),'erro');}
+  async function configurarMobile_(apagar){const input=$('cx-mobile-key');if(apagar&&!confirm('Desativar o envio de avisos Android pelo servidor?'))return;const r=await igWorker_('/msg/mobile/config','POST',apagar?{apagar:true}:{chave:input.value.trim()});if(r&&r.ok){input.value='';msg('cx-mobile-msg',apagar?'Chave excluída.':'Chave conferida e salva no servidor.','ok');conferirMobile_();}else msg('cx-mobile-msg',erroTxt(r),'erro');}
   function clique(ev) {
     const b = ev.target.closest('[data-cx]'); if (!b) return;
     const a = b.dataset.cx;
@@ -739,7 +739,7 @@
     else if (a === 'ia-ligar') ligarIA_();
     else if (a === 'ia-desligar') desligarIA_();
     else if (a === 'int-salvar') salvarIntegracoes_();
-    else if (a === 'int-limpar') { if (confirm('Remover o token da API de Conversões guardado no servidor?')) salvarIntegracoes_({ limparTokenCapi: true }).then(carregarIntegracoes_); }
+    else if (a === 'int-limpar') { if (confirm('Excluir o token da API de Conversões guardado no servidor?')) salvarIntegracoes_({ limparTokenCapi: true }).then(carregarIntegracoes_); }
     else if (a === 'conferir') conferir();
     else if (a === 'guardar') guardar(b.dataset.nome);
     else if (a === 'apagar') apagar(b.dataset.nome);
@@ -770,9 +770,9 @@
     temOnesignal = !!v.conexoesOnesignal; temIntegracoes = !!v.integracoes; temCofre = !!v.conexoesCopiar;                          // backend 3.4: sem o bloco do OneSignal
     botao.hidden = false;
     botao.addEventListener('click', () => {
-      if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; }
+      if (!podeGerir()) { TKAviso.aviso('Esta tela é só para o Admin total.'); return; }
       abrir();
     });
-    window.TKConexoes = { abrir: (secao) => { if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; } abrir(secao); } };
+    window.TKConexoes = { abrir: (secao) => { if (!podeGerir()) { TKAviso.aviso('Esta tela é só para o Admin total.'); return; } abrir(secao); } };
   })();
 })();

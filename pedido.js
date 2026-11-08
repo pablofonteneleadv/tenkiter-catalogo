@@ -23,7 +23,7 @@ function totalTexto_(itens, longo) {
   var n = itens.filter(ehConsulta).length;
   if (!n) return formatarReal(totalAvista_(itens));
   if (n === itens.length) return longo ? 'valor a consultar com a loja' : 'A consultar';
-  return formatarReal(totalAvista_(itens)) + (longo ? ' (+ ' + n + (n === 1 ? ' peça' : ' peças') + ' com valor a consultar)' : ' + consulta');
+  return formatarReal(totalAvista_(itens)) + (longo ? ' (+ ' + n + (n === 1 ? ' produto' : ' produtos') + ' com valor a consultar)' : ' + consulta');
 }
 function linhaItem_(p) {
   return '• ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' — ' + (ehConsulta(p) ? 'consulte o valor' : formatarReal(precoAvista_(p)) + ' à vista');
@@ -150,28 +150,28 @@ function abrirSacola() {
 
   if (carregando) {
     container.innerHTML = '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x tk-fechar" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
-      '<p class="texto-pequeno" style="padding:20px 16px">Carregando as peças da sua seleção…</p>';
+      '<p class="texto-pequeno" style="padding:20px 16px">Carregando os produtos da sua seleção…</p>';
   } else if (!todos.length) {
     container.innerHTML =
       '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x tk-fechar" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
-      '<div id="sacola-vazia">Sua seleção está vazia. Toque em <b>Selecionar</b> nas peças que você gostar e envie tudo de uma vez para a loja.</div>' +
+      '<div id="sacola-vazia">Sua seleção está vazia. Toque em <b>Selecionar</b> nos produtos que você gostar e envie tudo de uma vez para a loja.</div>' +
       '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">' + icPed_('whatsapp', '💬') + ' Prefiro falar no WhatsApp</a>';
   } else {
     var d = dadosIniciaisCliente_();
     var total = totalAvista_(itens);
     container.innerHTML =
       '<div class="sheet-topo"><div class="nome">Minha seleção (' + itens.length + ')</div><button type="button" class="x tk-fechar" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
-      (sumiram > 0 ? '<p class="texto-pequeno" role="status">' + sumiram + (sumiram === 1 ? ' peça saiu' : ' peças saíram') + ' do catálogo e foi removida da sacola.</p>' : '') +
+      (sumiram > 0 ? '<p class="texto-pequeno" role="status">' + sumiram + (sumiram === 1 ? ' produto saiu' : ' produtos saíram') + ' do catálogo e foi removido da seleção.</p>' : '') +
       itens.map(function (p) {
         // v7.50.0: tocar na miniatura ou no nome abre a peça (a seleção continua aberta por baixo; voltar retorna a ela)
         return '<div class="item-sacola">' +
-          '<button type="button" class="mini-btn" data-abrir-id="' + escaparHtml(p.ID) + '" aria-label="Ver a peça ' + escaparHtml(p.Nome) + '"><img ' + atribSrc(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + ' alt="" width="48" height="60" loading="lazy"></button>' +
+          '<button type="button" class="mini-btn" data-abrir-id="' + escaparHtml(p.ID) + '" aria-label="Ver o produto ' + escaparHtml(p.Nome) + '"><img ' + atribSrc(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + ' alt="" width="48" height="60" loading="lazy"></button>' +
           '<div class="info"><button type="button" class="nome-btn nome" data-abrir-id="' + escaparHtml(p.ID) + '">' + escaparHtml(p.Nome) + '</button>' +
           (p.Codigo ? '<div class="codigo">' + escaparHtml(p.Codigo) + '</div>' : '') +
           '<div class="preco">' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista') + '</div></div>' +
-          '<button type="button" class="btn-remover" data-remover-id="' + escaparHtml(p.ID) + '" aria-label="Remover da sacola: ' + escaparHtml(p.Nome) + '">' + icPed_('fechar', '✕') + '</button></div>';
+          '<button type="button" class="btn-remover" data-remover-id="' + escaparHtml(p.ID) + '" aria-label="Remover da seleção: ' + escaparHtml(p.Nome) + '">' + icPed_('fechar', '✕') + '</button></div>';
       }).join('') +
-      (esgotados.length ? '<p class="texto-pequeno" role="status" style="margin-top:8px">' + esgotados.length + (esgotados.length === 1 ? ' peça da sacola está esgotada' : ' peças da sacola estão esgotadas') + ' e não entra no pedido.</p>' : '') +
+      (esgotados.length ? '<p class="texto-pequeno" role="status" style="margin-top:8px">' + esgotados.length + (esgotados.length === 1 ? ' produto da seleção está esgotado' : ' produtos da seleção estão esgotados') + ' e não entra no pedido.</p>' : '') +
       '<div class="resumo-linha" style="margin-top:6px"><strong>Total estimado à vista</strong><span class="avista">' + totalTexto_(itens) + '</span></div>' +
       (PEDIDOS_ATIVOS ? (
       '<div class="form-pedido">' +
@@ -190,7 +190,7 @@ function abrirSacola() {
         '<div class="erro-campo" id="ped-erro" role="alert"></div>' +
       '</div>' +
       '<p class="texto-pequeno">O pedido vai para o WhatsApp da loja. O pagamento e a combinação de retirada ou entrega são feitos por lá. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>'
-      ) : '<p class="texto-pequeno">Toque em <b>Enviar para a loja</b> e a conversa abre no WhatsApp com as peças e os links. Sem cadastro, sem formulário. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>') +
+      ) : '<p class="texto-pequeno">Toque em <b>Enviar para a loja</b> e a conversa abre no WhatsApp com os produtos e os links. Sem cadastro, sem formulário. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>') +
       '<button type="button" class="btn-secundario-cta" id="btn-limpar-sacola" style="margin-top:12px">Esvaziar seleção</button>' +
       '<div class="barra-compra"><div class="bc-total"><small>Total à vista</small><strong>' + totalTexto_(itens) + '</strong></div>' +
       '<button type="button" class="bc-pedir" id="btn-enviar-sacola">' + icPed_('whatsapp', '💬') + (PEDIDOS_ATIVOS ? ' Enviar minha seleção' : ' Enviar para a loja') + '</button></div>';
@@ -223,7 +223,7 @@ function abrirSacola() {
 }
 /** Sem pedido: abre o WhatsApp da loja com as peças e os links (sem nome, telefone, endereço nem código). A seleção continua guardada. */
 function enviarSelecaoSimples_(itens) {
-  var texto = 'Olá! Tenho interesse nestas peças do catálogo:\n\n' + listaDePecasTexto_(itens) + '\n\nTotal estimado à vista: ' + totalTexto_(itens, true);
+  var texto = 'Olá! Tenho interesse nestes produtos do catálogo:\n\n' + listaDePecasTexto_(itens) + '\n\nTotal estimado à vista: ' + totalTexto_(itens, true);
   itens.forEach(function (p) { try { registrarEvento(p.ID, p.Codigo, 'whatsapp', '', true); } catch (e) {} });
   if (window.TKMeta) TKMeta.evento('Lead', { value: totalAvista_(itens), currency: 'BRL', content_ids: itens.map(function (p) { return p.Codigo || p.ID; }), content_type: 'product', num_items: itens.length }, 'sel_' + Date.now());
   try { window.open(linkWhatsApp(texto), '_blank'); } catch (e) { location.href = linkWhatsApp(texto); }
@@ -372,7 +372,7 @@ async function consultarRastreio_() {
   }
   if (r && r.bloqueado) erro.textContent = 'Muitas tentativas seguidas. Aguarde 15 minutos ou fale com a loja.';
   else if (r && r.naoEncontrado) erro.textContent = 'Não encontramos esse pedido. Confira o código e os 4 últimos números do WhatsApp usado no pedido.';
-  else if (r && r.semRede) erro.textContent = 'Sem conexão agora. Tente de novo em instantes.';
+  else if (r && r.semRede) erro.textContent = 'Sem conexão. Verifique a internet e tente de novo.';
   else if (!v || !v.pedidos) erro.textContent = 'O acompanhamento online ainda não está disponível. Fale com a loja pelo WhatsApp.';
   else erro.textContent = (r && r.erro) || 'Não foi possível consultar agora. Tente de novo.';
 }
@@ -410,7 +410,7 @@ function abrirFavoritos() {
   if (!produtos.length && ids.length) {
     c.innerHTML = topo + '<p class="texto-pequeno" style="padding:20px 16px">Carregando seus favoritos…</p>';
   } else if (!todos.length) {
-    c.innerHTML = topo + '<div id="sacola-vazia">Você ainda não tem favoritos. Toque no coração das peças que gostar para guardá-las aqui.</div>' +
+    c.innerHTML = topo + '<div id="sacola-vazia">Você ainda não tem favoritos. Toque no coração dos produtos que gostar para guardá-las aqui.</div>' +
       '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">' + icPed_('whatsapp', '💬') + ' Prefiro falar no WhatsApp</a>';
   } else {
     c.innerHTML = topo +
@@ -419,10 +419,10 @@ function abrirFavoritos() {
         return '<div class="fav-linha"><img ' + atribSrc(fotoMini(p.Foto_URL, 160)) + ' alt="" width="48" height="60" loading="lazy">' +
           '<div class="info"><button type="button" class="nome-btn" data-abrir-id="' + escaparHtml(p.ID) + '" style="all:unset;cursor:pointer;font-weight:700;font-size:.85rem">' + escaparHtml(p.Nome) + '</button>' +
           '<div class="fav-preco' + (esg ? ' esgotado' : '') + '">' + (esg ? 'Esgotado' : (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista')) + '</div></div>' +
-          '<div class="acoes">' + (esg ? '' : '<button type="button" data-sac-id="' + escaparHtml(p.ID) + '" aria-label="' + (estaNaSacola(p.ID) ? 'Já está na sacola: ' : 'Adicionar à sacola: ') + escaparHtml(p.Nome) + '">' + (estaNaSacola(p.ID) ? icPed_('certo', '✓') : icPed_('sacola', '🛍️')) + '</button>') +
+          '<div class="acoes">' + (esg ? '' : '<button type="button" data-sac-id="' + escaparHtml(p.ID) + '" aria-label="' + (estaNaSacola(p.ID) ? 'Já está na seleção: ' : 'Adicionar à seleção: ') + escaparHtml(p.Nome) + '">' + (estaNaSacola(p.ID) ? icPed_('certo', '✓') : icPed_('sacola', '🛍️')) + '</button>') +
           '<button type="button" data-rem-id="' + escaparHtml(p.ID) + '" aria-label="Remover dos favoritos: ' + escaparHtml(p.Nome) + '">' + icPed_('fechar', '✕') + '</button></div></div>';
       }).join('') +
-      '<div class="resumo-linha" style="margin-top:6px"><strong>Total à vista (' + disp.length + (disp.length === 1 ? ' peça' : ' peças') + ')</strong><span class="avista">' + totalTexto_(disp) + '</span></div>' +
+      '<div class="resumo-linha" style="margin-top:6px"><strong>Total à vista (' + disp.length + (disp.length === 1 ? ' produto' : ' produtos') + ')</strong><span class="avista">' + totalTexto_(disp) + '</span></div>' +
       (todos.length > disp.length ? '<p class="texto-pequeno">' + (todos.length - disp.length) + ' esgotada(s) não entram na conta.</p>' : '') +
       '<button type="button" class="btn-principal-cta" id="fav-pedir"' + (disp.length ? '' : ' disabled') + '>' + icPed_('whatsapp', '💬') + ' Consultar a lista no WhatsApp</button>' +
       '<button type="button" class="btn-secundario-cta" id="fav-mover"' + (disp.length ? '' : ' disabled') + '>Adicionar todos à seleção</button>' +
@@ -432,7 +432,7 @@ function abrirFavoritos() {
     c.querySelectorAll('[data-rem-id]').forEach(function (b) { b.addEventListener('click', function () { toggleFavorito(b.dataset.remId); atualizarSacolaHeader_(); abrirFavoritos(); if (apenasFavoritos) aplicarFiltros(); }); });
     var ped = document.getElementById('fav-pedir');
     if (ped) ped.addEventListener('click', function () {
-      var t = 'Olá! Gostei destas peças do catálogo e queria saber se estão disponíveis:\n\n' + listaDePecasTexto_(disp) + '\n\nTotal estimado à vista: ' + totalTexto_(disp, true);
+      var t = 'Olá! Gostei destes produtos do catálogo e queria saber se estão disponíveis:\n\n' + listaDePecasTexto_(disp) + '\n\nTotal estimado à vista: ' + totalTexto_(disp, true);
       disp.forEach(function (p) { try { registrarEvento(p.ID, p.Codigo, 'whatsapp', '', true); } catch (e) {} });
       if (window.TKMeta) TKMeta.evento('Contact', { content_ids: disp.map(function (p) { return p.Codigo || p.ID; }), content_type: 'product' });
       window.open(linkWhatsApp(t), '_blank');
@@ -475,12 +475,12 @@ function linkDaSelecao_(fixa, listaBase) {
 }
 /** Texto do WhatsApp (texto puro): com lista fixa, cada peça com preço e o link da seleção no fim (endereço completo e clicável). */
 function mensagemDaSelecao_(link, fixa, lista) {
-  var cab = 'Olha as peças que separei na TENKiTER Modas';
+  var cab = 'Olha os produtos que separei na TENKiTER Modas';
   if (!fixa) return cab + ' (' + descricaoDaSelecao_() + '):\n' + link;
   var n = Math.min(lista.length, MAX_SELECAO_FIXA), mostrar = Math.min(n, 12), msg;
   do {
-    var linhas = lista.slice(0, mostrar).map(linhaItem_).join('\n') + (n > mostrar ? '\n… e mais ' + (n - mostrar) + (n - mostrar === 1 ? ' peça' : ' peças') : '');
-    msg = cab + ' (' + n + (n === 1 ? ' peça' : ' peças') + '):\n' + linhas + '\n\nToque para ver as fotos de cada uma:\n' + link;
+    var linhas = lista.slice(0, mostrar).map(linhaItem_).join('\n') + (n > mostrar ? '\n… e mais ' + (n - mostrar) + (n - mostrar === 1 ? ' produto' : ' produtos') : '');
+    msg = cab + ' (' + n + (n === 1 ? ' produto' : ' produtos') + '):\n' + linhas + '\n\nToque para ver as fotos de cada uma:\n' + link;
     mostrar--;
   } while (msg.length > 1500 && mostrar > 0);
   return msg;
@@ -497,12 +497,12 @@ function descricaoDaSelecao_() {
   if (apenasNovidades) partes.push('novidades');
   if (apenasFavoritos) partes.push('favoritas');
   if (selecaoFixa) partes.push('seleção enviada');
-  return partes.length ? partes.join(' · ') : 'todas as peças';
+  return partes.length ? partes.join(' · ') : 'todos os produtos';
 }
 function abrirSelecao(daSacola) {
   if (typeof atualizarURLComFiltros === 'function') atualizarURLComFiltros();
   var listaSac = itensDaSacola_(), listaFil = listaFiltradaAtual || [];
-  var temFiltro = descricaoDaSelecao_() !== 'todas as peças';
+  var temFiltro = descricaoDaSelecao_() !== 'todos os produtos';
   // v6.4: quando há seleção E filtro, a pessoa escolhe o que vai no link (3 opções claras).
   var escolhaTripla = listaSac.length > 0 && temFiltro && !selecaoObrigatoriaFixa_() && listaFil.length > 0 && listaFil.length <= MAX_SELECAO_FIXA;
   var modo = daSacola ? 'sel' : (escolhaTripla ? 'sel' : 'filtro');
@@ -526,16 +526,16 @@ function abrirSelecao(daSacola) {
     var msg = mensagemDaSelecao_(link, fixa, lista);
     c.innerHTML =
       '<div class="sheet-topo"><div class="nome">Compartilhar seleção</div><button type="button" class="x tk-fechar" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
-      '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(escolhaTripla ? (modo === 'sel' ? 'as peças da sua seleção' : (modo === 'lista' ? 'o que o filtro mostra' : descricaoDaSelecao_())) : (daSacola ? 'as peças que você marcou em “Selecionar”' : descricaoDaSelecao_())) + '</p>' +
+      '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' produto' : ' produtos') + '</b> — ' + escaparHtml(escolhaTripla ? (modo === 'sel' ? 'os produtos da sua seleção' : (modo === 'lista' ? 'o que o filtro mostra' : descricaoDaSelecao_())) : (daSacola ? 'os produtos que você marcou em “Selecionar”' : descricaoDaSelecao_())) + '</p>' +
       '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img ' + atribSrc(fotoMini(p.Foto_URL, 160)) + ' alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
       (escolhaTripla ? '<fieldset class="sel-modo"><legend>O que vai no link?</legend>' +
-        '<label><input type="radio" name="sel-modo" value="sel"' + (modo === 'sel' ? ' checked' : '') + '> <span>🛍️ Só a minha seleção (' + listaSac.length + (listaSac.length === 1 ? ' peça' : ' peças') + ')</span></label>' +
-        '<label><input type="radio" name="sel-modo" value="lista"' + (modo === 'lista' ? ' checked' : '') + '> <span>📋 As ' + listaFil.length + ' peças que o filtro mostra agora (lista fixa)</span></label>' +
+        '<label><input type="radio" name="sel-modo" value="sel"' + (modo === 'sel' ? ' checked' : '') + '> <span>🛍️ Só a minha seleção (' + listaSac.length + (listaSac.length === 1 ? ' produto' : ' produtos') + ')</span></label>' +
+        '<label><input type="radio" name="sel-modo" value="lista"' + (modo === 'lista' ? ' checked' : '') + '> <span>📋 As ' + listaFil.length + ' produtos que o filtro mostra agora (lista fixa)</span></label>' +
         '<label><input type="radio" name="sel-modo" value="filtro"' + (modo === 'filtro' ? ' checked' : '') + '> <span>🔎 O filtro que estou usando (' + escaparHtml(descricaoDaSelecao_()) + ')</span></label></fieldset>' : '') +
-      (podeEscolher ? '<label class="sel-fixa"><input type="checkbox" id="sel-fixa"' + (fixa ? ' checked' : '') + '> <span>Enviar só estas ' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + ' (lista fixa)</span></label>' : '') +
+      (podeEscolher ? '<label class="sel-fixa"><input type="checkbox" id="sel-fixa"' + (fixa ? ' checked' : '') + '> <span>Enviar só estas ' + lista.length + (lista.length === 1 ? ' produto' : ' produtos') + ' (lista fixa)</span></label>' : '') +
       '<p class="texto-pequeno" id="sel-explica" style="margin-bottom:6px">' + (fixa
-        ? 'Quem abrir o link vê exatamente estas peças.'
-        : 'Quem abrir o link vê a loja com estes mesmos filtros (peças novas que entrarem nele aparecem também).') + '</p>' +
+        ? 'Quem abrir o link vê exatamente estes produtos.'
+        : 'Quem abrir o link vê a loja com estes mesmos filtros (produtos novos que entrarem nele aparecem também).') + '</p>' +
       '<label class="sr-only" for="sel-link">Link da seleção</label><input type="text" id="sel-link" class="link-selecao" readonly value="' + escaparHtml(link) + '">' +
       '<a class="btn-zap" style="margin:0 16px 8px" id="sel-zap" href="' + escaparHtml(linkWhatsApp(msg)) + '" target="_blank" rel="noopener">💬 Enviar para consultor TM🧡</a>' +
       '<button type="button" class="btn-secundario-cta" id="sel-copiar">📋 Copiar link</button>' +
@@ -553,7 +553,7 @@ function abrirSelecao(daSacola) {
       catch (e) { var i = document.getElementById('sel-link'); i.focus(); i.select(); aviso.textContent = 'Selecione e copie o link acima.'; }
     });
     var nat = document.getElementById('sel-nativo');
-    if (nat) nat.addEventListener('click', async function () { try { await navigator.share({ title: 'TENKiTER Modas — peças selecionadas', text: msg }); } catch (e) {} });   // o link já vai dentro do texto (sem "url" para não duplicar)
+    if (nat) nat.addEventListener('click', async function () { try { await navigator.share({ title: 'TENKiTER Modas — produtos selecionados', text: msg }); } catch (e) {} });   // o link já vai dentro do texto (sem "url" para não duplicar)
   }
   desenhar();
   abrirComHistorico_('overlay-selecao');
@@ -580,7 +580,7 @@ function ligarPedidoNaPagina() {
   var rast = document.getElementById('rod-rastrear'); if (rast && !PEDIDOS_ATIVOS && rast.parentElement) rast.parentElement.hidden = true;
   if (rast) rast.addEventListener('click', function (e) { e.preventDefault(); abrirRastreio('', ''); });
   var z = document.getElementById('rod-zap'); if (z) z.href = linkWhatsApp('Olá! Vim pelo catálogo da TENKiTER Modas.');
-  var az = document.getElementById('ajuda-zap'); if (az) az.href = linkWhatsApp('Olá! Preciso de ajuda para escolher uma peça no catálogo da TENKiTER Modas.');
+  var az = document.getElementById('ajuda-zap'); if (az) az.href = linkWhatsApp('Olá! Preciso de ajuda para escolher um produto no catálogo da TENKiTER Modas.');
   var fz = document.getElementById('fab-zap');
   if (fz) { fz.href = linkWhatsApp('Olá! Vim pelo catálogo da TENKiTER Modas e quero ajuda.'); fz.addEventListener('click', function () { if (window.TKMeta) TKMeta.evento('Contact'); }); }
 }

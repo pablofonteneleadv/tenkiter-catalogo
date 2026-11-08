@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("TK_BASE", "http://127.0.0.1:8766/")
 TELA = """<div data-acao='menu' onclick="document.getElementById('submenu').hidden=false"><span>Cadastrar</span></div>
-<section id='submenu' hidden><button data-acao='novo' onclick="document.getElementById('form').hidden=false;window.novoClicks=(window.novoClicks||0)+1;if(location.search.includes('tutorial_teste')&&window.novoClicks===1){document.getElementById('form').outerHTML=document.getElementById('form').outerHTML;setTimeout(()=>{document.getElementById('form').hidden=true;document.getElementById('submenu').hidden=true},80)}"><span>Cadastrar nova peça</span></button></section>
+<section id='submenu' hidden><button data-acao='novo' onclick="document.getElementById('form').hidden=false;window.novoClicks=(window.novoClicks||0)+1;if(location.search.includes('tutorial_teste')&&window.novoClicks===1){document.getElementById('form').outerHTML=document.getElementById('form').outerHTML;setTimeout(()=>{document.getElementById('form').hidden=true;document.getElementById('submenu').hidden=true},80)}"><span>Cadastrar novo produto</span></button></section>
 <section id='form' hidden><label id='foto-label' for='foto'>📷 Tirar foto ou escolher da galeria</label>
 <input id='foto' type='file' accept='image/*'></section>"""
 

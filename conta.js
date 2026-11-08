@@ -159,7 +159,7 @@
           var r = await o.chamar({action:'recuperar_whatsapp_iniciar',identificador:ident.value.trim()});
           if (!r || !r.ok || !r.desafio) return erro('Recuperação por WhatsApp indisponível agora. Use os dados cadastrados ou chame a gestão.');
           telaCodigo(r.desafio,r.mensagem);
-        } catch(e) { erro('Sem conexão. Tente novamente em instantes.'); }
+        } catch(e) { erro('Sem conexão. Verifique a internet e tente de novo.'); }
         finally {zapCodigo.disabled=false;}
       });
       var ok = el('button', { type: 'button', 'class': 'tkc-pri', text: 'Trocar a senha e entrar' }); box.appendChild(ok);
@@ -173,11 +173,11 @@
         if (cpf.value && !cpfValido(cpf.value)) return erro('CPF inválido. Confira os 11 números.');
         if (nasc.value && !nascValida(nasc.value)) return erro('Data de nascimento inválida. Use dd/mm/aaaa.');
         if (nova.value.length < 8) return erro('A senha nova precisa ter pelo menos 8 caracteres.');
-        ok.disabled = true; var rot = ok.textContent; ok.textContent = 'Conferindo...'; msg.className = ''; msg.textContent = '';
+        ok.disabled = true; var rot = ok.textContent; ok.textContent = 'Conferindo…'; msg.className = ''; msg.textContent = '';
         var r;
         try { r = await o.chamar({ action: 'recuperar_senha', identificador: ident.value.trim(), cpf: digitos(cpf.value), nascimento: nasc.value, novaSenha: nova.value }); } catch (e) { r = null; }
         ok.disabled = false; ok.textContent = rot;
-        if (!r) return erro('Sem conexão agora. Verifique a internet e tente de novo.');
+        if (!r) return erro('Sem conexão. Verifique a internet e tente de novo.');
         if (r.ok && r.usuario && r.sessao) { fechar(); if (o.aoEntrar) o.aoEntrar(r); return; }
         if (r.ok) { msg.className = 'tkc-ok'; msg.textContent = 'Senha trocada! Agora é só entrar com a senha nova.'; return; }
         if (r.precisaGestao) return telaGestao(r.nome, ident.value.trim(), r.erro || 'A gestão troca a sua senha pelo WhatsApp.');
@@ -200,7 +200,7 @@
         salvar.disabled=true;
         try {
           var r=await o.chamar({action:'recuperar_whatsapp_concluir',desafio:desafio,codigo:codigo.value,novaSenha:senha.value});
-          aviso.textContent=r&&r.ok?'Senha alterada. Feche esta janela e entre com a nova senha.':r&&r.erro||'Não foi possível confirmar. Tente novamente.';
+          aviso.textContent=r&&r.ok?'Senha alterada. Feche esta janela e entre com a nova senha.':r&&r.erro||'Não foi possível confirmar. Tente de novo.';
           if(r&&r.ok){codigo.value='';senha.value='';salvar.hidden=true;}
         }catch(e){aviso.textContent='Sem conexão agora.';}
         finally{salvar.disabled=false;}
@@ -235,7 +235,7 @@
     f.appendChild(inp); f.appendChild(bt); f.appendChild(msg);
     bt.addEventListener('click', async function () {
       if (!cpfValido(inp.value)) { msg.textContent = 'CPF inválido. Confira os 11 números.'; return; }
-      bt.disabled = true; var rot = bt.textContent; bt.textContent = 'Salvando...'; msg.textContent = '';
+      bt.disabled = true; var rot = bt.textContent; bt.textContent = 'Salvando…'; msg.textContent = '';
       var r; try { r = await o.salvar(inp.value); } catch (e) { r = null; }
       bt.disabled = false; bt.textContent = rot;
       if (r && r.ok) { f.remove(); if (o.aoSalvar) o.aoSalvar(r); return; }

@@ -6,8 +6,8 @@ from playwright.sync_api import sync_playwright
 BASE=os.environ.get('TK_BASE','http://127.0.0.1:8766/')
 OUT=Path(__file__).parent/'saida';OUT.mkdir(exist_ok=True)
 T=[
- {'id':'ind','titulo':'Atendimento pelo WhatsApp','descricao':'Pratique a resposta ao cliente.','pagina':'index.html','status':'publicado','versao':2,'manualId':'','etapas':[{'selector':'#busca','alvoNome':'Buscar','acao':'fill','regra':'preenchido','instrucao':'Procure uma peça'}]},
- {'id':'hib','titulo':'Prática do cadastro','descricao':'Faça o cadastro guiado.','pagina':'admin.html','status':'publicado','versao':1,'manualId':'1','etapas':[{'selector':'#busca-admin','alvoNome':'Buscar','acao':'fill','regra':'preenchido','instrucao':'Procure uma peça'}], 'conclusao':{'concluidoEm':'2026-10-25T12:00:00Z','versao':1,'acertos':1,'erros':0,'duracaoSeg':30}}
+ {'id':'ind','titulo':'Atendimento pelo WhatsApp','descricao':'Pratique a resposta ao cliente.','pagina':'index.html','status':'publicado','versao':2,'manualId':'','etapas':[{'selector':'#busca','alvoNome':'Buscar','acao':'fill','regra':'preenchido','instrucao':'Procure um produto'}]},
+ {'id':'hib','titulo':'Prática do cadastro','descricao':'Faça o cadastro guiado.','pagina':'admin.html','status':'publicado','versao':1,'manualId':'1','etapas':[{'selector':'#busca-admin','alvoNome':'Buscar','acao':'fill','regra':'preenchido','instrucao':'Procure um produto'}], 'conclusao':{'concluidoEm':'2026-10-25T12:00:00Z','versao':1,'acertos':1,'erros':0,'duracaoSeg':30}}
 ]
 with sync_playwright() as p:
  b=p.chromium.launch(args=['--no-sandbox'])

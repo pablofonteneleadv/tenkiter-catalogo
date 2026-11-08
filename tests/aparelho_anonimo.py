@@ -58,7 +58,7 @@ with sync_playwright() as p:
     pg.locator(".card:not(.esqueleto):has(.ac-sacola)").first.locator("button.abrir-peca, .btn-detalhes, .nome-produto").first.click(timeout=3000) if pg.locator(".card:not(.esqueleto):has(.ac-sacola)").count() else None
     pg.wait_for_timeout(1200)
     vz = evt(log, "visualizacao")
-    chk("abrir uma peça registra a visualização com o mesmo código e a mesma fonte", vz and vz[-1].get("visitante") == vid and vz[-1].get("fonte") == "instagram" and vz[-1].get("dispositivo") == "android", vz[-1:] )
+    chk("abrir um produto registra a visualização com o mesmo código e a mesma fonte", vz and vz[-1].get("visitante") == vid and vz[-1].get("fonte") == "instagram" and vz[-1].get("dispositivo") == "android", vz[-1:] )
     pg.reload(); pg.wait_for_timeout(2600)
     chk("recarregar a página NÃO conta nova visita na mesma sessão", len(evt(log, "visita")) == 1, len(evt(log, "visita")))
     chk("recarregar NÃO repete o registro do aparelho (nada mudou)", len(disp(log)) == 1, len(disp(log)))

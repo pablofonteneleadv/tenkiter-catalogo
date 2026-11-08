@@ -53,7 +53,7 @@ with sync_playwright() as p:
     pg = pagina(ctx, erros)
     print("== Painel com backend novo ==")
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
-    chk("lista de peças abre", pg.locator("#lista-produtos .produto").count() >= 10, pg.locator("#lista-produtos .produto").count())
+    chk("lista de produtos abre", pg.locator("#lista-produtos .produto").count() >= 10, pg.locator("#lista-produtos .produto").count())
     chk("cartão 'Pedidos' está dentro de Ferramentas do gestor (v4.19)", pg.locator("#details-ferramentas #card-pedidos").count() == 1)
     chk("aviso de pedido novo aparece no topo", pg.locator("#aviso-pedidos-novos").is_visible() and "1 pedido novo" in pg.inner_text("#aviso-pedidos-novos"), pg.inner_text("#aviso-pedidos-novos"))
     chk("resumo do cartão conta os pedidos em aberto", "1 em aberto" in pg.text_content("#ped-sum-txt"), pg.text_content("#ped-sum-txt"))
@@ -61,11 +61,11 @@ with sync_playwright() as p:
     chk("botões novos aparecem (números, importar)", all(pg.locator(i).is_visible() for i in ("#btn-abrir-metricas", "#btn-importar-csv")) and pg.locator("#btn-abrir-integracoes").count() == 0)
 
     print("== Códigos faltantes ==")
-    chk("aviso de peças sem código (3)", pg.locator("#aviso-codigos").is_visible() and "3 peças" in pg.inner_text("#aviso-codigos"), pg.inner_text("#aviso-codigos"))
+    chk("aviso de produtos sem código (3)", pg.locator("#aviso-codigos").is_visible() and "3 produtos" in pg.inner_text("#aviso-codigos"), pg.inner_text("#aviso-codigos"))
     log.clear()
     pg.click("#btn-gerar-codigos"); pg.wait_for_timeout(1500)
     chk("gerou os códigos no servidor", any(x.get("action") == "gerarCodigosFaltantes" for x in log))
-    chk("janela mostra os 3 códigos gerados", pg.locator("#overlay-gestao.aberto").count() == 1 and "3 peça(s) ganharam código" in folha_texto(pg), folha_texto(pg)[:120])
+    chk("janela mostra os 3 códigos gerados", pg.locator("#overlay-gestao.aberto").count() == 1 and "3 produtos ganharam código" in folha_texto(pg), folha_texto(pg)[:120])
     pg.click("#gestao-fechar"); pg.wait_for_timeout(300)
     chk("aviso some depois de gerar", pg.locator("#aviso-codigos").is_hidden())
 
@@ -103,7 +103,7 @@ with sync_playwright() as p:
     chk("janela de números mostra visualizações, toques e pedidos", pg.locator("#overlay-gestao.aberto").count() == 1 and "120" in t and "18" in t and "Pedidos pelo site" in t, t[:200])
     chk("explica que toque no WhatsApp não é venda", "não é venda confirmada" in t)
     chk("gráfico por dia tem descrição para leitor de tela", pg.locator(".mt-grafico[role=img]").count() == 1 and "Gráfico de visualizações" in (pg.get_attribute(".mt-grafico", "aria-label") or ""))
-    chk("tabela de peças mais vistas", "Vestido Floral" in t and "TK-0007" in t)
+    chk("tabela de produtos mais vistas", "Vestido Floral" in t and "TK-0007" in t)
     pg.click('[data-mt-dias="7"]'); pg.wait_for_timeout(700)
     chk("trocar período pede 7 dias", any(x.get("action") == "metricas" and x.get("dias") == 7 for x in log))
     pg.click("#gestao-fechar"); pg.wait_for_timeout(300)
@@ -114,7 +114,7 @@ with sync_playwright() as p:
     arq = os.path.join(AQUI, "saida", "export.csv"); dl.value.save_as(arq)
     csv = open(arq, encoding="utf-8", newline="").read()
     chk("exporta CSV com BOM e cabeçalho em português", csv.startswith("﻿codigo;id;nome;categoria;genero;preco;estoque"), csv[:60])
-    chk("CSV tem as peças (com código)", "TK-0007" in csv and csv.count("\r\n") >= 20)
+    chk("CSV tem os produtos (com código)", "TK-0007" in csv and csv.count("\r\n") >= 20)
     chk("nome do arquivo tem a data", re.match(r"tenkiter-pecas-\d{4}-\d{2}-\d{2}\.csv", dl.value.suggested_filename) is not None, dl.value.suggested_filename)
     leit = pg.evaluate("TKGestao._lerCsv('codigo;nome\\r\\n\"A;B\";\"x \"\"y\"\"\"\\r\\n')")
     chk("leitor de CSV entende aspas e ponto-e-vírgula", leit == [["codigo", "nome"], ["A;B", 'x "y"']], leit)
@@ -122,12 +122,12 @@ with sync_playwright() as p:
     chk("ID estragado pelo Excel (1,79E+12) é descartado — vale o código", "id" not in inj["objs"][0] and inj["objs"][0]["codigo"] == "TK-0001", inj)
 
     open(os.path.join(AQUI, "saida", "import.csv"), "w", encoding="utf-8").write(
-        "codigo;nome;preco;foto_url\r\nTK-0007;;99,90;\r\nTK-0003;;abc;\r\n;Peça Nova Teste;59,90;https://res.cloudinary.com/z/image/upload/v1/n.jpg\r\n")
+        "codigo;nome;preco;foto_url\r\nTK-0007;;99,90;\r\nTK-0003;;abc;\r\n;Produto Novo Teste;59,90;https://res.cloudinary.com/z/image/upload/v1/n.jpg\r\n")
     log.clear()
     pg.click("#btn-importar-csv"); pg.wait_for_timeout(300)
     pg.set_input_files("#imp-arquivo", os.path.join(AQUI, "saida", "import.csv")); pg.wait_for_timeout(1200)
     prev = pg.inner_text("#imp-previa")
-    chk("prévia: 1 atualizada, 1 nova, 1 ignorada", "Vão ser atualizadas" in prev and re.search(r"atualizadas\s*1", prev.replace("\n", " ")) is not None and re.search(r"novas\s*1", prev.replace("\n", " ")) is not None and re.search(r"problema\)\s*1", prev.replace("\n", " ")) is not None, prev[:300])
+    chk("prévia: 1 atualizada, 1 nova, 1 ignorada", "Vão ser atualizados" in prev and re.search(r"atualizados\s*1", prev.replace("\n", " ")) is not None and re.search(r"novos\s*1", prev.replace("\n", " ")) is not None and re.search(r"problema\)\s*1", prev.replace("\n", " ")) is not None, prev[:300])
     chk("prévia mostra o motivo da linha ignorada", "Preço inválido" in prev)
     chk("prévia mostra o campo que vai mudar (preço)", "preço" in prev)
     imp = [x for x in log if x.get("action") == "importarProdutos"]
@@ -135,7 +135,7 @@ with sync_playwright() as p:
     pg.click("#imp-aplicar"); pg.wait_for_timeout(1500)
     chk("aplicar pede confirmação", any(t == "confirm" and "Gravar" in m for t, m, _ in DIALOGOS))
     chk("aplicar grava (simular=false)", any(x.get("action") == "importarProdutos" and x.get("simular") is False for x in log) and len(st["importados"]) == 1)
-    chk("mensagem de pronto com o código da peça nova", "Pronto!" in folha_texto(pg) and "TK-07" in folha_texto(pg), folha_texto(pg)[:200])
+    chk("mensagem de pronto com o código do produto novo", "Pronto!" in folha_texto(pg) and "TK-07" in folha_texto(pg), folha_texto(pg)[:200])
     pg.click("#gestao-fechar"); pg.wait_for_timeout(300)
     open(os.path.join(AQUI, "saida", "ruim.csv"), "w", encoding="utf-8").write("foo;bar\r\n1;2\r\n")
     pg.click("#btn-importar-csv"); pg.wait_for_timeout(300)
@@ -149,7 +149,7 @@ with sync_playwright() as p:
     chk("botões novos na barra (estoque, categoria, lista)", all(pg.locator(i).count() == 1 for i in ("#btn-bulk-estoque", "#btn-bulk-categoria", "#btn-bulk-lista")))
     log.clear(); RESP["prompt"] = "-3"
     pg.click("#btn-bulk-estoque"); pg.wait_for_timeout(500)
-    chk("estoque negativo é recusado sem chamar o servidor", not [x for x in log if x.get("action") == "bulkUpdate"] and any("0 ou mais" in m for _, m, _ in DIALOGOS))
+    chk("estoque negativo é recusado sem chamar o servidor", not [x for x in log if x.get("action") == "bulkUpdate"] and "0 ou mais" in pg.inner_text("#tk-avisos"))
     RESP["prompt"] = "5"
     pg.click("#btn-bulk-estoque"); pg.wait_for_timeout(1500)
     bu = [x for x in log if x.get("action") == "bulkUpdate"]
@@ -164,7 +164,7 @@ with sync_playwright() as p:
     pg.locator("#lista-produtos .produto-chk").nth(0).check(); pg.wait_for_timeout(200)
     pg.click("#btn-bulk-lista"); pg.wait_for_timeout(600)
     lista = pg.evaluate("navigator.clipboard.readText()") if not any(t == "prompt" and "Copie" in m for t, m, _ in DIALOGOS) else next(d for t, m, d in DIALOGOS if t == "prompt" and "Copie" in m)
-    chk("lista para o WhatsApp tem preço, à vista e LINK COMPLETO da peça", "à vista" in lista and (SITE + "p/TK-") in lista and "TENKiTER Modas" in lista, lista[:200])
+    chk("lista para o WhatsApp tem preço, à vista e LINK COMPLETO do produto", "à vista" in lista and (SITE + "p/TK-") in lista and "TENKiTER Modas" in lista, lista[:200])
     chk("lista não inventa parcelamento", "3x" not in lista and "juros" not in lista.lower())
     pg.click("#btn-cancelar-bulk"); pg.wait_for_timeout(200)
 
@@ -243,7 +243,7 @@ with sync_playwright() as p:
     log = []; install(ctx, log=log, versao="3.0")
     erros = []; pg = pagina(ctx, erros)
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
-    chk("lista de peças funciona", pg.locator("#lista-produtos .produto").count() >= 10)
+    chk("lista de produtos funciona", pg.locator("#lista-produtos .produto").count() >= 10)
     abrir_ferramentas(pg)
     chk("recursos novos ficam escondidos (pedidos, números, importar, integrações)", all(pg.locator(i).is_hidden() for i in ("#card-pedidos", "#btn-abrir-metricas", "#btn-importar-csv", "#btn-abrir-integracoes")))
     chk("aviso de códigos faltantes não aparece", pg.locator("#aviso-codigos").is_hidden())

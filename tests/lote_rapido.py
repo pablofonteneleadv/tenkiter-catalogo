@@ -1,5 +1,5 @@
-"""Admin v7.18: "Editar peças" (só dados) vai numa chamada `updateLote` (servidor 4.28) em vez de uma por peça;
-erro de uma peça fica só nela; se o grupo não passar, cada peça segue pelo envio normal; servidor antigo continua como antes."""
+"""Admin v7.18: "Editar produtos" (só dados) vai numa chamada `updateLote` (servidor 4.28) em vez de uma por produto;
+erro de um produto fica só nela; se o grupo não passar, cada produto segue pelo envio normal; servidor antigo continua como antes."""
 import sys, os, time
 AQUI=os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0,AQUI)
 from mock import *
@@ -30,29 +30,29 @@ with sync_playwright() as p:
     print("== servidor 4.28: um grupo só ==")
     r,b=rodar(p,"4.28")
     lotes=r["st"].get("lotes_upd",[]); ups=[x for x in r["log"] if x.get("action")=="update"]
-    chk("uma chamada updateLote com as 5 peças", len(lotes)==1 and len(lotes[0])==5, [len(x) for x in lotes])
-    chk("nenhuma chamada update por peça", len(ups)==0, len(ups))
+    chk("uma chamada updateLote com as 5 produtos", len(lotes)==1 and len(lotes[0])==5, [len(x) for x in lotes])
+    chk("nenhuma chamada update por produto", len(ups)==0, len(ups))
     it=lotes[0][0] if lotes else {}
-    chk("cada item leva os dados da peça, sem senha/sessão dentro", it.get("nome","").endswith("Premium") and str(it.get("id")) in r["ids"] and not any(k in it for k in ("pin","sessao","whatsapp","action")), it)
+    chk("cada item leva os dados do produto, sem senha/sessão dentro", it.get("nome","").endswith("Premium") and str(it.get("id")) in r["ids"] and not any(k in it for k in ("pin","sessao","whatsapp","action")), it)
     lu=[x for x in r["log"] if x.get("action")=="updateLote"]
     chk("a sessão vai uma vez, no pacote", lu and lu[0].get("sessao") and lu[0].get("whatsapp"), {k:lu[0].get(k) for k in ("sessao","whatsapp")} if lu else None)
     chk("todas terminam como salvas", all(e["estado"]=="ok" for e in r["est"]) or not r["est"], r["est"])
     chk("sem erro de JS", not r["errs"], r["errs"]); b.close()
 
-    print("== uma peça recusada pelo servidor ==")
+    print("== um produto recusado pelo servidor ==")
     # a lista abre sempre na mesma ordem: a 2ª peça marcada é a mesma da rodada anterior
     def prep3(st, alvo=r["ids"][1]): st["lote_upd_falhar"]=[alvo]
     r,b=rodar(p,"4.28",prep3)
     errados=[e for e in r["est"] if e["estado"]=="erro"]
-    chk("só a peça recusada fica com erro, com a mensagem do servidor", len(errados)==1 and errados[0]["id"]==r["ids"][1] and "Preço inválido" in errados[0]["msg"], r["est"])
+    chk("só o produto recusado fica com erro, com a mensagem do servidor", len(errados)==1 and errados[0]["id"]==r["ids"][1] and "Preço inválido" in errados[0]["msg"], r["est"])
     chk("aparece o Tentar de novo dela", r["pg"].locator("#fila-envios button", has_text="Tentar de novo").count()==1)
     chk("o quadro de envios aparece (tem pendência)", r["pg"].locator("#cad-envios").is_visible())
     r["pg"].locator("#fila-envios button", has_text="Tentar de novo").click(); r["pg"].wait_for_timeout(2500)
     ups=[x for x in r["log"] if x.get("action")=="update"]
-    chk("Tentar de novo manda essa peça sozinha pelo update normal", len(ups)==1 and str(ups[0].get("id"))==r["ids"][1], [x.get("id") for x in ups])
+    chk("Tentar de novo manda esse produto sozinho pelo update normal", len(ups)==1 and str(ups[0].get("id"))==r["ids"][1], [x.get("id") for x in ups])
     b.close()
 
-    print("== grupo não passa: cada peça segue pelo envio normal ==")
+    print("== grupo não passa: cada produto segue pelo envio normal ==")
     def prep4(st): st["lote_upd_cair"]=1
     r,b=rodar(p,"4.28",prep4)
     ups=[x for x in r["log"] if x.get("action")=="update"]

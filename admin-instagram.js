@@ -4,7 +4,7 @@
  *  Nada entra no catálogo sem o seu aceite: "Aceitar" abre o cadastro normal já preenchido (fotos e vídeo já estão no R2), e só vira peça quando você toca em "Cadastrar peça".
  *  Só lê o Instagram (nunca posta). Fala com o Worker `tenkiter-ig` (INSTAGRAM_URL, common.js) com o login do painel; só Admin total (gerir_acessos).
  *  Rápido no celular: miniaturas preguiçosas, páginas de 20, ações com resposta na hora (descartar tem "Desfazer"), vídeo só toca quando você pede.
- * Carrega depois de admin-conexoes.js e usa o que a página já tem (getSessao, usuarioAdmin, temPermissao, abrirComHistorico_, window.tkAceitarRascunho...).
+ * Carrega depois de admin-conexoes.js e usa o que a página já tem (getSessao, usuarioAdmin, temPermissao, abrirComHistorico_, window.tkAceitarRascunho…).
  * ==================================================================== */
 (function () {
   'use strict';
@@ -12,7 +12,7 @@
   const esc = (v) => escaparHtml(v);
   const GRUPOS = [['pendente', 'Pendentes'], ['duplicado', 'Prováveis duplicados'], ['nao_produto', 'Não é produto'], ['descartado', 'Descartados']];
   let grupo = 'pendente', lista = [], mais = false, cont = {}, st = null, editando = null, ocupado = false, desfazer = null, desfazerTimer = null;
-  const LIM_FOTOS = 8, LIM_VIDEOS = 1;   // o cadastro da peça aceita no máximo 8 fotos e 1 vídeo
+  const LIM_FOTOS = 8, LIM_VIDEOS = 1;   // o cadastro do produto aceita no máximo 8 fotos e 1 vídeo
   let escolha = null;                    // tela de escolha quando juntar passa dos limites: { ordem, itens, sel:Set }
   const marcados = new Set();            // posts marcados com a caixinha para "Juntar"
   let iaRodando = false, iaTxt = '', tela = '';      // tela: 'lista' | 'editor' | 'conectar' (a leitura por IA só redesenha a lista)
@@ -25,7 +25,7 @@
     try {
       const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo || 'GET', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
       return await r.json();
-    } catch (e) { return { ok: false, erro: 'Sem conexão agora. Tente de novo.', semRede: true }; }
+    } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
   }
   const erroTxt = (r) => (r && r.erro) || 'Não foi possível agora. Tente de novo.';
   function podeGerir() { try { return typeof temPermissao === 'function' && typeof usuarioAdmin !== 'undefined' && !!usuarioAdmin && !!temPermissao(usuarioAdmin, 'gerir_acessos'); } catch (e) { return false; } }
@@ -137,7 +137,7 @@
   }
   function fechar() { fecharComHistorico_('overlay-instagram'); }
   async function abrir() {
-    if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; }
+    if (!podeGerir()) { TKAviso.aviso('Esta tela é só para o Admin total.'); return; }
     montar(); abrirComHistorico_('overlay-instagram');
     $('ig-corpo').innerHTML = '<p class="ig-vazio">Carregando…</p>';
     const r = await carregarStatus();
@@ -171,10 +171,10 @@
       : '<button type="button" class="ig-ok" data-ig="aceitar" data-id="' + r.id + '">✅ Aceitar</button><button type="button" class="ig-sec" data-ig="editar" data-id="' + r.id + '">🖼️ Mídias</button><button type="button" class="ig-ruim" data-ig="descartar" data-id="' + r.id + '">🗑️ Descartar</button>' + (grupo !== 'nao_produto' ? '<button type="button" class="ig-sec" data-ig="naoproduto" data-id="' + r.id + '">🚫 Não é produto</button>' : '');
     const ia = r.ia || null;
     const iaLinha = ia ? '<div class="ig-iaok">🤖 <b>' + esc(ia.nome || 'Sem nome') + '</b>' + (ia.categorias && ia.categorias.length ? ' · ' + esc(ia.categorias.join(', ')) : '') + (ia.generos && ia.generos.length ? ' · ' + esc(ia.generos.join(', ')) : '') + (ia.cores && ia.cores.length ? ' · ' + esc(ia.cores.join(', ')) : '') +
-      ''+ (ia.produto === false ? '<br>🤔 A IA acha que isso não é uma peça à venda.' : '') + '</div>'
+      ''+ (ia.produto === false ? '<br>🤔 A IA acha que isso não é um produto à venda.' : '') + '</div>'
       : (r.iaStatus === 'erro' ? '<div class="ig-ia">🤖 A IA não conseguiu ler as fotos deste post (você pode aceitar e preencher na mão).</div>' : '');
     const caixa = (grupo !== 'descartado') ? '<label class="ig-selcard"><input type="checkbox" class="ig-selr" value="' + r.id + '"' + (marcados.has(r.id) ? ' checked' : '') + '> Marcar para juntar</label>' : '';
-    return '<div class="ig-card" data-card="' + r.id + '">' + caixa + miniaturas(r, 3) + '<div class="ig-meta"><span>' + (ORIGEM[r.origem] || r.origem) + '</span><span>' + esc(dataBr(r.publicadoEm)) + '</span><span>' + (r.midias || []).length + ' mídia(s)</span>' + (r.permalink ? '<a href="' + esc(r.permalink) + '" target="_blank" rel="noopener" style="color:var(--laranja-txt)">ver no Instagram</a>' : '') + '</div>' +
+    return '<div class="ig-card" data-card="' + r.id + '">' + caixa + miniaturas(r, 3) + '<div class="ig-meta"><span>' + (ORIGEM[r.origem] || r.origem) + '</span><span>' + esc(dataBr(r.publicadoEm)) + '</span><span>' + tkPlural((r.midias || []).length, 'mídia', 'mídias') + '</span>' + (r.permalink ? '<a href="' + esc(r.permalink) + '" target="_blank" rel="noopener" style="color:var(--laranja-txt)">ver no Instagram</a>' : '') + '</div>' +
       (r.legenda ? '<p class="ig-leg">' + esc(r.legenda) + '</p>' : '') + iaLinha + (sug.length ? '<div class="ig-sug">' + sug.map((x) => '<span>' + esc(x) + '</span>').join('') + '</div>' : '') + dup + '<div class="ig-acoes">' + nao + '</div></div>';
   }
   function desenharLista() {
@@ -201,7 +201,7 @@
     return '<div class="ig-rodape"><span>' + (u ? 'Última busca: ' + esc(dataBr(u.fim)) + (u.erro ? ' (com erro)' : '') + ' · ' : '') + (st && st.novasDesdeOntem != null ? st.novasDesdeOntem + ' novo(s) em 24 h' : '') + '</span>' +
       '<button type="button" class="ig-sec" data-ig="buscar">🔄 Buscar agora</button><button type="button" class="ig-sec" data-ig="config">⚙️ Instagram</button></div><div class="ig-msg" id="ig-msg" role="status"></div>';
   }
-  function toast() { return desfazer ? '<div class="ig-toast" id="ig-toast"><span>' + esc(desfazer.txt) + '</span><button type="button" data-ig="desfazer">Desfazer</button></div>' : ''; }
+  function toast() { return desfazer ? '<div class="ig-toast" id="ig-toast" role="status"><span>' + esc(desfazer.txt) + '</span><button type="button" data-ig="desfazer">Desfazer</button></div>' : ''; }
   function msg(t, tipo) { const m = $('ig-msg'); if (m) { m.textContent = t || ''; m.className = 'ig-msg' + (tipo ? ' ' + tipo : ''); } }
 
   /* ---------- editor de mídias ---------- */
@@ -266,7 +266,7 @@
         (it.r.ia ? '<p class="ig-ajuda" style="margin:4px 0">🤖 Já veio preenchido pela leitura das fotos. Confira.</p>' : '<p class="ig-ajuda" style="margin:4px 0">Esta ainda não foi lida pela IA: preencha ou copie de outro.</p>') +
         '<div class="ig-edit-barra"><select id="ig-lcp-' + i + '" aria-label="Copiar as informações de outro produto" style="flex:1 1 140px;min-height:44px"><option value="-1">Copiar de…</option>' + outros + '</select>' +
         '<button type="button" class="ig-sec" data-ig="loteCopiar" data-i="' + i + '">📋 Copiar</button><button type="button" class="ig-sec" data-ig="loteIA" data-i="' + i + '">🤖 Voltar ao da IA</button></div>' +
-        '<label for="ig-l-' + i + '-nome">Nome da peça</label><input type="text" id="ig-l-' + i + '-nome" class="ig-lf" data-i="' + i + '" data-k="nome" maxlength="80" value="' + esc(v.nome) + '">' +
+        '<label for="ig-l-' + i + '-nome">Nome do produto</label><input type="text" id="ig-l-' + i + '-nome" class="ig-lf" data-i="' + i + '" data-k="nome" maxlength="80" value="' + esc(v.nome) + '">' +
         '<label for="ig-l-' + i + '-preco">Preço cheio (R$)</label><input type="text" inputmode="decimal" id="ig-l-' + i + '-preco" class="ig-lf" data-i="' + i + '" data-k="preco" value="' + esc(String(v.preco).replace('.', ',')) + '">' +
         '<fieldset style="border:0;padding:0;margin:6px 0"><legend>Para quem é</legend>' + (gens.length ? gens.map((g) => '<label style="display:inline-flex;align-items:center;gap:6px;margin:2px 10px 2px 0;min-height:44px"><input type="checkbox" class="ig-lg" data-i="' + i + '" value="' + esc(g) + '"' + (v.generos.indexOf(g) !== -1 ? ' checked' : '') + '> ' + esc(g) + '</label>').join('') : '<input type="text" class="ig-lf" data-i="' + i + '" data-k="generosTxt" placeholder="Ex.: Feminino" value="' + esc(v.generos.join(', ')) + '">') + '</fieldset>' +
         '<label for="ig-l-' + i + '-cat">Categoria (separe por vírgula)</label><input type="text" id="ig-l-' + i + '-cat" class="ig-lf" data-i="' + i + '" data-k="categorias" list="ig-l-cats" value="' + esc(v.categorias) + '">' +
@@ -292,7 +292,7 @@
     if (!loteAceite || ocupado) return;
     const ruins = loteAceite.map((it, i) => ({ i: i, v: it.v })).filter((x) => !x.v.nome.trim() || !(Number(String(x.v.preco).replace(',', '.')) > 0) || !x.v.categorias.trim() || !x.v.generos.length);
     if (ruins.length) { msg('Falta preencher: ' + ruins.map((x) => 'Produto ' + (x.i + 1)).join(', ') + '. Nome, preço, gênero e categoria são obrigatórios.', 'erro'); const el = $('ig-lfalta-' + ruins[0].i); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' }); return; }
-    if (typeof window.tkCadastrarLote !== 'function') { alert('O cadastro ainda não carregou. Tente de novo.'); return; }
+    if (typeof window.tkCadastrarLote !== 'function') { TKAviso.aviso('O cadastro ainda não carregou. Tente de novo.'); return; }
     if (!confirm('Cadastrar ' + loteAceite.length + ' produtos agora? Eles entram na fila de envio e sobem em segundo plano.')) return;
     const itens = loteAceite.map((it) => ({ r: it.r, dados: { nome: it.v.nome.trim(), categoria: it.v.categorias.split(',').map((c) => c.replace(/\s+/g, ' ').trim()).filter(Boolean).join(', '), genero: it.v.generos.join(', '), preco: String(it.v.preco).replace(',', '.'), estoque: '', tamanhos: it.v.tamanhos.trim(), cores: it.v.cores.trim(), descricao: it.v.descricao.trim(), novidade: !!it.v.novidade } }));
     loteAceite = null; marcados.clear(); fechar(); window.tkCadastrarLote(itens);
@@ -300,18 +300,18 @@
   async function descartarMarcados() {
     if (ocupado) return;
     const ordem = lista.filter((x) => marcados.has(x.id)); if (!ordem.length) { msg('Marque pelo menos 1 post.', 'erro'); return; }
-    if (!confirm('Descartar ' + ordem.length + ' post(s)?\n\nEles vão para a aba "Descartados" e dá para restaurar depois.')) return;
+    if (!confirm('Descartar ' + tkPlural(ordem.length, 'post', 'posts') + '?\n\nEles vão para a aba "Descartados" e dá para restaurar depois.')) return;
     ocupado = true; let feitos = 0, erro = '';
     for (const r of ordem) { msg('Descartando… ' + (feitos + 1) + ' de ' + ordem.length); const x = await ig('/acao', 'POST', { acao: 'descartar', id: r.id }); if (x && x.ok) feitos++; else { erro = erroTxt(x); break; } }
     ocupado = false; marcados.clear(); await carregarStatus(); await carregarLista(true);
-    msg(erro ? 'Descartei ' + feitos + ' e parei: ' + erro : '🗑️ ' + feitos + ' post(s) descartado(s). Estão em "Descartados".', erro ? 'erro' : 'ok');
+    msg(erro ? 'Descartei ' + feitos + ' e parei: ' + erro : '🗑️ ' + tkPlural(feitos, 'post', 'posts') + ' descartado(s). Estão em "Descartados".', erro ? 'erro' : 'ok');
   }
 
   /* ---------- aceitar ---------- */
   function aceitar(id) {
     const r = lista.find((x) => String(x.id) === String(id)) || (editando && String(editando.id) === String(id) ? editando : null);
     if (!r) return;
-    if (typeof window.tkAceitarRascunho !== 'function') { alert('O cadastro ainda não carregou. Tente de novo.'); return; }
+    if (typeof window.tkAceitarRascunho !== 'function') { TKAviso.aviso('O cadastro ainda não carregou. Tente de novo.'); return; }
     fechar();
     window.tkAceitarRascunho(r);
   }
@@ -348,7 +348,7 @@
     if (barra && !$('ig-btn-parar')) { const p = document.createElement('button'); p.type = 'button'; p.className = 'ig-ruim'; p.id = 'ig-btn-parar'; p.dataset.ig = 'parar'; p.textContent = '⏹ Parar'; barra.appendChild(p); }
     let total = 0, puladas = 0, recomecar = !!refazer, falhasRede = 0, terminou = false, erroFinal = '';
     while (!paraTodos) {
-      msg('Importando… ' + total + ' post(s) copiados até agora' + (puladas ? ' · ' + puladas + ' pulado(s)' : '') + '.');
+      msg('Importando… ' + tkPlural(total, 'post', 'posts') + ' copiados até agora' + (puladas ? ' · ' + puladas + ' pulado(s)' : '') + '.');
       const r = await ig('/buscar', 'POST', recomecar ? { todos: true, recomecar: true } : { todos: true });
       recomecar = false;
       if (r && r.ok) {
@@ -369,7 +369,7 @@
     rodarIA();
     if (terminou) msg('✅ Pronto! Todos os posts foram importados: ' + total + ' novo(s)' + (puladas ? ' (' + puladas + ' pulado(s) por falha na mídia)' : '') + '. Veja em "Produtos para aceitar".', 'ok');
     else if (erroFinal) msg('Parei: ' + erroFinal + ' (' + total + ' copiados). Toque em "Importar TODOS" para continuar de onde parou.', 'erro');
-    else msg('Parado. ' + total + ' post(s) copiados. Toque em "Importar TODOS" para continuar de onde parou.', 'ok');
+    else msg('Parado. ' + tkPlural(total, 'post', 'posts') + ' copiados. Toque em "Importar TODOS" para continuar de onde parou.', 'ok');
   }
 
   /* ---------- juntar vários posts em 1 produto ---------- */
@@ -383,7 +383,7 @@
   async function iniciarJuncao(ordem) {
     const itens = midiasDe(ordem), fotos = itens.filter((m) => m.tipo !== 'video'), vids = itens.filter((m) => m.tipo === 'video');
     if (fotos.length <= LIM_FOTOS && vids.length <= LIM_VIDEOS) {
-      if (!confirm('Juntar ' + ordem.length + ' posts em UM produto só?\n\n• ' + fotos.length + ' foto(s)' + (vids.length ? ' e ' + vids.length + ' vídeo' : '') + ' ficam juntos (a capa é a do primeiro da lista).\n• Os outros ' + (ordem.length - 1) + ' post(s) saem desta lista (ficam em "Descartados").')) return;
+      if (!confirm('Juntar ' + ordem.length + ' posts em UM produto só?\n\n• ' + tkPlural(fotos.length, 'foto', 'fotos') + '' + (vids.length ? ' e ' + vids.length + ' vídeo' : '') + ' ficam juntos (a capa é a do primeiro da lista).\n• Os outros ' + tkPlural((ordem.length - 1), 'post', 'posts') + ' saem desta lista (ficam em "Descartados").')) return;
       await executarJuncao(ordem, null); return;
     }
     const sel = new Set(fotos.slice(0, LIM_FOTOS).map((m) => m.id).concat(vids.slice(0, LIM_VIDEOS).map((m) => m.id)));
@@ -397,7 +397,7 @@
     const tiles = e.itens.map((m, i) => '<div class="ig-tile' + (e.sel.has(m.id) ? ' capa' : '') + '"><div class="ig-th"><img loading="lazy" alt="" ' + atribSrc(m.mini) + '>' + (m.tipo === 'video' ? '<span class="ig-play">▶ vídeo</span>' : '') + '</div>' +
       '<label class="ig-linha" style="align-items:center"><input type="checkbox" class="ig-esc" value="' + esc(m.id) + '"' + (e.sel.has(m.id) ? ' checked' : '') + '> <span>' + (e.sel.has(m.id) ? 'Fica' : 'Não fica') + ' · post ' + (e.ordem.findIndex((r) => r.id === m.de) + 1) + '</span></label></div>').join('');
     $('ig-corpo').innerHTML = '<button type="button" class="ig-sec" data-ig="voltarEscolha" style="width:auto;padding:10px 14px;border:0;border-radius:8px;min-height:44px;font-weight:700">← Voltar</button>' +
-      '<p class="ig-leg" style="-webkit-line-clamp:6;margin-top:10px"><b>Os ' + e.ordem.length + ' posts juntos têm ' + totF + ' foto(s)' + (totV ? ' e ' + totV + ' vídeo(s)' : '') + '.</b> O produto aceita no máximo ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo. Marque o que FICA; o resto vai para "Pendentes" como mídia solta (nada se perde).</p>' +
+      '<p class="ig-leg" style="-webkit-line-clamp:6;margin-top:10px"><b>Os ' + e.ordem.length + ' posts juntos têm ' + tkPlural(totF, 'foto', 'fotos') + '' + (totV ? ' e ' + tkPlural(totV, 'vídeo', 'vídeos') + '' : '') + '.</b> O produto aceita no máximo ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo. Marque o que FICA; o resto vai para "Pendentes" como mídia solta (nada se perde).</p>' +
       '<div class="ig-sug"><span id="ig-esc-cont">Fotos ' + c.f + '/' + LIM_FOTOS + ' · Vídeo ' + c.v + '/' + LIM_VIDEOS + '</span></div><div class="ig-grade">' + tiles + '</div>' +
       '<div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="juntarEscolhidas"' + (c.f < 1 ? ' disabled' : '') + '>🔗 Juntar com as escolhidas</button></div><div class="ig-msg" id="ig-msg" role="status"></div>';
   }
@@ -416,7 +416,7 @@
     }
     ocupado = false; marcados.clear(); escolha = null;
     await carregarStatus(); await carregarLista(true);
-    msg(erro ? 'Juntei ' + feitos + ' e parei: ' + erro : '✅ Pronto: ' + (feitos + 1) + ' posts viraram 1 produto' + (fora ? ' (' + fora + ' mídia(s) que passavam do limite foram para "Pendentes")' : '') + '.', erro ? 'erro' : 'ok');
+    msg(erro ? 'Juntei ' + feitos + ' e parei: ' + erro : '✅ Pronto: ' + (feitos + 1) + ' posts viraram 1 produto' + (fora ? ' (' + tkPlural(fora, 'mídia', 'mídias') + ' que passavam do limite foram para "Pendentes")' : '') + '.', erro ? 'erro' : 'ok');
     rodarIA();
   }
   /** "Cadastrar separado": cada post vira um produto, todos com as mesmas informações preenchidas no formulário. */
@@ -425,7 +425,7 @@
     const ordem = lista.filter((x) => marcados.has(x.id)); if (ordem.length < 2) { msg('Marque 2 ou mais posts.', 'erro'); return; }
     const semFoto = ordem.filter((r) => !(r.midias || []).some((m) => m.tipo !== 'video'));
     if (semFoto.length) { msg(semFoto.length + ' dos posts marcados só tem vídeo (sem foto). Desmarque-os ou junte com outro post que tenha foto.', 'erro'); return; }
-    if (typeof window.tkAceitarSeparado !== 'function') { alert('O cadastro ainda não carregou. Tente de novo.'); return; }
+    if (typeof window.tkAceitarSeparado !== 'function') { TKAviso.aviso('O cadastro ainda não carregou. Tente de novo.'); return; }
     if (!confirm('Cadastrar ' + ordem.length + ' posts como ' + ordem.length + ' produtos SEPARADOS?\n\nVocê preenche o cadastro UMA vez (começa com o post mais recente da lista marcada). Ao cadastrar, cada post vira um produto diferente, todos com as mesmas informações (nome, categoria, gênero, preço, cores…), cada um com as fotos do seu post.')) return;
     marcados.clear(); fechar(); window.tkAceitarSeparado(ordem);
   }
@@ -437,7 +437,7 @@
     iaRodando = true; let seguidasSemProgresso = 0;
     try {
       while (st && st.ia && st.ia.pendentes > 0 && $('overlay-instagram') && $('overlay-instagram').classList.contains('aberto')) {
-        iaTxt = '🤖 Lendo as fotos com IA… faltam ' + st.ia.pendentes + ' post(s). Pode continuar mexendo.'; const el = $('ig-ia'); if (el) { el.hidden = false; el.textContent = iaTxt; }
+        iaTxt = '🤖 Lendo as fotos com IA… faltam ' + tkPlural(st.ia.pendentes, 'post', 'posts') + '. Pode continuar mexendo.'; const el = $('ig-ia'); if (el) { el.hidden = false; el.textContent = iaTxt; }
         const r = await ig('/ia', 'POST', { limite: 2 });
         if (!r || !r.ok) { iaTxt = '🤖 A leitura por IA parou: ' + erroTxt(r); break; }
         if (r.restantes != null) st.ia.pendentes = r.restantes;

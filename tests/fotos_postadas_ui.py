@@ -1,7 +1,7 @@
 """v7.49.0 — Fotos postadas e fotos novas (vitrine + Postagens). Apps Script e Worker SIMULADOS (mock.py); nada real é chamado.
-Vitrine: peça com foto nova vai para o topo em "mais recentes"; ordenar por nome respeita a escolha; Worker com erro ou lento = como antes.
+Vitrine: produto com foto nova vai para o topo em "mais recentes"; ordenar por nome respeita a escolha; Worker com erro ou lento = como antes.
 Postador: fotos já postadas vêm desmarcadas com "Postada hoje"/"Postada há N dias"; marcar mesmo assim funciona (modelo e colagem
-levam as fotos originais em fotosOrigem); todas postadas = aviso claro; sinal discreto na lista de peças; postagem antiga casa por posição."""
+levam as fotos originais em fotosOrigem); todas postadas = aviso claro; sinal discreto na lista de produtos; postagem antiga casa por posição."""
 import os, sys, time, datetime
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -51,7 +51,7 @@ with sync_playwright() as p:
             ctx = b.new_context(viewport={'width': w, 'height': h}, is_mobile=w < 600, has_touch=w < 600, service_workers='block', timezone_id='America/Fortaleza')
             st = install(ctx, versao='3.7')
             for x in st['produtos']: x['Status'] = 'Ativo'; x['Estoque'] = 3
-            alvo = st['produtos'][2]['ID']          # peça antiga (cadastrada no começo): no fim da ordem "mais recentes"
+            alvo = st['produtos'][2]['ID']          # produto antigo (cadastrada no começo): no fim da ordem "mais recentes"
             if modo in ('ok', 'az'): st['fotos_novas'] = {alvo: iso(0)}
             if modo == 'erro': st['fn_modo'] = 'erro'; st['fotos_novas'] = {alvo: iso(0)}
             if modo == 'lento': st['fn_modo'] = 'lento'
@@ -62,9 +62,9 @@ with sync_playwright() as p:
             ids = ids_na_grade(pg)
             if modo == '':
                 base_ord = ids
-                chk(f'{w}: sem foto nova a peça antiga fica onde estava (fim da ordem)', ids.index(alvo) > 5, ids.index(alvo))
+                chk(f'{w}: sem foto novo o produto antigo fica onde estava (fim da ordem)', ids.index(alvo) > 5, ids.index(alvo))
             elif modo == 'ok':
-                chk(f'{w}: peça com foto nova vai para o topo em "mais recentes"', ids[0] == alvo, ids[:4])
+                chk(f'{w}: produto com foto nova vai para o topo em "mais recentes"', ids[0] == alvo, ids[:4])
                 chk(f'{w}: o resto mantém a ordem de antes', [i for i in ids if i != alvo] == [i for i in base_ord if i != alvo])
                 chk(f'{w}: /catalogo/fotos-novas pedida sem sessão (pública)', any(not c['sessao'] for c in st.get('fn_chamadas', [])))
                 chk(f'{w}: sem rolagem horizontal', sem_rolagem_horizontal(pg))
@@ -73,7 +73,7 @@ with sync_playwright() as p:
                 nomes = pg.eval_on_selector_all('#grid .card[data-id] .card-nome, #grid .card[data-id] h3', 'l => l.map(e => e.textContent.trim())')
                 ordenado = pg.evaluate("(ids) => { const P = produtos; return ids.map(i => P.find(p => String(p.ID) === i)).map(p => p.Nome); }", ids)
                 chk(f'{w}: ordenar por nome respeita a escolha (foto nova não fura)', ordenado == sorted(ordenado, key=lambda s: s.lower()) or pg.evaluate("(ids)=>{const n=ids.map(i=>produtos.find(p=>String(p.ID)===i).Nome);return n.every((x,k)=>k===0||n[k-1].localeCompare(x,'pt-BR')<=0)}", ids), ordenado[:5])
-                chk(f'{w}: com nome, a peça com foto nova não está forçada no topo', ids[0] != alvo or ordenado[0] == pg.evaluate("(i)=>produtos.find(p=>String(p.ID)===i).Nome", alvo))
+                chk(f'{w}: com nome, o produto com foto nova não está forçada no topo', ids[0] != alvo or ordenado[0] == pg.evaluate("(i)=>produtos.find(p=>String(p.ID)===i).Nome", alvo))
             elif modo == 'erro':
                 chk(f'{w}: Worker com erro = vitrine como antes', ids == base_ord, (ids[:4], base_ord[:4]))
             elif modo == 'lento':
@@ -103,18 +103,18 @@ with sync_playwright() as p:
         pg.click('#details-ferramentas > summary'); pg.wait_for_timeout(250); pg.click('#btn-abrir-postagens'); pg.wait_for_timeout(1200)
         # lista de peças: sinal discreto
         primeiro = pg.locator('.po-card').first.get_attribute('data-psel')
-        chk(f'{w}: lista do postador põe no começo a peça que ganhou foto nova', primeiro == C['ID'], (primeiro, C['ID']))
+        chk(f'{w}: lista do postador põe no começo o produto que ganhou foto nova', primeiro == C['ID'], (primeiro, C['ID']))
         def sinal(pid):
             l = pg.locator(f'.po-card[data-psel="{pid}"] .po-sinal')
             return l.inner_text().strip() if l.count() else ''
-        chk(f'{w}: lista mostra "2 fotos novas para postar" na peça com 2 de 4 postadas', sinal(A['ID']) == '2 fotos novas para postar', sinal(A['ID']))
-        chk(f'{w}: lista mostra "Tudo já postado há 5 dias" na peça toda postada', sinal(B['ID']) == 'Tudo já postado há 5 dias', sinal(B['ID']))
+        chk(f'{w}: lista mostra "2 fotos novas para postar" no produto com 2 de 4 postadas', sinal(A['ID']) == '2 fotos novas para postar', sinal(A['ID']))
+        chk(f'{w}: lista mostra "Tudo já postado há 5 dias" no produto toda postada', sinal(B['ID']) == 'Tudo já postado há 5 dias', sinal(B['ID']))
         chk(f'{w}: postagem antiga com modelo casa pela posição (capa) → "1 foto nova para postar"', sinal(C['ID']) == '1 foto nova para postar', sinal(C['ID']))
-        chk(f'{w}: peça nunca postada diz que a foto ainda não foi postada', sinal(P[0]['ID']) == 'Foto ainda não postada', sinal(P[0]['ID']))
+        chk(f'{w}: produto nunca postada diz que a foto ainda não foi postada', sinal(P[0]['ID']) == 'Foto ainda não postada', sinal(P[0]['ID']))
         st_sinal = pg.evaluate("(()=>{const e=document.querySelector('.po-sinal-novas');if(!e)return null;const r=e.getBoundingClientRect(),c=getComputedStyle(e);return {fs:parseFloat(c.fontSize),w:r.width,cor:c.color,fundo:c.backgroundColor}})()")
         chk(f'{w}: sinal legível (texto ≥ 11 px, não só cor)', st_sinal and st_sinal['fs'] >= 11, st_sinal)
         card = pg.locator(f'.po-card[data-psel="{A["ID"]}"]'); card.evaluate("e => e.scrollIntoView({block: 'center'})"); pg.wait_for_timeout(300)
-        chk(f'{w}: card da peça continua com alvo ≥ 44 px', card.bounding_box()['height'] >= 44)
+        chk(f'{w}: card do produto continua com alvo ≥ 44 px', card.bounding_box()['height'] >= 44)
         foto(pg, f'postador_lista_{w}.jpg')
         chk(f'{w}: lista sem rolagem horizontal', sem_rolagem_horizontal(pg))
         # escolher A

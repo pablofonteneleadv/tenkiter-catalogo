@@ -1,4 +1,4 @@
-"""v6.6: sem barra escura embaixo, gênero primeiro, só opções com peça ativa, 'adicionar' após qualquer filtro, só o botão laranja embaixo."""
+"""v6.6: sem barra escura embaixo, gênero primeiro, só opções com produto ativo, 'adicionar' após qualquer filtro, só o botão laranja embaixo."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
@@ -19,7 +19,7 @@ with sync_playwright() as p:
     # só opções de peças ativas
     cats = set(pg.evaluate("[...document.querySelectorAll('#chips-categoria .chip')].map(c=>c.dataset.filterValue||c.textContent)"))
     ativas = set(pg.evaluate("(()=>{const s=new Set();produtos.filter(p=>!estaEsgotado(p)).forEach(p=>listaDeTags(p.Categoria).forEach(c=>s.add(c)));return [...s]})()"))
-    chk("categorias do menu = só as de peças ativas", cats == ativas, (cats ^ ativas))
+    chk("categorias do menu = só as de produtos ativos", cats == ativas, (cats ^ ativas))
     # filtro simples já mostra o 'adicionar'
     pg.evaluate("document.querySelector('#chips-categoria .chip').click()"); pg.wait_for_timeout(600)
     chk("após 1 filtro (sem seleção) a linha do topo aparece", pg.locator("#linha-share-busca").is_visible())

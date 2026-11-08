@@ -22,7 +22,7 @@ with sync_playwright() as p:
     r = pg.evaluate("(()=>{const e=document.getElementById('filtros-extras').getBoundingClientRect();return [e.top,e.left,e.width,e.height]})()")
     chk("painel cobre a tela toda", r[0] == 0 and r[1] == 0 and r[2] >= 359 and r[3] >= 639, r)
     chk("topo com 'Fechar' à vista", pg.locator("#fx-fechar").is_visible())
-    chk("rodapé 'Ver N peças' sempre dentro da tela", pg.evaluate("document.getElementById('fx-ver').getBoundingClientRect().bottom <= innerHeight"))
+    chk("rodapé 'Ver N produtos' sempre dentro da tela", pg.evaluate("document.getElementById('fx-ver').getBoundingClientRect().bottom <= innerHeight"))
     pg.evaluate("document.getElementById('details-categoria').open = true"); pg.evaluate("document.getElementById('details-cor').open = true"); pg.evaluate("document.getElementById('details-tamanho').open = true"); pg.wait_for_timeout(200)
     y0 = pg.evaluate("scrollY")
     # v7.x: topo e rodapé ficam fixos e quem rola é o corpo do painel (#fx-corpo); sem ele, o painel inteiro

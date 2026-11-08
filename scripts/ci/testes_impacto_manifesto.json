@@ -30,6 +30,11 @@
       "catalogo",
       "mensagens"
     ],
+    "tests/avisos_padrao.py": [
+      "catalogo",
+      "treinamentos",
+      "infra"
+    ],
     "tests/cadastro_vinculos.js": [
       "catalogo",
       "ci"
@@ -188,13 +193,15 @@
     "tests/menu_selecao_ia.py": [
       "fotoia"
     ],
-    "tests/padrao_aparencia_ui.py": [
+    "tests/padrao_vocabulario.py": [
       "catalogo",
       "mensagens",
       "postagens",
       "esteira",
       "fotoia",
-      "treinamentos"
+      "treinamentos",
+      "push",
+      "infra"
     ],
     "tests/pedir_fotos_lote.py": [
       "esteira"
@@ -403,10 +410,6 @@
       "mensagens",
       "postagens"
     ],
-    "tests/manual_fidelidade.js": [
-      "treinamentos",
-      "ci"
-    ],
     "tests/padrao_regras_dados.py": [
       "catalogo",
       "esteira",
@@ -445,6 +448,14 @@
     "tests/worker_midia_mini.js": [
       "midia",
       "catalogo"
+    ],
+    "tests/padrao_aparencia_ui.py": [
+      "catalogo",
+      "mensagens",
+      "postagens",
+      "esteira",
+      "fotoia",
+      "treinamentos"
     ]
   },
   "evidencias": {

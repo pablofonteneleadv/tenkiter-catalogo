@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
 <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
-<title>TENKiTER Modas — Painel do Atendente</title>
+<title>Gestão — TENKiTER Modas</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&family=Playfair+Display:ital,wght@0,700;1,700&family=Dancing+Script:wght@700&family=Oswald:wght@500;700&display=swap">
 <style>html,body{overscroll-behavior-y:none}
   /* cores e medidas: ver tk-padrao.css (fonte única) */
@@ -51,9 +51,6 @@
   body:has(.envios-flut:not([hidden])) .sync-bar { bottom: 160px; }
   .sync-bar.sincronizando { border-color: #1a73e8; background: #e8f0fe; color: #0b3a8a; }
   .sync-bar button { min-height: 40px; }
-  #aviso-rapido { position: fixed; left: 12px; right: 12px; bottom: 150px; z-index: 86; max-width: 520px; margin: 0 auto; background: #0d0d0d; color: #fff; border: 2px solid #4caf50; border-radius: 14px; padding: 10px 14px; font-size: .85rem; font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
-  #aviso-rapido[hidden] { display: none; }
-  #aviso-rapido.aviso { border-color: #f5c542; }
   .sync-bar button { width: auto; padding: 6px 10px; font-size: 0.72rem; background: var(--preto); color: var(--laranja); }
 
   .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
@@ -1069,8 +1066,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   </div>
 </div>
 
-<div id="aviso-rapido" role="status" aria-live="polite" hidden></div>
-<div id="toast-carregando" role="status" aria-live="polite"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
+<div id="toast-carregando" role="status" aria-live="polite"><span class="spinner-mini"></span><span id="texto-toast">Carregando produtos…</span></div>
 <button type="button" id="envios-flut" class="envios-flut" aria-live="polite" hidden></button>
 
 <header>
@@ -1123,7 +1119,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   <div class="stats-panel" id="stats-panel">
     <div class="stats-card"><span>Visualizações</span><strong id="stats-views">—</strong></div>
     <div class="stats-card"><span>Cliques no WhatsApp</span><strong id="stats-whats">—</strong></div>
-    <div class="stats-card"><span>Peça mais vista</span><strong id="stats-mais-visto">—</strong><small id="stats-mais-visto-views"></small></div>
+    <div class="stats-card"><span>Produto mais vista</span><strong id="stats-mais-visto">—</strong><small id="stats-mais-visto-views"></small></div>
   </div>
   <details class="cartao-cad" id="card-pedidos" hidden>
     <summary><span class="ped-sum"><span class="ic" data-ico="recibo">🧾</span> <span id="ped-sum-txt">Pedidos</span></span></summary>
@@ -1146,16 +1142,16 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
     <h2 class="ferr-gtit">Conteúdo</h2>
     <div class="ferr-lista">
       <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-postagens" hidden><span class="ferr-ic" data-ico="camera">📸</span><span class="ferr-txt"><b>Postagens</b><small>Instagram, Status e grupo do WhatsApp</small></span><span class="ferr-badge" hidden></span></button>
-      <a href="fotos-ia.html?origem=gestao" class="ferr-tile btn-ferr" id="btn-abrir-fotoia" hidden><span class="ferr-ic" data-ico="pincel">🎨</span><span class="ferr-txt"><b>Fotos com IA</b><small>Lotes, combinações e poses com as peças do catálogo</small></span><span class="ferr-badge" hidden></span></a>
+      <a href="fotos-ia.html?origem=gestao" class="ferr-tile btn-ferr" id="btn-abrir-fotoia" hidden><span class="ferr-ic" data-ico="pincel">🎨</span><span class="ferr-txt"><b>Fotos com IA</b><small>Lotes, combinações e poses com os produtos do catálogo</small></span><span class="ferr-badge" hidden></span></a>
       <a class="ferr-tile" href="treinamentos.html" target="_blank"><span class="ferr-ic" data-ico="capelo">📖</span><span class="ferr-txt"><b>Treinamentos</b><small>Abre o portal da equipe em outra aba</small></span></a>
     </div>
   </div>
   <div class="ferr-grupo" data-grupo="dados">
     <h2 class="ferr-gtit">Planilha e histórico</h2>
     <div class="ferr-lista">
-      <button type="button" class="ferr-tile btn-ferr" id="btn-exportar-csv"><span class="ferr-ic" data-ico="pacote">⬇️</span><span class="ferr-txt"><b>Exportar planilha</b><small>Baixa todas as peças em CSV (Excel/Planilhas)</small></span><span class="ferr-badge" hidden></span></button>
-      <button type="button" class="ferr-tile btn-ferr" id="btn-importar-csv" hidden><span class="ferr-ic" data-ico="compartilhar">⬆️</span><span class="ferr-txt"><b>Importar planilha</b><small>Muda várias peças de uma vez, com prévia antes de gravar</small></span><span class="ferr-badge" hidden></span></button>
-      <button type="button" class="ferr-tile" id="btn-abrir-auditoria"><span class="ferr-ic" data-ico="documento">📋</span><span class="ferr-txt"><b>Auditoria</b><small>Quem cadastrou, editou ou arquivou cada peça</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile btn-ferr" id="btn-exportar-csv"><span class="ferr-ic" data-ico="pacote">⬇️</span><span class="ferr-txt"><b>Exportar planilha</b><small>Baixa todos os produtos em CSV (Excel/Planilhas)</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile btn-ferr" id="btn-importar-csv" hidden><span class="ferr-ic" data-ico="compartilhar">⬆️</span><span class="ferr-txt"><b>Importar planilha</b><small>Muda vários produtos de uma vez, com prévia antes de gravar</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile" id="btn-abrir-auditoria"><span class="ferr-ic" data-ico="documento">📋</span><span class="ferr-txt"><b>Auditoria</b><small>Quem cadastrou, editou ou arquivou cada produto</small></span><span class="ferr-badge" hidden></span></button>
     </div>
   </div>
   <div class="ferr-grupo" data-grupo="sistema">
@@ -1176,7 +1172,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
     <div id="push-segmento-linha" hidden><label for="push-segmento" style="margin-top:8px;display:block;">Enviar para</label><select id="push-segmento"></select></div>
     <div id="push-extras" hidden><button type="button" id="btn-push-historico" style="margin-top:8px;width:auto;padding:8px 12px;font-size:0.78rem;background:#dbe9fb;color:#0b3d75;">📜 Ver últimos avisos enviados</button></div>
     <div style="display:flex;gap:8px;margin-top:10px;">
-      <button type="button" id="btn-enviar-push" style="background:#0f5fa8;color:#fff;">Enviar Agora</button>
+      <button type="button" id="btn-enviar-push" style="background:#0f5fa8;color:#fff;">Enviar agora</button>
       <button type="button" id="btn-cancelar-push" style="background:#eee;color:#555;">Cancelar</button>
     </div>
     <div id="push-status" style="font-size:0.8rem;margin-top:8px;"></div>
@@ -1197,16 +1193,16 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
     <div class="cfg-bloco">
       <h3 class="cfg-tit">Inteligência artificial (Gemini)</h3>
-      <div id="ia-status" class="cfg-status">Verificando...</div>
+      <div id="ia-status" class="cfg-status">Verificando…</div>
       <label for="input-ia-chave">Chave</label>
       <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
       <label for="input-ia-modelo">Modelo</label>
       <input type="text" id="input-ia-modelo" placeholder="vazio = padrão do sistema" autocomplete="off">
       <div class="cfg-botoes">
         <button type="button" id="btn-salvar-ia" class="cfg-prim">Salvar configuração da IA</button>
-        <button type="button" id="btn-apagar-ia" class="cfg-sec">Apagar chave guardada</button>
+        <button type="button" id="btn-apagar-ia" class="cfg-sec">Excluir chave guardada</button>
       </div>
-      <p class="cfg-nota">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
+      <p class="cfg-nota">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar título/descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
     </div>
 
     <div class="cfg-bloco">
@@ -1216,7 +1212,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <input type="password" id="input-freeconvert-chave" placeholder="Cole sua nova chave de API FreeConvert" autocomplete="new-password" spellcheck="false">
       <div class="cfg-botoes">
         <button type="button" id="btn-salvar-freeconvert" class="cfg-prim">Salvar chave FreeConvert</button>
-        <button type="button" id="btn-apagar-freeconvert" class="cfg-sec">Remover chave</button>
+        <button type="button" id="btn-apagar-freeconvert" class="cfg-sec">Excluir chave</button>
       </div>
       <p class="cfg-nota">Apenas Admin total. A chave é enviada ao servidor e não é exibida novamente. Não use a chave anteriormente compartilhada no chat: gere uma nova na FreeConvert. O uso da API está sujeito aos limites da conta.</p>
     </div>
@@ -1252,15 +1248,15 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
   <section class="cartao-cad" id="cad-envios" aria-labelledby="cad-envios-titulo" tabindex="-1" style="padding:16px" hidden>
     <h2 id="cad-envios-titulo">Envios e pendências</h2>
-    <p>Confira o resultado de cada peça. Se houver falha, corrija a causa indicada e tente novamente.</p>
+    <p>Confira o resultado de cada produto. Se houver falha, corrija a causa indicada e tente de novo.</p>
     <div id="fila-envios" aria-live="polite"></div>
   </section>
 
   <section id="cad-resumo-envios" class="cad-resumo-envios" aria-label="Resumo dos cadastros" aria-live="polite" hidden></section>
   <details class="cartao-cad" id="card-form">
-    <summary><span id="cad-sum-txt">📝 Formulário da peça</span></summary>
+    <summary><span id="cad-sum-txt">📝 Formulário do produto</span></summary>
     <div class="cad-corpo">
-    <h2 id="titulo-form">Nova peça</h2>
+    <h2 id="titulo-form">Novo produto</h2>
     <span class="audit-linha" id="audit-form" hidden></span>
     <p class="cad-sub">Preencha de cima para baixo. O que tem <b style="color:var(--vermelho)">*</b> é obrigatório.</p>
 
@@ -1268,7 +1264,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <input type="hidden" id="produto-id">
 
       <section class="passo" data-passo="fotos">
-        <div class="passo-tit"><span class="num">1</span><span id="passo-fotos-nome">Fotos da peça</span> <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 8)</span></div>
+        <div class="passo-tit"><span class="num">1</span><span id="passo-fotos-nome">Fotos do produto</span> <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 8)</span></div>
         <p class="passo-sub" id="passo-fotos-varias" hidden>Cada foto vira um produto separado, com os dados que você preencher abaixo.</p>
         <div class="unioes" id="unioes" role="group" aria-label="Uniões de fotos" hidden></div>
         <div class="foto-box" id="galeria-box">
@@ -1277,33 +1273,33 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
           <div id="galeria-grid" class="galeria-grid"></div>
           <details class="dica-midia dica-midia-expansivel"><summary>★ A primeira foto é a capa · Dicas de enquadramento</summary><p>A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Cada foto entra <b>inteira</b> no quadro do site, sem nada cortado (as sobras ficam com o fundo da própria foto). Para dar zoom, cortar, girar ou posicionar, use <b>✂ Enquadrar</b>: lá dá para ver como fica no site, no Feed, no Carrossel e no Story. Toque numa foto para vê-la grande (e escolher a capa), ‹ › muda a ordem e ✕ tira.</p></details>
         </div>
-        <div class="passo-msg">Coloque pelo menos 1 foto da peça.</div>
+        <div class="passo-msg">Coloque pelo menos 1 foto do produto.</div>
       </section>
 
       <section class="passo" data-passo="video" id="passo-video">
-        <div class="passo-tit"><span class="num">2</span>Vídeos da peça <span class="opc">(opcional · até 3 · até 20 MB cada)</span><span class="passo-cont" id="video-contador"></span></div>
+        <div class="passo-tit"><span class="num">2</span>Vídeos do produto <span class="opc">(opcional · até 3 · até 20 MB cada)</span><span class="passo-cont" id="video-contador"></span></div>
         <div class="foto-box" id="video-box">
           <label class="btn-foto btn-video" for="video-input" id="video-label"><span class="ic" data-ico="play">🎬</span> Gravar ou escolher um vídeo</label>
           <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" multiple class="input-oculto">
           <div id="video-lista" class="video-lista"></div>
           <video id="video-preview" controls playsinline preload="metadata"></video>
-          <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
+          <div id="video-atual">🎬 Este produto já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
           <button type="button" id="btn-remover-video">Remover vídeo</button>
           <details class="dica-midia dica-midia-expansivel"><summary>MP4, MOV ou WEBM · Dicas sobre vídeos</summary><p>MP4, MOV ou WEBM. Os vídeos sobem junto com as fotos, em segundo plano. O primeiro vídeo é o que aparece como principal.</p></details>
         </div>
       </section>
 
       <section class="passo" data-passo="nome">
-        <div class="passo-tit"><span class="num">3</span>Nome da peça <i class="obg">*</i></div>
+        <div class="passo-tit"><span class="num">3</span>Nome do produto <i class="obg">*</i></div>
         <div class="cad-nome-linha">
         <input type="text" id="nome" maxlength="80" placeholder="Ex: Vestido Floral Midi" autocomplete="off" dir="ltr" lang="pt-BR">
           <button type="button" class="btn-seo-ia" id="btn-foto-ia">✨ Gerar com IA <small>Título e descrição</small></button>
         </div>
         <div id="foto-ia-box"></div>
-        <button type="button" class="cp-abrir" id="cp-abrir">Copiar dados de outra peça</button>
+        <button type="button" class="cp-abrir" id="cp-abrir">Copiar dados de outro produto</button>
         <div id="nome-sugestoes" aria-live="polite"></div>
       <div id="aviso-copiado" class="sug-aviso" role="status" hidden></div>
-        <div class="passo-msg">Escreva o nome da peça.</div>
+        <div class="passo-msg">Escreva o nome do produto.</div>
       </section>
 
       <section class="passo passo-tecido" data-passo="tecido" aria-labelledby="tecido-rotulo">
@@ -1327,9 +1323,9 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
             <input type="number" id="estoque" step="1" min="0" placeholder="Ex: 5" inputmode="numeric">
           </div>
         </div>
-        <label class="chk-consulta" id="linha-consulta" hidden><input type="checkbox" id="consultar-valor"><span><b>Consultar valor</b><small>Sem preço: o catálogo mostra “Consulte valor” (vale para todas as peças deste cadastro).</small></span></label>
+        <label class="chk-consulta" id="linha-consulta" hidden><input type="checkbox" id="consultar-valor"><span><b>Consultar valor</b><small>Sem preço: o catálogo mostra “Consulte valor” (vale para todos os produtos deste cadastro).</small></span></label>
         <div class="dica" id="dica-avista"></div>
-        <div class="passo-msg">Coloque o preço da peça (maior que zero) ou marque “Consultar valor”.</div>
+        <div class="passo-msg">Coloque o preço do produto (maior que zero) ou marque “Consultar valor”.</div>
       </section>
 
       <section class="passo" data-passo="categoria">
@@ -1344,7 +1340,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
         <div class="passo-tit"><span class="num">7</span>Para quem é? <i class="obg">*</i></div>
         <div class="chips chips-grandes publico-seis" id="chips-genero"></div>
         <label class="cad-unissex"><input type="checkbox" id="cad-unissex"> Também é unissex <small>Exibir para ambos os públicos da mesma faixa etária</small></label>
-        <div class="passo-msg">Escolha para quem é a peça.</div>
+        <div class="passo-msg">Escolha para quem é o produto.</div>
       </section>
 
       <section class="passo" data-passo="tamanhos">
@@ -1375,9 +1371,9 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <div class="extra" id="details-mais">
         <div class="passo-tit"><span class="num">10</span>Descrição e destaque <span class="opc">(opcional)</span></div>
       <label for="descricao">Descrição</label>
-        <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
+        <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve…"></textarea>
 
-        <button type="button" class="btn-seo-ia" id="btn-seo-ia">✨ Gerar Título/Descrição com IA</button>
+        <button type="button" class="btn-seo-ia" id="btn-seo-ia">✨ Gerar título/descrição com IA</button>
         <div id="seo-sugestao-box"></div>
 
         <div class="checkbox-linha">
@@ -1386,7 +1382,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
         </div>
         <div class="checkbox-linha" id="linha-arquivar-depois">
           <input type="checkbox" id="arquivar-depois">
-          <label for="arquivar-depois">Arquivar após cadastrar <small>(peça de teste)</small></label>
+          <label for="arquivar-depois">Arquivar após cadastrar <small>(produto de teste)</small></label>
         </div>
         <div class="checkbox-linha" id="linha-notificar-push" style="display:none;padding-left:22px;">
           <input type="checkbox" id="notificarPush" checked>
@@ -1396,8 +1392,8 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
       <div class="cad-falta" id="cad-falta" role="status" aria-live="polite"></div>
       <div class="aviso-gestao" id="aviso-lote" role="status" hidden></div>
-      <button type="submit" class="btn-primario" id="btn-salvar" style="margin-top:10px;">Cadastrar peça</button>
-      <button type="button" class="btn-cancelar-duplicar" id="btn-cancelar-duplicar">Cancelar Duplicação / Nova peça</button>
+      <button type="submit" class="btn-primario" id="btn-salvar" style="margin-top:10px;">Cadastrar produto</button>
+      <button type="button" class="btn-cancelar-duplicar" id="btn-cancelar-duplicar">Cancelar duplicação / Novo produto</button>
       <div id="status" style="text-align:center;font-size:0.85rem;margin-top:8px;"></div>
 
     </form>
@@ -1479,7 +1475,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
     <div class="sheet sep-sheet" role="dialog" aria-modal="true" aria-labelledby="sep-titulo">
       <div class="sheet-topo"><strong id="sep-titulo">Separar em produtos</strong><button type="button" class="sheet-x" id="sep-fechar" aria-label="Fechar">✕</button></div>
       <p class="sep-previa" id="sep-previa" aria-live="polite"></p>
-      <div class="sep-fotos" id="sep-fotos" role="list" aria-label="Fotos da peça, na ordem"></div>
+      <div class="sep-fotos" id="sep-fotos" role="list" aria-label="Fotos do produto, na ordem"></div>
       <fieldset class="sep-fam" id="sep-fam">
         <legend>Os produtos novos…</legend>
         <label class="precos-modo"><input type="radio" name="sep-fam" value="familia" checked><span><b id="sep-fam-rot">Unir numa família</b><small id="sep-fam-sub">Ficam ligados, aparecendo juntos na vitrine.</small></span></label>
@@ -1491,15 +1487,15 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   </div>
 
   <!-- v7.16: "Escolher peça para copiar" em tela cheia (passo 3 do cadastro): últimos cadastrados, busca, filtros e fotos grandes.
-       Tocar na peça copia todos os dados dela (com Desfazer); ✎ abre a peça para editar. -->
+       Tocar no produto copia todos os dados dele (com Desfazer); ✎ abre o produto para editar. -->
   <div class="overlay-sheet cp-overlay" id="overlay-copiar">
     <div class="sheet cp-sheet" role="dialog" aria-modal="true" aria-labelledby="cp-titulo">
       <div class="cp-topo">
-        <strong id="cp-titulo">Escolher peça para copiar</strong>
+        <strong id="cp-titulo">Escolher produto para copiar</strong>
         <button type="button" class="cp-fechar tk-fechar" id="cp-fechar" aria-label="Fechar">✕</button>
       </div>
       <div class="cp-ferramentas">
-        <input type="search" id="cp-busca" class="tk-busca" placeholder="Buscar por nome ou código (ex.: TK-0555)" autocomplete="off" lang="pt-BR" aria-label="Buscar peça por nome ou código">
+        <input type="search" id="cp-busca" class="tk-busca" placeholder="Buscar por nome ou código (ex.: TK-0555)" autocomplete="off" lang="pt-BR" aria-label="Buscar produto por nome ou código">
         <div class="cp-linha" role="group" aria-label="Situação e ordem">
           <button type="button" class="cp-chip" data-cp-situ="ativas" aria-pressed="true">Ativas</button>
           <button type="button" class="cp-chip" data-cp-situ="arquivadas" aria-pressed="false">Arquivadas</button>
@@ -1522,7 +1518,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   </div>
   <div class="overlay-sheet" id="overlay-lote">
     <div class="sheet lote-sheet" role="dialog" aria-modal="true" aria-labelledby="lote-titulo">
-      <div class="sheet-topo"><strong id="lote-titulo">Editar peças</strong><button type="button" class="sheet-x btn-fechar" id="lote-fechar" aria-label="Fechar">✕</button></div>
+      <div class="sheet-topo"><strong id="lote-titulo">Editar produtos</strong><button type="button" class="sheet-x btn-fechar" id="lote-fechar" aria-label="Fechar">✕</button></div>
       <p class="juntar-ajuda" id="lote-resumo"></p>
       <div class="lote-corpo" id="lote-corpo">
         <section class="lote-campo" data-campo="nome">
@@ -1537,7 +1533,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
           <small class="lote-dica" id="lote-preco-dica"></small>
         </section>
         <section class="lote-campo" data-campo="categoria"><label>Categoria</label><div class="lote-modo" data-modo-de="categoria"></div><div id="lote-lista-categoria"></div></section>
-        <section class="lote-campo" data-campo="genero"><label>Gênero</label><div class="lote-modo" data-modo-de="genero"></div><div id="lote-lista-genero"></div></section>
+        <section class="lote-campo" data-campo="genero"><label>Público</label><div class="lote-modo" data-modo-de="genero"></div><div id="lote-lista-genero"></div></section>
         <section class="lote-campo" data-campo="tamanhos"><label>Tamanhos</label><div class="lote-modo" data-modo-de="tamanhos"></div><div id="lote-lista-tamanhos"></div></section>
         <section class="lote-campo" data-campo="cores"><label>Cores e estampas</label><div class="lote-modo" data-modo-de="cores"></div><div id="lote-lista-cores"></div></section>
         <section class="lote-campo" data-campo="estoque">
@@ -1565,12 +1561,12 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <div class="sheet-topo"><strong id="precos-titulo">Alterar preços</strong><button type="button" class="sheet-x" id="precos-fechar" aria-label="Fechar">✕</button></div>
       <p class="juntar-ajuda" id="precos-resumo"></p>
       <div role="radiogroup" aria-label="O que fazer com o preço">
-        <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>Reajustar em %</b><small>10 = +10% · -15 = 15% de desconto. Peças “Consulte valor” são puladas.</small></span></label>
+        <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>Reajustar em %</b><small>10 = +10% · -15 = 15% de desconto. Produtos “Consulte valor” são puladas.</small></span></label>
         <label class="precos-modo" id="precos-modo-escrito" hidden><input type="radio" name="precos-modo" value="escrito"><span><b>Valor escrito (preço fixo)</b><small>Todas as marcadas ficam com o MESMO preço. Serve também para tirar do “Consulte valor”.</small></span></label>
         <label class="precos-modo" id="precos-modo-padrao" hidden><input type="radio" name="precos-modo" value="padrao"><span><b>Arrumar para ,99 / ,49</b><small>Ajusta o preço para o valor à vista terminar em ,99 ou ,49. Mostra antes quantas mudam e exemplos.</small></span></label>
         <label class="precos-modo" id="precos-modo-consulta" hidden><input type="radio" name="precos-modo" value="consulta"><span><b>Consultar valor</b><small>Tira o preço das marcadas e o catálogo mostra “Consulte valor”.</small></span></label>
       </div>
-      <label class="precos-todas" id="precos-todas-box" hidden><input type="checkbox" id="precos-todas"> <span>Valer para <b>todas as peças com preço da loja</b> (não só as marcadas)</span></label>
+      <label class="precos-todas" id="precos-todas-box" hidden><input type="checkbox" id="precos-todas"> <span>Valer para <b>todos os produtos com preço da loja</b> (não só as marcadas)</span></label>
       <div id="precos-campos">
         <div id="precos-campo-pct"><label for="precos-pct">Porcentagem</label><input type="text" id="precos-pct" inputmode="decimal" autocomplete="off" placeholder="Ex.: 10 ou -15"></div>
         <div id="precos-campo-valor" hidden><label for="precos-valor">Preço (R$)</label><input type="text" id="precos-valor" inputmode="decimal" autocomplete="off" placeholder="Ex.: 89.90"></div>
@@ -1582,7 +1578,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
   <div class="overlay-sheet" id="overlay-historico">
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="historico-titulo">
-      <div class="sheet-topo"><strong id="historico-titulo">Histórico da peça</strong><button type="button" class="sheet-x" id="historico-fechar" aria-label="Fechar">✕</button></div>
+      <div class="sheet-topo"><strong id="historico-titulo">Histórico do produto</strong><button type="button" class="sheet-x" id="historico-fechar" aria-label="Fechar">✕</button></div>
       <div id="historico-corpo" aria-live="polite"></div>
     </div>
   </div>
@@ -1601,16 +1597,16 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <button type="button" style="width:auto;padding:2px 8px;" id="btn-cancelar-bulk">Desmarcar todos</button>
     </div>
     <div class="bulk-bar-actions">
-      <button type="button" id="btn-bulk-editar">Editar peças</button>
-      <button type="button" id="btn-bulk-preco">% Alterar Preços</button>
-      <button type="button" id="btn-bulk-novidade">Marcar Novidades</button>
-      <button type="button" id="btn-bulk-arquivar">Arquivar em Massa</button>
+      <button type="button" id="btn-bulk-editar">Editar produtos</button>
+      <button type="button" id="btn-bulk-preco">% Alterar preços</button>
+      <button type="button" id="btn-bulk-novidade">Marcar novidades</button>
+      <button type="button" id="btn-bulk-arquivar">Arquivar em massa</button>
       <button type="button" id="btn-bulk-reativar">Reativar em Massa</button>
       <button type="button" id="btn-bulk-postar">Enviar para Postagens</button>
-      <button type="button" id="btn-bulk-pedir-fotos">Solicitar fotos</button>
+      <button type="button" id="btn-bulk-pedir-fotos">Pedir fotos</button>
       <button type="button" id="btn-bulk-juntar" hidden>Juntar em 1 produto</button>
-      <button type="button" id="btn-bulk-fotoia" hidden>Enviar para modelo IA</button>
-      <button type="button" id="btn-bulk-separar" hidden>✂️ Separar em peças</button>
+      <button type="button" id="btn-bulk-fotoia" hidden>Enviar para Fotos com IA</button>
+      <button type="button" id="btn-bulk-separar" hidden>✂️ Separar em produtos</button>
     </div>
   </div>
 
@@ -1621,12 +1617,12 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
   <div class="busca-bloco">
   <div class="busca-linha">
-    <span class="busca-admin-wrap"><span class="busca-admin-lupa" data-ico="busca" aria-hidden="true"></span><input type="text" id="busca-admin" placeholder="Nome ou código da peça" autocomplete="off"><button type="button" id="busca-admin-x" class="busca-admin-x" aria-label="Apagar a busca" hidden><span class="ic" data-ico="fechar">✕</span></button></span>
+    <span class="busca-admin-wrap"><span class="busca-admin-lupa" data-ico="busca" aria-hidden="true"></span><input type="text" id="busca-admin" placeholder="Nome ou código do produto" autocomplete="off"><button type="button" id="busca-admin-x" class="busca-admin-x" aria-label="Limpar a busca" hidden><span class="ic" data-ico="fechar">✕</span></button></span>
     <button type="button" id="fa-toggle" aria-expanded="false" aria-controls="filtros-admin"><span class="ic" data-ico="filtro">🎚️</span> Filtros<span class="fa-n" id="fa-n" hidden>0</span></button>
   </div>
   <div class="filtros-admin" id="filtros-admin">
     <select id="fa-categoria" aria-label="Filtrar por categoria"><option value="">Categoria: todas</option></select>
-    <select id="fa-genero" aria-label="Filtrar por gênero"><option value="">Gênero: todos</option></select>
+    <select id="fa-genero" aria-label="Filtrar por público"><option value="">Público: todos</option></select>
     <select id="fa-cor" aria-label="Filtrar por cor ou estampa"><option value="">Cor: todas</option></select>
     <select id="fa-tecido" aria-label="Filtrar por tecido"><option value="">Tecido: todos</option></select>
     <select id="fa-tam" aria-label="Filtrar por tamanho"><option value="">Tamanho: todos</option></select>
@@ -1654,6 +1650,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 
 
+<script src="avisos.js?v=7.60.0"></script>
 <script src="common.js"></script>
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
@@ -1694,7 +1691,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   let funcionarioNome = localStorage.getItem('tenkiter_funcionario') || '';
   let modoLogin = false;      // true: o servidor tem contas (WhatsApp + senha + permissões)
   let pinAindaAtivo = false;  // o PIN antigo ainda vale no servidor
-  let auditoriaMapa_ = {};     // v4.1: quem cadastrou/editou cada peça (só equipe, só backend 4.1)
+  let auditoriaMapa_ = {};     // v4.1: quem cadastrou/editou cada produto (só equipe, só backend 4.1)
   let usuarioAdmin = null;    // quem está logado (modo login)
   let servidorComContas = false; // o backend já tem contas/permissões (v2)
 
@@ -1754,8 +1751,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   document.getElementById('btn-copiar-log-debug').addEventListener('click', () => {
     const texto = logDebugEntradas.length ? logDebugEntradas.join('\n') : '(log vazio -- ligue o log e reproduza o problema antes de copiar)';
     navigator.clipboard.writeText(texto)
-      .then(() => alert('Log copiado! Cole numa mensagem e me mande.'))
-      .catch(() => alert('Não consegui copiar automaticamente. Toque e segure no texto do log pra selecionar e copiar manualmente.'));
+      .then(() => TKAviso.ok('Log copiado! Cole numa mensagem e me mande.'))
+      .catch(() => TKAviso.erro('Não consegui copiar automaticamente. Toque e segure no texto do log pra selecionar e copiar manualmente.'));
   });
   atualizarBotaoLogDebug_();
   atualizarTextoLogDebug_();
@@ -1866,7 +1863,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const btn = document.getElementById('lo-entrar');
     const w = document.getElementById('lo-whats').value, senha = document.getElementById('lo-senha').value;
     if (!w || !senha) { document.getElementById('lo-erro').textContent = 'Preencha e-mail, WhatsApp ou CPF e a senha.'; return; }
-    btn.disabled = true; btn.textContent = 'Entrando...';
+    btn.disabled = true; btn.textContent = 'Entrando…';
     const r = await entrarComSenha(w, senha);
     btn.disabled = false; btn.textContent = 'Entrar';
     if (!r || !r.ok) { document.getElementById('lo-erro').textContent = ((r && r.erro) || 'Dados ou senha incorretos.') + ' Esqueceu a senha? Toque em “Esqueci a senha”.'; return; }
@@ -1901,7 +1898,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function tratarRespostaAcesso(j) {
     if (!j || j.ok !== false) return;
     if (j.semPermissao) {
-      if (Date.now() - ultimoAvisoPermissao > 3000) { ultimoAvisoPermissao = Date.now(); alert(j.erro || 'Você não tem permissão para essa ação.'); }
+      if (Date.now() - ultimoAvisoPermissao > 3000) { ultimoAvisoPermissao = Date.now(); TKAviso.erro(j.erro || 'Você não tem permissão para essa ação.'); }
       return;
     }
     if (j.exigeLogin || j.sessaoInvalida || j.inativa || j.pinInvalido) {
@@ -1996,15 +1993,15 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!novoUrl) return;
     if (!confirm('Trocar o endereço do sistema? Só faça isso se você recebeu um novo endereço oficial.')) return;
     definirApiUrlPersonalizada(novoUrl);
-    alert('Endereço salvo! A página vai recarregar para aplicar a mudança.');
-    window.location.reload();
+    TKAviso.ok('Endereço salvo. A página vai recarregar para aplicar a mudança.');
+    setTimeout(() => window.location.reload(), 1500);
   });
 
   document.getElementById('btn-restaurar-api-url').addEventListener('click', () => {
     if (!confirm('Restaurar o endereço padrão do sistema?')) return;
     restaurarApiUrlPadrao();
-    alert('Endereço padrão restaurado! A página vai recarregar.');
-    window.location.reload();
+    TKAviso.ok('Endereço padrão restaurado. A página vai recarregar.');
+    setTimeout(() => window.location.reload(), 1500);
   });
 
   /* ===================== Fila offline / Sincronização ===================== */
@@ -2016,17 +2013,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     bar.classList.toggle('ativa', qtd > 0);
   }
 
-  // v4.27: aviso rápido SEM travar a tela (no lugar do alert "Tudo sincronizado!")
-  let avisoRapidoT_ = 0;
-  function avisoRapido_(texto, tipo) {
-    const el = document.getElementById('aviso-rapido');
-    if (!el) return;
-    el.textContent = texto;
-    el.className = tipo === 'aviso' ? 'aviso' : '';
-    el.hidden = false;
-    clearTimeout(avisoRapidoT_);
-    avisoRapidoT_ = setTimeout(() => { el.hidden = true; }, tipo === 'aviso' ? 7000 : 4500);
-  }
+  // v7.57.0: o aviso rápido usa a região única de avisos (avisos.js): empilha, não cobre faixas e erro não some sozinho.
+  function avisoRapido_(texto, tipo) { return TKAviso.mostrar(texto, { tipo: tipo === 'aviso' ? 'aviso' : 'ok' }); }
   window.tkAvisoRapido = avisoRapido_;
 
   let sincronizando_ = false;
@@ -2036,7 +2024,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const btn = document.getElementById('btn-sincronizar');
     const bar = document.getElementById('sync-bar');
     btn.disabled = true;
-    btn.textContent = 'Sincronizando...';
+    btn.textContent = 'Sincronizando…';
     bar.classList.add('sincronizando');
     try {
       const resultado = await sincronizarFilaOffline();
@@ -2188,7 +2176,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     grid.setAttribute('aria-label', fotosItens.length + ' fotos selecionadas');
     // v7.23: no modo "vários produtos" o título e a contagem dizem que cada foto vira um produto
     { const v = modoFormulario === 'varias', n = document.getElementById('passo-fotos-nome'), sub = document.getElementById('passo-fotos-varias');
-      if (n) n.textContent = v ? 'Fotos · uma por produto' : 'Fotos da peça'; if (sub) sub.hidden = !v;
+      if (n) n.textContent = v ? 'Fotos · uma por produto' : 'Fotos do produto'; if (sub) sub.hidden = !v;
       const dica = document.querySelector('#galeria-box .dica-midia-expansivel'); if (dica) dica.hidden = v; }
     desenharUnioes_();
     if (modoFormulario === 'varias') {
@@ -2338,9 +2326,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         a.href = info ? (info.tipo === 'drive' ? 'https://drive.google.com/file/d/' + info.id + '/view' : info.url) : v.url;
         card.appendChild(a);
       }
-      const capa = document.createElement('button'); capa.type = 'button'; capa.className = 'video-capa'; capa.textContent = '🖼 Escolher quadro para a capa'; capa.setAttribute('aria-label', 'Escolher quadro do vídeo ' + (idx + 1) + ' como capa da peça');
+      const capa = document.createElement('button'); capa.type = 'button'; capa.className = 'video-capa'; capa.textContent = '🖼 Escolher quadro para a capa'; capa.setAttribute('aria-label', 'Escolher quadro do vídeo ' + (idx + 1) + ' como capa do produto');
       capa.addEventListener('click', () => {
-        if (fotosItens.length >= MAX_GALERIA) { alert('O limite é de ' + MAX_GALERIA + ' fotos. Tire uma antes de escolher a capa.'); return; }
+        if (fotosItens.length >= MAX_GALERIA) { TKAviso.aviso('O limite é de ' + MAX_GALERIA + ' fotos. Tire uma antes de escolher a capa.'); return; }
         const listaOriginal = fotosItens;
         TKCapaVideo.abrir(v.file || v.url || v.prev, (data) => {
           if (fotosItens !== listaOriginal || !videosItens.includes(v)) throw new Error('Cadastro alterado');
@@ -2483,10 +2471,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     // v4.17: no modo "várias peças" o limite de 8 vale por peça, não pelo lote: cada foto vira uma peça.
     const varias = modoFormulario === 'varias';
     const vagas = varias ? arquivos.length : MAX_GALERIA - fotosItens.length;
-    if (!varias && arquivos.length > vagas) alert('Cabem só mais ' + vagas + ' foto(s) (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
+    if (!varias && arquivos.length > vagas) TKAviso.aviso('Cabem só mais ' + tkPlural(vagas, 'foto', 'fotos') + ' (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
     for (const f of arquivos.slice(0, Math.max(vagas, 0))) {
       if (!/^image\//.test(f.type)) continue;
-      try { const novaFoto = await encaixarPadrao_(await lerFotoReduzida(f)); fotosItens.push(novaFoto); preAgendar_(novaFoto, 'foto'); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
+      try { const novaFoto = await encaixarPadrao_(await lerFotoReduzida(f)); fotosItens.push(novaFoto); preAgendar_(novaFoto, 'foto'); } catch (err) { TKAviso.erro('Não consegui ler a foto "' + f.name + '".'); }
     }
     desenharFotos();
   });
@@ -2496,7 +2484,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!arquivos.length) return;
     let vagas = maxVideos_() - videosItens.length;
     for (const f of arquivos) {
-      if (vagas <= 0) { alert('Só cabem ' + maxVideos_() + ' vídeo(s) por peça. Os primeiros foram aproveitados.'); break; }
+      if (vagas <= 0) { TKAviso.aviso('Só cabem ' + tkPlural(maxVideos_(), 'vídeo', 'vídeos') + ' por produto. Os primeiros foram aproveitados.'); break; }
       const resultado = await TKVideoValidation.validar(f, { maxMB: MAX_VIDEO_MB });
       if (!resultado.ok) { alert('Não foi possível aceitar "' + f.name + '":\n\n' + resultado.erros.join('\n') + '\n\nEscolha outro arquivo ou exporte novamente como MP4.'); continue; }
       const novoVideo = { file: f, mime: f.type || 'video/mp4', prev: URL.createObjectURL(f), validado: true, metadata: resultado.metadata };
@@ -2508,7 +2496,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   function mostrarToastCarregando(texto) {
     const toast = document.getElementById('toast-carregando');
-    document.getElementById('texto-toast').textContent = texto || 'Carregando peças...';
+    document.getElementById('texto-toast').textContent = texto || 'Carregando produtos…';
     toast.classList.add('visivel');
   }
   function esconderToastCarregando() {
@@ -2744,7 +2732,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!podeGerirCategorias_()) return '';
     const e = escaparHtml(c);
     return '<button type="button" class="cat-acao cat-ed" data-cat-editar="' + e + '" aria-label="Corrigir o nome de ' + e + '" title="Corrigir o nome">✎</button>'
-      + (comApagar ? '<button type="button" class="cat-acao cat-x" data-cat-apagar="' + e + '" aria-label="Apagar a categoria ' + e + '" title="Apagar categoria">✕</button>' : '');
+      + (comApagar ? '<button type="button" class="cat-acao cat-x" data-cat-apagar="' + e + '" aria-label="Excluir a categoria ' + e + '" title="Excluir categoria">✕</button>' : '');
   }
   function editorCat_(c, classeLinha) {
     const e = escaparHtml(c);
@@ -2804,10 +2792,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       return;
     }
     const btn = document.getElementById('btn-confirmar-nova-categoria');
-    btn.disabled = true; btn.textContent = 'Adicionando...';
+    btn.disabled = true; btn.textContent = 'Adicionando…';
     try {
       const resp = await chamarAdmin_({ action: 'addCategoria', nome: nome });
-      if (!resp || !resp.ok) { const t = textoErroCat_(resp, 'Não consegui adicionar a categoria.'); if (t) alert(t); return; }
+      if (!resp || !resp.ok) { const t = textoErroCat_(resp, 'Não consegui adicionar a categoria.'); if (t) TKAviso.erro(t); return; }
       const nomeSalvo = limparNomeCategoria_(resp.nome || nome) || nome; // o servidor devolve o nome como ficou (ou o que já existia com outra maiúscula)
       let existente = categorias.find(c => semAcento_(c) === semAcento_(nomeSalvo));
       if (!existente) { categorias.push(nomeSalvo); existente = nomeSalvo; }
@@ -2832,7 +2820,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   async function salvarRenomear_(input) {
     if (ocupadoCat_ || !input) return;
     const antigo = input.dataset.catAntigo, novo = limparNomeCategoria_(input.value);
-    if (!novo) { alert('Escreva o novo nome da categoria.'); input.focus(); return; }
+    if (!novo) { TKAviso.aviso('Escreva o novo nome da categoria.'); input.focus(); return; }
     if (novo === antigo) { editandoCat_ = null; redesenharCategorias_(); return; }
     const botao = input.parentNode.querySelector('[data-cat-salvar]');
     ocupadoCat_ = true; botao.disabled = true; botao.textContent = 'Salvando…';
@@ -2840,7 +2828,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     ocupadoCat_ = false;
     if (!r || !r.ok) {
       botao.disabled = false; botao.textContent = 'Salvar';
-      const t = textoErroCat_(r, 'Não consegui corrigir o nome agora.'); if (t) alert(t);
+      const t = textoErroCat_(r, 'Não consegui corrigir o nome agora.'); if (t) TKAviso.erro(t);
       return;
     }
     const nomeFinal = r.nome || novo;
@@ -2852,24 +2840,24 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     editandoCat_ = null;
     guardarCategoriasLocal_();
     redesenharCategorias_();
-    if (r.juntou) alert('A categoria “' + existente + '” já existia: juntei as duas. ' + (r.pecas ? r.pecas + (r.pecas === 1 ? ' peça passou' : ' peças passaram') + ' para ela.' : ''));
+    if (r.juntou) TKAviso.ok('A categoria “' + existente + '” já existia: juntei as duas. ' + (r.pecas ? r.pecas + (r.pecas === 1 ? ' produto passou' : ' produtos passaram') + ' para ela.' : ''));
     if (r.pecas) carregarProdutos();
   }
   async function apagarCategoria_(nome) {
     if (ocupadoCat_) return;
-    if (!confirm('Apagar a categoria “' + nome + '”?')) return;
+    if (!confirm('Excluir a categoria “' + nome + '”?')) return;
     ocupadoCat_ = true;
     let r = await chamarAdmin_({ action: 'excluirCategoria', nome: nome });
     if (r && r.ok === false && r.emUso) {
       const n = r.emUso;
       ocupadoCat_ = false;
-      if (!confirm('“' + nome + '” está em ' + n + (n === 1 ? ' peça' : ' peças') + '.\n\nSe apagar, ' + (n === 1 ? 'essa peça fica' : 'essas peças ficam') + ' sem esta categoria (continuam no catálogo, com as outras categorias que tiverem).\n\nApagar mesmo assim?')) return;
+      if (!confirm('“' + nome + '” está em ' + n + (n === 1 ? ' produto' : ' produtos') + '.\n\nSe excluir, ' + (n === 1 ? 'esse produto fica' : 'esses produtos ficam') + ' sem esta categoria (continuam no catálogo, com as outras categorias que tiverem).\n\nApagar mesmo assim?')) return;
       ocupadoCat_ = true;
       r = await chamarAdmin_({ action: 'excluirCategoria', nome: nome, confirmar: true });
     }
     ocupadoCat_ = false;
-    if (!r || (!r.ok && !r.naoExiste)) { const t = textoErroCat_(r, 'Não consegui apagar a categoria agora.'); if (t) alert(t); return; }
-    if (r.naoExiste) alert('Essa categoria já tinha sido apagada. Atualizei a lista.');
+    if (!r || (!r.ok && !r.naoExiste)) { const t = textoErroCat_(r, 'Não consegui excluir a categoria agora.'); if (t) TKAviso.info(t); return; }
+    if (r.naoExiste) TKAviso.erro('Essa categoria já tinha sido excluída. Atualizei a lista.');
     categorias = categorias.filter(c => c !== nome);
     selecionadasCategorias.delete(nome);
     editandoCat_ = null;
@@ -2943,7 +2931,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const lista = listaDoCampo_(idCampo), marcados = lista.map(semAcento_);
       const box = document.getElementById(idChips);
       box.querySelectorAll('.chip[data-extra]').forEach(ch => { if (marcados.indexOf(semAcento_(ch.dataset.v)) === -1) ch.remove(); }); // valor antigo que a pessoa desmarcou
-      lista.forEach(v => { // valor que a peça já tem e não está na lista (peça antiga): aparece marcado, para nunca ficar escondido
+      lista.forEach(v => { // valor que o produto já tem e não está na lista (produto antigo): aparece marcado, para nunca ficar escondido
         if (!Array.prototype.some.call(box.querySelectorAll('.chip'), ch => semAcento_(ch.dataset.v) === semAcento_(v))) { const b = chipRapido_(idCampo, opcoes, v); b.dataset.extra = '1'; box.appendChild(b); }
       });
       box.querySelectorAll('.chip').forEach(ch => ch.classList.toggle('selecionado', marcados.indexOf(semAcento_(ch.dataset.v)) !== -1));
@@ -3074,8 +3062,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       .sort((a, b) => comeca(a) - comeca(b) || String(a.Nome).localeCompare(String(b.Nome), 'pt-BR')).slice(0, 6);
   }
   /* v7.16 — achar a peça de onde copiar (pedido do Pablo): parecidas com foto embaixo do nome e a tela cheia
-     "Escolher peça para copiar" com os últimos cadastrados, busca por nome/código, filtros (situação, para quem, categoria),
-     ordem e fotos grandes. Tocar na peça copia TODOS os dados dela (menos código, fotos e vídeos), com Desfazer; ✎ abre para editar. */
+     "Escolher produto para copiar" com os últimos cadastrados, busca por nome/código, filtros (situação, para quem, categoria),
+     ordem e fotos grandes. Tocar no produto copia TODOS os dados dele (menos código, fotos e vídeos), com Desfazer; ✎ abre para editar. */
   const fotoPeca_ = (p, w) => p && p.Foto_URL ? '<img ' + atribSrc(fotoMini(p.Foto_URL, w || 240)) + ' alt="" loading="lazy" decoding="async">' : '<span class="sug-sem-foto" aria-hidden="true"></span>';
   const situPeca_ = (p) => ehInativo_(p) ? 'arquivada' : (estaEsgotado(p) ? 'esgotada' : '');
   const precoPeca_ = (p) => p.Preco !== '' && p.Preco != null && !(Number(p.Preco) > 0) ? 'Consultar valor' : (Number(p.Preco) > 0 ? formatarReal(p.Preco) : '');
@@ -3095,7 +3083,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       .sort((a, b) => comeca(a) - comeca(b) || recencia_(b) - recencia_(a));
     if (!todas.length) { box.innerHTML = ''; return; }
     const igual = todas.find(p => semAcento_(p.Nome) === t);
-    box.innerHTML = (igual ? '<div class="sug-aviso">⚠️ Já existe uma peça com esse nome' + (igual.Codigo ? ' (' + escaparHtml(igual.Codigo) + ')' : '') + '. Se for outra peça, pode continuar; se queria mexer nela, abra "Ver todas" e toque no ✎.</div>' : '')
+    box.innerHTML = (igual ? '<div class="sug-aviso">⚠️ Já existe um produto com esse nome' + (igual.Codigo ? ' (' + escaparHtml(igual.Codigo) + ')' : '') + '. Se for outro produto, pode continuar; se queria mexer nele, abra "Ver todas" e toque no ✎.</div>' : '')
       + '<div class="sug-cab"><div class="sug-titulo">Parecidas — toque na foto para copiar os dados</div>'
       + '<button type="button" class="sug-ver-todas" data-copiar-todas="1">Ver todas (' + todas.length + ') ›</button></div><div class="sug-cartoes">'
       + todas.slice(0, 3).map(p => '<button type="button" class="sug-cartao" data-peca-usar="' + escaparHtml(p.ID) + '" aria-label="Copiar os dados de ' + escaparHtml(p.Nome) + '">' + fotoPeca_(p, 200)
@@ -3148,8 +3136,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     chipsFiltro_('cp-generos', gens, cp_.gen, 'data-cp-gen', 'Todos os públicos');
     chipsFiltro_('cp-categorias', cats, cp_.cat, 'data-cp-cat', 'Todas as categorias');
     chipsFiltro_('cp-precos', valores, cp_.valor, 'data-cp-valor', 'Todos os valores', (a, b) => numDe[a] - numDe[b] || a.localeCompare(b, 'pt-BR'));
-    document.getElementById('cp-rotulo').textContent = !texto && !cp_.gen && !cp_.cat && !cp_.valor && cp_.ordem === 'recentes' ? 'Últimos cadastrados' : (texto ? 'Resultado da busca' : 'Peças');
-    document.getElementById('cp-cont').textContent = r.lista.length + (r.lista.length === 1 ? ' peça' : ' peças');
+    document.getElementById('cp-rotulo').textContent = !texto && !cp_.gen && !cp_.cat && !cp_.valor && cp_.ordem === 'recentes' ? 'Últimos cadastrados' : (texto ? 'Resultado da busca' : 'Produtos');
+    document.getElementById('cp-cont').textContent = r.lista.length + (r.lista.length === 1 ? ' produto' : ' produtos');
     const mostrar = r.lista.slice(0, cp_.lim);
     document.getElementById('cp-grade').innerHTML = mostrar.length ? mostrar.map(p => {
       const situ = situPeca_(p), extra = [tags_(p.Categoria)[0], textoPlano(p.Tamanhos)].filter(Boolean).join(' · ');
@@ -3157,9 +3145,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         + '<span class="cp-nome">' + escaparHtml(p.Nome) + '</span><span class="cp-meta">' + (p.Codigo ? escaparHtml(p.Codigo) + ' · ' : '') + '<b>' + escaparHtml(precoPeca_(p) || 'sem preço') + '</b></span>'
         + (extra ? '<span class="cp-extra">' + escaparHtml(extra) + '</span>' : '') + '<span class="cp-acao">Copiar dados</span></button>'
         + (situ ? '<span class="cp-situ">' + situ + '</span>' : '')
-        + '<button type="button" class="cp-ed" data-peca-editar="' + escaparHtml(p.ID) + '" aria-label="Editar ' + escaparHtml(p.Nome) + '" title="Editar esta peça">✎</button></div>';
+        + '<button type="button" class="cp-ed" data-peca-editar="' + escaparHtml(p.ID) + '" aria-label="Editar ' + escaparHtml(p.Nome) + '" title="Editar este produto">✎</button></div>';
     }).join('') + (r.lista.length > mostrar.length ? '<button type="button" class="cp-mais" id="cp-mais">Mostrar mais ' + Math.min(40, r.lista.length - mostrar.length) + '</button>' : '')
-      : '<div class="cp-vazio">Nenhuma peça com esses filtros. Tente outra palavra ou toque em "Todas".</div>';
+      : '<div class="cp-vazio">Nenhum produto com esses filtros. Tente outra palavra ou toque em "Todas".</div>';
   }
   /** Copia TODOS os dados da peça (como antes), guardando o formulário para o Desfazer. Editando outra peça, só o nome. */
   let desfazerCopia_ = null;
@@ -3174,7 +3162,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const av = document.getElementById('aviso-copiado');
     if (av) {
       av.hidden = false;
-      av.innerHTML = escaparHtml(modoFormulario === 'editando' ? 'Copiei o nome de “' + p.Nome + '”.' : 'Copiei os dados de “' + p.Nome + '” (preço, categoria, gênero, tamanhos, cores, descrição). Confira e escolha as fotos da peça nova.')
+      av.innerHTML = escaparHtml(modoFormulario === 'editando' ? 'Copiei o nome de “' + p.Nome + '”.' : 'Copiei os dados de “' + p.Nome + '” (preço, categoria, gênero, tamanhos, cores, descrição). Confira e escolha as fotos do produto novo.')
         + ' <button type="button" class="aviso-desfazer" id="btn-desfazer-copia">Desfazer</button>';
     }
     campo.focus(); try { campo.setSelectionRange(campo.value.length, campo.value.length); } catch (e) {}
@@ -3227,7 +3215,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function tituloForm_(txt) {
     document.getElementById('titulo-form').textContent = txt;
     const s = document.getElementById('cad-sum-txt');
-    if (s) s.textContent = /^Editando/.test(txt) ? '✏️ ' + txt : /^Duplicando/.test(txt) ? '📋 ' + txt : '📝 Formulário da peça';
+    if (s) s.textContent = /^Editando/.test(txt) ? '✏️ ' + txt : /^Duplicando/.test(txt) ? '📋 ' + txt : '📝 Formulário do produto';
   }
   function abrirCadastro_() {
     const d = document.getElementById('card-form');
@@ -3410,12 +3398,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     let alvo = igual || nome;
     if (!igual) {
       const bt = document.getElementById(cfg.confirmar); const txt0 = bt ? bt.textContent : '';
-      if (bt) { bt.disabled = true; bt.textContent = 'Adicionando...'; }
+      if (bt) { bt.disabled = true; bt.textContent = 'Adicionando…'; }
       try {
-        if (!(await garantirOpcoesServidor_())) { alert('Não consegui falar com o servidor para guardar esta opção para todos. Confira a internet e tente de novo (nada foi criado).'); return; }
+        if (!(await garantirOpcoesServidor_())) { TKAviso.erro('Não consegui falar com o servidor para guardar esta opção para todos. Confira a internet e tente de novo (nada foi criado).'); return; }
         if (listasSoAdmin_()) throw new Error('Só o Admin total cria tamanhos e cores novos.');
         const resp = await chamarAdmin_({ action: chave === 'cores' ? 'addCor' : 'addTamanho', nome: nome });
-        if (!resp || !resp.ok) { const t = textoErroCat_(resp, (resp && resp.semRede) ? 'Sem conexão: a opção NÃO foi criada. Tente de novo.' : 'Não consegui guardar. Só o Admin total cria opções novas.'); if (t) alert(t); return; }
+        if (!resp || !resp.ok) { const t = textoErroCat_(resp, (resp && resp.semRede) ? 'Sem conexão: a opção NÃO foi criada. Tente de novo.' : 'Não consegui guardar. Só o Admin total cria opções novas.'); if (t) TKAviso.erro(t); return; }
         alvo = resp.nome || nome;
         if (!cfg.base.some((o) => semAcento_(o) === semAcento_(alvo))) cfg.base.push(alvo);
         montarRapidos_();
@@ -3488,7 +3476,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   function preencherFormComProduto(p) {
     document.getElementById('nome').value = p.Nome;
-    { const zero = p.Preco !== '' && p.Preco != null && !(Number(p.Preco) > 0);   // 0 explícito = peça "Consulte valor" (vazio = ainda sem preço digitado)
+    { const zero = p.Preco !== '' && p.Preco != null && !(Number(p.Preco) > 0);   // 0 explícito = produto "Consulte valor" (vazio = ainda sem preço digitado)
       document.getElementById('preco').value = zero ? '' : p.Preco;
       const cv = document.getElementById('consultar-valor'); if (cv) cv.checked = zero && consultarLiberado_; }
     document.getElementById('estoque').value = p.Estoque || '';
@@ -3526,10 +3514,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
     tituloForm_('Duplicando: ' + p.Nome);
     document.getElementById('btn-salvar').textContent = 'Cadastrar Cópia';
-    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar Duplicação / Nova peça';
+    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar duplicação / Novo produto';
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
 
-    alert('Dados copiados! Não esqueça de selecionar uma foto para esta peça antes de salvar.');
+    TKAviso.aviso('Dados copiados! Não esqueça de selecionar uma foto para este produto antes de salvar.');
     abrirCadastro_();
   }
 
@@ -3551,7 +3539,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const titulo = document.getElementById('titulo-form');
     const sum = document.getElementById('cad-sum-txt');
     const desc = corpo && corpo.querySelector('.cad-sub');
-    if (titulo) titulo.textContent = 'Corrigir tamanhos · ' + (p.Codigo || p.Nome || 'peça');
+    if (titulo) titulo.textContent = 'Corrigir tamanhos · ' + (p.Codigo || p.Nome || 'produto');
     if (sum) sum.textContent = 'Editar tamanhos e idades';
     if (desc) desc.textContent = 'Desmarque o que acabou ou marque as opções disponíveis. Salve para atualizar a loja.';
     const salvar = document.getElementById('btn-salvar');
@@ -3590,7 +3578,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
 
     abrirCadastro_();
-    if (window.tkFamiliaForm) window.tkFamiliaForm(p);   // v7.44.0: família de tamanhos da peça (admin-familias.js)
+    if (window.tkFamiliaForm) window.tkFamiliaForm(p);   // v7.44.0: família de tamanhos do produto (admin-familias.js)
   }
 
   document.getElementById('form-produto').addEventListener('reset', () => { const ac = document.getElementById('aviso-copiado'); if (ac) ac.hidden = true; });
@@ -3605,9 +3593,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
     renderizarChips('chips-genero', generos, selecionadosGeneros);
     zerarMidia(null);
-    tituloForm_('Nova peça');
+    tituloForm_('Novo produto');
     mostrarAuditoriaForm_();
-    document.getElementById('btn-salvar').textContent = 'Cadastrar peça';
+    document.getElementById('btn-salvar').textContent = 'Cadastrar produto';
     document.getElementById('btn-cancelar-duplicar').style.display = 'none';
     document.getElementById('seo-sugestao-box').innerHTML = '';
     document.querySelectorAll('#form-produto .passo.erro').forEach(x => x.classList.remove('erro'));
@@ -3628,7 +3616,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       if (menu) menu.open = false;
       const f = document.getElementById('ig-faixa');
       if (f && !f.hidden) { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); const b = document.getElementById('ig-abrir'); if (b) b.click(); }
-      else alert('Nenhum produto do Instagram esperando aceite agora.');
+      else TKAviso.info('Nenhum produto do Instagram esperando aceite agora.');
     });
     if (bNova) bNova.addEventListener('click', () => { if (menu) menu.open = false; cancelarDuplicacao(); abrirCadastro_(); });
     if (bVarias) bVarias.addEventListener('click', () => { if (menu) menu.open = false; iniciarVarias_(); });
@@ -3643,7 +3631,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (al) { al.hidden = false; al.textContent = 'Vários produtos: os dados são preenchidos uma vez e cada foto vira um produto separado com eles.'; }
     document.getElementById('btn-salvar').textContent = 'Cadastrar os produtos';
     desenharFotos();
-    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Nova peça';
+    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Novo produto';
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
     abrirCadastro_();
   }
@@ -3657,7 +3645,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   };
 
   // v3.6 — "Produtos para aceitar" (importador do Instagram): abre o cadastro NORMAL já preenchido com as mídias do rascunho (já estão no R2) — mesmo caminho de sempre
-  // (código TK, categoria, SEO...). Nada vira produto sem o Pablo conferir e apertar "Cadastrar peça". `r` = { id, legenda, precoSug, tamanhosSug, midias:[{tipo,url,capa}] }.
+  // (código TK, categoria, SEO…). Nada vira produto sem o Pablo conferir e apertar "Cadastrar peça". `r` = { id, legenda, precoSug, tamanhosSug, midias:[{tipo,url,capa}] }.
   window.tkAceitarRascunho = function (r) {
     cancelarDuplicacao();
     const fotos = (r.midias || []).filter(m => m.tipo === 'foto'), video = (r.midias || []).find(m => m.tipo === 'video');
@@ -3671,8 +3659,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     zerarMidia({ Foto_URL: capa ? capa.url : '', Fotos_Galeria: resto.join(','), Video_URL: video ? video.url : '' });
     window.__rascunhoAtual = r.id;
     tituloForm_('Aceitando do Instagram');
-    document.getElementById('btn-salvar').textContent = 'Cadastrar peça';
-    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Nova peça';
+    document.getElementById('btn-salvar').textContent = 'Cadastrar produto';
+    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Novo produto';
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
     abrirCadastro_();
     atualizarFaltas_();
@@ -3687,17 +3675,17 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     tituloForm_('Cadastro separado: ' + rs.length + ' produtos');
     document.getElementById('btn-salvar').textContent = 'Cadastrar os ' + rs.length + ' produtos';
     const al = document.getElementById('aviso-lote');
-    al.hidden = false; al.textContent = '🧩 Cadastro separado: preencha UMA vez. Ao cadastrar, este e mais ' + (rs.length - 1) + ' post(s) viram ' + rs.length + ' produtos diferentes, todos com estas mesmas informações; cada um fica com as fotos/vídeo do seu post.';
+    al.hidden = false; al.textContent = '🧩 Cadastro separado: preencha UMA vez. Ao cadastrar, este e mais ' + tkPlural((rs.length - 1), 'post', 'posts') + ' viram ' + rs.length + ' produtos diferentes, todos com estas mesmas informações; cada um fica com as fotos/vídeo do seu post.';
   };
   /* v4.9: "Aceitar" vários posts, cada um com as suas informações (janela do importador). Cada item vira um envio na fila, com as fotos do SEU post. */
   window.tkListasLoja = function () { return { categorias: categorias.slice(), generos: generos.slice() }; };
   window.tkCadastrarLote = function (itens) {
     (itens || []).forEach((it) => {
       const base = Object.assign({ action: 'create' }, it.dados), d2 = dadosDoPostSeparado_(base, it.r);
-      envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: it.r.id, k: novoKEnvio_(), etapa: 'fila' });
+      envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Produto', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: it.r.id, k: novoKEnvio_(), etapa: 'fila' });
       guardarEnvio_(envios[envios.length - 1]);
     });
-    document.getElementById('status').textContent = 'Enviando ' + (itens || []).length + ' produtos em segundo plano. Pode cadastrar a próxima peça.';
+    document.getElementById('status').textContent = 'Enviando ' + (itens || []).length + ' produtos em segundo plano. Pode cadastrar a próxima produto.';
     desenharEnvios(); processarEnvios();
   };
   function dadosDoPostSeparado_(base, r2) {
@@ -3730,11 +3718,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (pend.length) {
       const ativo = envios.find(e => e.estado === 'enviando');
       const pct = ativo && typeof ativo.progresso === 'number' ? Math.round(Math.min(1, ativo.progresso) * 100) : null;
-      html = '<span class="env-spin">⏳</span> <b>Enviando ' + (pend.length === 1 ? '1 peça' : pend.length + ' peças') + '</b>' + (pct != null ? ' · ' + pct + '%' : '') + '<small>Pode mexer no painel. Se fechar o app, o que falta retoma quando voltar.</small>' + (pct != null ? '<i class="barra"><u style="width:' + pct + '%"></u></i>' : '');
+      html = '<span class="env-spin">⏳</span> <b>Enviando ' + (pend.length === 1 ? '1 produto' : pend.length + ' produtos') + '</b>' + (pct != null ? ' · ' + pct + '%' : '') + '<small>Pode mexer no painel. Se fechar o app, o que falta retoma quando voltar.</small>' + (pct != null ? '<i class="barra"><u style="width:' + pct + '%"></u></i>' : '');
       cls += ' enviando';
-    } else if (erros) { html = '❌ <b>' + (erros === 1 ? '1 peça com problema' : erros + ' peças com problema') + '</b><small>Toque para ver e tentar de novo.</small>'; cls += ' erro'; }
+    } else if (erros) { html = '❌ <b>' + (erros === 1 ? '1 produto com problema' : erros + ' produtos com problema') + '</b><small>Toque para ver e tentar de novo.</small>'; cls += ' erro'; }
     else if (avisos) { html = '⚠️ <b>' + (avisos === 1 ? '1 aviso' : avisos + ' avisos') + ' no envio</b><small>Toque para ver.</small>'; cls += ' aviso'; }
-    else if (oks) { html = '✅ <b>' + (oks === 1 ? '1 peça salva' : oks + ' peças salvas') + '</b>'; cls += ' ok'; }
+    else if (oks) { html = '✅ <b>' + (oks === 1 ? '1 produto salvo' : oks + ' produtos salvos') + '</b>'; cls += ' ok'; }
     el.className = cls; el.innerHTML = html; el.hidden = !html || cardAberto;
   }
   (function () {
@@ -3762,7 +3750,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   const HIST_ENVIOS_ = 'tk_envios_hist_v1';
   function histEnvio_(it, estado) {
     try {
-      const l = JSON.parse(localStorage.getItem(HIST_ENVIOS_) || '[]'); l.unshift({ t: String(it.titulo || 'Peça').slice(0, 60), q: Date.now(), r: estado || it.estado, m: String(it.msg || '').slice(0, 140) });
+      const l = JSON.parse(localStorage.getItem(HIST_ENVIOS_) || '[]'); l.unshift({ t: String(it.titulo || 'Produto').slice(0, 60), q: Date.now(), r: estado || it.estado, m: String(it.msg || '').slice(0, 140) });
       localStorage.setItem(HIST_ENVIOS_, JSON.stringify(l.slice(0, 40)));
     } catch (e) {}
   }
@@ -3806,11 +3794,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const it = { chave: ++seqEnvios, k: r.k, titulo: r.titulo, ehEdicao: !!r.ehEdicao, temVideo: !!r.temVideo, videoArquivo: null, videoArquivos: (r.videoArquivos && r.videoArquivos.length) ? r.videoArquivos : (r.videoArquivo ? [r.videoArquivo] : []), videosSalvos: r.videosSalvos || [], videosRemover: r.videosRemover || [], capaNovaB64: r.capaNovaB64 || null,
         galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, familia: r.familia || null, estado: 'fila', msg: '', etapa: 'fila', subiu: r.subiu || undefined, recortesDe: r.recortesDe || null };
       // v4.20: com o servidor novo (opId) reenviar é seguro: se a peça já tinha sido salva, ele devolve a original em vez de duplicar. Sem isso, pergunta como antes.
-      if (r.etapa === 'salvando' && !(opOk && r.v >= 2) && !r.ehEdicao) { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se esta peça chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
+      if (r.etapa === 'salvando' && !(opOk && r.v >= 2) && !r.ehEdicao) { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se este produto chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
       else if (r.msg) { it.estado = 'erro'; it.msg = r.msg; }
       envios.push(it);
     });
-    document.getElementById('status').textContent = 'Retomando ' + lista.length + (lista.length === 1 ? ' peça que ficou' : ' peças que ficaram') + ' pela metade da última vez.';
+    document.getElementById('status').textContent = 'Retomando ' + lista.length + (lista.length === 1 ? ' produto que ficou' : ' produtos que ficaram') + ' pela metade da última vez.';
     if (envios.some(e => e.estado === 'erro')) abrirCadastro_();   // o que pede decisão (não sei se salvou) abre o cartão; o resto só aparece na plaquinha #envios-flut
     desenharEnvios(); processarEnvios();
   }
@@ -3834,8 +3822,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   function textoEnvio(it) {
     const o = it.ehEdicao ? 'Alterações de ' : 'Cadastro de ';
-    if (it.estado === 'fila') return '⏳ ' + o + '"' + it.titulo + '" na fila...';
-    if (it.estado === 'enviando') return '<span class="env-spin">⏳</span> Enviando ' + (it.temVideo ? 'com vídeo (pode levar minutos) ' : '') + '"' + it.titulo + '"...' + (it.tentativa > 1 ? ' (tentativa ' + it.tentativa + ' de ' + it.maxTentativas + ')' : '');
+    if (it.estado === 'fila') return '⏳ ' + o + '"' + it.titulo + '" na fila…';
+    if (it.estado === 'enviando') return '<span class="env-spin">⏳</span> Enviando ' + (it.temVideo ? 'com vídeo (pode levar minutos) ' : '') + '"' + it.titulo + '"…' + (it.tentativa > 1 ? ' (tentativa ' + it.tentativa + ' de ' + it.maxTentativas + ')' : '');
     if (it.estado === 'ok') return '✅ "' + it.titulo + '" salvo!';
     if (it.estado === 'aviso') return '⚠️ "' + it.titulo + '": ' + it.msg;
     if (it.estado === 'offline') return '📥 "' + it.titulo + '": sem conexão. Guardado no aparelho; envie com "Sincronizar".';
@@ -3858,10 +3846,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     resumo.appendChild(descricao);
     if (falhas.length) {
       const lista = document.createElement('ul');
-      lista.setAttribute('aria-label', 'Peças que precisam de atenção');
+      lista.setAttribute('aria-label', 'Produtos que precisam de atenção');
       falhas.forEach(it => {
         const linha = document.createElement('li');
-        linha.textContent = (it.titulo || 'Peça') + ' · ' + (it.tentativa ? 'tentativa ' + it.tentativa + ' · ' : '') + (it.msg || 'Precisa de atenção.');
+        linha.textContent = (it.titulo || 'Produto') + ' · ' + (it.tentativa ? 'tentativa ' + it.tentativa + ' · ' : '') + (it.msg || 'Precisa de atenção.');
         lista.appendChild(linha);
       });
       resumo.appendChild(lista);
@@ -3869,7 +3857,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const ir = document.createElement('button');
     ir.type = 'button';
     ir.setAttribute('aria-controls', 'cad-envios');
-    ir.textContent = falhas.length ? 'Ver problemas e tentar novamente' : 'Ver andamento dos envios';
+    ir.textContent = falhas.length ? 'Ver problemas e tentar de novo' : 'Ver andamento dos envios';
     ir.addEventListener('click', () => {
       const fila = document.getElementById('cad-envios');
       if (!fila) return;
@@ -3888,7 +3876,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     atualizarFlut_();
     { const pend = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
       ajustarWakeLock_(pend);
-      if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⏳ Enviando: ' + (pend === 1 ? 'falta 1 peça' : 'faltam ' + pend + ' peças') + '. Pode usar o painel e as outras telas; o que já está no servidor termina sozinho.'; box.appendChild(av); } }
+      if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⏳ Enviando: ' + (pend === 1 ? 'falta 1 produto' : 'faltam ' + pend + ' produtos') + '. Pode usar o painel e as outras telas; o que já está no servidor termina sozinho.'; box.appendChild(av); } }
     envios.forEach((it) => {
       const linha = document.createElement('div'); linha.className = 'env-item env-' + (it.estado === 'fila' ? 'enviando' : it.estado);
       const t = document.createElement('div'); t.className = 'env-txt';
@@ -3903,7 +3891,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         t.appendChild(barraWrap);
         const pct = document.createElement('div'); pct.className = 'env-progresso-txt';
         let etaTxt;
-        if (it.etaSegundos == null) etaTxt = 'calculando tempo...';
+        if (it.etaSegundos == null) etaTxt = 'calculando tempo…';
         else if (it.etaSegundos <= 1) etaTxt = 'menos de 1s restante';
         else etaTxt = '~' + it.etaSegundos + 's restantes';
         pct.textContent = Math.min(100, Math.round(it.progresso * 100)) + '% enviado · ' + etaTxt;
@@ -3951,7 +3939,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (novos.length) {
       const vs = videosDoProduto_(p);
       if (!vs.length) return 'foi salvo, mas o vídeo não voltou na lista. Confira se o script do catálogo é a versão mais nova.';
-      if (videosMulti_ && !novos.every(u => vs.indexOf(u) !== -1)) return 'foi salvo, mas nem todos os vídeos voltaram na lista (' + vs.length + ' de ' + (it.videosEsperados || novos.length) + '). Abra a peça e confira os vídeos.';
+      if (videosMulti_ && !novos.every(u => vs.indexOf(u) !== -1)) return 'foi salvo, mas nem todos os vídeos voltaram na lista (' + vs.length + ' de ' + (it.videosEsperados || novos.length) + '). Abra o produto e confira os vídeos.';
     }
     return '';
   }
@@ -3968,7 +3956,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const inicio = Date.now();
     window.logDebug_('→ POST ' + API_URL + '  (ação=' + dados.action + ', ' + corpo.length + ' bytes, via fetch)');
     const ctrl = new AbortController();
-    const limite = setTimeout(() => ctrl.abort(), 300000); // 5 min -- evita "Enviando..." travado pra sempre
+    const limite = setTimeout(() => ctrl.abort(), 300000); // 5 min -- evita "Enviando…" travado pra sempre
     let r, texto;
     try {
       r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpo, signal: ctrl.signal });
@@ -4032,7 +4020,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       if (assinatura.assinaturaVersao === 2) {
         const p = assinatura.parametros;
         if (!p || !p.allowed_formats || !p.public_id || p.overwrite !== 'false') {
-          reject(new Error('Autorização de mídia incompleta. Atualize a página e tente novamente.')); return;
+          reject(new Error('Autorização de mídia incompleta. Atualize a página e tente de novo.')); return;
         }
         ['allowed_formats', 'public_id', 'overwrite'].forEach(k => form.append(k, String(p[k])));
       }
@@ -4235,7 +4223,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (dados.action === 'update' && dados.consultarValor === undefined && consultarLiberado_ && !(Number(String(dados.preco == null ? '' : dados.preco).replace(',', '.')) > 0)) { dados.consultarValor = true; dados.preco = ''; }
     // v7.16: categorias e cores da peça gravadas em ordem alfabética (cadastro, edição e "Editar peças")
     ['categoria', 'cores'].forEach(k => { if (typeof dados[k] === 'string' && dados[k].indexOf(',') !== -1) dados[k] = ordemAlfa_(dados[k].split(',').map(x => x.trim()).filter(Boolean)).join(', '); });
-    if (!it.ehEdicao) dados.opId = it.k;   // v4.20: código único da peça: reenviar a MESMA peça nunca cria outra (backend 4.19)
+    if (!it.ehEdicao) dados.opId = it.k;   // v4.20: código único do produto: reenviar o MESMO produto nunca cria outra (backend 4.19)
     const arqVideos = arquivosDeVideo_(it), galeria = it.galeriaNovaB64 || [], subiu = it.subiu || { capa: '', gal: {}, vid: {} };
     if (subiu.capa) dados.fotoUrlExistente = subiu.capa;
     if (galeria.length) dados.fotosGaleriaExistentes = String(dados.fotosGaleriaExistentes || '').split(',').filter(Boolean).concat(galeria.map((_, i) => subiu.gal[i])).join(',');
@@ -4282,7 +4270,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const arqVideos = arquivosDeVideo_(it), galeria = it.galeriaNovaB64 || [];
     const temFotosNovas = !!(it.capaNovaB64 || galeria.length);
     it.subiu = it.subiu || { capa: '', gal: {}, vid: {} };
-    window.logDebug_('════ começando envio de "' + it.titulo + '" (' + (it.ehEdicao ? 'edição' : 'novo') + (arqVideos.length ? ', com ' + arqVideos.length + ' vídeo(s)' : '') + (temFotosNovas ? ', com foto(s) nova(s)' : '') + ') ════');
+    window.logDebug_('════ começando envio de "' + it.titulo + '" (' + (it.ehEdicao ? 'edição' : 'novo') + (arqVideos.length ? ', com ' + tkPlural(arqVideos.length, 'vídeo', 'vídeos') + '' : '') + (temFotosNovas ? ', com foto(s) nova(s)' : '') + ') ════');
 
     // 1) arquivos novos, todos juntos
     const tarefas = [], frac = {}, t0 = Date.now();
@@ -4317,7 +4305,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
     // 3) POST final (só URLs: sempre pequeno). Só cai na fila offline depois de insistir.
     let resultado;
-    it.etapa = 'salvando'; await guardarEnvio_(it);   // se o app fechar daqui até a resposta, na volta a pessoa confere antes de reenviar (evita peça duplicada)
+    it.etapa = 'salvando'; await guardarEnvio_(it);   // se o app fechar daqui até a resposta, na volta a pessoa confere antes de reenviar (evita produto duplicado)
     try {
       const resp = await comTentativas_(it, () => enviarComProgresso(dados, () => {}), 'salvar produto');
       resultado = { ok: true, resp: resp };
@@ -4333,9 +4321,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         const novoId = resultado.resp.id;
         try {
           const arq = await chamarAdmin_({ action: 'arquivarRapido', id: novoId });
-          if (!arq || !arq.ok) { it.estado = 'aviso'; it.msg = 'foi cadastrada, mas não consegui arquivar a peça de teste. Arquive em Gestão → Arquivadas.'; return; }
+          if (!arq || !arq.ok) { it.estado = 'aviso'; it.msg = 'foi cadastrado, mas não consegui arquivar o produto de teste. Arquive em Gestão → Arquivadas.'; return; }
           it.arquivadaDepois = true;
-        } catch (e) { it.estado = 'aviso'; it.msg = 'foi cadastrada, mas não consegui arquivar a peça de teste. Arquive em Gestão → Arquivadas.'; return; }
+        } catch (e) { it.estado = 'aviso'; it.msg = 'foi cadastrado, mas não consegui arquivar o produto de teste. Arquive em Gestão → Arquivadas.'; return; }
       }
       // edição com vários vídeos: tira e acrescenta pelos comandos próprios do servidor (4.17+)
       if (it.ehEdicao && videosMulti_ && (it.videosRemover || []).length + novosVideos.length) {
@@ -4343,7 +4331,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         for (const u of (it.videosRemover || [])) { try { const r = await chamarAdmin_({ action: 'videoRemover', id: id, url: u }); if (!r || !r.ok) falhou++; } catch (e) { falhou++; } }
         for (const u of novosVideos) { try { const r = await chamarAdmin_({ action: 'videoAdicionar', id: id, url: u }); if (!r || !r.ok) falhou++; } catch (e) { falhou++; } }
         it.videosEsperados = salvos.length + novosVideos.length;
-        if (falhou) { it.estado = 'aviso'; it.msg = 'foi salvo, mas ' + falhou + ' alteração(ões) de vídeo não passaram. Abra a peça e confira os vídeos.'; window.logDebug_('════ "' + it.titulo + '": salvo com aviso de vídeo ════'); return; }
+        if (falhou) { it.estado = 'aviso'; it.msg = 'foi salvo, mas ' + falhou + ' alteração(ões) de vídeo não passaram. Abra o produto e confira os vídeos.'; window.logDebug_('════ "' + it.titulo + '": salvo com aviso de vídeo ════'); return; }
       }
       // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
       it.estado = 'ok'; it.respSalvo = resultado.resp; if (!it.arquivadaDepois) conferir_.push(it);
@@ -4379,7 +4367,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     try { resp = await comTentativas_(grupo[0], () => enviarComProgresso({ action: 'updateLote', pin: auth.pin, sessao: auth.sessao, whatsapp: auth.whatsapp, funcionario: auth.funcionario, itens: itens }, () => {}), 'salvar edições em grupo'); }
     catch (e) { resp = null; }
     if (!resp || !resp.ok || !Array.isArray(resp.resultados)) {
-      window.logDebug_('[updateLote] não passou (' + ((resp && resp.erro) || 'sem resposta') + ') -- cada peça segue pelo envio normal');
+      window.logDebug_('[updateLote] não passou (' + ((resp && resp.erro) || 'sem resposta') + ') -- cada produto segue pelo envio normal');
       grupo.forEach((it) => { it.semLote = true; it.estado = 'fila'; it.etapa = 'fila'; guardarEnvio_(it); });
       return;
     }
@@ -4387,7 +4375,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     grupo.forEach((it) => {
       const x = porId[String(it.dados.id)];
       if (x && x.ok) { if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id); it.estado = 'ok'; it.respSalvo = { ok: true, id: it.dados.id }; conferir_.push(it); apagarEnvio_(it); }
-      else { it.estado = 'erro'; it.msg = (x && x.erro) || 'o servidor não confirmou esta peça. Toque em Tentar de novo.'; it.semLote = true; it.etapa = 'fila'; guardarEnvio_(it); }
+      else { it.estado = 'erro'; it.msg = (x && x.erro) || 'o servidor não confirmou este produto. Toque em Tentar de novo.'; it.semLote = true; it.etapa = 'fila'; guardarEnvio_(it); }
     });
     window.logDebug_('════ grupo salvo: ' + grupo.filter(it => it.estado === 'ok').length + ' de ' + grupo.length + ' ════');
   }
@@ -4404,7 +4392,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; window.logDebug_('════ "' + it.titulo + '": erro inesperado no JS -- ' + ((err && err.stack) || err) + ' ════'); }
       if (it.estado === 'ok' || it.estado === 'aviso' || it.estado === 'offline') apagarEnvio_(it); else { it.etapa = 'fila'; guardarEnvio_(it); }
       if (it.ehEdicao && document.body.classList.contains('edicao-rapida-atendimento') && it.estado === 'erro') {
-        document.getElementById('status').textContent = 'Não foi possível salvar. Confira o aviso de envio e tente novamente.';
+        document.getElementById('status').textContent = 'Não foi possível salvar. Confira o aviso de envio e tente de novo.';
         const salvar = document.getElementById('btn-salvar');
         const voltar = document.getElementById('cad-atendimento-voltar');
         if (salvar) { salvar.disabled = false; salvar.textContent = 'Salvar tamanhos'; }
@@ -4460,11 +4448,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (pendentesQueDependem_().length) { ev.preventDefault(); ev.returnValue = ''; }
   });
   window.TKSairBloqueio = () => {
-    salvarAoMinimizar_();   // peças com mídia pronta: o registro leve sai agora, antes de trocar de tela
+    salvarAoMinimizar_();   // produtos com mídia pronta: o registro leve sai agora, antes de trocar de tela
     const dep = pendentesQueDependem_(), n = dep.length;
     if (!n) return '';
     const prontas = envios.filter(e => (e.estado === 'fila' || e.estado === 'enviando') && !e.ehEdicao && midiaPronta_(e)).length;
-    const base = '⚠️ ' + (n === 1 ? '1 peça ainda está ENVIANDO fotos/vídeos' : n + ' peças ainda estão ENVIANDO fotos/vídeos') + '.\n\n' + (prontas ? (prontas === 1 ? '(1 outra já tem tudo no servidor e termina sozinha.)\n\n' : '(' + prontas + ' outras já têm tudo no servidor e terminam sozinhas.)\n\n') : '');
+    const base = '⚠️ ' + (n === 1 ? '1 produto ainda está ENVIANDO fotos/vídeos' : n + ' produtos ainda estão ENVIANDO fotos/vídeos') + '.\n\n' + (prontas ? (prontas === 1 ? '(1 outra já tem tudo no servidor e termina sozinha.)\n\n' : '(' + prontas + ' outras já têm tudo no servidor e terminam sozinhas.)\n\n') : '');
     return base + (envioGuardadoOk_
       ? 'Se você sair agora, o envio dessas fotos/vídeos PAUSA e continua quando você voltar ao painel.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.'
       : 'Se você sair agora, o que não terminou SE PERDE e precisa ser cadastrado de novo.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.');
@@ -4473,7 +4461,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   document.getElementById('form-produto').addEventListener('submit', (e) => {
     e.preventDefault();
     const faltas = faltasDoForm_();
-    if (faltas.length) { mostrarFaltas_(faltas); return; } // sem foto/nome/preço/gênero/categoria a peça não é salva
+    if (faltas.length) { mostrarFaltas_(faltas); return; } // sem foto/nome/preço/gênero/categoria o produto não é salvo
     const famNova = modoFormulario === 'duplicando' && window.tkFamiliaAoSalvar ? window.tkFamiliaAoSalvar() : null;   // v7.44.0/v7.47.0: "+ Nova variação desta família"
     if (famNova === false) return;
     const idParaEditar = document.getElementById('produto-id').value;
@@ -4500,7 +4488,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       // v7.50.0: uniões — cada grupo vira UM produto (capa = 1ª foto do grupo, o resto vai para a galeria); cada foto solta vira um produto.
       // v7.52.0: fotos que já estão no servidor (caixa de fotos da Esteira) entram pelo endereço, sem subir de novo
       const unidades = unidadesUniao_().map(u => u.filter(i => i.b64 || i.url)).filter(u => u.length);
-      if (!unidades.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
+      if (!unidades.length) { TKAviso.aviso('Escolha pelo menos uma foto — cada foto vira um produto.'); return; }
       if (uniaoModo_) { uniaoModo_ = false; uniaoMarcadas_.clear(); }
       // Vídeo(s) escolhidos no lote vão só no PRIMEIRO produto (um mesmo arquivo em dois produtos se perderia ao mexer num deles); depois dá para juntar os produtos.
       const vidsLote = videosItens.filter(v => v.file).map(v => v.file);
@@ -4510,7 +4498,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         const sem = sementePre_(capa.b64 ? capa : null, galNovas, ix === 0 ? vidsLoteItens : []);
         const dadosU = Object.assign({}, base, capa.b64 ? {} : { fotoUrlExistente: capa.url }, gal.some(g => !g.b64) ? { fotosGaleriaExistentes: gal.filter(g => !g.b64).map(g => g.url).join(',') } : {});
         const daCaixa = u.map(i => i.caixaId || (i.orig && i.orig.caixaId) || 0).filter(Boolean);   // v7.52.0: avisa a Esteira quais fotos da caixa viraram este produto
-        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: capa.b64 || null, galeriaNovaB64: galNovas.map(g => g.b64), dados: dadosU, estado: 'fila', msg: '', rascunhoId: daCaixa.length ? 'caixa:' + daCaixa.join('.') : null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
+        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Produto', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: capa.b64 || null, galeriaNovaB64: galNovas.map(g => g.b64), dados: dadosU, estado: 'fila', msg: '', rascunhoId: daCaixa.length ? 'caixa:' + daCaixa.join('.') : null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
         guardarEnvio_(envios[envios.length - 1]);
       });
       cancelarDuplicacao();
@@ -4541,7 +4529,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     };
     const videosNovos = videosItens.filter(v => v.file), videosSalvos = videosItens.filter(v => v.url).map(v => v.url);
     if (ehEdicao && !videosMulti_ && !videosNovos.length && videosRemovidos.length && !videosSalvos.length) dados.removerVideo = true;   // backend antigo: 1 vídeo só
-    if (!ehEdicao && !videosNovos.length && videosSalvos.length) { dados.videoUrlExistente = videosSalvos[0]; if (videosSalvos.length > 1 && videosMulti_) dados.videos = videosSalvos.slice(1); }   // v3.6: peça aceita do Instagram já traz o vídeo (R2)
+    if (!ehEdicao && !videosNovos.length && videosSalvos.length) { dados.videoUrlExistente = videosSalvos[0]; if (videosSalvos.length > 1 && videosMulti_) dados.videos = videosSalvos.slice(1); }   // v3.6: produto aceito do Instagram já traz o vídeo (R2)
     if (ehEdicao) dados.id = idParaEditar;
     if (famNova && !ehEdicao) dados.nome = famNova.nomeFinal;   // o nome que está no campo (a pessoa só muda se quiser)
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
@@ -4558,7 +4546,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const semPre = sementePre_(capaItem && capaItem.b64 ? capaItem : null, resto.filter(i => i.b64), videosItens.filter(v => v.file));
     envios.push({
       subiu: semPre.subiu, pre: semPre.pre,
-      chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, arquivarDepois: arquivarDepois,
+      chave: ++seqEnvios, titulo: dados.nome || 'Produto', ehEdicao: !!ehEdicao, arquivarDepois: arquivarDepois,
       temVideo: videosNovos.length > 0, videoArquivo: null, videoArquivos: videosNovos.map(v => v.file), videosSalvos: ehEdicao ? videosSalvos : [], videosRemover: ehEdicao ? videosRemovidos.slice() : [],
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
       // v7.49.0: foto antiga só recortada (✂ Enquadrar) não é foto nova — guarda de qual endereço ela saiu
@@ -4569,7 +4557,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!ehEdicao && Array.isArray(window.__loteSeparado) && window.__loteSeparado.length && window.__rascunhoAtual && window.__rascunhoAtual === window.__loteBase) {
       window.__loteSeparado.forEach((r2) => {
         const d2 = dadosDoPostSeparado_(dados, r2);
-        envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: r2.id, k: novoKEnvio_(), etapa: 'fila' });
+        envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Produto', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: r2.id, k: novoKEnvio_(), etapa: 'fila' });
         guardarEnvio_(envios[envios.length - 1]);
       });
     }
@@ -4579,10 +4567,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const voltar = document.getElementById('cad-atendimento-voltar');
       if (salvar) { salvar.disabled = true; salvar.textContent = 'Salvando tamanhos…'; }
       if (voltar) voltar.disabled = true;
-      document.getElementById('status').textContent = 'Salvando a correção da peça. Não feche esta aba ainda.';
+      document.getElementById('status').textContent = 'Salvando a correção do produto. Não feche esta aba ainda.';
     } else {
       cancelarDuplicacao(); // libera o formulário já
-      document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
+      document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima produto.';
       sairDoCadastro_();
     }
     desenharEnvios(); processarEnvios();
@@ -4627,7 +4615,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!a) return '';
     const partes = [];
     if (a.criadoPor) partes.push('Cadastrou: ' + a.criadoPor + (a.criadoEm ? ' · ' + quandoCurto_(a.criadoEm) : ''));
-    if (a.editadoPor) partes.push((a.ultimaAcao && a.ultimaAcao !== 'Editou a peça' ? a.ultimaAcao : 'Editou') + ': ' + a.editadoPor + (a.editadoEm ? ' · ' + quandoCurto_(a.editadoEm) : ''));
+    if (a.editadoPor) partes.push((a.ultimaAcao && a.ultimaAcao !== 'Editou o produto' ? a.ultimaAcao : 'Editou') + ': ' + a.editadoPor + (a.editadoEm ? ' · ' + quandoCurto_(a.editadoEm) : ''));
     return partes.join(' — ');
   }
   async function carregarAuditoria_() {
@@ -4646,7 +4634,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
   async function abrirHistorico_(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
-    document.getElementById('historico-titulo').textContent = 'Histórico: ' + (p ? p.Nome : 'peça');
+    document.getElementById('historico-titulo').textContent = 'Histórico: ' + (p ? p.Nome : 'produto');
     const corpo = document.getElementById('historico-corpo');
     corpo.innerHTML = '<p style="color:#666">Carregando…</p>';
     abrirComHistorico_('overlay-historico');
@@ -4654,7 +4642,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!r || !r.ok) { corpo.innerHTML = '<p style="color:#b3151b">' + escaparHtml((r && r.erro) || 'Não consegui carregar agora.') + '</p>'; return; }
     corpo.innerHTML = r.historico.length
       ? r.historico.map(h => '<div class="hist-item"><b>' + escaparHtml(h.acao) + '</b> — ' + escaparHtml(h.quem || 'Sem identificação') + '<small>' + escaparHtml(quandoCurto_(h.quando)) + (h.resumo ? ' · ' + escaparHtml(h.resumo) : '') + '</small></div>').join('')
-      : '<p style="color:#666">Ainda não há registros desta peça. Os próximos cadastros e edições aparecem aqui.</p>';
+      : '<p style="color:#666">Ainda não há registros deste produto. Os próximos cadastros e edições aparecem aqui.</p>';
   }
   document.getElementById('historico-fechar').addEventListener('click', () => fecharComHistorico_('overlay-historico'));
   document.getElementById('overlay-historico').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-historico') fecharComHistorico_('overlay-historico'); });
@@ -4705,7 +4693,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (ordem === 'antigas') lista = lista.slice().reverse();
     else if (ordem === 'nome') lista = lista.slice().sort((a, b) => String(a.Nome || '').localeCompare(String(b.Nome || ''), 'pt-BR'));
     else if (ordem === 'preco-maior' || ordem === 'preco-menor') { const dir = ordem === 'preco-maior' ? -1 : 1; lista = lista.slice().sort((a, b) => { const ca = ehConsulta(a), cb = ehConsulta(b); if (ca || cb) return ca === cb ? 0 : (ca ? 1 : -1); return dir * (Number(a.Preco) - Number(b.Preco)); }); }   // "Consulte valor" sempre no fim
-    else if (ordem === 'recentes' && window.TKFotosNovas) lista = window.TKFotosNovas.ordenar(lista);   // v7.57.0: peça com FOTO NOVA sobe, como na vitrine, no Postador e na Esteira
+    else if (ordem === 'recentes' && window.TKFotosNovas) lista = window.TKFotosNovas.ordenar(lista);   // v7.57.0: produto com FOTO NOVA sobe, como na vitrine, no Postador e na Esteira
     return lista;
   }
 
@@ -4720,7 +4708,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     produtos.forEach(p => { String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean).forEach(c => cats.add(c)); String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean).forEach(g => gens.add(g)); });
     const atualC = selC.value, atualG = selG.value;
     selC.innerHTML = '<option value="">Categoria: todas</option>' + Array.from(cats).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(c => '<option value="' + escaparHtml(c) + '">' + escaparHtml(c) + '</option>').join('');
-    selG.innerHTML = '<option value="">Gênero: todos</option>' + Array.from(gens).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(g => '<option value="' + escaparHtml(g) + '">' + escaparHtml(g) + '</option>').join('');
+    selG.innerHTML = '<option value="">Público: todos</option>' + Array.from(gens).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(g => '<option value="' + escaparHtml(g) + '">' + escaparHtml(g) + '</option>').join('');
     selC.value = atualC; selG.value = atualG;
     if (selR) { const atualR = selR.value; selR.innerHTML = '<option value="">Cor: todas</option>' + Array.from(cores).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(c => '<option value="' + escaparHtml(c) + '">' + escaparHtml(c) + '</option>').join(''); selR.value = atualR; }
   }
@@ -4780,13 +4768,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     document.getElementById('dash-esgotados').textContent = ativos.filter(p => estaEsgotado(p)).length;
     renderizarFiltrosLista_();
     renderizarFiltrosAdmin_();   // v4.10 (FE-08)
-    if (window.TKGestao) TKGestao.aoRenderizarLista(); // v3.1: aviso de peças sem código
+    if (window.TKGestao) TKGestao.aoRenderizarLista(); // v3.1: aviso de produtos sem código
 
     const lista = listaVisivel_();
     const fora = busca ? achadasForaDoFiltro_() : 0;
-    const avisoFora = fora > 0 ? '<div class="aviso-busca" role="status">🔎 Mais ' + fora + (fora === 1 ? ' peça' : ' peças') + ' fora de “' + rotuloFiltro_(filtroLista) + '” também ' + (fora === 1 ? 'combina' : 'combinam') + ' com a busca. <button type="button" id="busca-ver-todas">Ver em “Todas”</button></div>' : '';
+    const avisoFora = fora > 0 ? '<div class="aviso-busca" role="status">🔎 Mais ' + fora + (fora === 1 ? ' produto' : ' produtos') + ' fora de “' + rotuloFiltro_(filtroLista) + '” também ' + (fora === 1 ? 'combina' : 'combinam') + ' com a busca. <button type="button" id="busca-ver-todas">Ver em “Todas”</button></div>' : '';
 
-    if (!lista.length) { container.innerHTML = avisoFora + '<p style="text-align:center;color:#666;padding:18px 0;">' + (busca ? 'Nenhuma peça com esse nome ou código' + (filtroLista !== 'todas' ? ' em “' + rotuloFiltro_(filtroLista) + '”' : '') + '.' : 'Nenhuma peça nesta lista.') + '</p>'; return; }
+    if (!lista.length) { container.innerHTML = avisoFora + '<p style="text-align:center;color:#666;padding:18px 0;">' + (busca ? 'Nenhum produto com esse nome ou código' + (filtroLista !== 'todas' ? ' em “' + rotuloFiltro_(filtroLista) + '”' : '') + '.' : 'Nenhum produto nesta lista.') + '</p>'; return; }
 
     const emEtapas_ = completo !== true && lista.length > LISTA_RAPIDA_MAX_;
     container.innerHTML = avisoFora + (emEtapas_ ? lista.slice(0, LISTA_RAPIDA_MAX_) : lista).map(p => {
@@ -4826,7 +4814,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       </div>
     `; }).join('');
 
-    if (window.tkFamiliaMarcarLista) window.tkFamiliaMarcarLista(container);   // v7.47.1: selo "Família · N peças" nos cards
+    if (window.tkFamiliaMarcarLista) window.tkFamiliaMarcarLista(container);   // v7.47.1: selo "Família · N produtos" nos cards
     container.querySelectorAll('.produto-chk').forEach(chk => {
       chk.addEventListener('change', (e) => {
         if (e.target.checked) selecionadosBulk.add(e.target.dataset.id);
@@ -4847,8 +4835,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     }));
     container.querySelectorAll('[data-duplicar-id]').forEach(btn => btn.addEventListener('click', () => duplicarProduto(btn.dataset.duplicarId)));
     container.querySelectorAll('[data-arte-id]').forEach(btn => btn.addEventListener('click', () => abrirCriadorDeArte(btn.dataset.arteId)));
-    container.querySelectorAll('[data-arquivar-id]').forEach(btn => btn.addEventListener('click', () => arquivarUnico(btn.dataset.arquivarId)));
-    container.querySelectorAll('[data-reativar-id]').forEach(btn => btn.addEventListener('click', () => reativarUnico(btn.dataset.reativarId)));
+    container.querySelectorAll('[data-arquivar-id]').forEach(btn => btn.addEventListener('click', () => arquivarUnico(btn.dataset.arquivarId, btn)));
+    container.querySelectorAll('[data-reativar-id]').forEach(btn => btn.addEventListener('click', () => reativarUnico(btn.dataset.reativarId, btn)));
     container.querySelectorAll('[data-excluir-id]').forEach(btn => btn.addEventListener('click', () => excluirPermanenteUnico(btn.dataset.excluirId, btn.dataset.codigo)));
     if (emEtapas_) listaEtapa2_ = setTimeout(() => { listaEtapa2_ = null; renderizarProdutos(true); }, 60);
   }
@@ -4867,17 +4855,17 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       bar.classList.remove('ativa');
       const bs2 = document.getElementById('btn-bulk-separar'); if (bs2) bs2.hidden = true;
     }
-    if (window.tkFamiliaBarraLote) window.tkFamiliaBarraLote(selecionadosBulk.size);   // v7.44.0: "Ligar como família" com 2+ peças
+    if (window.tkFamiliaBarraLote) window.tkFamiliaBarraLote(selecionadosBulk.size);   // v7.44.0: "Ligar como família" com 2+ produtos
   }
 
   /** Manda as peças (1 ou várias) para a lista da aba Postagens; lá cada uma vira uma postagem, uma depois da outra. */
   function enviarParaPostagem_(ids) {
-    if (typeof window.tkPostarPecas !== 'function') { alert('A aba Postagens ainda não carregou. Tente de novo em instantes.'); return; }
+    if (typeof window.tkPostarPecas !== 'function') { TKAviso.erro('A aba Postagens ainda não carregou. Tente de novo em instantes.'); return; }
     window.tkPostarPecas(ids.map(String));
   }
   document.getElementById('btn-bulk-fotoia').addEventListener('click', () => {
     if (window.tkFotoIA) window.tkFotoIA.abrir(Array.from(selecionadosBulk));
-    else alert('Fotos com IA ainda está carregando. Tente novamente em instantes.');
+    else TKAviso.erro('Fotos com IA ainda está carregando. Tente de novo em instantes.');
   });
   document.getElementById('btn-bulk-postar').addEventListener('click', () => {
     const ids = Array.from(selecionadosBulk);
@@ -4886,7 +4874,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos();
   });
   document.getElementById('btn-bulk-pedir-fotos').addEventListener('click', () => {
-    if (!window.TKPedirFotos) return alert('A solicitação de fotos ainda está carregando. Tente novamente em instantes.');
+    if (!window.TKPedirFotos) return TKAviso.erro('O pedido de fotos ainda está carregando. Tente de novo em instantes.');
     TKPedirFotos.abrir(produtos.filter(p => selecionadosBulk.has(String(p.ID))), 'gestao');
   });
   document.getElementById('btn-cancelar-bulk').addEventListener('click', () => {
@@ -4914,7 +4902,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   document.querySelectorAll('input[name="precos-modo"]').forEach(r => r.addEventListener('change', sincPrecos_));
   document.getElementById('btn-bulk-preco').addEventListener('click', () => {
     const marcadas = Array.from(selecionadosBulk), semPreco = marcadas.filter(id => { const p = produtos.find(x => String(x.ID) === String(id)); return p && ehConsulta(p); }).length;
-    document.getElementById('precos-resumo').textContent = marcadas.length + (marcadas.length === 1 ? ' peça selecionada' : ' peças selecionadas') + (semPreco ? ' · ' + semPreco + ' em “Consulte valor”' : '') + '.';
+    document.getElementById('precos-resumo').textContent = marcadas.length + (marcadas.length === 1 ? ' produto selecionado' : ' produtos selecionados') + (semPreco ? ' · ' + semPreco + ' em “Consulte valor”' : '') + '.';
     document.getElementById('precos-modo-escrito').hidden = !consultarLiberado_;
     document.getElementById('precos-modo-consulta').hidden = !consultarLiberado_;
     document.getElementById('precos-modo-padrao').hidden = !precoTerminacaoLiberado_;
@@ -4937,13 +4925,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       try {
         const sim = await chamarAdmin_(Object.assign({}, base, { simular: true }));
         if (!sim || !sim.ok) return falha((sim && sim.erro) || 'Não consegui conferir agora. Tente de novo.');
-        if (!sim.mudariam) { alert('Nada para arrumar: as ' + sim.total + ' peças já estão certas' + (sim.semPreco ? ' (' + sim.semPreco + ' “Consulte valor” não contam).' : '.')); return; }
+        if (!sim.mudariam) { TKAviso.aviso('Nada para arrumar: ' + (sim.total === 1 ? 'o produto já está certo' : 'os ' + sim.total + ' produtos já estão certos') + (sim.semPreco ? ' (' + sim.semPreco + ' “Consulte valor” não contam).' : '.')); return; }
         const ex = (sim.exemplos || []).slice(0, 5).map(e => '• ' + (e.codigo ? e.codigo + ' ' : '') + formatarReal(e.de) + ' → ' + formatarReal(e.para) + ' (à vista ' + formatarReal(e.avista) + ')').join('\n');
-        if (!confirm('Arrumar ' + sim.mudariam + ' de ' + sim.total + ' peças para o à vista terminar em ,99/,49?\n\n' + ex + (sim.mudariam > 5 ? '\n…' : '') + '\n\nOK = aplicar agora.')) return;
+        if (!confirm('Arrumar ' + sim.mudariam + ' de ' + sim.total + ' produtos para o à vista terminar em ,99/,49?\n\n' + ex + (sim.mudariam > 5 ? '\n…' : '') + '\n\nOK = aplicar agora.')) return;
         btn.textContent = 'Aplicando…';
         const r = await chamarAdmin_(base);
         if (!r || !r.ok) return falha((r && r.erro) || 'Não consegui aplicar. Tente de novo.');
-        fecharComHistorico_('overlay-precos'); alert('Pronto! ' + r.afetados + ' peça(s) arrumada(s).'); selecionadosBulk.clear(); atualizarBarraBulk(); await carregarProdutos();
+        fecharComHistorico_('overlay-precos'); TKAviso.ok('Pronto! ' + tkPlural(r.afetados, 'produto arrumado', 'produtos arrumados') + '.'); selecionadosBulk.clear(); atualizarBarraBulk(); await carregarProdutos();
       } finally { btn.disabled = false; sincPrecos_(); }
       return;
     }
@@ -4957,7 +4945,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       if (!(valor > 0)) return falha('Digite o preço (maior que zero).');
       tipo = 'valorEscrito'; valor = String(valor);
     } else {
-      if (!confirm('Tirar o preço das ' + selecionadosBulk.size + ' peça(s) marcada(s)? O catálogo vai mostrar “Consulte valor”.')) return;
+      if (!confirm('Tirar o preço de ' + tkPlural(selecionadosBulk.size, 'produto marcado', 'produtos marcados') + '? O catálogo vai mostrar “Consulte valor”.')) return;
       tipo = 'consultarValor'; valor = true;
     }
     fecharComHistorico_('overlay-precos');
@@ -4994,8 +4982,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function abrirSeparar_(id) {
     const p = produtos.find(x => String(x.ID) === String(id)); if (!p) return;
     const fotos = fotosDaPeca_(p), n = fotos.length;
-    if (n < 2) { alert('Esta peça tem uma foto só: não há o que separar.'); return; }
-    if (!opIdemp_) { alert('Para separar com segurança, o servidor do catálogo precisa estar atualizado (versão 4.19 ou mais nova). Fale com o Pablo.'); return; }
+    if (n < 2) { TKAviso.aviso('Este produto tem uma foto só: não há o que separar.'); return; }
+    if (!opIdemp_) { TKAviso.aviso('Para separar com segurança, o servidor do catálogo precisa estar atualizado (versão 4.19 ou mais nova). Fale com o Pablo.'); return; }
     separarId_ = String(p.ID);
     const rot = p.Codigo || p.Nome;
     const pv = document.getElementById('sep-previa'); pv.replaceChildren();
@@ -5017,7 +5005,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const p = produtos.find(x => String(x.ID) === String(separarId_)), er = document.getElementById('sep-erro');
     if (!p) return;
     if (!window.TKFilaLote) { er.textContent = 'Não consegui preparar o envio agora. Atualize a página e tente de novo.'; er.hidden = false; return; }
-    if (TKFilaLote.ocupado([p.ID])) { er.textContent = 'Esta peça já está sendo juntada ou separada. Espere o aviso de “Pronto”.'; er.hidden = false; return; }
+    if (TKFilaLote.ocupado([p.ID])) { er.textContent = 'Este produto já está sendo juntado ou separado. Espere o aviso de “Pronto”.'; er.hidden = false; return; }
     const fotos = fotosDaPeca_(p), unir = (document.querySelector('input[name="sep-fam"]:checked') || {}).value === 'familia';
     const f = window.tkFamiliaDe ? window.tkFamiliaDe(p.ID) : null;
     const base = dadosParaSeparar_(p);
@@ -5028,7 +5016,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
   document.getElementById('btn-bulk-separar').addEventListener('click', () => {
     const ids = Array.from(selecionadosBulk);
-    if (ids.length !== 1) { alert('Para separar, marque UMA peça só (a que tem várias fotos).'); return; }
+    if (ids.length !== 1) { TKAviso.aviso('Para separar, marque UM produto só (o que tem várias fotos).'); return; }
     abrirSeparar_(ids[0]);
   });
 
@@ -5083,7 +5071,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const bruto = loteLimpa_(est.termo);
       const existe = bruto && opcoesAtuais().some(o => igual(o, bruto));
       let h = lista.map(o => '<button type="button" data-pega="' + escaparHtml(o) + '">' + escaparHtml(o) + '</button>').join('');
-      if (bruto && !existe && !jaTem(bruto)) h += podeCriar() ? '<button type="button" class="criar" data-cria="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '<span class="lote-nada">' + (est.modo === 'tirar' ? 'Nenhuma peça marcada tem ' + (/^(categoria|cor)$/.test(cfg.rotulo) ? 'essa ' : 'esse ') + cfg.rotulo + '.' : 'Não existe ' + (/^(categoria|cor)$/.test(cfg.rotulo) ? 'essa ' : 'esse ') + cfg.rotulo + '.' + (cfg.criar && listasSoAdmin_() ? ' Só o Admin total cria nomes novos.' : '')) + '</span>';
+      if (bruto && !existe && !jaTem(bruto)) h += podeCriar() ? '<button type="button" class="criar" data-cria="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '<span class="lote-nada">' + (est.modo === 'tirar' ? 'Nenhum produto marcado tem ' + (/^(categoria|cor)$/.test(cfg.rotulo) ? 'essa ' : 'esse ') + cfg.rotulo + '.' : 'Não existe ' + (/^(categoria|cor)$/.test(cfg.rotulo) ? 'essa ' : 'esse ') + cfg.rotulo + '.' + (cfg.criar && listasSoAdmin_() ? ' Só o Admin total cria nomes novos.' : '')) + '</span>';
       raiz.querySelector('[data-sug]').innerHTML = h || (t ? '' : '<span class="lote-nada">Nada mais para escolher.</span>');
     }
     est.redesenhar = desenhar; est.adicionar = adicionar;
@@ -5135,23 +5123,23 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       sec.classList.toggle('mudando', c in ativo ? ativo[c] : !!(loteLista_[c] && loteLista_[c].itens.length));
     });
     const pr = document.getElementById('lote-preco').value.trim(), dica = document.getElementById('lote-preco-dica');
-    if (pr && document.getElementById('lote-preco-modo').value === 'pct') { const v = parseFloat(pr.replace(',', '.')); dica.textContent = isFinite(v) && v !== 0 ? 'Cada peça com preço será reajustada em ' + (v > 0 ? '+' : '') + String(v).replace('.', ',') + '% (o à vista termina em ,99 ou ,49). Peças em “Consulte valor” não mudam.' : 'Digite o percentual, por exemplo 10 ou −5.'; }
+    if (pr && document.getElementById('lote-preco-modo').value === 'pct') { const v = parseFloat(pr.replace(',', '.')); dica.textContent = isFinite(v) && v !== 0 ? 'Cada produto com preço será reajustado em ' + (v > 0 ? '+' : '') + String(v).replace('.', ',') + '% (o à vista termina em ,99 ou ,49). Produtos em “Consulte valor” não mudam.' : 'Digite o percentual, por exemplo 10 ou −5.'; }
     else if (pr && typeof precoTerminacao === 'function') { const r = precoTerminacao(pr); dica.textContent = r.valido ? (r.mudou ? 'Vai ficar ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + ' (o à vista termina em ,99 ou ,49).' : 'Preço ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + '.') : 'Digite um valor maior que zero, por exemplo 89,90.'; } else dica.textContent = '';
-    document.getElementById('lote-previa').textContent = m.length ? 'Vai mudar em ' + n + (n === 1 ? ' peça: ' : ' peças: ') + m.join(', ') + '.' : 'Preencha só o que quer mudar. O resto fica como está.';
+    document.getElementById('lote-previa').textContent = m.length ? 'Vai mudar em ' + n + (n === 1 ? ' produto: ' : ' produtos: ') + m.join(', ') + '.' : 'Preencha só o que quer mudar. O resto fica como está.';
     document.getElementById('lote-ok').disabled = !m.length;
-    document.getElementById('lote-ok').textContent = m.length ? 'Aplicar em ' + n + (n === 1 ? ' peça' : ' peças') : 'Aplicar';
+    document.getElementById('lote-ok').textContent = m.length ? 'Aplicar em ' + n + (n === 1 ? ' produto' : ' produtos') : 'Aplicar';
   }
   function loteErro_(t) { const e = document.getElementById('lote-erro'); e.textContent = t || ''; e.hidden = !t; }
 
   document.getElementById('btn-bulk-editar').addEventListener('click', () => {
     const ids = Array.from(selecionadosBulk);
-    if (!ids.length) { alert('Marque pelo menos uma peça para editar.'); return; }
+    if (!ids.length) { TKAviso.aviso('Marque pelo menos um produto para editar.'); return; }
     ['nome', 'preco', 'estoque', 'descricao'].forEach(c => { document.getElementById('lote-' + c).value = ''; });
     ['lote-nome-modo', 'lote-preco-modo', 'lote-estoque-modo', 'lote-descricao-modo'].forEach(id => { const e = document.getElementById(id); e.selectedIndex = 0; });
     document.getElementById('lote-novidade').value = '';
     ['categoria', 'genero', 'tamanhos', 'cores'].forEach(loteMontarCampo_);
     const sel = produtos.filter(p => selecionadosBulk.has(String(p.ID)));
-    document.getElementById('lote-resumo').innerHTML = '<b>' + ids.length + (ids.length === 1 ? ' peça marcada' : ' peças marcadas') + '</b>' + (sel.length ? ': ' + escaparHtml(sel.slice(0, 3).map(p => (p.Codigo ? p.Codigo + ' ' : '') + p.Nome).join('; ')) + (sel.length > 3 ? ' e mais ' + (sel.length - 3) : '') : '') + '. Só muda o que você preencher.';
+    document.getElementById('lote-resumo').innerHTML = '<b>' + ids.length + (ids.length === 1 ? ' produto marcado' : ' produtos marcados') + '</b>' + (sel.length ? ': ' + escaparHtml(sel.slice(0, 3).map(p => (p.Codigo ? p.Codigo + ' ' : '') + p.Nome).join('; ')) + (sel.length > 3 ? ' e mais ' + (sel.length - 3) : '') : '') + '. Só muda o que você preencher.';
     loteErro_(''); lotePrevia_();
     abrirComHistorico_('overlay-lote');
     document.getElementById('lote-corpo').scrollTop = 0;
@@ -5166,7 +5154,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     loteErro_('');
     const ids = Array.from(selecionadosBulk);
     const pecas = ids.map(id => produtos.find(x => String(x.ID) === String(id))).filter(Boolean);
-    if (!pecas.length) { loteErro_('Não achei as peças marcadas. Atualize a lista e marque de novo.'); return; }
+    if (!pecas.length) { loteErro_('Não achei os produtos marcados. Atualize a lista e marque de novo.'); return; }
     const nomeNovo = document.getElementById('lote-nome').value.trim(), modoNome = document.getElementById('lote-nome-modo').value;
     const precoTxt = document.getElementById('lote-preco').value.trim();
     const estTxt = document.getElementById('lote-estoque').value.trim();
@@ -5178,19 +5166,19 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (estTxt !== '' && !/^\d+$/.test(estTxt)) { loteErro_('Estoque precisa ser um número inteiro, como 3.'); return; }
     if (nomeNovo && modoNome !== 'trocar') {
       const longos = pecas.filter(p => ((modoNome === 'fim' ? (p.Nome || '') + ' ' + nomeNovo : nomeNovo + ' ' + (p.Nome || ''))).length > 80);
-      if (longos.length) { loteErro_('O nome ficaria com mais de 80 letras em ' + longos.length + (longos.length === 1 ? ' peça' : ' peças') + ' (por exemplo ' + (longos[0].Codigo || longos[0].Nome) + '). Escreva algo mais curto.'); return; }
+      if (longos.length) { loteErro_('O nome ficaria com mais de 80 letras em ' + longos.length + (longos.length === 1 ? ' produto' : ' produtos') + ' (por exemplo ' + (longos[0].Codigo || longos[0].Nome) + '). Escreva algo mais curto.'); return; }
     }
     btn.disabled = true; const txt0 = btn.textContent; btn.textContent = 'Aplicando…';
     try {
       // 1) cria o que não existe (se falhar, nada foi alterado nas peças)
       for (const chave of ['categoria', 'tamanhos', 'cores']) {
         const est = loteLista_[chave]; if (!est || !est.novos.size) continue;
-        if (chave !== 'categoria' && !(await garantirOpcoesServidor_())) { loteErro_('Não consegui falar com o servidor para guardar ' + (chave === 'cores' ? 'a cor nova' : 'o tamanho novo') + ' para todos. Confira a internet e tente de novo (nenhuma peça foi alterada).'); return; }
+        if (chave !== 'categoria' && !(await garantirOpcoesServidor_())) { loteErro_('Não consegui falar com o servidor para guardar ' + (chave === 'cores' ? 'a cor nova' : 'o tamanho novo') + ' para todos. Confira a internet e tente de novo (nenhum produto foi alterado).'); return; }
         for (const nome of Array.from(est.novos)) {
           const resp = await chamarAdmin_({ action: LOTE_CFG_[chave].criar, nome: nome });
           if (!resp || !resp.ok) {
             const t = textoErroCat_(resp, (resp && resp.semRede) ? 'Sem conexão: “' + nome + '” NÃO foi criado. Tente de novo.' : 'Não consegui criar “' + nome + '”. Só o Admin total cria opções novas.');
-            loteErro_((t || 'Sua sessão não permite criar “' + nome + '”.') + ' Nenhuma peça foi alterada.'); return;
+            loteErro_((t || 'Sua sessão não permite criar “' + nome + '”.') + ' Nenhum produto foi alterado.'); return;
           }
           const salvo = (chave === 'categoria' ? limparNomeCategoria_(resp.nome || nome) : String(resp.nome || nome)) || nome;
           const k = est.itens.indexOf(nome); if (k >= 0) est.itens[k] = salvo; est.novos.delete(nome);
@@ -5225,15 +5213,15 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         const L = loteLista_;
         const L2 = { categoria: 'Categoria', genero: 'Genero', tamanhos: 'Tamanhos', cores: 'Cores' };
         Object.keys(L2).forEach((c) => { if (L[c].itens.length) dados[c] = juntar(p[L2[c]], L[c].itens, L[c].modo).join(', '); });
-        envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: true, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: dados, estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
+        envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Produto', ehEdicao: true, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: dados, estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
         guardarEnvio_(envios[envios.length - 1]); n++;
       });
       if (!n) { loteErro_('Nada para aplicar.'); return; }
       fecharComHistorico_('overlay-lote');
-      document.getElementById('status').textContent = 'Editando ' + n + ' peça(s) em segundo plano.';
+      document.getElementById('status').textContent = 'Editando ' + tkPlural(n, 'produto', 'produtos') + ' em segundo plano.';
       selecionadosBulk.clear(); atualizarBarraBulk(); desenharEnvios(); processarEnvios();
     } catch (e) {
-      loteErro_('Não consegui aplicar agora. Confira a internet e tente de novo. Nenhuma peça foi perdida.');
+      loteErro_('Não consegui aplicar agora. Confira a internet e tente de novo. Nenhum produto foi perdido.');
     } finally { btn.disabled = false; btn.textContent = txt0; lotePrevia_(); }
   });
 
@@ -5242,7 +5230,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function juntarSelecionados_() { return produtos.filter(p => selecionadosBulk.has(String(p.ID))); }
   document.getElementById('btn-bulk-juntar').addEventListener('click', () => {
     const sel = juntarSelecionados_();
-    if (sel.length < 2) { alert('Marque pelo menos 2 produtos para juntar.'); return; }
+    if (sel.length < 2) { TKAviso.aviso('Marque pelo menos 2 produtos para juntar.'); return; }
     const lista = document.getElementById('juntar-lista'); lista.innerHTML = '';
     sel.forEach((p, i) => {
       const fotos = 1 + String(p.Fotos_Galeria || '').split(',').filter(x => x.trim()).length;
@@ -5262,7 +5250,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const sel = juntarSelecionados_(); if (!marcado || sel.length < 2) return;
     const destino = sel.find(p => String(p.ID) === marcado.value); const outros = sel.filter(p => String(p.ID) !== marcado.value);
     if (!window.TKFilaLote) { er.textContent = 'Não consegui preparar o envio agora. Atualize a página e tente de novo.'; er.hidden = false; return; }
-    if (TKFilaLote.ocupado(sel.map(p => p.ID))) { er.textContent = 'Alguma dessas peças já está sendo juntada ou separada. Espere o aviso de “Pronto” e tente de novo.'; er.hidden = false; return; }
+    if (TKFilaLote.ocupado(sel.map(p => p.ID))) { er.textContent = 'Algum desses produtos já está sendo juntado ou separado. Espere o aviso de “Pronto” e tente de novo.'; er.hidden = false; return; }
     if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' produto' : ' produtos') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nOs outros ficam arquivados e as fotos deles passam para este. Você pode continuar trabalhando enquanto junta.')) return;
     TKFilaLote.juntar({ id: destino.ID, codigo: destino.Codigo, nome: destino.Nome }, outros.map(p => ({ id: p.ID, codigo: p.Codigo, nome: p.Nome })));
     selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos(); fecharComHistorico_('overlay-juntar');
@@ -5301,22 +5289,22 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         const rr = resultado.resp, pedidos = Array.isArray(rr.faltaram) ? (rr.pedidos || 0) : 0;
         if (Array.isArray(rr.faltaram) && rr.faltaram.length) {
           // v4.5: mostra QUAIS peças não foram alteradas (e deixa só elas marcadas para tentar de novo)
-          const nomeDe = id => { const p = produtos.find(x => String(x.ID) === String(id)); return p ? (p.Codigo ? p.Codigo + ' ' : '') + p.Nome : 'peça ' + id; };
-          alert('Concluído em ' + rr.afetados + ' de ' + pedidos + ' peças.\n\nNÃO foram alteradas (não encontradas — talvez já apagadas):\n• ' + rr.faltaram.map(nomeDe).join('\n• ') + '\n\nElas continuam marcadas para você tentar de novo.');
+          const nomeDe = id => { const p = produtos.find(x => String(x.ID) === String(id)); return p ? (p.Codigo ? p.Codigo + ' ' : '') + p.Nome : 'produto ' + id; };
+          alert('Concluído em ' + rr.afetados + ' de ' + pedidos + ' produtos.\n\nNÃO foram alterados (não encontrados — talvez já apagadas):\n• ' + rr.faltaram.map(nomeDe).join('\n• ') + '\n\nEles continuam marcados para você tentar de novo.');
           selecionadosBulk = new Set(rr.faltaram.map(String));
         } else {
-          alert('Ação realizada em ' + rr.afetados + (rr.afetados === 1 ? ' produto!' : ' produtos!') + (rr.semPreco ? '\n\n' + rr.semPreco + (rr.semPreco === 1 ? ' peça' : ' peças') + ' em “Consulte valor” não foi reajustada (não tem preço).' : ''));
+          TKAviso.ok('Ação realizada em ' + rr.afetados + (rr.afetados === 1 ? ' produto!' : ' produtos!') + (rr.semPreco ? '\n\n' + rr.semPreco + (rr.semPreco === 1 ? ' produto' : ' produtos') + ' em “Consulte valor” não foi reajustada (não tem preço).' : ''));
           selecionadosBulk.clear();
         }
         atualizarBarraBulk();
         await carregarProdutos();
       } else if (!resultado.ok && resultado.enfileirado) {
-        alert('Sem conexão agora. A ação foi salva e será enviada quando você tocar em "Sincronizar".');
+        TKAviso.aviso('Sem conexão agora. A ação foi salva e será enviada quando você tocar em "Sincronizar".');
         selecionadosBulk.clear();
         atualizarBarraBulk();
       } else {
         const motivo = resultado && resultado.resp && resultado.resp.erro ? resultado.resp.erro : '';
-        alert('Não consegui executar a ação em lote' + (motivo ? ': ' + motivo : '.') + '\nConfira a lista antes de repetir — as peças continuam marcadas.');
+        TKAviso.erro('Não consegui executar a ação em lote' + (motivo ? ': ' + motivo : '.') + '\nConfira a lista antes de repetir — os produtos continuam marcados.');
       }
     } finally {
       travarBotoesBulk(false);
@@ -5325,35 +5313,40 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   /* ===================== Arquivar / Reativar / Excluir por item ===================== */
 
-  async function arquivarUnico(id) {
-    if (!confirm('Arquivar esta peça? Ela deixa de aparecer no catálogo público (mas continua no admin, e pode ser reativada depois).')) return;
-    const resultado = await enviarComFila({
-      action: 'bulkUpdate', pin: adminPin, funcionario: funcionarioNome,
-      ids: [id], tipoAcao: 'arquivar', valor: true
-    });
-    atualizarBarraSync();
-    if (resultado.ok && resultado.resp && resultado.resp.ok) {
-      await carregarProdutos();
-    } else if (!resultado.ok && resultado.enfileirado) {
-      alert('Sem conexão agora. Ação salva para sincronizar depois.');
-    } else {
-      alert('Erro ao arquivar. Tente novamente.');
-    }
+  // v7.57.0: arquivar/reativar um produto — botão travado contra toque duplo (TKOcupado), aviso de sucesso com "Desfazer"
+  // e o motivo do servidor (traduzido) quando falha.
+  async function mudarArquivoUnico_(id, btn, cfg) {
+    if (btn && btn.disabled) return;
+    const rotulo = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = cfg.ocupado; }
+    const fim = window.TKOcupado ? TKOcupado.inicio() : function () {};
+    try {
+      const resultado = await enviarComFila({
+        action: 'bulkUpdate', pin: adminPin, funcionario: funcionarioNome,
+        ids: [id], tipoAcao: cfg.tipoAcao, valor: true
+      });
+      atualizarBarraSync();
+      if (resultado.ok && resultado.resp && resultado.resp.ok) {
+        TKAviso.ok(cfg.ok, { desfazer: { rotulo: 'Desfazer', fn: () => cfg.inverso(id, null) } });
+        await carregarProdutos();
+      } else if (!resultado.ok && resultado.enfileirado) {
+        TKAviso.aviso('Sem conexão agora. A ação foi guardada e segue quando a internet voltar.');
+      } else {
+        const resp = resultado && resultado.resp;
+        TKAviso.erro(cfg.falha + ' ' + TKAviso.textoErro(resp, 'Tente de novo em instantes.'));
+        if (btn) { btn.disabled = false; btn.textContent = rotulo; }
+      }
+    } finally { fim(); }
   }
-
-  async function reativarUnico(id) {
-    const resultado = await enviarComFila({
-      action: 'bulkUpdate', pin: adminPin, funcionario: funcionarioNome,
-      ids: [id], tipoAcao: 'reativar', valor: true
-    });
-    atualizarBarraSync();
-    if (resultado.ok && resultado.resp && resultado.resp.ok) {
-      await carregarProdutos();
-    } else if (!resultado.ok && resultado.enfileirado) {
-      alert('Sem conexão agora. Ação salva para sincronizar depois.');
-    } else {
-      alert('Erro ao reativar. Tente novamente.');
-    }
+  function arquivarUnico(id, btn) {
+    if (!confirm('Arquivar este produto? Ele deixa de aparecer no catálogo público, mas continua na Gestão e pode ser reativado depois.')) return;
+    return mudarArquivoUnico_(id, btn, { tipoAcao: 'arquivar', ocupado: 'Arquivando…', ok: 'Produto arquivado.', falha: 'Não consegui arquivar.', inverso: reativarUnico });
+  }
+  function reativarUnico(id, btn) {
+    return mudarArquivoUnico_(id, btn, { tipoAcao: 'reativar', ocupado: 'Reativando…', ok: 'Produto reativado.', falha: 'Não consegui reativar.', inverso: arquivarSemPerguntar_ });
+  }
+  function arquivarSemPerguntar_(id, btn) {
+    return mudarArquivoUnico_(id, btn, { tipoAcao: 'arquivar', ocupado: 'Arquivando…', ok: 'Produto arquivado.', falha: 'Não consegui arquivar.', inverso: reativarUnico });
   }
 
   /**
@@ -5362,12 +5355,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
    * confirm(): o atendente precisa digitar o código da peça pra confirmar.
    */
   async function excluirPermanenteUnico(id, codigo) {
-    if (!confirm('ATENÇÃO: isso apaga a peça para sempre da planilha (não é arquivar, é excluir de verdade). Não tem como desfazer. Continuar?')) return;
+    if (!confirm('ATENÇÃO: isso apaga o produto para sempre da planilha (não é arquivar, é excluir de verdade). Não tem como desfazer. Continuar?')) return;
 
-    const digitado = prompt('Pra confirmar, digite o código da peça' + (codigo ? (' (' + codigo + ')') : '') + ':');
+    const digitado = prompt('Pra confirmar, digite o código do produto' + (codigo ? (' (' + codigo + ')') : '') + ':');
     if (digitado === null) return;
     if (codigo && digitado.trim().toUpperCase() !== String(codigo).trim().toUpperCase()) {
-      alert('Código não confere. Exclusão cancelada por segurança.');
+      TKAviso.aviso('Código não confere. Exclusão cancelada por segurança.');
       return;
     }
 
@@ -5381,10 +5374,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       if (resp.ok) {
         await carregarProdutos();
       } else {
-        alert('Erro ao excluir: ' + (resp.erro || 'falha desconhecida'));
+        TKAviso.erro('Erro ao excluir: ' + (resp.erro || 'falha desconhecida'));
       }
     } catch (e) {
-      alert('Sem conexão agora. Exclusão permanente exige internet — tente novamente quando estiver online.');
+      TKAviso.erro('Sem conexão agora. Exclusão permanente exige internet — tente de novo quando estiver online.');
     }
   }
 
@@ -5394,7 +5387,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const prod = produtos.find(x => String(x.ID) === String(id)) || { ID: id };
     const link = linkProduto(prod);
     navigator.clipboard.writeText(link);
-    alert('Link copiado!');
+    TKAviso.ok('Link copiado!');
   }
 
   // ===================== Overlay x botão/gesto "voltar" do Android =====================
@@ -5409,7 +5402,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!el || !el.classList.contains('aberto')) return;
     if (TKCamadas.aberta(idOverlay)) TKCamadas.desempilhar(idOverlay); else el.classList.remove('aberto');
   }
-  document.addEventListener('click', (ev) => { // fecha o menu "⋯" das peças ao tocar fora dele
+  document.addEventListener('click', (ev) => { // fecha o menu "⋯" dos produtos ao tocar fora dele
     document.querySelectorAll('details.mais[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });
   });
 
@@ -5486,7 +5479,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       <div class="chips" id="chips-selo-arte">
         ${OPCOES_SELO_ARTE.map(s => `<button type="button" class="chip${configArteAtual.selo === s ? ' selecionado' : ''}" data-selo="${s}">${s}</button>`).join('')}
       </div>
-      <input type="text" id="input-selo-custom" placeholder="Ou digite um selo personalizado...">
+      <input type="text" id="input-selo-custom" placeholder="Ou digite um selo personalizado…">
 
       <div class="arte-campo-linha">
         <label for="input-nome-arte">Nome na arte (1 linha)</label>
@@ -5504,22 +5497,22 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         <label class="arte-toggle"><input type="checkbox" id="chk-desc-arte" ${mostrarDescIni ? 'checked' : ''}> Mostrar descrição</label>
         <label class="arte-toggle"><input type="checkbox" id="chk-cat-arte" ${mostrarCatIni ? 'checked' : ''} ${subtitulo ? '' : 'disabled'}> Mostrar categoria</label>
       </div>
-      <p style="font-size:0.72rem;color:#666;margin-top:6px;">O que ficar desmarcado some da arte e o preço se reposiciona sozinho. Isso só vale para esta arte — o cadastro da peça não muda.</p>
+      <p style="font-size:0.72rem;color:#666;margin-top:6px;">O que ficar desmarcado some da arte e o preço se reposiciona sozinho. Isso só vale para esta arte — o cadastro do produto não muda.</p>
 
       <label style="margin-top:14px;">Preço a exibir no Story (R$)</label>
       <input type="number" id="input-preco-arte" step="0.01" min="0" value="${configArteAtual.precoStory}">
       <p style="font-size:0.72rem;color:#666;margin-top:4px;">Só muda o valor mostrado nesta arte — não altera o preço cadastrado no catálogo.</p>
 
-      <label style="margin-top:14px;">🔗 Link do adesivo (abre o WhatsApp de atendimento com a referência da peça)</label>
+      <label style="margin-top:14px;">🔗 Link do adesivo (abre o WhatsApp de atendimento com a referência do produto)</label>
       <input type="text" id="input-link-arte" readonly style="font-size:0.72rem;">
       <div style="display:flex;gap:8px;margin-top:6px;">
         <button type="button" id="btn-copiar-link-arte" style="background:var(--preto);color:var(--laranja);">📋 Copiar link</button>
         <button type="button" id="btn-testar-link-arte" style="background:#eee;color:#555;">Testar</button>
       </div>
-      <p style="font-size:0.72rem;color:#666;margin-top:4px;">No Instagram, no Story, use o adesivo "Link" e cole este endereço no espaço reservado da arte. Quem tocar cai no WhatsApp da loja já com o nome, o código e o preço da peça escritos.</p>
+      <p style="font-size:0.72rem;color:#666;margin-top:4px;">No Instagram, no Story, use o adesivo "Link" e cole este endereço no espaço reservado da arte. Quem tocar cai no WhatsApp da loja já com o nome, o código e o preço do produto escritos.</p>
 
       <div id="status-arte" style="text-align:center;font-size:0.8rem;margin-top:8px;min-height:18px;"></div>
-      <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-top:6px;">⬇️ Baixar Imagem</button>
+      <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-top:6px;">⬇️ Baixar imagem</button>
 
       <section class="arte-video" id="arte-video" aria-labelledby="arte-video-titulo">
         <h4 id="arte-video-titulo">🎬 Story em vídeo <span class="arte-novo">novo · em teste</span></h4>
@@ -5649,7 +5642,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     document.getElementById('btn-baixar-arte').addEventListener('click', () => {
       const c = lerCamposArte_();
       const status = document.getElementById('status-arte');
-      status.textContent = 'Gerando imagem...';
+      status.textContent = 'Gerando imagem…';
       gerarEBaixarImagemStories(p, { selo: c.selo, precoStory: c.precoStory, foto: configArteAtual.foto, nome: c.nome, desc: c.desc, categoria: c.categoria }, status);
     });
 
@@ -6077,7 +6070,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         // v7.19: mostrava "Ver produto" (sem ser link) quando a peça não tinha código; agora o código e o nome da peça
         const pm = produtos.find(p => String(p.ID) === String(resp.produtoMaisVistoId));
         const codigo = resp.produtoMaisVistoCodigo || (pm && pm.Codigo) || '';
-        document.getElementById('stats-mais-visto').textContent = codigo || (pm ? String(pm.Nome).slice(0, 28) : 'Peça sem código');
+        document.getElementById('stats-mais-visto').textContent = codigo || (pm ? String(pm.Nome).slice(0, 28) : 'Produto sem código');
         document.getElementById('stats-mais-visto-views').textContent = (codigo && pm ? String(pm.Nome).slice(0, 28) + ' · ' : '') + (resp.produtoMaisVistoViews || 0) + ' visualizações';
       } else {
         document.getElementById('stats-mais-visto').textContent = '—';
@@ -6119,8 +6112,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
     btnPush.disabled = true;
     const textoOriginalBtn = btnPush.textContent;
-    btnPush.textContent = 'Enviando...';
-    statusPush.textContent = 'Enviando...';
+    btnPush.textContent = 'Enviando…';
+    statusPush.textContent = 'Enviando…';
     try {
       const resp = await fetch(API_URL, {
         method: 'POST',
@@ -6136,7 +6129,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         statusPush.textContent = '❌ Erro: ' + (resp.erro || 'Falha ao enviar.');
       }
     } catch (e) {
-      statusPush.textContent = '❌ Sem conexão. Tente novamente.';
+      statusPush.textContent = '❌ Sem conexão. Verifique a internet e tente de novo.';
     } finally {
       btnPush.disabled = false;
       btnPush.textContent = textoOriginalBtn;
@@ -6161,7 +6154,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         <div id="aud-usuarios-lista" style="display:grid;gap:6px;margin-top:8px"></div>
       </details>
       <div class="aud-acoes"><button type="button" id="aud-limpar">Limpar filtros</button><span id="aud-total"></span></div>
-      <div id="lista-auditoria" style="margin-top:10px;max-height:48vh;overflow-y:auto;"><p style="text-align:center;color:#666;">Carregando...</p></div>
+      <div id="lista-auditoria" style="margin-top:10px;max-height:48vh;overflow-y:auto;"><p style="text-align:center;color:#666;">Carregando…</p></div>
       <button type="button" id="btn-fechar-auditoria" class="aud-fechar">Fechar</button>
     `;
     abrirComHistorico_('overlay-compartilhar');
@@ -6184,7 +6177,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
     const nomes = [...new Set(registros.map(r => String(r.Funcionario || 'Sistema').trim() || 'Sistema'))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
     const listaUsuarios = document.getElementById('aud-usuarios-lista');
-    listaUsuarios.innerHTML = nomes.map((nome, i) => `<label style="display:flex;align-items:center;gap:8px;min-height:38px"><input type="checkbox" class="aud-usuario" value="${escaparHtml(nome)}" checked> <span>${escaparHtml(nome)}</span></label>`).join('') || '<span style="color:#666">Nenhum usuário encontrado.</span>';
+    listaUsuarios.innerHTML = nomes.map((nome, i) => `<label style="display:flex;align-items:center;gap:8px;min-height:38px"><input type="checkbox" class="aud-usuario" value="${escaparHtml(nome)}" checked> <span>${escaparHtml(nome)}</span></label>`).join('') || '<span style="color:#666">Nenhum usuário nos registros ainda. Os nomes aparecem aqui quando alguém fizer uma ação na Gestão.</span>';
 
     function diaLocal(valor) {
       if (!valor) return '';
@@ -6276,7 +6269,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     finally{btn.disabled=false}
   });
   document.getElementById('btn-apagar-freeconvert').addEventListener('click',async()=>{
-    if(!confirm('Remover a chave FreeConvert cadastrada pela Gestão?'))return;
+    if(!confirm('Excluir a chave FreeConvert cadastrada pela Gestão?'))return;
     try{const r=await configFreeConvert_('POST',{apagar:true});statusFreeConvert_(r.configurada?'A chave da Gestão foi removida; existe outra chave no Worker.':'Chave FreeConvert removida.',false)}
     catch(err){statusFreeConvert_(err.message,true)}
   });
@@ -6288,15 +6281,15 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     try {
       const r = await chamarConfigIA_({ action: 'salvarConfigIA', chave: chave, modelo: modelo });
       mostrarStatusIA_(r);
-      if (r && r.ok) { document.getElementById('input-ia-chave').value = ''; alert('Configuração da IA salva!'); }
-      else alert((r && r.erro) || 'Não foi possível salvar.');
-    } catch (err) { alert('Sem conexão agora — tente novamente.'); }
+      if (r && r.ok) { document.getElementById('input-ia-chave').value = ''; TKAviso.ok('Configuração da IA salva!'); }
+      else TKAviso.erro((r && r.erro) || 'Não foi possível salvar.');
+    } catch (err) { TKAviso.erro('Sem conexão. Verifique a internet e tente de novo.'); }
     btn.disabled = false;
   });
   document.getElementById('btn-apagar-ia').addEventListener('click', async () => {
-    if (!confirm('Apagar a chave do Gemini guardada no servidor? Os botões de IA param de funcionar até você colar uma chave de novo.')) return;
+    if (!confirm('Excluir a chave do Gemini guardada no servidor? Os botões de IA param de funcionar até você colar uma chave de novo.')) return;
     try { mostrarStatusIA_(await chamarConfigIA_({ action: 'salvarConfigIA', apagarChave: true })); }
-    catch (err) { alert('Sem conexão agora — tente novamente.'); }
+    catch (err) { TKAviso.erro('Sem conexão. Verifique a internet e tente de novo.'); }
   });
 
   /* ===================== Preencher pela foto (IA olha TODAS as fotos) ===================== */
@@ -6345,9 +6338,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const btn = document.getElementById('btn-foto-ia');
     const box = document.getElementById('foto-ia-box');
     if (btn.disabled) return;
-    if (!fotosItens.length) { alert('Adicione ao menos uma foto antes.'); return; }
+    if (!fotosItens.length) { TKAviso.aviso('Adicione ao menos uma foto antes.'); return; }
     const rotuloOriginal = btn.textContent;
-    btn.disabled = true; btn.textContent = '📷 Analisando as fotos...'; box.innerHTML = '';
+    btn.disabled = true; btn.textContent = '📷 Analisando as fotos…'; box.innerHTML = '';
     try {
       const fotos = [];
       for (const it of fotosItens) {
@@ -6361,7 +6354,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       }
       const sess = (typeof getSessao === 'function' && getSessao()) || null;
       const corpoIa = JSON.stringify({ action: 'sugerirPorFoto', pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', fotos: fotos, categorias: categorias, generos: generos });
-      logDebug_('IA foto: enviando ' + fotos.length + ' foto(s), ' + Math.round(corpoIa.length / 1024) + ' KB');
+      logDebug_('IA foto: enviando ' + tkPlural(fotos.length, 'foto', 'fotos') + ', ' + Math.round(corpoIa.length / 1024) + ' KB');
       const t0 = Date.now();
       // v7.14.2: Gemini sobrecarregado (503/500, "high demand", demora) não é erro definitivo: o painel tenta de novo sozinho,
       // com espera crescente, até dar certo (o servidor 4.26 já passa por todos os modelos, do mais barato ao mais caro, em cada tentativa).
@@ -6391,7 +6384,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         logDebug_('IA foto: tentativa ' + tentativa + ', ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s — ' + (resp && resp.ok ? ('ok, modelo ' + resp.modelo) : ('erro: ' + (resp && resp.erro))));
         if (cancelada || (resp && resp.ok) || !ehSobrecarga(resp) || tentativa >= MAX_TENTATIVAS_IA) break;
         const espera = Math.min(4 * tentativa, 20);
-        btn.textContent = 'Tentando de novo...';
+        btn.textContent = 'Tentando de novo…';
         aviso('O Gemini está sobrecarregado agora. Vou tentar de novo em ' + espera + ' s (tentativa ' + (tentativa + 1) + ' de ' + MAX_TENTATIVAS_IA + ').');
         await new Promise((ok) => { const t = setTimeout(ok, espera * (window.TK_IA_ESPERA_MS || 1000)); acordar = () => { clearTimeout(t); ok(); }; });   // TK_IA_ESPERA_MS: só para testes
         acordar = null;
@@ -6424,9 +6417,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
           : '<span class="sug-ia-vazio">' + (sug[chave] ? 'não vou usar' : 'nada sugerido') + '</span>' +
             (sug[chave] ? ' <button type="button" class="sug-ia-volta" data-ia-sim="' + uso + '">desfazer</button>' : '')) + '</div>';
       const pintarSug = () => {
-        box.innerHTML = '<div class="seo-sugestao"><div style="font-size:.8rem;color:#666;margin-bottom:6px;">Analisei ' + resp.fotosAnalisadas + ' foto(s). Edite o texto ou toque no ✕ para retirar o que não quiser — só o que ficar será aplicado. Preço, estoque e tamanhos continuam com você.</div>' +
+        box.innerHTML = '<div class="seo-sugestao"><div style="font-size:.8rem;color:#666;margin-bottom:6px;">Analisei ' + tkPlural(resp.fotosAnalisadas, 'foto', 'fotos') + '. Edite o texto ou toque no ✕ para retirar o que não quiser — só o que ficar será aplicado. Preço, estoque e tamanhos continuam com você.</div>' +
           textoHtml('nome', 'usarNome', 'Nome', 1) +
-          '<div class="campo"><b>Gênero</b>' + chipsHtml('generos') + '</div>' +
+          '<div class="campo"><b>Público</b>' + chipsHtml('generos') + '</div>' +
           '<div class="campo"><b>Categoria</b>' + chipsHtml('categorias') + '</div>' +
           '<div class="campo"><b>Cores</b>' + chipsHtml('cores') + '</div>' +
           textoHtml('descricao', 'usarDescricao', 'Descrição', 4) +
@@ -6456,7 +6449,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       btn.disabled = false; btn.textContent = rotuloOriginal;
       logDebug_('IA foto: falhou — ' + (e && e.name) + ': ' + (e && e.message));
       const demorou = e && e.name === 'AbortError';
-      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + (demorou ? 'A IA demorou demais para responder. Tente de novo em instantes.' : 'Sem conexão agora — tente novamente.') + '</div>';
+      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + (demorou ? 'A IA demorou demais para responder. Tente de novo em instantes.' : 'Sem conexão. Verifique a internet e tente de novo.') + '</div>';
     }
   });
 
@@ -6466,11 +6459,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const btn = document.getElementById('btn-seo-ia');
     const box = document.getElementById('seo-sugestao-box');
     const nomeAtual = document.getElementById('nome').value.trim();
-    if (!nomeAtual) { alert('Preencha ao menos o nome do produto antes de gerar com IA.'); return; }
+    if (!nomeAtual) { TKAviso.aviso('Preencha ao menos o nome do produto antes de gerar com IA.'); return; }
     if (btn.disabled) return; // já está processando — ignora clique duplo
 
     btn.disabled = true;
-    btn.textContent = '✨ Gerando...';
+    btn.textContent = '✨ Gerando…';
     box.innerHTML = '';
 
     try {
@@ -6487,7 +6480,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       }).then(r => r.json());
 
       btn.disabled = false;
-      btn.textContent = '✨ Gerar Título/Descrição com IA';
+      btn.textContent = '✨ Gerar título/descrição com IA';
 
       if (!resp.ok) {
         box.innerHTML = `<div class="seo-sugestao" style="color:#c62828;">${escaparHtml(resp.erro || 'Não foi possível gerar sugestão agora.')}</div>`;
@@ -6496,11 +6489,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
       box.innerHTML = `
         <div class="seo-sugestao">
-          ${resp.local ? '<div class="campo" style="color:#7a4a00"><b>Gerado sem IA</b>' + escaparHtml(resp.aviso || 'A IA não respondeu.') + ' Montei um texto só com os dados da peça: confira e ajuste.</div>' : ''}
+          ${resp.local ? '<div class="campo" style="color:#7a4a00"><b>Gerado sem IA</b>' + escaparHtml(resp.aviso || 'A IA não respondeu.') + ' Montei um texto só com os dados do produto: confira e ajuste.</div>' : ''}
           <div class="campo"><b>Título sugerido</b>${escaparHtml(resp.titulo || '—')}</div>
           <div class="campo"><b>Descrição sugerida</b>${escaparHtml(resp.descricao || '—')}</div>
-          <button type="button" id="btn-usar-titulo-seo" style="background:var(--laranja);">Usar Título</button>
-          <button type="button" id="btn-usar-descricao-seo" style="background:var(--laranja);">Usar Descrição</button>
+          <button type="button" id="btn-usar-titulo-seo" style="background:var(--laranja);">Usar título</button>
+          <button type="button" id="btn-usar-descricao-seo" style="background:var(--laranja);">Usar descrição</button>
           <button type="button" id="btn-descartar-seo" style="background:#eee;color:#555;">Descartar</button>
         </div>
       `;
@@ -6517,8 +6510,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       document.getElementById('btn-descartar-seo').addEventListener('click', () => { box.innerHTML = ''; });
     } catch (e) {
       btn.disabled = false;
-      btn.textContent = '✨ Gerar Título/Descrição com IA';
-      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">Sem conexão agora — tente novamente.</div>';
+      btn.textContent = '✨ Gerar título/descrição com IA';
+      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">Sem conexão. Verifique a internet e tente de novo.</div>';
     }
   });
 
@@ -6617,7 +6610,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     });
   }
   setInterval(espelha,1500); espelha();
-  // vindo do catálogo (botão "✎ Editar produto" do modal da peça) ou da Esteira ("Editar no cadastro", v7.48.0): abre o MESMO formulário de edição daqui.
+  // vindo do catálogo (botão "✎ Editar produto" do modal da peça) ou da Esteira ("Editar produto", v7.48.0): abre o MESMO formulário de edição daqui.
   // Espera a pessoa entrar (sem prazo enquanto a tela de login está aberta) e a lista carregar; sem permissão ou peça inexistente: aviso legível.
   try {
     var mEd = /[?&]editar=([^&]+)/.exec(location.search);
@@ -6628,17 +6621,17 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       var fimEd = function(t){ clearInterval(tmEd); if (t) avisoEd(t); try{ history.replaceState(history.state,'',location.pathname); }catch(e){} };
       var tmEd = setInterval(function(){
         tentEd++;
-        if (!/^[A-Za-z0-9_-]{1,90}$/.test(idEd)) return fimEd('O link de edição está incompleto. Abra a peça de novo pela Esteira ou pela lista.');
+        if (!/^[A-Za-z0-9_-]{1,90}$/.test(idEd)) return fimEd('O link de edição está incompleto. Abra o produto de novo pela Esteira ou pela lista.');
         var lo = $('login-overlay');
-        if (lo && lo.classList.contains('visivel')) { if (!pediuLoginEd) { pediuLoginEd = true; avisoEd('Entre na sua conta para abrir a edição da peça.'); } tentEd = 0; return; }
+        if (lo && lo.classList.contains('visivel')) { if (!pediuLoginEd) { pediuLoginEd = true; avisoEd('Entre na sua conta para abrir a edição do produto.'); } tentEd = 0; return; }
         var lista = (typeof produtos !== 'undefined') && produtos && produtos.length ? produtos : null;
         var u = (typeof usuarioAdmin !== 'undefined') ? usuarioAdmin : null, contas = (typeof modoLogin !== 'undefined') && modoLogin;
-        if (!lista || (contas && !u && tentEd < 40)) { if (tentEd > 120) fimEd('Não consegui carregar a lista de peças para abrir a edição. Atualize a página e tente de novo.'); return; }
-        if (u && !temPermissao(u, 'catalogo_cadastrar')) return fimEd('Seu acesso não permite editar peças. Peça ao administrador a permissão de cadastrar peças.');
+        if (!lista || (contas && !u && tentEd < 40)) { if (tentEd > 120) fimEd('Não consegui carregar a lista de produtos para abrir a edição. Atualize a página e tente de novo.'); return; }
+        if (u && !temPermissao(u, 'catalogo_cadastrar')) return fimEd('Seu acesso não permite editar produtos. Produto ao Admin total a permissão de cadastrar produtos.');
         var achou = lista.some(function(x){ return String(x.ID) === idEd; });
-        if (!achou) return fimEd('Não encontrei essa peça no catálogo (ela pode ter sido excluída). Procure pelo nome na lista.');
+        if (!achou) return fimEd('Não encontrei esse produto no catálogo (ele pode ter sido excluído). Procure pelo nome na lista.');
         fimEd('');
-        try { editarProduto(idEd); } catch (e) { avisoEd('Não consegui abrir a edição desta peça. Procure pelo nome na lista.'); }
+        try { editarProduto(idEd); } catch (e) { avisoEd('Não consegui abrir a edição deste produto. Procure pelo nome na lista.'); }
       }, 500);
     }
   } catch(e) {}

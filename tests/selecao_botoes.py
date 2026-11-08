@@ -33,13 +33,13 @@ with sync_playwright() as p:
         chk("Edição em lote só para a equipe", (pg.locator("#btn-lote-menu:visible").count() == 1) == lote)
         chk("botões com fundo próprio e ≥44px", pg.evaluate("(()=>{const r=document.querySelector('#btn-limpar-sel').getBoundingClientRect(); return r.height>=44 && getComputedStyle(document.querySelector('#btn-limpar-sel')).backgroundColor!=='rgba(0, 0, 0, 0)'})()"))
         if lote:
-            pg.click("#btn-lote-menu"); chk("lista de ações abre com Solicitar fotos", pg.locator("#lote-menu:visible").count() == 1 and pg.locator("#lote-menu [data-lote]").count() == 7 and pg.locator('[data-lote="btn-bulk-pedir-fotos"]').is_visible())
+            pg.click("#btn-lote-menu"); chk("lista de ações abre com Pedir fotos", pg.locator("#lote-menu:visible").count() == 1 and pg.locator("#lote-menu [data-lote]").count() == 7 and pg.locator('[data-lote="btn-bulk-pedir-fotos"]').is_visible())
         chk("mesma linha (tops iguais)", pg.evaluate("(()=>{const t=[...document.querySelectorAll('#btn-share-busca,#btn-limpar-sel,#btn-lote-menu')].filter(b=>b.offsetParent).map(b=>Math.round(b.getBoundingClientRect().top)); return new Set(t).size===1})()"))
         if lote:
             pg.on("dialog", lambda d: d.accept())
             pg.click('#lote-menu [data-lote=btn-bulk-juntar]'); pg.wait_for_timeout(300)
             chk("Juntar abre a janela no catálogo (sem sair)", pg.locator("#overlay-juntar.aberto").count() == 1 and pg.url.endswith("index.html") or "admin" not in pg.url)
-            chk("2 peças para escolher", pg.locator("#juntar-lista input").count() == 2)
+            chk("2 produtos para escolher", pg.locator("#juntar-lista input").count() == 2)
             pg.click("#juntar-ok"); pg.wait_for_timeout(100)
             chk("v7.50.0: a janela fecha na hora e o aviso discreto mostra o andamento/resultado", pg.locator("#overlay-juntar.aberto").count() == 0 and pg.locator("#tk-fila-lote:visible").count() == 1)
             pg.wait_for_timeout(1500)

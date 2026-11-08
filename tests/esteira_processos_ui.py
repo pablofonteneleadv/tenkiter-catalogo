@@ -19,7 +19,7 @@ with sync_playwright() as p:
  assert pg.locator('#livre').input_value()=='Funcionário continua trabalhando'
  # Save a second command and lose its response, then resume from the same operation ID.
  job2=pg.evaluate("async()=>fila.adicionar('teste',{nome:'Outro pedido',arquivo:new Blob(['foto'])},'Outro pedido')");pg.wait_for_timeout(150);assert len(calls)==2;op=calls[-1]['op'];held.pop(0).abort();pg.wait_for_timeout(150)
- pg.reload();pg.wait_for_function('!!window.fila');pg.click('#esteira-processos-abrir');pg.wait_for_selector('text=Tentar novamente');pg.get_by_role('button',name='Tentar novamente').click();pg.wait_for_timeout(150);assert calls[-1]['op']==op and len(calls)==3
+ pg.reload();pg.wait_for_function('!!window.fila');pg.click('#esteira-processos-abrir');pg.wait_for_selector('text=Tentar de novo');pg.get_by_role('button',name='Tentar de novo').click();pg.wait_for_timeout(150);assert calls[-1]['op']==op and len(calls)==3
  held.pop(0).fulfill(json={'ok':True,'id':20});pg.wait_for_function("document.querySelector('#esteira-processos-abrir').textContent==='Processos'")
  # Identity and credential boundaries.
  pg.evaluate("conta='conta-b';dispatchEvent(new Event('tk:sessao'))");pg.wait_for_timeout(100);assert 'Pedido simulado' not in pg.inner_text('#esteira-processos')

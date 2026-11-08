@@ -1,4 +1,4 @@
-"""Postagens (18/10/2026): 🧩 Colagem (fotos da peça numa só imagem, as usadas somem, baixar, desfazer) e 🖼️ Gerar imagens (sobe ao servidor,
+"""Postagens (18/10/2026): 🧩 Colagem (fotos do produto numa só imagem, as usadas somem, baixar, desfazer) e 🖼️ Gerar imagens (sobe ao servidor,
 baixar/conferir, vira 'desatualizada' ao editar e o Postar NÃO gera de novo). Apps Script, Worker e R2 SIMULADOS (mock.py)."""
 import sys, os, json
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -32,7 +32,7 @@ with sync_playwright() as p:
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250); pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(800)
     pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(500); pg.click("[data-tipo=story]"); pg.wait_for_timeout(900)
     nm = pg.locator(".po-midias .po-m").count()
-    chk("a peça tem várias fotos (mínimo 4) e o botão 🧩 Colagem aparece", nm >= 4 and pg.locator("[data-a=col-abrir]").count() == 1, nm)
+    chk("o produto tem várias fotos (mínimo 4) e o botão 🧩 Colagem aparece", nm >= 4 and pg.locator("[data-a=col-abrir]").count() == 1, nm)
 
     print("== Lista de fotos: proporção e ordem ==")
     asp = pg.evaluate("(()=>{const r=document.querySelector('.po-midias .po-m').getBoundingClientRect();return r.width/r.height})()")
@@ -77,7 +77,7 @@ with sync_playwright() as p:
     pg.click("[data-a=col-abrir]"); pg.wait_for_timeout(900)
     r = pg.evaluate("(()=>{const o=document.getElementById('po-ct').getBoundingClientRect();return {w:o.width,h:o.height,vw:innerWidth,vh:innerHeight,aberto:document.getElementById('po-ct').classList.contains('aberto')}})()")
     chk("a colagem abre em TELA CHEIA", r["aberto"] and abs(r["w"] - r["vw"]) < 2 and abs(r["h"] - r["vh"]) < 2, r)
-    chk("18 modelos; os que pedem mais fotos do que a peça tem ficam desabilitados", pg.locator("[data-ctl]").count() == 18 and pg.locator("[data-ctl]:disabled").count() == 3, (pg.locator("[data-ctl]").count(), pg.locator("[data-ctl]:disabled").count()))
+    chk("18 modelos; os que pedem mais fotos do que o produto tem ficam desabilitados", pg.locator("[data-ctl]").count() == 18 and pg.locator("[data-ctl]:disabled").count() == 3, (pg.locator("[data-ctl]").count(), pg.locator("[data-ctl]:disabled").count()))
     ic = pg.evaluate("(()=>{const s=document.querySelector('[data-ctl] svg');const w=+s.getAttribute('width'),h=+s.getAttribute('height');return w/h})()")
     chk("a miniatura do modelo tem a proporção do Story (9:16)", abs(ic - 9 / 16) < 0.02, ic)
     cb = caixa_cv()
@@ -106,7 +106,7 @@ with sync_playwright() as p:
     pg.click("[data-ctmv=x]"); pg.wait_for_timeout(300)
     chk("✕ Tirar deixa a posição vazia e bloqueia Criar", pg.locator(".po-ct-slot img").count() == 3 and pg.is_disabled("#po-ct-criar") and "Faltam 1" in pg.inner_text("#po-ct-st"), pg.inner_text("#po-ct-st"))
     pg.locator(".po-ct-foto[aria-pressed=false]").first.click(); pg.wait_for_timeout(300)
-    chk("tocar numa foto da peça preenche a posição vazia", pg.locator(".po-ct-slot img").count() == 4 and pg.is_enabled("#po-ct-criar"))
+    chk("tocar numa foto do produto preenche a posição vazia", pg.locator(".po-ct-slot img").count() == 4 and pg.is_enabled("#po-ct-criar"))
 
     print("-- zoom, mover e girar --")
     pg.click("[data-cts='0']"); aba("ajustar")
@@ -228,7 +228,7 @@ with sync_playwright() as p:
     pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(500); pg.click("[data-tipo=story]"); pg.wait_for_timeout(1500)
     antes = len(st["midia"]["envios"])
     pg.click("[data-a=gerar]"); pg.wait_for_timeout(3500)
-    chk("nova peça gerou de novo (a assinatura é por foto e por edição)", len(st["midia"]["envios"]) > antes and "pronta" in pg.inner_text("#po-gerar"))
+    chk("novo produto gerou de novo (a assinatura é por foto e por edição)", len(st["midia"]["envios"]) > antes and "pronta" in pg.inner_text("#po-gerar"))
     pg.evaluate("()=>{const d=document.getElementById('po-det'); if(d) d.open=true}")
     k = pg.evaluate("document.querySelector('[data-seltx]')&&document.querySelector('[data-seltx]').dataset.seltx")
     if k:

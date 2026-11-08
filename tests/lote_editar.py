@@ -1,4 +1,4 @@
-"""Admin: tamanhos na lista + janela interativa 'Editar peças' (nome, preço, categoria/tamanho/cor com criação por escrita, retirar, foco ao digitar)."""
+"""Admin: tamanhos na lista + janela interativa 'Editar produtos' (nome, preço, categoria/tamanho/cor com criação por escrita, retirar, foco ao digitar)."""
 import sys, os
 AQUI=os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0,AQUI)
 from mock import *
@@ -41,7 +41,7 @@ with sync_playwright() as p:
     acts=[x.get("action") for x in log]
     chk("criou categoria e tamanho antes de editar", "addCategoria" in acts and "addTamanho" in acts and acts.index("addCategoria")<acts.index("update"), acts[-12:])
     ups=[x for x in log if x.get("action")=="update"]
-    chk("2 peças atualizadas", len(ups)==2, len(ups))
+    chk("2 produtos atualizados", len(ups)==2, len(ups))
     u=ups[0] if ups else {}
     chk("nome acrescentado", u.get("nome","").endswith("Premium") and u.get("nome","").startswith(nomes[0].split(' ')[0]), u.get("nome"))
     chk("categoria nova entrou e tamanho novo entrou", "Zzcat" in u.get("categoria","") and "XXG" in u.get("tamanhos",""), (u.get("categoria"),u.get("tamanhos")))

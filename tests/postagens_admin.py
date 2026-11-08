@@ -1,4 +1,4 @@
-"""Aba Postagens (admin-postagens.js, v4.6): escolher peça/mídias, tipo (Feed, Carrossel, Reels, Story), Original/Templates (canvas -> JPEG -> R2), legenda, agora x agendado,
+"""Aba Postagens (admin-postagens.js, v4.6): escolher produto/mídias, tipo (Feed, Carrossel, Reels, Story), Original/Templates (canvas -> JPEG -> R2), legenda, agora x agendado,
 fila (cancelar / tentar de novo), Story com link = tarefa manual (baixar, copiar, "Já postei"), quem pode ver o botão, teclado e axe. Worker do Instagram e R2 simulados (mock.py)."""
 import sys, os, json, datetime
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -48,21 +48,21 @@ with sync_playwright() as p:
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
     chk("Admin total vê o botão 📸 Postagens", pg.locator("#btn-abrir-postagens").is_visible())
     c2, _ = novo(b, perms=["catalogo_cadastrar", "catalogo_admin"]); p2 = c2.new_page(); p2.goto(BASE + "admin.html"); p2.wait_for_timeout(2600); p2.click("#details-ferramentas > summary"); p2.wait_for_timeout(250)
-    chk("quem cadastra peças (sem Admin total) também vê", p2.locator("#btn-abrir-postagens").is_visible())
+    chk("quem cadastra produtos (sem Admin total) também vê", p2.locator("#btn-abrir-postagens").is_visible())
     c3, _ = novo(b, perms=["catalogo_admin", "catalogo_push"]); p3 = c3.new_page(); p3.goto(BASE + "admin.html"); p3.wait_for_timeout(2600); p3.click("#details-ferramentas > summary"); p3.wait_for_timeout(250)
     chk("quem não cadastra NÃO vê", not p3.locator("#btn-abrir-postagens").is_visible())
     c2.close(); c3.close()
 
     print("== Nova postagem: Feed agora com template ==")
     abrir(pg)
-    chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 7 and "Qual peça?" in corpo(pg))
+    chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 7 and "Qual produto?" in corpo(pg))
     pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300)
-    chk("busca por código mostra a peça", pg.locator(".po-card").count() >= 1, corpo(pg)[:200])
+    chk("busca por código mostra o produto", pg.locator(".po-card").count() >= 1, corpo(pg)[:200])
     pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(400); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(500)
     t = corpo(pg)
-    chk("peça escolhida: tipos, visual, legenda e quando aparecem", all(x in t for x in ["O que postar?", "Visual", "Legenda", "Quando?"]), t[:300])
+    chk("produto escolhido: tipos, visual, legenda e quando aparecem", all(x in t for x in ["O que postar?", "Visual", "Legenda", "Quando?"]), t[:300])
     leg = pg.input_value("#po-leg")
-    chk("legenda automática: nome, preço à vista, código e link completo da peça", "à vista" in leg and "TK-0003" in leg and "https://tenkitermodas.com.br/p/TK-0003" in leg and "#tenkitermodas" in leg, leg[:300])
+    chk("legenda automática: nome, preço à vista, código e link completo do produto", "à vista" in leg and "TK-0003" in leg and "https://tenkitermodas.com.br/p/TK-0003" in leg and "#tenkitermodas" in leg, leg[:300])
     chk("Feed marca só 1 foto", pg.locator(".po-m[aria-pressed=true]").count() == 1)
     pg.wait_for_timeout(1500)
     chk("prévia do template mostra a imagem montada (canvas 1080x1350)", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length>0 && (c[0]._W||c[0].width)===1080 && (c[0]._H||c[0].height)===1350"))
@@ -77,7 +77,7 @@ with sync_playwright() as p:
     c = g["post_chamadas"][-1]["corpo"] if g.get("post_chamadas") else {}
     chk("enviou 1 Feed 'agora' com a mídia do R2 e a legenda", c.get("tipo") == "feed" and c.get("quando") == "agora" and len(c.get("midias", [])) == 1 and "tenkiter-midia" in c["midias"][0]["url"] and "TK-0003" in c.get("legenda", ""), c)
     chk("subiu ao R2 uma imagem montada de verdade (não a miniatura)", st["midia"]["envios"] and st["midia"]["envios"][0].get("tam", 0) > 5000, st["midia"]["envios"][:1])
-    chk("guarda a peça e o template no pedido", c.get("produto") == "TK-0003" and c.get("template") == "classico")
+    chk("guarda o produto e o template no pedido", c.get("produto") == "TK-0003" and c.get("template") == "classico")
     chk("vai para 'Já postadas' com aviso", "Enviado" in corpo(pg) or "Já postadas" in pg.inner_text("#po-abas"), corpo(pg)[:200])
     aba(pg, "hist"); chk("histórico mostra Publicado + link do Instagram", "Publicado" in corpo(pg) and pg.locator("#po-corpo a:has-text('Ver no Instagram')").count() == 1)
 
@@ -85,7 +85,7 @@ with sync_playwright() as p:
     aba(pg, "nova"); pg.fill("#po-busca", "TK-0004"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300)
     pg.click("[data-tipo=carrossel]"); pg.wait_for_timeout(200)
     n = pg.locator(".po-m[aria-pressed=true]").count()
-    chk("Carrossel marca as fotos da peça (2 ou mais quando existem)", n >= 1, n)
+    chk("Carrossel marca as fotos do produto (2 ou mais quando existem)", n >= 1, n)
     pg.click("[data-tipo=reels]"); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
     chk("Reels sem vídeo é barrado com frase", "1 vídeo" in corpo(pg) and "role" in pg.inner_html("#po-corpo"))
     chk("Reels não oferece template", pg.locator("[data-tpl]").count() == 0)
@@ -97,7 +97,7 @@ with sync_playwright() as p:
     chk("botão vira 'Preparar Story para postar à mão'", "Preparar Story" in pg.inner_text(".po-enviar"))
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"]
-    chk("cria Stories manuais com o link completo da peça (um por foto)", all(q["modo"] == "manual" and q["link"] == "https://tenkitermodas.com.br/p/TK-0004" and q["tipo"] == "story" and len(q["midias"]) == 1 for q in c["posts"]), c)
+    chk("cria Stories manuais com o link completo do produto (um por foto)", all(q["modo"] == "manual" and q["link"] == "https://tenkitermodas.com.br/p/TK-0004" and q["tipo"] == "story" and len(q["midias"]) == 1 for q in c["posts"]), c)
     chk("abre na aba 'Postar à mão'", pg.locator("#po-abas [data-aba=manual][aria-selected=true]").count() == 1 and "Passo a passo" in corpo(pg), corpo(pg)[:200])
     chk("tem Baixar mídia, Copiar link, Abrir o Instagram e Já postei", all(pg.locator("#po-corpo :text('%s')" % x).count() for x in ["Baixar mídia", "Copiar link", "Abrir o Instagram", "Já postei"]))
     pg.click("[data-a=copiar-link] >> nth=0"); pg.wait_for_timeout(300)
@@ -131,12 +131,12 @@ with sync_playwright() as p:
     chk("menu ⋯ aberto não é recortado (cartão deixa de conter o desenho)", pg.evaluate("getComputedStyle(document.querySelector('.produto:has(details.mais[open])')).contentVisibility") == "visible")
     pg.mouse.click(5, 300); pg.wait_for_timeout(200)
     pg.locator(".produto .btn-postar").first.click(); pg.wait_for_timeout(900)
-    chk("📸 Postar do cartão abre a aba com a peça já escolhida e a lista", pg.locator("#overlay-postagens.aberto").count() == 1 and "Lista para postar (1)" in corpo(pg) and "O que postar?" in corpo(pg), corpo(pg)[:200])
+    chk("📸 Postar do cartão abre a aba com o produto já escolhido e a lista", pg.locator("#overlay-postagens.aberto").count() == 1 and "Lista para postar (1)" in corpo(pg) and "O que postar?" in corpo(pg), corpo(pg)[:200])
     pg.evaluate("document.querySelector('#overlay-postagens').classList.remove('aberto')")
     pg.locator(".produto-chk").nth(0).check(); pg.locator(".produto-chk").nth(1).check(); pg.wait_for_timeout(200)
-    chk("com peças marcadas aparece 'Enviar para Postagens' na barra", pg.locator("#btn-bulk-postar").is_visible())
+    chk("com produtos marcados aparece 'Enviar para Postagens' na barra", pg.locator("#btn-bulk-postar").is_visible())
     pg.click("#btn-bulk-postar"); pg.wait_for_timeout(900)
-    chk("2 peças marcadas viram uma lista de 2", "Lista para postar (2)" in corpo(pg), corpo(pg)[:200])
+    chk("2 produtos marcados viram uma lista de 2", "Lista para postar (2)" in corpo(pg), corpo(pg)[:200])
     chk("a seleção em massa é limpa depois de enviar", pg.locator("#bulk-bar.ativa").count() == 0)
     antes = len(g["posts"])
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
@@ -146,14 +146,14 @@ with sync_playwright() as p:
     axe(pg, "lista de postagem")
     pg.evaluate("document.querySelector('#overlay-postagens').classList.remove('aberto')")
 
-    print("== 3 opções de horário e postagem LIVRE (sem peça) ==")
+    print("== 3 opções de horário e postagem LIVRE (sem produto) ==")
     abrir(pg); aba(pg, "nova")
     from PIL import Image
     d = os.path.join(AQUI, "saida"); os.makedirs(d, exist_ok=True)
     for i, cor in enumerate(["red", "blue"]): Image.new("RGB", (600, 800), cor).save(os.path.join(d, "livre%d.jpg" % i))
     criar_mp4(os.path.join(d, "livre.mp4"), segundos=4, codec="libx264")
     pg.click("[data-modo=livre]"); pg.wait_for_timeout(300)
-    chk("modo livre não pede peça e mostra o campo de mídias", pg.locator("#po-livre-arq").count() == 1 and "Qual peça?" not in corpo(pg))
+    chk("modo livre não pede produto e mostra o campo de mídias", pg.locator("#po-livre-arq").count() == 1 and "Qual produto?" not in corpo(pg))
     pg.click("[data-tipo=story]")
     # O MP4 sintético usa VP9 porque o Chromium do Playwright não decodifica H.264.
     # Grupo clientes exige H.264; este cenário testa horários e ordem, sem o grupo.
@@ -171,7 +171,7 @@ with sync_playwright() as p:
     n0 = len(g["posts"]); pg.click("[data-a=enviar]"); pg.wait_for_timeout(3500)
     c = g["post_chamadas"][-1]["corpo"]
     if "posts" not in c: print("TELA:", corpo(pg)[:400])
-    chk("sequência: 3 Stories com quando='sequencia', sem peça, 2 fotos (JPEG no R2) e 1 vídeo", len(c["posts"]) == 3 and all(q["quando"] == "sequencia" and q["tipo"] == "story" and q["modo"] == "auto" and not q["produto"] for q in c["posts"]) and [q["midias"][0]["tipo"] for q in c["posts"]] == ["imagem", "imagem", "video"], c)
+    chk("sequência: 3 Stories com quando='sequencia', sem produto, 2 fotos (JPEG no R2) e 1 vídeo", len(c["posts"]) == 3 and all(q["quando"] == "sequencia" and q["tipo"] == "story" and q["modo"] == "auto" and not q["produto"] for q in c["posts"]) and [q["midias"][0]["tipo"] for q in c["posts"]] == ["imagem", "imagem", "video"], c)
     chk("todas as mídias foram para o R2", all("tenkiter-midia" in q["midias"][0]["url"] for q in c["posts"]))
     chk("aviso mostra a janela de horários e vai para a Fila", "Na fila" in corpo(pg) and "Sai entre" in corpo(pg), corpo(pg)[:200])
     print("-- agendado: um vídeo às 7h, depois fotos em sequência, um horário próprio")
@@ -223,7 +223,7 @@ with sync_playwright() as p:
         pg.mouse.move(cx, cy); pg.mouse.down(); pg.mouse.move(cx + dx_frac * r["width"] / 2, cy + dy_frac * r["height"] / 2, steps=4); pg.mouse.move(cx + dx_frac * r["width"], cy + dy_frac * r["height"], steps=4); pg.mouse.up(); pg.wait_for_timeout(250)
     garantir(pg); aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(600); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(900)
     chk("template Clássico mostra a prévia sozinho e o editor com Selo, Nome, Preço e Código", pg.locator("#po-previa canvas").count() == 1 and all(pg.locator("#po-tx-%s" % k).count() == 1 for k in ["selo", "nome", "preco", "codigo"]))
-    chk("os textos nascem com os dados da peça (editáveis)", "TK-0003" in pg.input_value("#po-tx-codigo") and "à vista" in pg.input_value("#po-tx-preco"))
+    chk("os textos nascem com os dados do produto (editáveis)", "TK-0003" in pg.input_value("#po-tx-codigo") and "à vista" in pg.input_value("#po-tx-preco"))
     b0 = caixa(pg, 0, "nome"); sel_tx(pg, "nome"); pg.fill("#po-tx-nome", "Vestido longo florido de verão"); pg.wait_for_timeout(300)
     b1 = caixa(pg, 0, "nome")
     chk("editar o texto muda a imagem na hora (caixa do nome mudou)", b0 and b1 and abs((b1["x1"] - b1["x0"]) - (b0["x1"] - b0["x0"])) > 1, [b0, b1])
@@ -279,7 +279,7 @@ with sync_playwright() as p:
     axe(pg, "Ela usa TM")
     pg.click("[data-q=sequencia]"); n_antes = len(g["posts"]); pg.click("[data-a=enviar]"); pg.wait_for_timeout(4000)
     c = g["post_chamadas"][-1]["corpo"]
-    chk("cria 2 Stories automáticos em sequência com template elausa, sem peça, mídias no R2", len(c["posts"]) == 2 and all(q["tipo"] == "story" and q["template"] == "elausa" and q["modo"] == "auto" and q["quando"] == "sequencia" and not q["produto"] and "tenkiter-midia" in q["midias"][0]["url"] for q in c["posts"]), c)
+    chk("cria 2 Stories automáticos em sequência com template elausa, sem produto, mídias no R2", len(c["posts"]) == 2 and all(q["tipo"] == "story" and q["template"] == "elausa" and q["modo"] == "auto" and q["quando"] == "sequencia" and not q["produto"] and "tenkiter-midia" in q["midias"][0]["url"] for q in c["posts"]), c)
     ac = [x for x in g["foto_chamadas"] if x["path"] == "/fotos/acao"]
     chk("as fotos usadas saem de 'Novas' e vão para 'Já usadas'", ac and ac[-1]["corpo"]["acao"] == "usada" and len(ac[-1]["corpo"]["ids"]) == 2)
     aba(pg, "fotos"); pg.click("[data-ff=usada]"); pg.wait_for_timeout(700); chk("filtro 'Já usadas' mostra as 2", pg.locator(".po-item").count() == 2)
@@ -291,7 +291,7 @@ with sync_playwright() as p:
     print("== Recusas do servidor e teclado ==")
     abrir(pg)
     aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0006"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300)
-    g["post_recusa"] = "O Instagram não está conectado. Peça ao Admin total para conectar em Conexões."
+    g["post_recusa"] = "O Instagram não está conectado. Produto ao Admin total para conectar em Conexões."
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     chk("recusa do servidor vira aviso vermelho com a frase", "não está conectado" in corpo(pg) and pg.locator(".po-aviso.erro").count() >= 1)
     chk("o aviso não vira JSON", "{" not in corpo(pg))

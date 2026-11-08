@@ -1,4 +1,4 @@
-"""v7.14.3: editar peça "Consultar valor" (Preco 0) sem mexer no preço — janela "Editar peças" ou reenvio de envio antigo — vai com
+"""v7.14.3: editar produto "Consultar valor" (Preco 0) sem mexer no preço — janela "Editar produtos" ou reenvio de envio antigo — vai com
 consultarValor:true (o servidor recusava "Preço inválido"). Preço novo continua valendo; criar e desmarcar não mudam."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)

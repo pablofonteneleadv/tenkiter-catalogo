@@ -12,7 +12,7 @@ with sync_playwright() as p:
         st=install(ctx,versao='3.7');st['produtos'][:]=st['produtos'][:6]
         for i,prod in enumerate(st['produtos']):
             prod.update(Status='Ativo',Estoque=3,Codigo=f'TK-{9999-i}',Genero='Feminino Adulto',Tamanhos='36, 38, 40, 42' if i%2 else 'M',Nome='Conjunto feminino adulto short saia balonê com nome comprido' if i%2 else 'Body rosa')
-            prod['Descricao']='Descrição da peça.\nTecido: '+('Alfaiataria' if i%2 else 'Crepe Dior')
+            prod['Descricao']='Descrição do produto.\nTecido: '+('Alfaiataria' if i%2 else 'Crepe Dior')
             prod['Fotos_Galeria']=','.join(f'https://res.cloudinary.com/z/image/upload/v1/extra-{i}-{j}.jpg' for j in range(5)) if i%3!=1 else ''
         before=os.environ.get('TK_BEFORE_CSS')
         if before:ctx.route('**/catalogo.css*',lambda r:r.fulfill(path=before,content_type='text/css'))

@@ -120,7 +120,7 @@ with sync_playwright() as p:
     chk("gênero=Infantil Menina", ultimos(log)[0].get("genero") == "Infantil Menina")
     chk("4 filtros ativos no contador", "(4 ativos)" in pg.inner_text("#mt-nfiltros"), pg.inner_text("#mt-nfiltros"))
     chk("resumo lista os filtros", all(x in pg.inner_text(".mt-resumo") for x in ("origem App instalado", "dispositivo", "categoria Blusas")), pg.inner_text(".mt-resumo"))
-    chk("com filtro, os números mudam (mock: 25%)", pg.locator(".mt-card:has-text('Visualizações de peças') strong").inner_text() == "30")
+    chk("com filtro, os números mudam (mock: 25%)", pg.locator(".mt-card:has-text('Visualizações de produtos') strong").inner_text() == "30")
     pg.click("#mt-limpar"); pg.wait_for_timeout(700)
     m = ultimos(log)[0]
     chk("Limpar filtros: volta ao pedido simples e zera os campos", m.get("dias") == 30 and not any(k in m for k in ("origem", "dispositivo", "categoria", "genero", "fonte")) and pg.input_value("#mt-origem") == "" and pg.input_value("#mt-categoria") == "", m)
@@ -176,7 +176,7 @@ with sync_playwright() as p:
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2400)
     abrir_numeros(pg)
     chk("sem metricasAvancadas: não aparece o bloco de filtros", pg.locator("#mt-det").count() == 0)
-    chk("tela antiga continua (Últimos 7/30/90 dias)", "Últimos 7 dias" in texto(pg) and "Peças mais vistas" in texto(pg))
+    chk("tela antiga continua (Últimos 7/30/90 dias)", "Últimos 7 dias" in texto(pg) and "Produtos mais vistas" in texto(pg))
     pg.click("[data-mt-dias='7']"); pg.wait_for_timeout(700)
     chk("tela antiga: trocar período ainda funciona", ultimos(log2)[0].get("dias") == 7 and "horaDe" not in ultimos(log2)[0])
     chk("nenhum erro de JavaScript (3.4)", not erros2, erros2)
@@ -185,8 +185,8 @@ with sync_playwright() as p:
     ctx3.add_init_script(SESSION); log3 = []; st3 = install(ctx3, log=log3, versao="3.5"); st3["pessoas_reais"] = True
     pg = ctx3.new_page(); pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     abrir_numeros(pg); t = texto(pg)
-    chk("cartões em PESSOAS: entraram, viram peças, pediram no WhatsApp", "Pessoas reais que entraram" in t and "Pessoas que viram peças" in t and "Pessoas que pediram no WhatsApp" in t, t[:400])
-    chk("funil em pessoas, com a explicação da conta", "Pessoas que viram alguma peça" in t and "pessoas diferentes, sem repetir" in t)
+    chk("cartões em PESSOAS: entraram, viram produtos, pediram no WhatsApp", "Pessoas reais que entraram" in t and "Pessoas que viram produtos" in t and "Pessoas que pediram no WhatsApp" in t, t[:400])
+    chk("funil em pessoas, com a explicação da conta", "Pessoas que viram algum produto" in t and "pessoas diferentes, sem repetir" in t)
     chk("tabelas têm linha de total real e aviso de que uma pessoa pode estar em dois grupos", "Pessoas reais (sem repetir)" in t and "pode passar do total real" in t)
     chk("Hoje, 1, 2 e 3 dias existem no período", all(pg.locator(sel).count() == 1 for sel in ("[data-mt-hoje]", "[data-mt-dias='1']", "[data-mt-dias='2']", "[data-mt-dias='3']")))
     chk("resumo recolhido mostra as pessoas", "pessoas" in pg.inner_text("#mt-det > summary"))

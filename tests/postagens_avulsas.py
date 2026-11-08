@@ -1,4 +1,4 @@
-"""v4.27: "O que postar?" aceita fotos/vídeos AVULSOS do aparelho junto da peça e a pessoa escolhe a ORDEM em que a postagem sai. Apps Script/internet SIMULADOS."""
+"""v4.27: "O que postar?" aceita fotos/vídeos AVULSOS do aparelho junto do produto e a pessoa escolhe a ORDEM em que a postagem sai. Apps Script/internet SIMULADOS."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
@@ -38,7 +38,7 @@ with sync_playwright() as p:
     chk("as 2 avulsas entram na grade de mídias", pg.locator(".po-m").count() == antes + 2, pg.locator(".po-m").count())
     chk("já vêm marcadas", pg.locator(".po-m[aria-pressed=true]").count() == sel0 + 2)
     o = ordem(pg)
-    chk("lista de ordem mostra tudo o que vai sair (as avulsas por último)", len(o) == sel0 + 2 and o[-1].startswith("avulsa") and o[-2].startswith("avulsa") and o[0] == "da peça", o)
+    chk("lista de ordem mostra tudo o que vai sair (as avulsas por último)", len(o) == sel0 + 2 and o[-1].startswith("avulsa") and o[-2].startswith("avulsa") and o[0] == "do produto", o)
     chk("1º não sobe, último não desce", pg.locator(".po-ordem [data-pm=up]").first.is_disabled() and pg.locator(".po-ordem [data-pm=down]").last.is_disabled())
     pg.locator(".po-ordem [data-pm=up]").last.click(); pg.wait_for_timeout(300)
     o2 = ordem(pg)

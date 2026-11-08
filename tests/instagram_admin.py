@@ -86,7 +86,7 @@ with sync_playwright() as p:
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
     pg.click("#btn-salvar"); pg.wait_for_timeout(4000)
     cr = [x for x in log if x.get("action") == "create"]
-    chk("peça criada com a capa escolhida e a galeria, tudo do R2", len(cr) == 1 and cr[0]["fotoUrlExistente"].startswith("https://tenkiter-midia.") and cr[0]["fotoUrlExistente"].endswith("a1.jpg") and cr[0]["fotosGaleriaExistentes"].endswith("a2.jpg"), cr[:1])
+    chk("produto criado com a capa escolhida e a galeria, tudo do R2", len(cr) == 1 and cr[0]["fotoUrlExistente"].startswith("https://tenkiter-midia.") and cr[0]["fotoUrlExistente"].endswith("a1.jpg") and cr[0]["fotosGaleriaExistentes"].endswith("a2.jpg"), cr[:1])
     chk("Worker do Instagram foi avisado (rascunho = aceito)", st["ig"]["rasc"][0]["status"] == "aceito")
     chk("sem erro de JavaScript", not errs, errs)
     b.close()
@@ -211,7 +211,7 @@ with sync_playwright() as p:
     for i in range(3):
         pg.fill("#ig-l-%d-preco" % i, "80"); pg.fill("#ig-l-%d-cat" % i, "Vestido")
         if pg.locator("input.ig-lg[data-i='%d']" % i).count() and not pg.locator("input.ig-lg[data-i='%d']:checked" % i).count(): pg.locator("input.ig-lg[data-i='%d']" % i).first.check()
-        if not pg.input_value("#ig-l-%d-nome" % i).strip(): pg.fill("#ig-l-%d-nome" % i, "Peça %d" % i)
+        if not pg.input_value("#ig-l-%d-nome" % i).strip(): pg.fill("#ig-l-%d-nome" % i, "Produto %d" % i)
     pg.click("[data-ig=loteSalvar]"); pg.wait_for_timeout(7000)
     cr = [x for x in log if x.get("action") == "create"]
     chk("3 produtos criados, cada um com o seu nome", len(cr) == 3 and len({c.get("nome") for c in cr}) >= 2, [(c.get("nome")) for c in cr])

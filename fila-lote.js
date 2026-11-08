@@ -55,11 +55,11 @@
   }
 
   /* ---------- textos ---------- */
-  const rotulo = (p) => (p && (p.codigo || p.nome)) || 'a peça';
+  const rotulo = (p) => (p && (p.codigo || p.nome)) || 'o produto';
   const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
   function erroLegivel(r, padrao) {
     if (r && r.semPermissao) return 'Sua conta não tem permissão para isso. Fale com a gestão.';
-    if (r && r.semRede) return 'Sem conexão com o servidor agora. Confira a internet e toque em “Tentar de novo”.';
+    if (r && r.semRede) return 'Sem conexão. Verifique a internet e tente de novo.';
     const t = String((r && r.erro) || '').trim();
     if (t && t.length < 220 && !/[{}<>]|Exception|TypeError|HTTP \d/.test(t)) return t;
     return padrao;
@@ -72,7 +72,7 @@
         return { tit: 'Pronto: ' + rotulo(j.destino) + (r.fotos != null ? ' ficou com ' + plural(Number(r.fotos), 'foto', 'fotos') : ' recebeu as fotos') + '; ' + plural(Number(r.arquivados != null ? r.arquivados : j.origens.length), 'arquivada', 'arquivadas') + '.', sub: '' };
       }
       if (j.estado === 'erro') return { tit: 'Não consegui juntar em ' + rotulo(j.destino) + '.', sub: j.msg || 'Tente de novo.' };
-      return { tit: 'Juntando ' + n + ' peças em ' + rotulo(j.destino) + '…', sub: 'Pode continuar trabalhando. Se fechar a página, continua quando você abrir de novo.' };
+      return { tit: 'Juntando ' + n + ' produtos em ' + rotulo(j.destino) + '…', sub: 'Pode continuar trabalhando. Se fechar a página, continua quando você abrir de novo.' };
     }
     const n = j.fotos.length, novos = n - 1, feitos = Object.keys(j.criados || {}).length;
     const fam = j.familia && j.familia.modo !== 'nao';
@@ -151,7 +151,7 @@
   async function chamar(corpo, padrao) {
     if (typeof cfg.chamar !== 'function') throw falha('Abra a Gestão para terminar este trabalho.');
     let r;
-    try { r = await cfg.chamar(corpo); } catch (e) { throw falha('Sem conexão com o servidor agora. Confira a internet e toque em “Tentar de novo”.', true); }
+    try { r = await cfg.chamar(corpo); } catch (e) { throw falha('Sem conexão. Verifique a internet e tente de novo.', true); }
     if (!r || !r.ok) throw falha(erroLegivel(r, padrao), !!(r && r.semRede));
     return r;
   }
@@ -171,7 +171,7 @@
     }
     // 2) a peça original fica só com a 1ª foto (as outras já estão nos produtos novos: nada se perde). Repetir dá o mesmo resultado.
     if (!j.originalOk) {
-      await chamar(Object.assign({}, j.baseOriginal, { action: 'update', id: j.produto.id, fotoUrlExistente: j.fotos[0], fotosGaleriaExistentes: '' }), 'Os produtos novos foram criados, mas não consegui tirar as fotos extras da peça original. Tente de novo.');
+      await chamar(Object.assign({}, j.baseOriginal, { action: 'update', id: j.produto.id, fotoUrlExistente: j.fotos[0], fotosGaleriaExistentes: '' }), 'Os produtos novos foram criados, mas não consegui tirar as fotos extras do produto original. Tente de novo.');
       j.originalOk = true; await guardar(j);
     }
     // 3) família (opcional): ligar de novo as mesmas peças não muda nada

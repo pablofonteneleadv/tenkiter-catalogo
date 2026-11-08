@@ -1,4 +1,4 @@
-"""v4.21 — "Consultar valor" (peça sem preço): catálogo, sacola, cadastro único e em massa, edição, lista, Alterar preços em lote e Postagens.
+"""v4.21 — "Consultar valor" (produto sem preço): catálogo, sacola, cadastro único e em massa, edição, lista, Alterar preços em lote e Postagens.
 O Apps Script (mock.py, versao 4.20) e a internet são SIMULADOS.   python3 tests/consultar_valor.py"""
 import sys, os, re, json
 from urllib.parse import unquote
@@ -20,7 +20,7 @@ def catalogo(b, versao="4.20"):
     ctx.add_init_script("window.TK_PEDIDOS=true;")  # cenário de pedido opcional, desligado por padrão no site
     log = []; st = install(ctx, log=log, versao=versao)
     for q in st["produtos"][:3]: q["Status"] = "Ativo"; q["Estoque"] = 5
-    st["produtos"][0]["Preco"] = 0            # a primeira peça é "Consulte valor"
+    st["produtos"][0]["Preco"] = 0            # o primeiro produto é "Consulte valor"
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept()); pg.add_init_script(STUB)
     pg.goto(BASE + "index.html"); pg.wait_for_selector(".card"); pg.wait_for_timeout(900)
     return ctx, pg, st, log, erros
@@ -34,7 +34,7 @@ def admin(b, versao="4.20", perms=PERMS_ALL):
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(1800)
     return ctx, pg, st, log, erros
 
-def preencher(pg, nome="Peça sob consulta", preco=None):
+def preencher(pg, nome="Produto sob consulta", preco=None):
     pg.fill("#nome", nome)
     if preco: pg.fill("#preco", preco)
     if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
@@ -44,7 +44,7 @@ def preencher(pg, nome="Peça sob consulta", preco=None):
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
 
-    print("== Catálogo: peça sem preço mostra 'Consulte valor' ==")
+    print("== Catálogo: produto sem preço mostra 'Consulte valor' ==")
     ctx, pg, st, log, er = catalogo(b)
     pid = st["produtos"][0]["ID"]
     card = pg.locator('.card[data-id="%s"]' % pid)
@@ -58,14 +58,14 @@ with sync_playwright() as p:
     chk("ordenar por maior preço: também no fim", ids and ids[-1] == pid, ids[-3:])
     pg.select_option("#ordem", "recentes"); pg.wait_for_timeout(300)
     pg.evaluate("(()=>{const e=document.getElementById('preco-max'); e.value='5000'; e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}))})()"); pg.wait_for_timeout(500)
-    chk("filtro de preço máximo NÃO traz a peça sem preço", pg.locator('.card[data-id="%s"]' % pid).count() == 0)
+    chk("filtro de preço máximo NÃO traz o produto sem preço", pg.locator('.card[data-id="%s"]' % pid).count() == 0)
     pg.evaluate("(()=>{const e=document.getElementById('preco-max'); e.value=''; e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}))})()"); pg.wait_for_timeout(500)
     chk("limpando o filtro ela volta", pg.locator('.card[data-id="%s"]' % pid).count() == 1)
 
-    print("== Catálogo: janela da peça, título e WhatsApp ==")
+    print("== Catálogo: janela do produto, título e WhatsApp ==")
     pg.locator('.card[data-id="%s"] .abrir-peca' % pid).click(); pg.wait_for_selector("#overlay.aberto"); pg.wait_for_timeout(500)
     m = pg.inner_text("#modal-conteudo")
-    chk("janela da peça mostra 'Consulte valor' e não R$ 0,00 nem 'à vista'", "Consulte valor" in m and "R$ 0,00" not in m and "à vista" not in m.split("Consulte valor")[0][-40:], m[:300])
+    chk("janela do produto mostra 'Consulte valor' e não R$ 0,00 nem 'à vista'", "Consulte valor" in m and "R$ 0,00" not in m and "à vista" not in m.split("Consulte valor")[0][-40:], m[:300])
     chk("título da página usa 'Consulte valor'", "Consulte valor" in pg.title() and "R$" not in pg.title(), pg.title())
     ld = pg.evaluate("(document.getElementById('ld-produto')||{}).textContent||''")
     chk("dados estruturados sem oferta de preço", ld and "offers" not in ld, ld[:120])
@@ -75,25 +75,25 @@ with sync_playwright() as p:
     chk("mensagem do WhatsApp pergunta o valor (sem R$ 0,00)", op and "saber o valor" in op[-1] and "R$ 0,00" not in op[-1], op)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
 
-    print("== Catálogo: sacola mistura peça com preço e sem preço ==")
+    print("== Catálogo: sacola mistura produto com preço e sem preço ==")
     pg.evaluate("window.__opened=[]")
     pg.locator('.card[data-id="%s"] .ac-sacola' % pid).click(); pg.wait_for_timeout(200)
     outro = st["produtos"][1]["ID"]
     pg.locator('.card[data-id="%s"] .ac-sacola' % outro).click(); pg.wait_for_timeout(200)
     pg.click("#btn-sacola-header"); pg.wait_for_selector("#overlay-sacola.aberto"); pg.wait_for_timeout(400)
     s = pg.inner_text("#sacola-conteudo")
-    chk("sacola: a peça sem preço aparece como 'Consulte valor'", "Consulte valor" in s, s[:300])
+    chk("sacola: o produto sem preço aparece como 'Consulte valor'", "Consulte valor" in s, s[:300])
     esperado = "R$ %.2f" % (st["produtos"][1]["Preco"] * 0.9)
     tot = pg.inner_text(".bc-total strong")
-    chk("total soma só a peça COM preço e avisa que tem peça a consultar", esperado.replace(".", ",") in tot and "consulta" in tot.lower(), (tot, esperado))
+    chk("total soma só o produto COM preço e avisa que tem produto a consultar", esperado.replace(".", ",") in tot and "consulta" in tot.lower(), (tot, esperado))
     pg.fill("#ped-nome", "Maria Souza"); pg.fill("#ped-whats", "88 99876-5432"); pg.click("#btn-enviar-sacola"); pg.wait_for_timeout(1500)
     cria = [x for x in log if x.get("action") == "criarPedido"]
-    chk("o pedido leva as duas peças ao servidor", len(cria) == 1 and len(cria[0].get("itens", [])) == 2, cria)
+    chk("o pedido leva os dois produtos ao servidor", len(cria) == 1 and len(cria[0].get("itens", [])) == 2, cria)
     op = abertos(pg)
-    chk("mensagem do pedido: 'consulte o valor' na peça sem preço e total sem R$ 0,00 enganoso", op and "consulte o valor" in op[-1] and "a consultar" in op[-1], op[-1:] if op else op)
+    chk("mensagem do pedido: 'consulte o valor' no produto sem preço e total sem R$ 0,00 enganoso", op and "consulte o valor" in op[-1] and "a consultar" in op[-1], op[-1:] if op else op)
     chk("sem erro de JavaScript no catálogo", not er, er); ctx.close()
 
-    print("== Admin: cadastro de UMA peça com 'Consultar valor' ==")
+    print("== Admin: cadastro de UM produto com 'Consultar valor' ==")
     ctx, pg, st, log, er = admin(b)
     pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
     chk("backend 4.20: a opção 'Consultar valor' aparece", pg.locator("#linha-consulta").is_visible())
@@ -112,12 +112,12 @@ with sync_playwright() as p:
     print("== Admin: cadastro com preço escrito NÃO manda a marca ligada ==")
     pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
     pg.set_input_files("#galeria-input", os.path.join(S, "cv2.jpg")); pg.wait_for_timeout(1500)
-    preencher(pg, "Peça com preço", "89.90")
+    preencher(pg, "Produto com preço", "89.90")
     pg.click("#btn-salvar"); pg.wait_for_timeout(2500)
     cr = [x for x in log if x.get("action") == "create"]
     chk("create com valor escrito: consultarValor:false e preço corrigido pela regra ,99 (89,90 → 89.99)", len(cr) == 2 and cr[1].get("consultarValor") is False and cr[1].get("preco") == "89.99", cr and cr[-1])
 
-    print("== Admin: várias peças de uma vez com 'Consultar valor' ==")
+    print("== Admin: vários produtos de uma vez com 'Consultar valor' ==")
     pg.click("#details-ferramentas > summary") if pg.locator("#details-ferramentas[open]").count() == 0 and False else None
     pg.evaluate("document.getElementById('menu-cad-varias') && document.getElementById('menu-cad-varias').click()"); pg.wait_for_timeout(500)
     pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
@@ -126,13 +126,13 @@ with sync_playwright() as p:
     pg.check("#consultar-valor"); pg.wait_for_timeout(200)
     pg.click("#btn-salvar"); pg.wait_for_timeout(3500)
     cr = [x for x in log if x.get("action") == "create" and x.get("nome") == "Lote sob consulta"]
-    chk("lote: cada peça vai com consultarValor:true", len(cr) == 2 and all(x.get("consultarValor") is True and x.get("preco") == "" for x in cr), cr)
+    chk("lote: cada produto vai com consultarValor:true", len(cr) == 2 and all(x.get("consultarValor") is True and x.get("preco") == "" for x in cr), cr)
 
     print("== Admin: lista, editar e voltar ao valor escrito ==")
     st["produtos"][2]["Preco"] = 0
     pg.reload(); pg.wait_for_timeout(2000)
     linha = pg.locator(".produto", has_text=st["produtos"][2]["Codigo"]).first
-    chk("a lista do admin mostra 'Consulte valor' na peça sem preço", "Consulte valor" in (linha.text_content() or "") and "R$ 0,00" not in (linha.text_content() or ""), (linha.text_content() or "")[:200])
+    chk("a lista do admin mostra 'Consulte valor' no produto sem preço", "Consulte valor" in (linha.text_content() or "") and "R$ 0,00" not in (linha.text_content() or ""), (linha.text_content() or "")[:200])
     linha.locator(".btn-editar").evaluate("e=>e.click()"); pg.wait_for_timeout(800)
     chk("editar: a caixa já vem marcada e o preço travado", pg.is_checked("#consultar-valor") and pg.is_disabled("#preco"))
     pg.uncheck("#consultar-valor"); pg.wait_for_timeout(200)
@@ -180,7 +180,7 @@ with sync_playwright() as p:
     chk("Alterar preços só oferece o % (como antes)", pg.locator("#overlay-precos .precos-modo:visible").count() == 1)
     ctx.close()
 
-    print("== Postagens: peça sem preço vira 'Consulte valor' sozinha, junto com peças com preço ==")
+    print("== Postagens: produto sem preço vira 'Consulte valor' sozinha, junto com produtos com preço ==")
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block", permissions=["clipboard-read", "clipboard-write"])
     ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=400;")
     log = []; st = install(ctx, log=log, versao="4.20"); st["midia"]["modo"] = "ok"
@@ -191,14 +191,14 @@ with sync_playwright() as p:
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
     pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(900)
     cartoes = pg.locator(".po-card")
-    chk("a grade de peças da aba mostra 'Consulte valor' (e não R$ 0,00)", "Consulte valor" in pg.inner_text("#po-corpo") and "R$ 0,00" not in pg.inner_text("#po-corpo"))
+    chk("a grade de produtos da aba mostra 'Consulte valor' (e não R$ 0,00)", "Consulte valor" in pg.inner_text("#po-corpo") and "R$ 0,00" not in pg.inner_text("#po-corpo"))
     pg.locator(".po-card", has_text=st["produtos"][0]["Codigo"]).first.click(); pg.locator(".po-card", has_text=st["produtos"][1]["Codigo"]).first.click(); pg.wait_for_timeout(300)
     pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(900)
     corpo = pg.inner_text("#po-corpo")
-    chk("em lote: a peça sem preço vem marcada e travada em 'sem preço'; a outra, com a caixa livre", pg.locator("[data-sp]:checked:disabled").count() >= 1 and pg.locator("[data-sp]:not(:checked):not(:disabled)").count() >= 1, corpo[:300])
+    chk("em lote: o produto sem preço vem marcada e travada em 'sem preço'; a outra, com a caixa livre", pg.locator("[data-sp]:checked:disabled").count() >= 1 and pg.locator("[data-sp]:not(:checked):not(:disabled)").count() >= 1, corpo[:300])
     _c = pg.inner_text("#po-corpo"); i0 = _c.find("R$ 0,00")
     if i0 >= 0: print("   contexto R$ 0,00:", repr(_c[max(0, i0 - 120):i0 + 60]))
-    chk("a legenda da peça sem preço fala 'Consulte valor' (nunca R$ 0,00)", "R$ 0,00" not in pg.inner_text("#po-corpo") and pg.locator("#po-leg").count() == 1 and ("Consulte valor" in pg.input_value("#po-leg") if pg.locator("#po-leg").count() else True), pg.input_value("#po-leg")[:200] if pg.locator("#po-leg").count() else "sem campo")
+    chk("a legenda do produto sem preço fala 'Consulte valor' (nunca R$ 0,00)", "R$ 0,00" not in pg.inner_text("#po-corpo") and pg.locator("#po-leg").count() == 1 and ("Consulte valor" in pg.input_value("#po-leg") if pg.locator("#po-leg").count() else True), pg.input_value("#po-leg")[:200] if pg.locator("#po-leg").count() else "sem campo")
     chk("sem erro de JavaScript nas Postagens", not er, er); ctx.close()
 
     b.close()

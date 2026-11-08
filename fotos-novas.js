@@ -9,7 +9,7 @@
 (function () {
   'use strict';
   var CHAVE = 'tk_fotos_novas_v1', VALIDADE = 10 * 60 * 1000, LIMITE_MS = 2500;
-  var mapa = {};                                   // ID da peça → ms da última foto nova
+  var mapa = {};                                   // ID do produto → ms da última foto nova
 
   function usar(obj) {
     var m = {};
@@ -88,7 +88,7 @@
     var porUrl = {}, der = (resp && resp.derivadas) || {}, legado = (resp && Array.isArray(resp.legado)) ? resp.legado : [], cachePeca = {};
     var marcar = function (m, u, em) { if (u && em && (!m[u] || m[u] < em)) m[u] = em; };
     Object.keys((resp && resp.porUrl) || {}).forEach(function (u) { marcar(porUrl, u, resp.porUrl[u]); });
-    legado.forEach(function (x) { (x.u || []).forEach(function (u) { marcar(porUrl, u, x.em); }); });   // endereço igual vale para qualquer peça
+    legado.forEach(function (x) { (x.u || []).forEach(function (u) { marcar(porUrl, u, x.em); }); });   // endereço igual vale para qualquer produto
     function daPeca(p) {
       var id = String((p && p.ID) || ''); if (cachePeca[id]) return cachePeca[id];
       var m = {}, fotos = fotosDe(p), cod = String((p && p.Codigo) || '');
