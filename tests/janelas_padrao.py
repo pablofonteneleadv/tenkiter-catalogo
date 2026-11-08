@@ -274,7 +274,7 @@ with sync_playwright() as p:
         pg = ctx.new_page(); er = []
         pg.on("pageerror", lambda e: er.append(str(e)))
         pg.on("dialog", lambda d: (DIALOGOS.append(d.message), d.accept() if RESPOSTA["aceitar"] else d.dismiss()))
-        pg.goto(BASE + "disponibilidade-fixture"); pg.evaluate(boot.group(1))
+        pg.goto(BASE + "disponibilidade-fixture"); pg.add_script_tag(url=BASE + "common.js"); pg.evaluate(boot.group(1))
         pg.click("#abrir"); pg.wait_for_selector("#ms-edicao-tamanhos")
         c = caixa(pg, ".tk-disp-fechar")
         chk("disponibilidade: ✕ 44×44 contornado", ehFechar(c), c)
@@ -287,7 +287,7 @@ with sync_playwright() as p:
         RESPOSTA["aceitar"] = False; DIALOGOS.clear(); pg.mouse.click(4, 4); pg.wait_for_timeout(300)
         chk("disponibilidade: com marcação, toque fora PERGUNTA e recusar mantém a janela", pg.locator("#ms-edicao-tamanhos").count() == 1 and len(DIALOGOS) == 1, DIALOGOS)
         chk("disponibilidade: a pergunta diz a consequência", bool(DIALOGOS) and "Descartar" in DIALOGOS[0] and "salvo" in DIALOGOS[0], DIALOGOS)
-        DIALOGOS.clear(); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+        DIALOGOS.clear(); pg.locator(".tk-disp-fechar").focus(); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         chk("disponibilidade: Esc também pergunta", pg.locator("#ms-edicao-tamanhos").count() == 1 and len(DIALOGOS) == 1)
         DIALOGOS.clear(); volta(pg, 600)
         chk("disponibilidade: Voltar pergunta e, recusando, a janela continua (e o próximo Voltar ainda funciona)",

@@ -35,8 +35,10 @@ html body .tk-fechar, html body .sheet-x {
   min-width: 44px !important; min-height: 44px !important; padding: 0 !important; margin: 0;
   border-radius: 8px !important; background: transparent !important; border: 1px solid var(--tkj-borda) !important;
   color: var(--tkj-texto) !important; font: 700 1rem/1 "Inter", -apple-system, Roboto, Arial, sans-serif !important;
-  cursor: pointer; display: inline-flex !important; align-items: center; justify-content: center;
+  cursor: pointer; align-items: center; justify-content: center;
 }
+/* display fora do !important: o módulo pode esconder o botão (ex.: app Android esconde o ✕ do Mensageiro) */
+:where(.tk-fechar, .sheet-x) { display: inline-flex; }
 html body .tk-fechar:hover, html body .sheet-x:hover { background: #f3efe8 !important; }
 html body .tk-fechar .tk-ico { width: 18px; height: 18px; }
 /* sobre foto (detalhe do produto): mesmo formato, fundo claro para ler em cima da foto */
@@ -49,10 +51,13 @@ html body .tk-fechar.tk-fechar-escuro:hover { background: rgba(255, 255, 255, .1
 
 /* ---------- 3. aba / segmento ativo único ---------- */
 /* Escolha marcada = preto com texto branco (aria-selected="true"). Segmentos (alternância) usam aria-pressed. */
-html body .tk-abas { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+html body .tk-abas { display: flex; overflow-x: auto; scrollbar-width: none; }
+:where(.tk-abas) { gap: 6px; }
+/* medidas e fonte com especificidade zero: o módulo pode ajustar (ex.: rótulo longo em 320 px); cor, fundo e borda não mudam */
+:where(.tk-abas) > :where([role=tab], button) { min-height: 44px; padding: 0 14px; font: 600 .95rem "Inter", -apple-system, Roboto, Arial, sans-serif; }
 html body .tk-abas > [role=tab], html body .tk-abas > button {
-  flex: none; box-sizing: border-box; min-height: 44px; padding: 0 14px; border-radius: 8px !important; border: 1px solid var(--tkj-borda) !important;
-  background: #fff !important; color: var(--tkj-texto) !important; font: 600 .95rem "Inter", -apple-system, Roboto, Arial, sans-serif; cursor: pointer;
+  flex: none; box-sizing: border-box; border-radius: 8px !important; border: 1px solid var(--tkj-borda) !important;
+  background: #fff !important; color: var(--tkj-texto) !important; cursor: pointer;
   box-shadow: none !important; white-space: nowrap;
 }
 html body .tk-abas > [role=tab][aria-selected="true"], html body .tk-abas > button[aria-pressed="true"] {

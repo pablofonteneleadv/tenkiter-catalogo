@@ -716,7 +716,7 @@
       }
       /* v7.40.35: em zoom alto o texto fica maior do que os 44px da aba. Em vez de
          cortar a palavra, a barra passa a rolar na horizontal (a altura não muda). */
-      .sheet-mensagens .ms-abas{padding:0 8px;flex:none;overflow-y:hidden}.sheet-mensagens .ms-aba{position:relative;min-height:44px;padding:0 3px;font-size:.73rem;font-weight:650}
+      .sheet-mensagens .ms-abas{padding:0 8px;gap:2px;flex:none;overflow-y:hidden}.sheet-mensagens .ms-aba{position:relative;min-height:44px;padding:0 3px;font-size:.73rem;font-weight:650}
       /* v7.40.35 — fluxo por abas. Quatro rótulos longos em 320px: a aba quebra em no
          máximo 2 linhas e a barra mantém os 48px, então o cabeçalho NÃO cresce. */
       /* v7.40.35: texto centralizado com folga de 6px no pé, para o indicador laranja

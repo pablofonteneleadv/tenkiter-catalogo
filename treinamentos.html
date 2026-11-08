@@ -3047,6 +3047,7 @@ async function carregarAcessos(){
   if (state.view === 'admin' && state.adminTab === 'acessos'){ pintarFiltroAcessos(); pintarAcessos(); }
 }
 /** Plano B da foto: o script lê o arquivo no Drive e devolve a imagem (não depende do link público). */
+window.fotoFallback = fotoFallback;
 function fotoFallback(img, alvo, tipo){
   if (img.dataset.fb || !state.user){ img.style.visibility = 'hidden'; return; }
   img.dataset.fb = '1';
