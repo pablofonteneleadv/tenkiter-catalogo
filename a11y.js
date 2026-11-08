@@ -342,7 +342,7 @@
     } catch (e) { return 0; }
   };
   const FACETAS = () => {
-    [['chips-categoria', 'Categoria'], ['chips-genero', 'Público'], ['chips-cor', 'cor'], ['chips-tamanho', 'tamanho']].forEach(([id, c]) => {
+    [['chips-categoria', 'Categoria'], ['chips-genero', 'Genero'], ['chips-cor', 'cor'], ['chips-tamanho', 'tamanho']].forEach(([id, c]) => {
       const box = document.getElementById(id);
       if (!box) return;
       box.querySelectorAll('button.chip').forEach((el) => {

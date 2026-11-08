@@ -84,6 +84,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
@@ -91,6 +93,8 @@ jobs:
         run: bash scripts/ci/check_js.sh
       - name: Estrutura das páginas HTML
         run: python3 scripts/ci/check_html.py
+      - name: CSS/JS alterado exige ?v= novo nas páginas
+        run: python3 scripts/ci/check_versao_assets.py origin/main
       - name: Skill obrigatória de estética humana
         run: python3 scripts/ci/check_ux_skill.py
       - name: Padrões obrigatórios do site (catraca; docs/ia/padroes-site.md)
