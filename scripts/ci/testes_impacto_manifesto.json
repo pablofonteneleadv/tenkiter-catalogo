@@ -219,6 +219,9 @@
       "midia",
       "postagens"
     ],
+    "tests/postagens_multi_sem_limite.py": [
+      "postagens"
+    ],
     "tests/postagens_prova_falhas_ui.py": [
       "postagens"
     ],
