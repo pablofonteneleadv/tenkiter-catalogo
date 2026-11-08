@@ -77,5 +77,13 @@ html body main:focus, html body [tabindex="-1"]:focus { outline: none; }
 html.tk-travado, html.tk-travado body { overflow: hidden; }
 .overlay-sheet .sheet, .overlay-sheet-loja .modal, #overlay .modal { overscroll-behavior: contain; }
 
+/* ---------- 5b. nenhuma janela passa da largura da tela (celular Android): a folha nunca é mais larga que a tela e
+ * os blocos internos podem encolher (min-width:0 com :where = sem peso de especificidade). Rolagem lateral de
+ * uma faixa de abas/tabela fica só dentro da própria faixa (overflow-x:auto no componente). */
+.overlay-sheet .sheet, .overlay-sheet-loja .modal, #overlay .modal { max-width: 100%; box-sizing: border-box; overflow-x: hidden; }
+.overlay-sheet .sheet :where(div, section, form, header, label, fieldset, details, ul, ol, li) { min-width: 0; }
+.overlay-sheet .sheet :where(img, video, canvas, svg, table, pre, textarea, select, input) { max-width: 100%; }
+.overlay-sheet .sheet :where(p, h1, h2, h3, h4) { overflow-wrap: anywhere; }
+
 /* ---------- 6. altura das folhas: dvh com reserva em vh (declarada junto de cada folha: admin.html, catalogo.css, push.js) ---------- */
 @media (prefers-reduced-motion: reduce) { .tk-pular { transition: none; } }

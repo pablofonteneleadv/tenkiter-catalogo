@@ -30,6 +30,21 @@ Pagamento de dívida de padrão (catraca de `check_padroes.py`: 387 para 351 oco
 - Treinamentos e Instagram (Descartar com Desfazer) usam `TKAviso` no lugar de aviso próprio; o teste local do push usa `SITE_URL`.
 - `z-index` 20, 80 e 100 viraram `var(--z-sticky|menu|folha, N)` com o mesmo número (ordem das camadas igual, conferida por estilo calculado nas páginas tocadas).
 
+## 7.62.2 — janelas sempre cabem na tela e arquivos novos chegam certos
+
+- `janelas.css` e `a11y.js` agora têm `?v=` novo em todas as páginas (a correção das abas foi publicada sem trocar o número e o celular podia montar HTML novo com CSS velho).
+- Folhas e janelas nunca passam da largura da tela (`max-width:100%`, blocos podem encolher, títulos e parágrafos longos quebram; selos e botões não mudam de tamanho).
+- Novo check de CI `check_versao_assets.py`: CSS/JS alterado exige `?v=` novo nas páginas.
+- Contagens dos chips de Público (Feminino/Infantil/Masculino) voltam a aparecer na vitrine.
+
+
+## [7.62.0] - 2026-11-08
+
+- Postagens: "Usar os N produtos juntos" não tem mais teto de 8. O botão fica habilitado com qualquer quantidade e a seleção inteira vai para a postagem, cada foto com os dados do seu produto (antes a oitava cortava os demais em silêncio).
+- Prévias em grupos de dez, com "Anteriores / Próximas" e contagem ("1–10 de 100 fotos"): só esse grupo de canvases fica em memória no celular e o cache de imagens é limitado a 20.
+- Story com mais de 60 mídias avisa antes de subir arquivos (a fila aceita 60 postagens por envio) e mantém a seleção para enviar em etapas.
+- Substitui o PR #385 (parte de Postagens); a parte de registros de clientes/solicitações do #385 não entra nesta versão.
+
 ## [7.61.1] - 2026-11-08
 
 - Corrige as faixas de abas (Postagens, Avisos e outras): na 7.61.0 cada aba ficou com a largura da tela inteira e só a primeira aparecia (sumiram Fila, Postar à mão, Já postadas…). A regra única das abas agora fixa a largura pelo texto. Teste novo `tests/abas_visiveis.py` (falha no código anterior).
