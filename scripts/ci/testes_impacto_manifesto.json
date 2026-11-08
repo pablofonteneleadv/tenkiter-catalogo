@@ -395,8 +395,18 @@
       "treinamentos",
       "ci"
     ],
-    "tests/prova_resiliente.py": [
-      "treinamentos"
+    "tests/padrao_regras_dados.py": [
+      "catalogo",
+      "esteira",
+      "postagens",
+      "treinamentos",
+      "push"
+    ],
+    "tests/postagens_chave_ui.py": [
+      "postagens"
+    ],
+    "tests/worker_post_chave.js": [
+      "postagens"
     ]
   },
   "evidencias": {

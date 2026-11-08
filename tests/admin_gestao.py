@@ -156,8 +156,9 @@ with sync_playwright() as p:
     chk("estoque em lote enviado (alterarEstoque = 5)", len(bu) == 1 and bu[0].get("tipoAcao") == "alterarEstoque" and bu[0].get("valor") == 5 and len(bu[0].get("ids", [])) >= 10, bu[:1] and {k: bu[0][k] for k in ("tipoAcao", "valor")})
     chk("seleção é limpa depois do lote", pg.locator("#bulk-bar.ativa").count() == 0)
     pg.locator("#lista-produtos .produto-chk").nth(0).check(); pg.locator("#lista-produtos .produto-chk").nth(1).check(); pg.wait_for_timeout(200)
-    RESP["prompt"] = "Fantasia"; log.clear()
-    pg.click("#btn-bulk-categoria"); pg.wait_for_timeout(1500)
+    log.clear()
+    pg.click("#btn-bulk-categoria"); pg.wait_for_timeout(500)
+    pg.fill("#gl-cat-nova-in", "Fantasia"); pg.click("#gl-cat-nova-ok"); pg.wait_for_timeout(1500)   # Admin total pode criar nome novo
     bu = [x for x in log if x.get("action") == "bulkUpdate"]
     chk("categoria em lote enviada", len(bu) == 1 and bu[0].get("tipoAcao") == "alterarCategoria" and bu[0].get("valor") == "Fantasia" and len(bu[0].get("ids", [])) == 2, bu[:1])
     pg.locator("#lista-produtos .produto-chk").nth(0).check(); pg.wait_for_timeout(200)

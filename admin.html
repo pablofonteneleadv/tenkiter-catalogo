@@ -1657,6 +1657,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 
 <script src="common.js"></script>
+<script src="padrao-dados.js?v=7.57.0"></script>
 <script src="sessao-rapida.js?v=7.50.0"></script>
 <script src="fila-lote.js?v=7.50.0"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
@@ -2755,6 +2756,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   /* --- criar --- */
   function abrirCriacaoCategoria_(texto) {
+    if (listasSoAdmin_()) return;   // v7.57.0: trava no código, não só no CSS (como tamanhos e cores)
     editandoCat_ = null;
     document.getElementById('nova-categoria-linha').classList.add('aberto');
     ['cat-busca', 'cat-lista', 'btn-criar-categoria'].forEach(id => { document.getElementById(id).style.display = 'none'; });
@@ -2786,6 +2788,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       : '<div class="sug-titulo">Nenhuma categoria parecida. Pode criar.</div>';
   }
   async function adicionarNovaCategoria() {
+    if (listasSoAdmin_()) return;
     const input = document.getElementById('input-nova-categoria');
     const nome = limparNomeCategoria_(input.value);
     if (!nome) { input.focus(); return; }
@@ -3044,7 +3047,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     el.textContent = falta.length ? 'Falta: ' + falta.map(x => x[1]).join(', ') + '.' : 'Tudo certo! Pode salvar.';
     const consultar = sincConsulta_(), p = precoDigitado_();
     { const r = precoTerminacao(p);   // v4.25: o à vista do site sempre termina em ,99 ou ,49 (o valor digitado é ajustado)
-      document.getElementById('dica-avista').textContent = consultar ? 'No catálogo vai aparecer “Consulte valor”.' : (r.valido ? (r.mudou ? 'Vai ficar ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + ' (o site sempre termina em ,99 ou ,49).' : 'À vista (10% de desconto): ' + formatarReal(r.avista)) : ''); }
+      document.getElementById('dica-avista').textContent = consultar ? 'No catálogo vai aparecer “Consulte valor”.' : (r.valido ? (r.mudou ? 'Vai ficar ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + ' (o site sempre termina em ,99 ou ,49).' : 'À vista ('+(window.TKPadrao?TKPadrao.descontoTxt():'10%')+' de desconto): ' + formatarReal(r.avista)) : ''); }
     sincRapidos_();
   }
   function mostrarFaltas_(falta) {
@@ -3984,7 +3987,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     } catch (e) {
       const trecho = String(texto || '').slice(0, 140).replace(/\s+/g, ' ').trim();
       window.logDebug_('← HTTP ' + r.status + ' em ' + ms + 'ms -- resposta não era JSON: "' + trecho + '"');
-      throw new Error('resposta inesperada do servidor, HTTP ' + r.status + (trecho ? ': "' + trecho + '"' : ' (vazia)'));
+      throw new Error('O servidor respondeu de um jeito inesperado. Tente de novo em instantes.');   // v7.57.0: o detalhe técnico fica só no registro de depuração acima
     }
   }
 
@@ -4691,6 +4694,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (ordem === 'antigas') lista = lista.slice().reverse();
     else if (ordem === 'nome') lista = lista.slice().sort((a, b) => String(a.Nome || '').localeCompare(String(b.Nome || ''), 'pt-BR'));
     else if (ordem === 'preco-maior' || ordem === 'preco-menor') { const dir = ordem === 'preco-maior' ? -1 : 1; lista = lista.slice().sort((a, b) => { const ca = ehConsulta(a), cb = ehConsulta(b); if (ca || cb) return ca === cb ? 0 : (ca ? 1 : -1); return dir * (Number(a.Preco) - Number(b.Preco)); }); }   // "Consulte valor" sempre no fim
+    else if (ordem === 'recentes' && window.TKFotosNovas) lista = window.TKFotosNovas.ordenar(lista);   // v7.57.0: peça com FOTO NOVA sobe, como na vitrine, no Postador e na Esteira
     return lista;
   }
 
@@ -4749,7 +4753,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   const icA_ = (nome, reserva) => (window.TKIcone && TKIcone(nome)) || reserva;
   /** v7.50.0: quantas fotos a peça tem (capa + galeria, sem repetir). */
   function fotosDaPeca_(p) { const v = []; [p && p.Foto_URL].concat(String((p && p.Fotos_Galeria) || '').split(',')).forEach((u) => { u = String(u || '').trim(); if (u && v.indexOf(u) === -1) v.push(u); }); return v; }
-  function qtdFotos_(p) { return fotosDaPeca_(p).length; }
+  function qtdFotos_(p) { return window.TKPadrao ? TKPadrao.contarFotos(p) : fotosDaPeca_(p).length; }   // v7.57.0: mesma contagem da vitrine (padrao-dados.js)
   function renderizarProdutos() {
     const busca = semAcento_(document.getElementById('busca-admin').value);
     const container = document.getElementById('lista-produtos');
@@ -6508,26 +6512,26 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     aplicarPadroesNovo_();
   })();
 </script>
-<script src="admin-gestao.js?v=7.19.0"></script>
+<script src="admin-gestao.js?v=7.57.0"></script>
 <script src="admin-push.js?v=7.19.0"></script>
-<script src="admin-conexoes.js?v=7.38.2"></script>
+<script src="admin-conexoes.js?v=7.57.0"></script>
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.40.28">
-<script src="admin-disponibilidade.js?v=7.41.0"></script>
-<script src="admin-familias.js?v=7.50.0"></script>
+<script src="admin-disponibilidade.js?v=7.57.0"></script>
+<script src="admin-familias.js?v=7.57.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.40.45">
 <script src="mensagens-presenca.js?v=7.40.43"></script>
 <script src="mensagens-gestor.js?v=7.40.43"></script>
-<script src="admin-mensagens.js?v=7.56.2"></script>
-<script src="admin-instagram.js?v=7.52.0"></script>
+<script src="admin-mensagens.js?v=7.57.0"></script>
+<script src="admin-instagram.js?v=7.57.0"></script>
 <script src="admin-caixa-fotos.js?v=7.52.0"></script>
 <link rel="stylesheet" href="pedir-fotos.css?v=1">
-<script src="pedir-fotos.js?v=1"></script>
+<script src="pedir-fotos.js?v=7.57.0"></script>
 <script src="video-validation.js?v=7.55.8"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
-<script src="admin-postagens.js?v=7.56.1"></script>
-<script src="admin-fotoia.js?v=7.53.0"></script>
+<script src="admin-postagens.js?v=7.57.0"></script>
+<script src="admin-fotoia.js?v=7.57.0"></script>
 <script src="admin-enquadrar.js?v=7.28.0"></script>
 <script src="admin-capa-video.js"></script>
 <script src="nav.js?v=7.38.2" data-ativo="gestao"></script>
@@ -6578,7 +6582,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 </script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
-<script src="push.js"></script>
+<script src="push.js?v=7.57.0"></script>
 
 <script>
 /* Atalhos "O que fazer agora": só levam a funções que já existem (nada foi removido). */

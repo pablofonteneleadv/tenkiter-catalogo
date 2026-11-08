@@ -2103,6 +2103,21 @@ export async function rotasFotosCliente(env, req, url, J) {     // /cliente/foto
   if (url.pathname !== '/cliente/foto' || req.method !== 'POST') return null;
   const info = await infoSessao(env, req); if (!info) return J({ ok: false, erro: 'Entre na sua conta para enviar a foto.' }, 401);
   await iniciar(env);
+  /* v7.57.0: chave de operação (?op=): a mesma foto reenviada depois de um "sem confirmação" devolve o mesmo registro e não cria outro. */
+  const opCru = String(url.searchParams.get('op') || '');
+  if (opCru && !/^[A-Za-z0-9_-]{8,64}$/.test(opCru)) return J({ ok: false, erro: 'Atualize a página e tente de novo.' }, 400);
+  if (!opCru) return enviarFotoCliente_(env, req, url, J, info);
+  const chaveOp = 'fc_op_' + await sha(info.whats + ':' + opCru), anteriorOp = await cfgGet(env, chaveOp);
+  if (anteriorOp) { let x = {}; try { x = JSON.parse(anteriorOp); } catch (_) {} return x.id ? J({ ok: true, id: x.id, repetido: true }) : J({ ok: false, erro: 'A foto anterior ainda está sendo conferida. Espere um pouco e toque de novo.' }, 409); }
+  const reservaOp = await env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) VALUES(?,?)').bind(chaveOp, JSON.stringify({ em: agora() })).run();
+  if (!reservaOp.meta || !reservaOp.meta.changes) return J({ ok: false, erro: 'Essa foto já está sendo enviada. Espere um pouco e toque de novo.' }, 409);
+  const resp = await enviarFotoCliente_(env, req, url, J, info);
+  let corpoOp = null; try { corpoOp = await resp.clone().json(); } catch (_) {}
+  if (resp.status === 200 && corpoOp && corpoOp.ok) await cfgSet(env, chaveOp, JSON.stringify({ em: agora(), id: corpoOp.id || 1 }));
+  else await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chaveOp).run();   // falha definitiva: a mesma chave pode tentar de novo
+  return resp;
+}
+async function enviarFotoCliente_(env, req, url, J, info) {
   const whats = info.whats, desde = new Date(Date.now() - 86400000).toISOString();
   const dia = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM foto_cliente WHERE whats=? AND origem='cliente' AND criado_em>?").bind(whats, desde).first()) || {}).n) || 0;
   if (dia >= FOTOS_POR_DIA_CLIENTE) return J({ ok: false, erro: 'Você já enviou ' + FOTOS_POR_DIA_CLIENTE + ' fotos hoje. Amanhã dá para mandar mais. 🧡' }, 429);
@@ -2223,6 +2238,30 @@ function esperaCotaPost_(p,cotas){
   const limites=bucketsDoPost(p.tipo,p.canal).map(b=>({canal:b,...cotas.canais[b]}));if(canalUsaInstagram_(p.canal))limites.push({canal:'instagram',...cotas.instagram});
   const bloqueios=limites.filter(c=>c.usadas>=c.limite);if(!bloqueios.length)return null;
   return {motivo:'limite24h',limites:bloqueios,retomaEm:bloqueios.map(b=>b.liberaEm).filter(Boolean).sort().at(-1)||''};
+}
+/* v7.57.0: chave de operação do POST /post. A tela gera um idLocal e o reusa se a pessoa tocar de novo sem confirmação; a mesma chave devolve a
+ * MESMA resposta e nunca cria outra postagem (padrão de /post/retomar-pendentes e Mensagens). Sem idLocal (tela antiga em cache) o envio segue como antes.
+ * Falha definitiva (validação, limite) libera a chave para a pessoa corrigir e reenviar; falha inesperada deixa a chave "em verificação". */
+async function postComChave_(env,req,b,J,executar){
+  const idLocal=b&&b.idLocal!=null?String(b.idLocal):'';
+  if(!idLocal)return executar();
+  if(!/^[A-Za-z0-9_-]{8,64}$/.test(idLocal))return J({ok:false,erro:'Atualize a tela de postagens e tente de novo.'},400);
+  const lista=Array.isArray(b.posts)?b.posts:[b];
+  const assinatura=await sha(JSON.stringify([lista.length,lista.map(x=>[x&&x.tipo||'',x&&x.canal||'',x&&x.produto||'',x&&x.grupo||'',Array.isArray(x&&x.midias)?x.midias.length:0])]));
+  const chave='po_post_'+await sha(msgTelefone_(req.headers.get('X-TK-Whats'))+':'+idLocal);
+  const anterior=await cfgGet(env,chave);
+  if(anterior){
+    let x={};try{x=JSON.parse(anterior)}catch(_){}
+    if(x.assinatura&&x.assinatura!==assinatura)return J({ok:false,erro:'Esse envio mudou depois da tentativa anterior. Confira a Fila antes de enviar de novo.'},409);
+    return x.resultado?J(x.resultado):J({ok:false,erro:'O envio anterior ainda está em verificação. Confira a Fila antes de enviar de novo.'},409);
+  }
+  const reserva=await env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) VALUES(?,?)').bind(chave,JSON.stringify({em:agora(),assinatura})).run();
+  if(!reserva.meta?.changes)return J({ok:false,erro:'Esse envio já está em andamento. Confira a Fila antes de enviar de novo.'},409);
+  const resp=await executar();
+  let corpo=null;try{corpo=await resp.clone().json()}catch(_){}
+  if(resp.status===200&&corpo&&corpo.ok){await cfgSet(env,chave,JSON.stringify({em:agora(),assinatura,resultado:corpo}));return resp;}
+  await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run();   // falha definitiva: nada foi criado, a mesma chave pode ser reusada
+  return resp;
 }
 async function retomarPendentesPost_(env,req,b,perms,J){
   const ids=[...new Set((Array.isArray(b?.ids)?b.ids:[]).map(Number))];
@@ -2398,67 +2437,70 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     return J({ ok: true, mensagem: a.ativa ? 'Instagram retomado. As postagens que esperavam a pausa saem na ordem, com o espaço mínimo entre elas.' : 'O Instagram já estava liberado.' });
   }
   if (p === '/post' && req.method === 'POST') {
-    const originais = Array.isArray(b.posts) ? b.posts : [b];
-    if (!originais.length || originais.length > 60 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a sessenta postagens por vez.' }, 400);
-    if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
-    if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
-    const fontes=new Map();
-    const lista = originais.flatMap((x,indice) => {
-      const chave=x.serie?'video:'+String(x.serie.preparo):'midia:'+indice;
-      if(!fontes.has(chave))fontes.set(chave,crypto.randomUUID());
-      // Story com figurinha de link exige Instagram manual. O Status continua
-      // automático e precisa de um recibo próprio para nunca ser reenviado
-      // quando alguém concluir a etapa manual do Instagram.
-      const destinos = x.canal === 'ambos' && x.modo === 'manual'
-        ? [Object.assign({}, x, { canal: 'instagram', grupoClientes: false }),
-          Object.assign({}, x, { canal: 'whatsapp', modo: 'auto', link: '', grupoClientes: false })]
-        : [x];
-      if (x.grupoClientes === true && x.canal !== 'grupo') destinos.push(Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false, status2: false }));
-      if (x.status2 === true && x.canal !== 'whatsapp2') destinos.push(Object.assign({}, x, { canal: 'whatsapp2', modo: 'auto', link: '', grupoClientes: false, status2: false }));
-      return destinos.map(d=>Object.assign({},d,{origemMidia:fontes.get(chave)}));
-    });
-    const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
-    if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
-    const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
-    // Agendamento importante não pode esperar até a hora marcada para descobrir
-    // que o MP4 do grupo usa HEVC e será recusado pela ponte de mensagens.
-    for (const v of vs) if (v.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.midias); if (erro) return J({ ok: false, erro }, 400); }
-    if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
-    const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
-    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], inicioSeries={}, horariosOriginais=new Map(), intervaloMs = intervaloPedidoMs_(b.intervalo);
-    try{await validarSeriesPost_(env,req,lista,vs);}catch(e){return J({ok:false,erro:e.message},400);}
-    for (let i = 0; i < vs.length; i++) {
-      const v = vs[i], origem=lista[i].origemMidia;
-      // O original tem um único horário, calculado com as restrições de TODOS
-      // os destinos. Sortear/calcular por canal fazia o grupo adiantar a fila.
-      const bs = [...new Set(vs.flatMap((destino,j)=>lista[j].origemMidia===origem?bucketsDoPost(destino.tipo,destino.canal):[]))].sort(), ck = bs.join('+');
-      const continuacao=!!(v.serie&&v.parte>1);
-      const anteriorOriginal=horariosOriginais.get(origem);
-      const editorial=continuacao?0:anteriorOriginal?anteriorOriginal.editorial:intervaloEditorialMs_(cfg,bs,intervaloMs);
-      for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
-      let t;
-      if(anteriorOriginal)t=anteriorOriginal.t;
-      else if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
-      else if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
-      else if (v.sequencia && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], editorial);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
-      else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
-      else {
-        const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
-        t = aj.t; if (aj.ajustado) ajustes.push({ i: i, tipo: v.tipo, de: new Date(pedido).toISOString(), para: new Date(t).toISOString(), motivo: aj.motivo });
+    const executarPost_ = async () => {
+      const originais = Array.isArray(b.posts) ? b.posts : [b];
+      if (!originais.length || originais.length > 60 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a sessenta postagens por vez.' }, 400);
+      if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
+      if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
+      const fontes=new Map();
+      const lista = originais.flatMap((x,indice) => {
+        const chave=x.serie?'video:'+String(x.serie.preparo):'midia:'+indice;
+        if(!fontes.has(chave))fontes.set(chave,crypto.randomUUID());
+        // Story com figurinha de link exige Instagram manual. O Status continua
+        // automático e precisa de um recibo próprio para nunca ser reenviado
+        // quando alguém concluir a etapa manual do Instagram.
+        const destinos = x.canal === 'ambos' && x.modo === 'manual'
+          ? [Object.assign({}, x, { canal: 'instagram', grupoClientes: false }),
+            Object.assign({}, x, { canal: 'whatsapp', modo: 'auto', link: '', grupoClientes: false })]
+          : [x];
+        if (x.grupoClientes === true && x.canal !== 'grupo') destinos.push(Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false, status2: false }));
+        if (x.status2 === true && x.canal !== 'whatsapp2') destinos.push(Object.assign({}, x, { canal: 'whatsapp2', modo: 'auto', link: '', grupoClientes: false, status2: false }));
+        return destinos.map(d=>Object.assign({},d,{origemMidia:fontes.get(chave)}));
+      });
+      const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
+      if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
+      const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
+      // Agendamento importante não pode esperar até a hora marcada para descobrir
+      // que o MP4 do grupo usa HEVC e será recusado pela ponte de mensagens.
+      for (const v of vs) if (v.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.midias); if (erro) return J({ ok: false, erro }, 400); }
+      if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
+      const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
+      const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], inicioSeries={}, horariosOriginais=new Map(), intervaloMs = intervaloPedidoMs_(b.intervalo);
+      try{await validarSeriesPost_(env,req,lista,vs);}catch(e){return J({ok:false,erro:e.message},400);}
+      for (let i = 0; i < vs.length; i++) {
+        const v = vs[i], origem=lista[i].origemMidia;
+        // O original tem um único horário, calculado com as restrições de TODOS
+        // os destinos. Sortear/calcular por canal fazia o grupo adiantar a fila.
+        const bs = [...new Set(vs.flatMap((destino,j)=>lista[j].origemMidia===origem?bucketsDoPost(destino.tipo,destino.canal):[]))].sort(), ck = bs.join('+');
+        const continuacao=!!(v.serie&&v.parte>1);
+        const anteriorOriginal=horariosOriginais.get(origem);
+        const editorial=continuacao?0:anteriorOriginal?anteriorOriginal.editorial:intervaloEditorialMs_(cfg,bs,intervaloMs);
+        for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
+        let t;
+        if(anteriorOriginal)t=anteriorOriginal.t;
+        else if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
+        else if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
+        else if (v.sequencia && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], editorial);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
+        else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
+        else {
+          const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
+          t = aj.t; if (aj.ajustado) ajustes.push({ i: i, tipo: v.tipo, de: new Date(pedido).toISOString(), para: new Date(t).toISOString(), motivo: aj.motivo });
+        }
+        if(v.serie&&v.parte===1)inicioSeries[v.serie]=t;
+        if(!anteriorOriginal){horariosOriginais.set(origem,{t,editorial});cursores[ck] = t; bs.forEach((b) => ocup[b].push(t));}
+        v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
+        quandos.push(v.quando);
+
+
+        inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes, origem_midia, intervalo_ms, fotos_origem) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0,lista[i].origemMidia,editorial,v.fotosOrigem.length?JSON.stringify(v.fotosOrigem):''));
       }
-      if(v.serie&&v.parte===1)inicioSeries[v.serie]=t;
-      if(!anteriorOriginal){horariosOriginais.set(origem,{t,editorial});cursores[ck] = t; bs.forEach((b) => ocup[b].push(t));}
-      v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
-      quandos.push(v.quando);
-
-
-      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes, origem_midia, intervalo_ms, fotos_origem) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0,lista[i].origemMidia,editorial,v.fotosOrigem.length?JSON.stringify(v.fotosOrigem):''));
-    }
-    // Todos os destinos entram juntos ou nenhum: uma falha não deixa metade do pedido na fila.
-    const criadas = await env.DB.batch(inserts);
-    criadas.forEach((r) => ids.push(r.meta && r.meta.last_row_id));
-    if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
-    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: originais.filter((x) => x.grupoClientes === true && x.canal !== 'grupo').length, status2: originais.filter((x) => x.status2 === true && x.canal !== 'whatsapp2').length });
+      // Todos os destinos entram juntos ou nenhum: uma falha não deixa metade do pedido na fila.
+      const criadas = await env.DB.batch(inserts);
+      criadas.forEach((r) => ids.push(r.meta && r.meta.last_row_id));
+      if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
+      return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: originais.filter((x) => x.grupoClientes === true && x.canal !== 'grupo').length, status2: originais.filter((x) => x.status2 === true && x.canal !== 'whatsapp2').length });
+    };
+    return postComChave_(env, req, b, J, executarPost_);
   }
   if (p === '/post/config' && req.method === 'GET') return J({ ok: true, config: await lerCfgPost(env), padrao: CFG_POST_PADRAO, podeEditar: (perms || []).indexOf('gerir_acessos') !== -1 });
   if (p === '/post/config' && req.method === 'POST') {
