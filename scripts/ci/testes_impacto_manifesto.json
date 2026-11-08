@@ -107,6 +107,9 @@
     "tests/manual_rico.py": [
       "treinamentos"
     ],
+    "tests/prova_resiliente.py": [
+      "treinamentos"
+    ],
     "tests/mensagens_acesso_equipe.py": [
       "mensagens"
     ],
@@ -394,6 +397,9 @@
     "tests/manual_fidelidade.js": [
       "treinamentos",
       "ci"
+    ],
+    "tests/prova_resiliente.py": [
+      "treinamentos"
     ]
   },
   "evidencias": {

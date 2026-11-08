@@ -24,6 +24,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Mensagens: o envio deixa de demorar vários segundos. Cada mensagem fazia até 3 conferências seguidas de sessão no Google (2 a 3,5 s cada); agora faz no máximo 1, e as ações de rotina do atendimento (enviar, marcar como lida, encerrar, assumir, notas, ficha, agendar) aproveitam o cache de 2 minutos da leitura das conversas. Configurações e acessos continuam conferindo a sessão na hora.
 - O nome do atendente e a assinatura saem de uma consulta só ao banco (antes até 6) e em paralelo; o "responsável" da conversa é gravado em segundo plano, sem a pessoa esperar.
 
+## [7.56.3] - 2026-11-07
+
+- Prova do manual: o estagiário (e qualquer pessoa) sempre consegue finalizar. Pergunta impossível de responder (sem alternativas) deixa de travar o botão Corrigir; se algo falhar na correção, o botão é liberado com explicação.
+- Nota da avaliação fica guardada no aparelho até o servidor confirmar. Se o servidor recusar ou a internet cair, a tela diz o motivo em português (sessão, permissão, limite, conexão) e oferece "Enviar de novo"; ao entrar de novo, notas pendentes são reenviadas sozinhas (o servidor ignora repetição).
+
 ## [7.56.2] - 2026-11-07
 
 - Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.
