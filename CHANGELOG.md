@@ -19,6 +19,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.62.1 — janelas sempre cabem na tela e arquivos novos chegam certos
+
+- `janelas.css` e `a11y.js` agora têm `?v=` novo em todas as páginas (a correção das abas foi publicada sem trocar o número e o celular podia montar HTML novo com CSS velho).
+- Folhas e janelas nunca passam da largura da tela (`max-width:100%`, blocos podem encolher, textos longos quebram).
+- Novo check de CI `check_versao_assets.py`: CSS/JS alterado exige `?v=` novo nas páginas.
+- Contagens dos chips de Público (Feminino/Infantil/Masculino) voltam a aparecer na vitrine.
+
+
 ## [7.62.0] - 2026-11-08
 
 - Postagens: "Usar os N produtos juntos" não tem mais teto de 8. O botão fica habilitado com qualquer quantidade e a seleção inteira vai para a postagem, cada foto com os dados do seu produto (antes a oitava cortava os demais em silêncio).
