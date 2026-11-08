@@ -120,6 +120,7 @@ jobs:
           python3 tests/auditoria_interna.py
           python3 tests/worker_credenciais.py
           node tests/estoque_opcional.js
+          node tests/manual_fidelidade.js
           python3 tests/saude_publica.py
           python3 tests/distribuicao_cache.py
           node tests/pedido_idempotencia.js
