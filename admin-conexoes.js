@@ -676,7 +676,7 @@
       if (a.eventos && a.eventos.length) linhas.push('Eventos: ' + a.eventos.join(', ') + '.');
     }
     if (testar) {
-      if (!r.teste || !r.teste.enviado) linhas.push('✗ O Zernio não aceitou mandar o teste' + (r.teste ? ' (HTTP ' + r.teste.codigo + ')' : '') + '.');
+      if (!r.teste || !r.teste.enviado) linhas.push('✗ O Zernio não aceitou mandar o teste' + (r.teste ? ' (código ' + r.teste.codigo + ')' : '') + '.');
       else {
         await new Promise((ok) => setTimeout(ok, 6000));
         const depois = await igWorker_('/msg/zernio/config', 'GET'), u = depois && depois.ultimoAviso;
@@ -685,7 +685,7 @@
     }
     if (r.entregas && r.entregas.length) {
       linhas.push('Últimas entregas do Zernio:');
-      r.entregas.forEach((e) => linhas.push('• ' + horaZr_(e.em) + ' · ' + (e.evento || 'evento') + ' · ' + (e.situacao || '?') + (e.codigo ? ' (HTTP ' + e.codigo + ')' : '') + (e.erro ? ' · ' + e.erro : '') + (e.teste ? ' · teste' : '')));
+      r.entregas.forEach((e) => linhas.push('• ' + horaZr_(e.em) + ' · ' + (e.evento || 'evento') + ' · ' + (e.situacao || '?') + (e.codigo ? ' (código ' + e.codigo + ')' : '') + (e.erro ? ' · ' + e.erro : '') + (e.teste ? ' · teste' : '')));
     } else linhas.push(r.logsDisponiveis ? 'O Zernio não registrou nenhuma entrega recente para este aviso.' : 'O Zernio não mostrou o histórico de entregas agora.');
     if (r.ultimoRecebido && r.ultimoRecebido.em) linhas.push('Último aviso recebido aqui: ' + horaZr_(r.ultimoRecebido.em) + (r.ultimoRecebido.evento ? ' (' + r.ultimoRecebido.evento + ')' : '') + '.');
     box.textContent = linhas.join('\n');

@@ -4,7 +4,7 @@
 
 .fotos-ia button,.fotos-ia input,.fotos-ia select,.fotos-ia textarea{font:inherit}
 .fotos-ia button,.fotos-ia a,.fotos-ia input,.fotos-ia select,.fotos-ia textarea{touch-action:manipulation}
-.fotos-ia .fi-header{padding:calc(8px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0;background:var(--preto);box-shadow:none;position:sticky;top:0;z-index:20;color:#fff}
+.fotos-ia .fi-header{padding:calc(8px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0;background:var(--preto);box-shadow:none;position:sticky;top:0;z-index: var(--z-sticky, 20);color:#fff}
 .fi-marca,.fi-titulo,.fi-abas{max-width:1180px;margin:auto;display:flex;gap:16px;align-items:center}
 .fi-marca{min-height:32px;font-size:.78rem}.fi-marca span{flex:1;font-weight:700;letter-spacing:.06em;color:var(--laranja)}
 .fi-marca a{min-width:44px;min-height:44px;display:inline-flex;align-items:center;color:#e6e0d5;text-decoration:none}

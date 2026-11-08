@@ -61,7 +61,7 @@ with sync_playwright() as p:
     chk("com chave e Instagram: aparecem 'Conferir entregas' e 'Testar aviso'", pg.locator("[data-cx=zr-diag]").is_visible() and pg.locator("[data-cx=zr-testar]").is_visible())
     pg.click("[data-cx=zr-diag]"); pg.wait_for_timeout(700)
     dtx = pg.inner_text("#cx-zr-diag")
-    chk("conferir entregas: aviso ativo, entrega recusada com o código e o último aviso recebido", "Aviso ativo" in dtx and "HTTP 404" in dtx and "Último aviso recebido aqui" in dtx and "{" not in dtx, dtx)
+    chk("conferir entregas: aviso ativo, entrega recusada com o código e o último aviso recebido", "Aviso ativo" in dtx and "código 404" in dtx and "Último aviso recebido aqui" in dtx and "{" not in dtx, dtx)
     Z["zernio"]["desligado"] = True; pg.click("[data-cx=zr-diag]"); pg.wait_for_timeout(700)
     chk("aviso desligado pelo Zernio: diz o que fazer", "DESLIGOU" in pg.inner_text("#cx-zr-diag") and "Salvar e conferir" in pg.inner_text("#cx-zr-diag"))
     Z["zernio"]["desligado"] = False
