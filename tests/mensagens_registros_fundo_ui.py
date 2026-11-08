@@ -43,8 +43,12 @@ with sync_playwright() as p:
         assert pg.locator('#ms-texto').is_enabled()
         pg.locator('#ms-texto').fill('Rascunho do atendimento enquanto as fotos são guardadas')
         pg.get_by_role('button',name='Acompanhar registros de clientes',exact=True).wait_for()
-        caixas=pg.evaluate("()=>{const b=document.querySelector('#ms-registro-flutuante').getBoundingClientRect(),t=document.querySelector('#ms-assina').getBoundingClientRect();return {b:b.bottom,t:t.top}}")
-        assert caixas['b']<=caixas['t'],caixas
+        medir_caixas="()=>{const b=document.querySelector('#ms-registro-flutuante').getBoundingClientRect(),t=document.querySelector('#ms-assina').getBoundingClientRect();return {b:b.bottom,t:t.top}}"
+        # o indicador é reposicionado por ResizeObserver/MutationObserver (assíncrono): espera o layout assentar antes de medir
+        try:pg.wait_for_function("()=>{const b=document.querySelector('#ms-registro-flutuante').getBoundingClientRect(),t=document.querySelector('#ms-assina').getBoundingClientRect();return b.bottom<=t.top+0.5}",timeout=4000)
+        except Exception:pass
+        caixas=pg.evaluate(medir_caixas)
+        assert caixas['b']<=caixas['t']+0.5,caixas
         pg.screenshot(path=str(OUT/f'guardando-sem-bloquear-{width}.png'))
         print('ETAPA',width,'primeiro upload retido e conversa livre',flush=True)
         # Trocar de cliente enquanto o primeiro upload está retido não muda o destino do pedido.
