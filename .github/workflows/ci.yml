@@ -120,6 +120,7 @@ jobs:
           python3 tests/auditoria_interna.py
           python3 tests/worker_credenciais.py
           node tests/estoque_opcional.js
+          node tests/manual_fidelidade.js
           python3 tests/saude_publica.py
           python3 tests/distribuicao_cache.py
           node tests/pedido_idempotencia.js
@@ -268,6 +269,10 @@ jobs:
           python3 -m pip install playwright pillow
           python3 -m playwright install chromium
 
+      - name: Conferir fidelidade do manual em quatro telas
+        if: github.event_name == 'pull_request'
+        run: python3 tests/manual_fidelidade_ui.py
+
       - name: Biblioteca de vídeos e recuperação no Chromium
         if: github.event_name == 'pull_request'
         env:
@@ -371,6 +376,14 @@ jobs:
             tests/saida/reparos/
             tests/saida/fotoia-catalogo/
             tests/saida/pedir-fotos-lote/
+          if-no-files-found: ignore
+
+      - name: Screenshots de fidelidade dos manuais
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v6
+        with:
+          name: evidencias-fidelidade-manual
+          path: tests/saida/manual-fidelidade/
           if-no-files-found: ignore
 
       - name: Screenshots da edição rápida
