@@ -41,7 +41,7 @@
       const r = await fetch(INSTAGRAM_URL + caminho, { method: corpo ? 'POST' : 'GET', headers: h, body: corpo ? JSON.stringify(corpo) : undefined, cache: 'no-store' });
       const j = await r.json().catch(() => null);
       if (!j) return { ok: false, erro: 'O servidor das famílias não respondeu direito. Tente de novo.' };
-      if (!j.ok) j.erro = TKAviso.textoErro(j, 'Não consegui agora. Tente de novo.');
+      if (!j.ok) j.erro = window.TKPadrao ? TKPadrao.erro(j, 'Não consegui agora. Tente de novo.') : (j.erro || 'Não consegui agora. Tente de novo.');   // v7.57.0: nunca JSON nem código na tela
       return j;
     } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
   }

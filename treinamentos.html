@@ -226,7 +226,7 @@ th{background:var(--surface-2); font-weight:700;}
 .quiz-aviso{margin:10px 0; padding:12px 14px; border-radius:10px; background:var(--accent-soft); border:2px solid var(--accent-2); font-weight:700; color:var(--text);}
 .prova-bloco{margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);}
 .prova-t{margin:0 0 8px; font-size:0.95rem;}
-.tm-zerar{position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px;}
+.tm-zerar{position:fixed; inset:0; z-index:var(--z-folha); background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px;}
 .tm-zerar-box{background:var(--surface); color:var(--text); border-radius:14px; padding:18px; width:100%; max-width:460px; max-height:90dvh; overflow:auto; border:1px solid var(--border);}
 .ds-zerar{margin:8px 0 2px; padding:8px 12px; font-size:0.85rem;}
 .quiz-q .qn{font-size:0.78rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;}
@@ -264,9 +264,7 @@ th{background:var(--surface-2); font-weight:700;}
 .muted-note{color:var(--muted); font-size:0.85rem; margin-top:6px;}
 .admin-btn-topbar{background:var(--accent-2); color:#0d0d0d; border-color:var(--accent-2); font-weight:700;}
 .admin-shell{max-width:1100px; margin:0 auto; padding:20px; width:100%; min-width:0;}
-.admin-tabs{display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:18px; flex-wrap:wrap;}
-.admin-tab{padding:10px 16px; border:none; background:transparent; color:var(--muted); font-weight:600; cursor:pointer; border-bottom:2px solid transparent; font-size:0.92rem;}
-.admin-tab.active{color:var(--accent); border-bottom-color:var(--accent-2);}
+.admin-tabs{margin-bottom:18px; flex-wrap:wrap;}   /* aparência da aba: .tk-abas (janelas.css) */
 .admin-panel{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; overflow-x:auto;}
 .admin-table{width:100%; border-collapse:collapse; font-size:0.88rem; min-width:560px;}
 .admin-table th{text-align:left; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap;}
@@ -299,10 +297,10 @@ th{background:var(--surface-2); font-weight:700;}
 .ac-foto-col{flex:0 0 auto;}
 .ac-foto{width:54px; height:54px; border-radius:50%; object-fit:cover; display:block; background:var(--surface);}
 .ac-foto-vazia{display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--muted); border:1px solid var(--border);}
-.foto-grande{position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:14px;}
-.foto-grande-box{position:relative; max-width:96vw; max-height:94vh; display:flex; flex-direction:column; align-items:center; gap:8px;}
-.foto-grande-box img{max-width:96vw; max-height:84vh; object-fit:contain; border-radius:12px; background:#111;}
-.foto-grande-x{position:absolute; top:-6px; right:-6px; width:38px; height:38px; border-radius:50%; border:none; background:#fff; color:#111; font-size:1.1rem; font-weight:800; cursor:pointer; z-index:2;}
+.foto-grande{position:fixed; inset:0; z-index:var(--z-sobre-tudo); background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:14px;}
+.foto-grande-box{position:relative; max-width:96vw; max-height:94vh; max-height:94dvh; display:flex; flex-direction:column; align-items:center; gap:8px;}
+.foto-grande-box img{max-width:96vw; max-height:84vh; max-height:84dvh; object-fit:contain; border-radius:12px; background:#111;}
+.foto-grande-x{position:absolute; top:8px; right:8px; z-index:2;}
 .foto-grande-leg{color:#fff; font-size:.85rem;}
 .ac-filtro{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; margin:0 0 12px;}
 .ac-filtro-t{font-size:.8rem; color:var(--muted); font-weight:700;}
@@ -523,8 +521,9 @@ details.manual-card[open]>summary::after{content:'▴';}
 </style>
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
 <link rel="stylesheet" href="rh-permissoes.css?v=7.55.1">
-<script src="avisos.js?v=7.57.0"></script>
+<script src="avisos.js?v=7.60.0"></script>
 <script src="rh-permissoes.js?v=7.55.1"></script>
+<link rel="stylesheet" href="janelas.css?v=7.58.1">
 </head>
 <body class="pg-treinamentos">
 
@@ -532,8 +531,8 @@ details.manual-card[open]>summary::after{content:'▴';}
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script id="app-data" type="application/json">{"manuals": {}, "titles": {"1": "TM Funcionário Iniciando", "2": "TM Funcionário Estágio", "3": "TM Funcionário Avançado"}, "blurbs": {"1": "Leitura rápida para quem vai ser entrevistado.", "2": "O manual completo de operação do dia a dia.", "3": "Responsabilidades ampliadas de apoio e coordenação."}, "quizzes": {}, "roster": [], "appsScriptUrl": "https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec", "appsScriptToken": "tenkiter2026"}</script>
-<script src="tm-verificado.js?v=7.2.1"></script>
-<script src="tutorial-app.js?v=7.14.11"></script>
+<script src="tm-verificado.js?v=7.58.1"></script>
+<script src="tutorial-app.js?v=7.58.1"></script>
 <script>
 (function(){
 "use strict";
@@ -1162,7 +1161,7 @@ function renderBlocks(blocks, chaveCap){
         html += '</table></div>';
       } else if (b.type === 'img'){
         var lado = (b.side === 'left' || b.side === 'right') ? (b.side === 'left' ? ' lado-esq' : ' lado-dir') : '';
-        html += '<div class="manual-img-wrap' + lado + '"' + (lado && Number(b.pct) > 0 ? ' style="--pct:' + Math.max(10, Math.min(46, Math.round(Number(b.pct)))) + '"' : '') + '><img src="' + esc(b.src) + '" alt=""' +
+        html += '<div class="manual-img-wrap' + lado + '"' + (lado && Number(b.pct) > 0 ? ' style="--pct:' + Math.max(10, Math.min(46, Math.round(Number(b.pct)))) + '"' : '') + '><img ' + atribSrc(b.src) + ' alt=""' +
           (b.width ? ' width="' + Math.round(b.width) + '"' : '') +
           (b.height ? ' height="' + Math.round(b.height) + '"' : '') +
           ' loading="lazy"></div>';
@@ -1311,7 +1310,7 @@ async function doCadastro(){
   btn.disabled = false; btn.textContent = 'Criar conta';
   if(resp && resp.contaExiste){ jaTem(); return; }
   if(!resp || !resp.ok){
-    err.textContent = (resp && resp.erro) || 'Não foi possível cadastrar agora. Tente de novo.'; err.style.display='block'; return;
+    err.textContent = TKPadrao.erro(resp, 'Não foi possível cadastrar agora. Tente de novo.'); err.style.display='block'; return;
   }
   var entry = {
     whatsapp: whatsapp, name: nome, level: 1, password: senha, status: 'ativo',
@@ -1403,7 +1402,7 @@ function fotoUrlOk(u){
 function avatarHtml(user, size){
   var cls = 'avatar' + (size ? ' avatar-' + size : '');
   if (user.fotoPerfilUrl){
-    return '<span class="' + cls + '"><img referrerpolicy="no-referrer" src="' + esc(fotoUrlOk(user.fotoPerfilUrl)) + '" alt=""></span>';
+    return '<span class="' + cls + '"><img referrerpolicy="no-referrer" ' + atribSrc(fotoUrlOk(user.fotoPerfilUrl)) + ' alt=""></span>';
   }
   return '<span class="' + cls + ' avatar-fallback">' + esc(avatarIniciais(user.name)) + '</span>';
 }
@@ -1505,7 +1504,7 @@ function renderPerfil(){
     '</div>' +
     '<div class="perfil-fotos">' +
       '<div class="perfil-foto-box">' +
-        (u.fotoPerfilUrl ? '<img referrerpolicy="no-referrer" src="' + esc(fotoUrlOk(u.fotoPerfilUrl)) + '" class="perfil-foto-preview" id="preview-foto-perfil">' : '<div class="perfil-foto-placeholder" id="preview-foto-perfil">' + esc(avatarIniciais(u.name)) + '</div>') +
+        (u.fotoPerfilUrl ? '<img referrerpolicy="no-referrer" ' + atribSrc(fotoUrlOk(u.fotoPerfilUrl)) + ' class="perfil-foto-preview" id="preview-foto-perfil">' : '<div class="perfil-foto-placeholder" id="preview-foto-perfil">' + esc(avatarIniciais(u.name)) + '</div>') +
         '<span class="perfil-foto-legenda">Foto de perfil</span>' +
         '<div class="perfil-foto-uploader">' +
           '<button type="button" class="btn btn-primary btn-sm" id="btn-foto-perfil-label">' + (u.fotoPerfilUrl ? 'Trocar foto' : 'Enviar foto') + '</button>' +
@@ -1513,7 +1512,7 @@ function renderPerfil(){
         '</div>' +
       '</div>' +
       '<div class="perfil-foto-box">' +
-        (u.fotoCorpoUrl ? '<img referrerpolicy="no-referrer" src="' + esc(fotoUrlOk(u.fotoCorpoUrl)) + '" class="perfil-foto-preview perfil-foto-corpo" id="preview-foto-corpo">' : '<div class="perfil-foto-placeholder perfil-foto-corpo" id="preview-foto-corpo">📷</div>') +
+        (u.fotoCorpoUrl ? '<img referrerpolicy="no-referrer" ' + atribSrc(fotoUrlOk(u.fotoCorpoUrl)) + ' class="perfil-foto-preview perfil-foto-corpo" id="preview-foto-corpo">' : '<div class="perfil-foto-placeholder perfil-foto-corpo" id="preview-foto-corpo">📷</div>') +
         '<span class="perfil-foto-legenda">Foto de corpo inteiro</span>' +
         '<div class="perfil-foto-uploader">' +
           '<button type="button" class="btn btn-primary btn-sm" id="btn-foto-corpo-label">' + (u.fotoCorpoUrl ? 'Trocar foto' : 'Enviar foto') + '</button>' +
@@ -1588,6 +1587,10 @@ function wirePerfil(){
           img.id = previewId; img.className = preview.className; img.src = dataUrl;
           preview.replaceWith(img);
         }
+        var resp = await submitResult({ action:'enviar_foto_perfil', whatsapp: state.user.whatsapp, senha: state.user.password, tipo: tipo, fotoBase64: dataUrl });
+        if (!resp || !resp.ok){
+          err.textContent = TKPadrao.erro(resp, 'Não foi possível enviar a foto agora.'); err.style.display = 'block'; return;
+        }
         if (tipo === 'corpo') state.user.fotoCorpoUrl = resp.url; else state.user.fotoPerfilUrl = resp.url;
         var rosterEntry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === state.user.whatsapp; });
         if (rosterEntry){ if (tipo === 'corpo') rosterEntry.fotoCorpoUrl = resp.url; else rosterEntry.fotoPerfilUrl = resp.url; }
@@ -1633,7 +1636,7 @@ function wirePerfil(){
     var resp = await submitResult({ action:'atualizar_perfil', whatsapp: state.user.whatsapp, senha: state.user.password, campos: campos });
     btn.disabled = false; btn.textContent = 'Salvar alterações';
     if (!resp || !resp.ok){
-      err.textContent = (resp && resp.erro) || 'Não foi possível salvar agora. Tente de novo.'; err.style.display = 'block'; return;
+      err.textContent = TKPadrao.erro(resp, 'Não foi possível salvar agora. Tente de novo.'); err.style.display = 'block'; return;
     }
     Object.keys(campos).forEach(function(k){ state.user[k] = campos[k]; });
     var rosterEntry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === state.user.whatsapp; });
@@ -1675,7 +1678,7 @@ function goHome(){
       (unlocked ? (
         '<div class="progress-bar"><div style="width:' + prog.pct + '%"></div></div>' +
         '<div class="progress-label">' + prog.done + ' de ' + prog.total + ' capítulos lidos</div>'
-      ) : '<div class="progress-label">Peça ao Admin total pra liberar este manual</div>') +
+      ) : '<div class="progress-label">Produto ao Admin total pra liberar este manual</div>') +
     '</div>';
   }).join('');
   var comp = perfilCompletude(state.user);
@@ -2257,7 +2260,7 @@ function gradeQuiz(level){
   var total = quiz.questions.length;
   var pct = score/total;
   var passed = pct >= quizPassFor(level) && criticasErradas === 0; // pergunta da regra de ouro errada = não passa, mesmo com nota alta
-  var date = new Date().toLocaleDateString('pt-BR');
+  var date = TKPadrao.dataHora(new Date(), 'data');
   var tentId = quiz.id || novoIdTentativa_();
   state.quizAttempt = null; state.quizPicks = {};
   ls_set(quizKey(state.user.whatsapp, level), { score: score, total: total, date: date });
@@ -2338,7 +2341,7 @@ async function fetchAdminData(){
     senhaAdmin: state.user.password
   });
   if (!resp || !resp.ok){
-    toast(TKAviso.textoErro(resp, 'Não foi possível carregar os dados da equipe.'));
+    toast(TKPadrao.erro(resp, 'Não foi possível carregar os dados da equipe.'));
     return;
   }
   state.adminData = { funcionarios: resp.funcionarios || [], resultados: resp.resultados || [] };
@@ -2355,7 +2358,7 @@ function renderAdminPanel(){
   if (temPerm('dados_pessoais') || temPerm('gerir_acessos')) tabs.push({ id:'curriculos', label:'📄 Currículos' });
   if (!tabs.some(function(t){ return t.id === state.adminTab; })) state.adminTab = tabs.length ? tabs[0].id : 'equipe';
   var tabsHtml = tabs.map(function(t){
-    return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '"' + (state.adminTab===t.id?' aria-current="page"':'') + ' data-tab="' + t.id + '">' + t.label + '</button>';
+    return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '" role="tab" aria-selected="' + (state.adminTab===t.id) + '" data-tab="' + t.id + '">' + t.label + '</button>';
   }).join('');
   var body;
   if (state.adminTab === 'curriculos'){
@@ -2377,7 +2380,7 @@ function renderAdminPanel(){
   }
   return '<div class="admin-shell">' +
     '<div class="hero"><h1>Painel do RH / Admin</h1><p>Gestão da equipe, acompanhamento das avaliações e configuração dos manuais.</p></div>' +
-    '<nav class="admin-tabs" aria-label="Áreas do RH">' + tabsHtml + '</nav>' +
+    '<nav class="admin-tabs tk-abas" role="tablist" aria-label="Áreas do RH">' + tabsHtml + '</nav>' +
     body +
   '</div>';
 }
@@ -2439,7 +2442,7 @@ function wireTabEquipe(){
         action:'atualizar_nivel_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         whatsappAlvo: whats, novoNivel: parseInt(sel.value, 10)
       });
-      if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível atualizar o nível.')); return; }
+      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível atualizar o nível.')); return; }
       toast('Nível atualizado.');
       if (whats === state.user.whatsapp){ state.user.level = parseInt(sel.value, 10); }
       await loadRoster();
@@ -2458,7 +2461,7 @@ function wireTabEquipe(){
         action:'alterar_status_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         whatsappAlvo: whats, novoStatus: novoStatus
       });
-      if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível alterar o status.')); return; }
+      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível alterar o status.')); return; }
       toast(novoStatus === 'Ativo' ? 'Funcionário reativado.' : 'Funcionário desativado.');
       await loadRoster();
       fetchAdminData();
@@ -2473,7 +2476,7 @@ function wireTabEquipe(){
         action:'resetar_senha_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         whatsappAlvo: whats, novaSenha: nova
       });
-      if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível resetar a senha.')); return; }
+      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível resetar a senha.')); return; }
       toast('Senha redefinida.');
     });
   });
@@ -2492,7 +2495,7 @@ function dsErros(r){
 }
 function dsDataFmt(r){
   var d = r.dataHora ? new Date(r.dataHora) : null;
-  return d && !isNaN(d) ? d.toLocaleString('pt-BR') : '—';
+  return d && !isNaN(d) ? TKPadrao.dataHora(d, 'completa') : '—';
 }
 function dsTempo(r){ var d = r.dataHora ? new Date(r.dataHora) : null; return d && !isNaN(d) ? d.getTime() : 0; }
 function dsChave(r){ var w = normWhats(r.whatsapp); return w || ('nome:' + dsTxt(r.nome)); }
@@ -2647,7 +2650,7 @@ function wireTabDesempenho(){
     if (resp && /já tenha sido apagada|Não encontrei essa avaliação/i.test(resp.erro || '')){ toast('Essa avaliação já estava apagada. Lista atualizada.'); tirarDaTela(); recarregarRelatorioSilencioso_(); return; }
     b.removeAttribute('data-ocupado'); b.disabled = false; b.textContent = rotuloAnt;
     if (resp && resp.demorou){ toast('O servidor demorou. Vou conferir se a exclusão foi feita…'); recarregarRelatorioSilencioso_(); return; }
-    toast(TKAviso.textoErro(resp, 'Não foi possível excluir.'));
+    toast(TKPadrao.erro(resp, 'Não foi possível excluir.'));
   });
   var btn = document.getElementById('btn-export-csv');
   if (!btn) return;
@@ -2729,7 +2732,7 @@ function renderTabConteudo(){
           '<button type="button" class="btn manual-sync-btn">🔄 Sincronizar manual</button>' +
           '<button type="button" class="btn manual-del-btn" style="color:var(--danger)">Excluir</button>' +
         '</div>' +
-        '<div class="sub manual-atualizado">' + (m.atualizadoEm ? ('Atualizado em ' + new Date(m.atualizadoEm).toLocaleString('pt-BR')) : 'Ainda não sincronizado') + '</div>';
+        '<div class="sub manual-atualizado">' + (m.atualizadoEm ? ('Atualizado em ' + TKPadrao.dataHora(m.atualizadoEm, 'completa')) : 'Ainda não sincronizado') + '</div>';
 
     var prova = '';
     if (quiz || m.provaDocUrl || !m.semente){
@@ -2750,7 +2753,7 @@ function renderTabConteudo(){
               '<button type="button" class="btn prova-sync-btn">🔄 Sincronizar prova</button>'
             : (m.semente ? '' : '<button type="button" class="btn btn-primary prova-criar-btn">📄 Criar Doc da prova</button>')) +
         '</div>' +
-        (m.provaDocUrl ? '<div class="sub">' + (m.provaAtualizadoEm ? 'Prova sincronizada em ' + new Date(m.provaAtualizadoEm).toLocaleString('pt-BR') : 'Prova ainda não sincronizada') + '</div>' : '') +
+        (m.provaDocUrl ? '<div class="sub">' + (m.provaAtualizadoEm ? 'Prova sincronizada em ' + TKPadrao.dataHora(m.provaAtualizadoEm, 'completa') : 'Prova ainda não sincronizada') + '</div>' : '') +
         (m.provaDocUrl && !m.provaAtualizadoEm && !m.semente ? '<div class="callout callout-tip" style="margin-top:8px;font-weight:500">Este Doc nasceu com 10 perguntas de exemplo (começam com "(Modelo)"). Troque pelas suas no Google Docs e toque em <b>Sincronizar prova</b>. Até lá nenhum aluno vê prova neste manual.</div>' : '') +
       '</div>';
     }
@@ -2809,7 +2812,7 @@ function wireTabConteudo(){
     try { resp = await submitResult({ action:'importar_manual_doc', whatsappAdmin:state.user.whatsapp, senhaAdmin:state.user.password, docUrl:docUrl }); }
     catch (e) { resp = null; }
     importar.disabled = false; importar.textContent = 'Importar Doc para revisão';
-    if (!resp || !resp.ok) { toast(TKAviso.textoErro(resp, 'Não consegui importar este Doc agora.')); return; }
+    if (!resp || !resp.ok) { toast(TKPadrao.erro(resp, 'Não consegui importar este Doc agora.')); return; }
     await recarregarManuais_(); render();
     toast('Manual importado para revisão da gestão. Confira antes de liberar à equipe.');
   });
@@ -2829,7 +2832,7 @@ function wireTabConteudo(){
       mudou++;
       var r = await submitResult({ action:'atualizar_manual_config', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         manualId: ids[i], titulo: m.titulo, blurb: m.blurb || '', nivelMinimo: m.nivelMinimo, ordem: i + 1 });
-      if (!r || !r.ok){ falhou = true; toast(TKAviso.textoErro(r, 'Não foi possível salvar a ordem.')); break; }
+      if (!r || !r.ok){ falhou = true; toast(TKPadrao.erro(r, 'Não foi possível salvar a ordem.')); break; }
     }
     await recarregarManuais_();
     if (!falhou && mudou) toast('Ordem salva. É essa que o candidato vê.');
@@ -2892,7 +2895,7 @@ function wireTabConteudo(){
       action:'salvar_config_quiz', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, configs: configs
     });
     btnCfg.disabled = false; btnCfg.textContent = 'Salvar regras das provas';
-    if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível salvar.')); return; }
+    if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível salvar.')); return; }
     await loadQuizConfig();
     await recarregarManuais_();
     toast('Regras das provas salvas!');
@@ -2914,7 +2917,7 @@ function wireTabConteudo(){
         manualId: m.id, titulo: m.titulo, blurb: m.blurb || '',
         nivelMinimo: parseInt(m.nivelMinimo || m.id, 10) || 1, parts: (m.parts && m.parts.length) ? m.parts : ((DATA.manuals[m.id] && DATA.manuals[m.id].parts) || [])
       });
-      if (!resp || !resp.ok){ falhas.push(m.titulo + ': ' + ((resp && resp.erro) || 'falha desconhecida')); continue; }
+      if (!resp || !resp.ok){ falhas.push(m.titulo + ': ' + (TKPadrao.erro(resp, 'falha desconhecida'))); continue; }
       feitos++;
     }
     await recarregarManuais_();
@@ -2933,7 +2936,7 @@ function wireTabConteudo(){
       action: 'criar_manual_vazio', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
       titulo: titulo, blurb: blurb, nivelMinimo: nivelMinimo
     });
-    if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível criar o manual.')); return; }
+    if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível criar o manual.')); return; }
     toast(resp.prova && resp.prova.ok && resp.prova.modelo
       ? 'Manual criado! O Doc da prova também: já vem com 10 perguntas de exemplo para você trocar. Abrindo o Doc do manual…'
       : resp.prova && !resp.prova.ok ? 'Manual criado, mas o Doc da prova não saiu agora. Toque em "Criar Doc da prova" no card. Abrindo o Doc do manual…'
@@ -2954,7 +2957,7 @@ function wireTabConteudo(){
         blurb: card.querySelector('.manual-blurb-input').value.trim(),
         nivelMinimo: parseInt(card.querySelector('.manual-nivel-sel').value, 10)
       });
-      if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível salvar.')); return; }
+      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível salvar.')); return; }
       toast('Manual atualizado.');
       await recarregarManuais_();
     });
@@ -2970,7 +2973,7 @@ function wireTabConteudo(){
         manualId: manualId
       });
       btnEl.disabled = false; btnEl.textContent = '🔄 Sincronizar manual';
-      if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível sincronizar.')); return; }
+      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível sincronizar.')); return; }
       toast(resp.aviso ? 'Manual atualizado. ' + resp.aviso : 'Manual atualizado a partir do Google Docs!');
       await recarregarManuais_();
       render();
@@ -2982,7 +2985,7 @@ function wireTabConteudo(){
       var manualId = btnEl.closest('.manual-card').getAttribute('data-manual-id');
       btnEl.disabled = true; btnEl.textContent = 'Criando…';
       var resp = await submitResult({ action: 'prova_criar_doc', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, manualId: manualId });
-      if (!resp || !resp.ok){ btnEl.disabled = false; btnEl.textContent = '📄 Criar Doc da prova'; toast(TKAviso.textoErro(resp, 'Não foi possível criar o Doc da prova.')); return; }
+      if (!resp || !resp.ok){ btnEl.disabled = false; btnEl.textContent = '📄 Criar Doc da prova'; toast(TKPadrao.erro(resp, 'Não foi possível criar o Doc da prova.')); return; }
       toast('Doc da prova criado! Abrindo…');
       if (resp.docUrl) window.open(resp.docUrl, '_blank');
       await recarregarManuais_();
@@ -2997,7 +3000,7 @@ function wireTabConteudo(){
       var resp = await submitResult({ action: 'prova_sincronizar', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, manualId: manualId });
       btnEl.disabled = false; btnEl.textContent = '🔄 Sincronizar prova';
       var avisos = (resp && Array.isArray(resp.avisos)) ? resp.avisos : [];
-      if (!resp || !resp.ok){ toast(((resp && resp.erro) || 'Não foi possível sincronizar a prova.') + (avisos.length ? ' ' + avisos.slice(0, 2).join(' ') : '')); return; }
+      if (!resp || !resp.ok){ toast((TKPadrao.erro(resp, 'Não foi possível sincronizar a prova.')) + (avisos.length ? ' ' + avisos.slice(0, 2).join(' ') : '')); return; }
       toast('Prova atualizada: ' + resp.perguntas + ' pergunta' + (resp.perguntas === 1 ? '' : 's') + (avisos.length ? '. ATENÇÃO: ' + avisos.length + ' ficaram de fora — ' + avisos.slice(0, 2).join(' ') : '.') +
         (Number(resp.modelo) > 0 ? ' ATENÇÃO: ' + resp.modelo + ' pergunta' + (resp.modelo === 1 ? '' : 's') + ' de EXEMPLO ainda ' + (resp.modelo === 1 ? 'está' : 'estão') + ' na prova (começam com "(Modelo)"). Troque no Doc e sincronize de novo.' : ''));
       await recarregarManuais_();
@@ -3014,7 +3017,7 @@ function wireTabConteudo(){
         action: 'excluir_manual', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         manualId: manualId
       });
-      if (!resp || !resp.ok){ toast(TKAviso.textoErro(resp, 'Não foi possível remover.')); return; }
+      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível remover.')); return; }
       toast('Manual removido do site.');
       await recarregarManuais_();
       render();
@@ -3044,7 +3047,8 @@ function abrirZerarPessoa(whats, nome){
       '</div>' +
     '</div>';
   document.body.appendChild(ov);
-  function fechar(){ var e = document.getElementById('tm-zerar'); if (e) e.remove(); }
+  var pj = window.TKJanela ? TKJanela.prender(ov, { fechar: function(){ sair(); }, foco: '#zr-leitura', camada: 'tm-zerar' }) : null;
+  function fechar(){ var e = document.getElementById('tm-zerar'); if (e) e.remove(); if (pj) pj.soltar(); }
   if (window.TKCamadas) TKCamadas.empilhar('tm-zerar', fechar);
   function sair(){ if (window.TKCamadas) TKCamadas.desempilhar('tm-zerar'); else fechar(); }
   document.getElementById('zr-cancelar').addEventListener('click', sair);
@@ -3057,7 +3061,7 @@ function abrirZerarPessoa(whats, nome){
     if (!confirm('Zerar ' + [leitura ? 'a leitura' : '', aval ? 'as avaliações' : ''].filter(Boolean).join(' e ') + ' ' + manTxt + ' de ' + (nome || whats) + '? Não dá para desfazer pela tela.')) return;
     var btn = document.getElementById('zr-ok'); btn.disabled = true; btn.textContent = 'Zerando…';
     var r = await submitResult({ action: 'resetar_pessoa', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, whatsappAlvo: whats, itens: { leitura: leitura, avaliacoes: aval }, manualIds: [man] });
-    if (!r || !r.ok){ btn.disabled = false; btn.textContent = 'Zerar agora'; toast(TKAviso.textoErro(r, 'Não foi possível zerar.')); return; }
+    if (!r || !r.ok){ btn.disabled = false; btn.textContent = 'Zerar agora'; toast(TKPadrao.erro(r, 'Não foi possível zerar.')); return; }
     sair();
     toast('Pronto: ' + (aval ? r.avaliacoesApagadas + ' avaliação(ões) apagada(s)' : '') + (aval && leitura ? ' · ' : '') + (leitura ? 'leitura zerada' : '') + '.');
     if (state.view === 'admin'){ if (state.adminTab === 'desempenho' || state.adminTab === 'equipe') fetchAdminData(); }
@@ -3106,7 +3110,7 @@ function acessosEstado(){
 }
 async function msgAcessosReq_(method, body){
   var r = await fetch(INSTAGRAM_URL+'/msg/acessos',{method:method||'GET',headers:{'Content-Type':'application/json','X-TK-Whats':state.user.whatsapp,'X-TK-Sessao':state.user.password},body:body?JSON.stringify(body):undefined,cache:'no-store'});
-  var j = await r.json(); if(!r.ok||!j.ok)throw new Error(j.erro||'Não foi possível consultar os acessos de Mensagens.');return j;
+  var j = await r.json(); if(!r.ok||!j.ok)throw new Error(TKPadrao.erro(j,'Não foi possível consultar os acessos de Mensagens.'));return j;
 }
 function msgAcessosHtml_(p){
   var a=acessosEstado(),m=a.msgAcessos;
@@ -3126,7 +3130,7 @@ async function carregarAcessos(){
   var a = acessosEstado();
   var resp = await acessosReq({ action: 'acessos_listar', todos: true });
   if (!resp || !resp.ok){
-    a.erro = (resp && resp.erro) || 'Não foi possível carregar os acessos.';
+    a.erro = TKPadrao.erro(resp, 'Não foi possível carregar os acessos.');
   } else {
     a.erro = ''; a.pessoas = resp.pessoas || []; a.perfis = resp.perfis || []; a.permissoes = resp.permissoes || [];
     a.totalClientes = resp.totalClientes || 0; a.eu = resp.eu || state.user.whatsapp;
@@ -3138,6 +3142,7 @@ async function carregarAcessos(){
   if (state.view === 'admin' && state.adminTab === 'acessos'){ pintarFiltroAcessos(); pintarAcessos(); }
 }
 /** Plano B da foto: o script lê o arquivo no Drive e devolve a imagem (não depende do link público). */
+window.fotoFallback = fotoFallback;
 function fotoFallback(img, alvo, tipo){
   if (img.dataset.fb || !state.user){ img.style.visibility = 'hidden'; return; }
   img.dataset.fb = '1';
@@ -3146,17 +3151,19 @@ function fotoFallback(img, alvo, tipo){
   });
 }
 function acFotoHtml(p){
-  if (p.fotoPerfilUrl) return '<img class="ac-foto" referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(p.fotoPerfilUrl)) + '" onerror="fotoFallback(this,\'' + esc(p.whatsapp) + '\')">';
+  if (p.fotoPerfilUrl) return '<img class="ac-foto" referrerpolicy="no-referrer" alt="" ' + atribSrc(fotoUrlOk(p.fotoPerfilUrl)) + ' onerror="fotoFallback(this,\'' + esc(p.whatsapp) + '\')">';
   return '<span class="ac-foto ac-foto-vazia">' + esc(avatarIniciais(p.nome)) + '</span>';
 }
 function abrirFotoGrande(url, legenda, alvoFoto){
-  var ov = document.createElement('div'); ov.className = 'foto-grande';
-  ov.innerHTML = '<div class="foto-grande-box"><button type="button" class="foto-grande-x" aria-label="Fechar">✕</button><img referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(url)) + '" onerror="fotoFallback(this,\'' + esc(alvoFoto || '') + '\',\'corpo\')"><div class="foto-grande-leg">' + esc(legenda || '') + '</div></div>';
-  function fechar(){ if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', tecla); }
-  function tecla(ev){ if (ev.key === 'Escape') fechar(); }
-  ov.addEventListener('click', function(ev){ if (ev.target === ov || ev.target.className === 'foto-grande-x') fechar(); });
-  document.addEventListener('keydown', tecla);
+  var ov = document.createElement('div'); ov.className = 'foto-grande'; ov.setAttribute('aria-label', legenda || 'Foto ampliada');
+  ov.innerHTML = '<div class="foto-grande-box"><button type="button" class="foto-grande-x tk-fechar tk-fechar-foto" aria-label="Fechar">✕</button><img referrerpolicy="no-referrer" alt="" ' + atribSrc(fotoUrlOk(url)) + ' onerror="fotoFallback(this,\'' + esc(alvoFoto || '') + '\',\'corpo\')"><div class="foto-grande-leg">' + esc(legenda || '') + '</div></div>';
+  /* camada própria no histórico: o Voltar do Android fecha só a foto; Esc, Tab preso e foco devolvido pelo TKJanela (a11y.js) */
+  var pj = window.TKJanela ? TKJanela.prender(ov, { fechar: function(){ sair(); }, foco: '.foto-grande-x', camada: 'tm-foto' }) : null;
+  function fechar(){ if (ov.parentNode) ov.parentNode.removeChild(ov); if (pj) pj.soltar(); }
+  function sair(){ if (window.TKCamadas && TKCamadas.aberta('tm-foto')) TKCamadas.desempilhar('tm-foto'); else fechar(); }
+  ov.addEventListener('click', function(ev){ if (ev.target === ov || ev.target.classList.contains('foto-grande-x')) sair(); });
   document.body.appendChild(ov);
+  if (window.TKCamadas) TKCamadas.empilhar('tm-foto', fechar);
 }
 function baseDosPerfis(lista){
   var soma = {};
@@ -3222,7 +3229,7 @@ function cvMensagemCobranca(p){
   return 'Oi' + (nome ? ', ' + nome : '') + '! \n\n' +
     'Aqui é da TENKiTER Modas de Crateús\n\n' +
     linha + '\n\n' +
-    'É rapidinho: entre no nosso site https://tenkitermodas.com.br/treinamentos.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
+    'É rapidinho: entre no nosso site ' + SITE_URL + 'treinamentos.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
     'Na tela inicial vai aparecer um aviso *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
     'Qualquer dúvida, é só chamar por aqui que te ajudo!';
 }
@@ -3348,7 +3355,7 @@ function wireTabAcessos(){
     salvar.disabled = true;
     var r = await acessosReq({ action: 'acessos_criar', nome: nome, whatsappNovo: w, senhaNova: senha, perfil: perfil });
     salvar.disabled = false;
-    if (!r || !r.ok){ toast(TKAviso.textoErro(r, 'Não foi possível criar.')); return; }
+    if (!r || !r.ok){ toast(TKPadrao.erro(r, 'Não foi possível criar.')); return; }
     toast('Pessoa criada. Passe a senha para ela.');
     a.criando = false; ['ac-n-nome', 'ac-n-whats', 'ac-n-senha'].forEach(function(i){ document.getElementById(i).value = ''; });
     await carregarAcessos();
@@ -3363,7 +3370,7 @@ function wireTabAcessos(){
     var r = await acessosReq({ action: 'acessos_log', limite: 60 });
     if (!r || !r.ok){ box.innerHTML = '<p class="sub">Não foi possível carregar.</p>'; return; }
     box.innerHTML = '<div class="ac-logbox">' + (r.registros.length ? r.registros.map(function(x){
-      var d = new Date(x.dataHora); var quando = isNaN(d) ? esc(x.dataHora) : d.toLocaleString('pt-BR');
+      var d = new Date(x.dataHora); var quando = isNaN(d) ? esc(x.dataHora) : TKPadrao.dataHora(d, 'completa');
       return '<div>' + quando + ' — <strong>' + esc(x.quem) + '</strong> · ' + esc(x.acao) + ' · ' + esc(x.alvo) + (x.detalhe ? ' · ' + esc(x.detalhe) : '') + '</div>';
     }).join('') : '<div>Nada registrado ainda.</div>') + '</div>';
   });
@@ -3406,7 +3413,7 @@ function wireTabAcessos(){
       var ativoAgora = btn.getAttribute('data-ativo') === '1';
       if (ativoAgora && !confirm('Desativar ' + p.nome + '? A pessoa perde o acesso a tudo até ser reativada.')) return;
       var r = await acessosReq({ action: 'acessos_status', whatsappAlvo: p.whatsapp, novoStatus: ativoAgora ? 'Inativo' : 'Ativo' });
-      if (!r || !r.ok){ toast(TKAviso.textoErro(r, 'Não foi possível alterar.')); return; }
+      if (!r || !r.ok){ toast(TKPadrao.erro(r, 'Não foi possível alterar.')); return; }
       toast(ativoAgora ? 'Pessoa desativada.' : 'Pessoa reativada.'); carregarAcessos(); return;
     }
     if (btn.classList.contains('ac-reset')){
@@ -3431,7 +3438,7 @@ function wireTabAcessos(){
       if (perfisNovos.length === 1) req.perfil = perfisNovos[0];   // backend antigo (só um perfil) ainda entende
       var r = await acessosReq(req);
       if (!r || !r.ok){
-        var msg = (r && r.erro) || 'Não foi possível trocar os perfis.';
+        var msg = TKPadrao.erro(r, 'Não foi possível trocar os perfis.');
         if (perfisNovos.length > 1 && /desconhecido/i.test(msg)) msg = 'Para dar mais de um perfil, o backend de Funcionários precisa estar na versão 3.2 (cole o arquivo novo no Apps Script).';
         toast(msg); pintarAcessos(); return;
       }
@@ -3550,10 +3557,11 @@ function telaSemConexao_(){
 })();
 </script>
 <script src="common.js"></script>
+<script src="padrao-dados.js?v=7.57.0"></script>
 <script src="icones.js?v=7.17.0"></script>
-<script src="nav.js?v=7.38.2" data-ativo="treinamentos"></script>
+<script src="nav.js?v=7.58.1" data-ativo="treinamentos"></script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
-<script src="push.js"></script>
+<script src="push.js?v=7.57.0"></script>
 </body>
 </html>

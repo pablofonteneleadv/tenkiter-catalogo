@@ -36,7 +36,7 @@
     if(refs.length>4&&f.motor!=='auto')erros.push('Os motores Cloudflare aceitam quatro referências. Para '+refs.length+', escolha o padrão da gestão com Gemini habilitado ou distribua as pessoas em mais fotos.');
     if(info){
       const provedores=info.config.provedores||[];
-      if(f.motor!=='auto'&&(!info.cloudflare?.disponivel||!provedores.includes('cloudflare')))erros.push('O Cloudflare está desabilitado. Peça ao Admin total para habilitar ou escolha o padrão da gestão.');
+      if(f.motor!=='auto'&&(!info.cloudflare?.disponivel||!provedores.includes('cloudflare')))erros.push('O Cloudflare está desabilitado. Produto ao Admin total para habilitar ou escolha o padrão da gestão.');
       if(refs.length>4&&(!info.temChave||!provedores.includes('gemini')))erros.push('Esta foto exige Gemini com geração de imagens habilitada. Ele não está configurado; reduza as referências para até quatro.');
       if(!info.config.ligado)erros.push('A criação de fotos está pausada pelo gestor. O planejamento pode ser salvo.');
     }

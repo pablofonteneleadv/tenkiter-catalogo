@@ -19,13 +19,37 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## [7.57.0] - 2026-11-08
+## [7.60.0] - 2026-11-08
 
 - Avisos que não travam a tela: novo `avisos.js` (região única empilhada, sucesso some em 6 s, erro fica até fechar, "Desfazer" quando reversível). Substitui os `alert()` de sucesso/informação da Gestão, Instagram, Conexões, Mensageiro, Postagens, Avisos e Pedir fotos; o aviso não cobre mais a faixa de juntar/separar.
 - Confirmações: "toque de novo" da Esteira e das Famílias viram `confirm()` com a consequência; exclusões dizem "Não dá para desfazer"; nova senha em campo de senha numa janela (Treinamentos).
 - Arquivar/reativar produto: botão travado, aviso de sucesso com Desfazer e motivo do erro. Treinamentos: aviso anunciado por leitor de tela e foto de perfil só aparece após o servidor confirmar.
 - Vocabulário único: produto, seleção, Gestão, Pedir fotos, Público, Tentar de novo, "…", MB, você; plurais corretos. Telas vazias dizem o que fazer.
 - Testes `padrao_vocabulario.py` e `avisos_padrao.py`.
+
+## [7.58.0] - 2026-11-07
+
+- Regras iguais em todas as telas: a equipe só escolhe categoria já cadastrada (também na barra de seleção da Gestão); só o Admin total cria nome novo, e a trava agora vale no código, não só na aparência.
+- Postagens, pedir fotos e foto do cliente ganham chave de operação: tocar de novo depois de um "sem confirmação" não duplica; a tela manda conferir a Fila.
+- Preço: o filtro da vitrine compara o preço à vista (o mesmo do cartão) e o rótulo diz isso; o Google recebe o preço de tabela, igual ao compartilhamento da peça.
+- Erros sempre em português (foto do cliente, famílias, treinamentos, currículo, Esteira, editor de visual): nunca JSON nem código HTTP. Telefone, contagem de fotos e data/hora de Fortaleza passam por funções únicas (padrao-dados.js).
+- Disponibilidade mostra "R$ 89,90"; Gestão em "Mais recentes" sobe peça com foto nova; "Enviar para modelo IA" segue a mesma permissão do cartão; links compartilháveis usam o endereço oficial; desconto à vista lido de uma só constante.
+
+## 7.57.0 — janelas e navegação com uma só gramática
+
+- Toda janela do site fecha igual: botão ✕ de 44 px contornado no canto superior direito (`janelas.css`, classe `tk-fechar`), inclusive Minha conta, Seleção, Rastreio, Compartilhar, menu lateral e Filtros.
+- Voltar do Android, Esc, foco inicial/devolvido e Tab preso valem também para a foto ampliada de Mensagens, foto de perfil, certificado, "Zerar dados" e tutorial de Treinamentos, "Escolher capa do vídeo" (agora fecha ao tocar fora), folhas da Esteira e painel de Filtros. O Esc dos Filtros só age quando eles são a janela do topo.
+- Disponibilidade e as folhas de edição da Esteira perguntam antes de descartar o que foi alterado (toque fora, Esc, ✕ e Voltar).
+- Aba/segmento ativo único (preto, `aria-selected`) em Avisos, Instagram, Postagens, Mensagens, Gestão do atendimento, Esteira, Fotos com IA, Treinamentos, Currículos e Minha conta. Fim do laranja que nunca valia.
+- Altura das folhas em `dvh` (com reserva em `vh`) no painel, no detalhe do produto e na janela de avisos; fundo da página travado de um jeito só (`tk-travado`).
+- Escala de camadas nomeada (`--z-*`) no lugar dos números soltos.
+- Esteira ganha "‹ Gestão" para voltar; "Ir para o conteúdo" e foco laranja de 3 px em todas as páginas.
+
+
+## [7.56.4] - 2026-11-08
+
+- Mensagens: o envio deixa de demorar vários segundos. Cada mensagem fazia até 3 conferências seguidas de sessão no Google (2 a 3,5 s cada); agora faz no máximo 1, e as ações de rotina do atendimento (enviar, marcar como lida, encerrar, assumir, notas, ficha, agendar) aproveitam o cache de 2 minutos da leitura das conversas. Configurações e acessos continuam conferindo a sessão na hora.
+- O nome do atendente e a assinatura saem de uma consulta só ao banco (antes até 6) e em paralelo; o "responsável" da conversa é gravado em segundo plano, sem a pessoa esperar.
 
 ## [7.56.3] - 2026-11-07
 

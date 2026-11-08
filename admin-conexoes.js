@@ -123,7 +123,7 @@
   const ROTULO_ACAO = { renderCriarRegras: 'Criar as regras que faltam', 'chave:render': 'Guardar a chave do Render', 'chave:cloudflare': 'Guardar o token da Cloudflare', onesignalConfigurar: 'Ligar os avisos agora', 'chave:onesignal': 'Guardar a chave do OneSignal' };
   function fmtData(iso) {
     const d = iso ? new Date(iso) : null;
-    return d && !isNaN(d) ? d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+    return d && !isNaN(d) ? TKPadrao.dataHora(d, 'completa') : '';   // v7.57.0: relógio de Fortaleza
   }
   function blocoChave(nome, titulo, ajuda, aviso, antes, depois) {
     const c = (status.conexoes || {})[nome] || {};

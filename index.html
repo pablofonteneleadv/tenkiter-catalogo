@@ -39,15 +39,16 @@
 <!-- v3.3: política de segurança de conteúdo. Fica aqui (e não em cabeçalho HTTP) porque o Render estático não deixa configurar cabeçalhos por arquivo.
      Só libera o que o catálogo realmente usa: o próprio site, o Apps Script (dados), Cloudinary/Google (fotos e vídeos), OneSignal (avisos) e Meta (só se o Pixel for ligado no painel). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://*.onesignal.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.onesignal.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://tenkiter-og.distkrpconfeccoes.workers.dev https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://lh3.googleusercontent.com https://res.cloudinary.com https://tenkiter-midia.distkrpconfeccoes.workers.dev https://tenkiter-ig.distkrpconfeccoes.workers.dev https://drive.google.com https://onesignal.com https://*.onesignal.com https://www.facebook.com https://connect.facebook.net; frame-src 'self' https://drive.google.com https://*.onesignal.com https://onesignal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-<link rel="stylesheet" href="catalogo.css?v=7.51.0">
+<link rel="stylesheet" href="catalogo.css?v=7.58.1">
 <!-- v7.0: camada de vitrine (acessibilidade, navegação e caminho até o produto).
      Arquivo próprio, como a11y.js / meta.js / push.js: só o catálogo carrega. -->
-<link rel="stylesheet" href="vitrine.css?v=7.12.1">
+<link rel="stylesheet" href="vitrine.css?v=7.58.1">
 <link rel="stylesheet" href="vitrine-v71.css?v=7.12.1">
 <!-- v7.15: acabamento novo (ícones de linha, escala única, preço sem riscado). Carrega por último. -->
-<link rel="stylesheet" href="acabamento.css?v=7.17.0">
-<script src="avisos.js?v=7.57.0"></script>
+<link rel="stylesheet" href="acabamento.css?v=7.58.1">
+<script src="avisos.js?v=7.60.0"></script>
 <script src="common.js?v=7.12.1"></script>
+<script src="padrao-dados.js?v=7.57.0"></script>
 <script src="sessao-rapida.js?v=7.50.0"></script>
 <script src="fila-lote.js?v=7.50.0"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
@@ -87,12 +88,13 @@ catch (e) { window.__precargaLista = null; }
 }
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
+<link rel="stylesheet" href="janelas.css?v=7.58.1">
 </head>
 <body>
 
 <div id="modal-conta" role="dialog" aria-modal="true" aria-labelledby="conta-titulo">
   <div class="conta-box">
-    <button type="button" class="conta-fechar" id="conta-fechar" aria-label="Fechar">×</button>
+    <div class="conta-topo"><button type="button" class="conta-fechar tk-fechar" id="conta-fechar" aria-label="Fechar">✕</button></div>
     <div id="conta-corpo"></div>
   </div>
 </div>
@@ -146,14 +148,14 @@ catch (e) { window.__precargaLista = null; }
   </div>
   <div class="linha-share-busca" id="linha-share-busca" hidden><button type="button" id="btn-share-busca">Compartilhar seleção</button><button type="button" class="btn-add-resultados" id="btn-add-resultados-topo" hidden><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg> <span class="txt">Adicionar estes à seleção</span></button><button type="button" id="btn-limpar-filtros-topo" hidden>Limpar filtros</button><button type="button" id="btn-limpar-sel" hidden>Limpar seleção</button><button type="button" id="btn-lote-menu" hidden aria-expanded="false">🛠️ Edição em lote</button><div class="lote-menu" id="lote-menu" hidden role="menu"><button type="button" role="menuitem" data-lote="btn-bulk-preco">% Alterar preços</button><button type="button" role="menuitem" data-lote="btn-bulk-novidade">Marcar novidades</button><button type="button" role="menuitem" data-lote="btn-bulk-arquivar">🗃️ Arquivar</button><button type="button" role="menuitem" data-lote="btn-bulk-reativar">🔄 Reativar</button><button type="button" role="menuitem" data-lote="btn-bulk-postar">📸 Enviar para Postagens</button><button type="button" role="menuitem" data-lote="btn-bulk-pedir-fotos">Pedir fotos</button><button type="button" role="menuitem" data-lote="btn-bulk-juntar">🔗 Juntar em 1 produto</button></div></div>
   <div class="filtros-extras" id="filtros-extras">
-    <div class="fx-topo"><strong>Filtros</strong><span class="fx-cont" id="fx-cont" aria-live="polite"></span><button type="button" id="fx-fechar" class="fx-fechar"><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg> Fechar</button></div>
+    <div class="fx-topo"><strong>Filtros</strong><span class="fx-cont" id="fx-cont" aria-live="polite"></span><button type="button" id="fx-fechar" class="fx-fechar tk-fechar" aria-label="Fechar">✕</button></div>
     <div class="fx-corpo">
     <div class="fx-busca-interna"><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input id="fx-busca" type="search" placeholder="Buscar por produto, código…" aria-label="Buscar produtos nos filtros" autocomplete="off"><button type="button" id="fx-voz" aria-label="Pesquisar por voz"><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5"/></svg></button></div>
     <div class="linha-preco">
-      <span>Preço:</span>
-      <input type="number" id="preco-min" aria-label="Preço mínimo em reais" placeholder="Mín R$" inputmode="decimal">
+      <span>Preço à vista:</span>
+      <input type="number" id="preco-min" aria-label="Preço mínimo à vista, em reais" placeholder="Mín R$" inputmode="decimal">
       <span>até</span>
-      <input type="number" id="preco-max" aria-label="Preço máximo em reais" placeholder="Máx R$" inputmode="decimal">
+      <input type="number" id="preco-max" aria-label="Preço máximo à vista, em reais" placeholder="Máx R$" inputmode="decimal">
     </div>
     <div class="chips" id="chips-extra"></div>
 
@@ -197,7 +199,7 @@ catch (e) { window.__precargaLista = null; }
 
 <section class="beneficios" id="beneficios" aria-label="Vantagens da loja">
   <span><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 5.5h14v10H10l-4 3.5v-3.5H5z"/></svg>Consulte pelo WhatsApp</span>
-  <span><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 12.5V4h8.5l8.5 8.5-8.5 8.5z"/><circle cx="8" cy="8.5" r="1.3"/></svg>10% de desconto à vista</span>
+  <span><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 12.5V4h8.5l8.5 8.5-8.5 8.5z"/><circle cx="8" cy="8.5" r="1.3"/></svg><span data-desconto-avista>10%</span> de desconto à vista</span>
   <span><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>Retire na loja, em Crateús</span>
 </section>
 
@@ -242,7 +244,7 @@ catch (e) { window.__precargaLista = null; }
     <div>
       <h2>TENKiTER MODAS</h2>
       <address>Rua Dr. Moreira da Rocha, 759 — Crateús, CE<br><a id="rod-mapa" href="https://www.google.com/maps/search/?api=1&amp;query=Rua+Dr.+Moreira+da+Rocha+759+Crateús+CE" target="_blank" rel="noopener">Ver no mapa</a></address>
-      <p class="nota">Preços e estoque podem mudar sem aviso. 10% de desconto no pagamento à vista.</p>
+      <p class="nota">Preços e estoque podem mudar sem aviso. <span data-desconto-avista>10%</span> de desconto no pagamento à vista.</p>
     </div>
     <ul>
       <li><a id="rod-zap" href="#" target="_blank" rel="noopener"><svg class="tk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="tk-ico-cheio" d="M12.04 2.5a9.4 9.4 0 0 0-8.1 14.2L2.6 21.5l4.9-1.3a9.4 9.4 0 1 0 4.5-17.7zm0 17.2a7.8 7.8 0 0 1-4-1.1l-.3-.2-2.9.8.8-2.8-.2-.3a7.8 7.8 0 1 1 6.6 3.6zm4.3-5.8c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.5.1l-.7.9c-.1.2-.3.2-.5.1a6.4 6.4 0 0 1-3.2-2.8c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.7-1.7c-.2-.5-.4-.4-.5-.4h-.5a.9.9 0 0 0-.7.3 2.8 2.8 0 0 0-.9 2.1 4.9 4.9 0 0 0 1 2.6 11.2 11.2 0 0 0 4.3 3.8c1.6.7 2.2.7 3 .6a2.6 2.6 0 0 0 1.7-1.2 2.1 2.1 0 0 0 .1-1.2c0-.1-.2-.2-.5-.3z"/></svg> WhatsApp da loja</a></li>
@@ -307,7 +309,7 @@ catch (e) { window.__precargaLista = null; }
 <div id="overlay-rastreio" class="overlay-sheet-loja"><div class="modal" id="rastreio-conteudo" role="dialog" aria-modal="true" aria-label="Acompanhar pedido"></div></div>
 
 <div id="overlay-juntar" class="overlay-sheet-loja"><div class="modal juntar-modal" role="dialog" aria-modal="true" aria-labelledby="juntar-titulo">
-  <div class="juntar-topo"><strong id="juntar-titulo">Juntar produtos repetidos</strong><button type="button" class="btn-fechar" id="juntar-fechar" aria-label="Fechar">✕</button></div>
+  <div class="juntar-topo"><strong id="juntar-titulo">Juntar produtos repetidos</strong><button type="button" class="btn-fechar tk-fechar" id="juntar-fechar" aria-label="Fechar">✕</button></div>
   <p class="juntar-ajuda">Escolha o produto que <b>fica</b>. As fotos e o vídeo dos outros vão para ele, e os outros ficam <b>arquivados</b> (dá para reativar).</p>
   <div id="juntar-lista" role="radiogroup" aria-labelledby="juntar-titulo"></div>
   <div id="juntar-erro" class="juntar-erro" role="alert" hidden></div>
@@ -325,13 +327,13 @@ catch (e) { window.__precargaLista = null; }
 
 
 <script src="conta.js"></script>
-<script src="foto-cliente.js"></script>
+<script src="foto-cliente.js?v=7.57.0"></script>
 <script src="meta.js"></script>
-<script src="pedido.js?v=7.50.0"></script>
+<script src="pedido.js?v=7.58.1"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
-<script src="catalogo.js?v=7.54.3"></script>
-<link rel="stylesheet" href="pedir-fotos.css?v=1">
-<script src="pedir-fotos.js?v=1"></script>
+<script src="catalogo.js?v=7.58.1"></script>
+<link rel="stylesheet" href="pedir-fotos.css?v=7.58.1">
+<script src="pedir-fotos.js?v=7.58.1"></script>
 <script>
 document.addEventListener('DOMContentLoaded',function(){
  const interna=document.getElementById('fx-busca'),original=document.getElementById('busca');
@@ -343,16 +345,16 @@ document.addEventListener('DOMContentLoaded',function(){
  if(voz&&originalVoz)voz.addEventListener('click',function(){originalVoz.click();});
 });
 </script>
-<script src="nav.js?v=7.38.2" data-ativo="catalogo"></script>
+<script src="nav.js?v=7.58.1" data-ativo="catalogo"></script>
 <!-- v7.0: por último, de propósito — depois de catalogo.js (funções que ela
      envolve) e de nav.js (que cria a barra inferior que ela assume). -->
-<script src="vitrine.js?v=7.15.0"></script>
-<script src="menu-lateral.js?v=7.4.0"></script>
-<script src="a11y.js?v=7.12.1"></script>
+<script src="vitrine.js?v=7.58.1"></script>
+<script src="menu-lateral.js?v=7.58.1"></script>
+<script src="a11y.js?v=7.58.1"></script>
 <!-- v7.1: menu, pesquisa e filtros (itens 1,3,4,5,6,7,8). Camada aditiva,
      carregada por ultimo: so age no catalogo e nao reescreve regra existente. -->
 <script src="vitrine-v71.js?v=7.16.0"></script>
-<script src="push.js"></script>
-<script src="pwa.js"></script>
+<script src="push.js?v=7.57.0"></script>
+<script src="pwa.js?v=7.57.0"></script>
 </body>
 </html>

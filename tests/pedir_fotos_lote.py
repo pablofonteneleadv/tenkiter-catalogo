@@ -1,4 +1,4 @@
-"""Pedir fotos pela seleção da Gestão e do catálogo; serviços externos simulados."""
+"""Solicitar fotos pela seleção da Gestão e do catálogo; serviços externos simulados."""
 import os, sys, json, threading, functools, http.server, subprocess
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -103,10 +103,11 @@ try:
             # Falha parcial: repete apenas a peça sem confirmação, com o mesmo identificador.
             ctx, pg, state, calls, errors, ids = setup(browser, 390, 844, 'admin.html', mode='partial')
             open_dialog(pg, 'admin.html'); pg.locator('[data-opcao="manequim"]').click(); pg.locator('.pf-enviar').click()
-            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("falta")')
+            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("Tentar")')
             chk('falha parcial informa 1 de 2', '1 de 2' in pg.locator('.pf-status').inner_text())
+            chk('plural: falta 1 (não "Faltam 1")', 'Falta 1' in pg.locator('.pf-status').inner_text() and 'Faltam 1' not in pg.locator('.pf-status').inner_text() and 'restantes' not in pg.locator('.pf-enviar').inner_text())
             pg.locator('.pf-fechar').click(); open_dialog(pg, 'admin.html')
-            chk('fechar/reabrir preserva falha e formulario', pg.locator('[data-opcao="manequim"]').get_attribute('aria-pressed') == 'true' and 'falta' in pg.locator('.pf-enviar').inner_text())
+            chk('fechar/reabrir preserva falha e formulario', pg.locator('[data-opcao="manequim"]').get_attribute('aria-pressed') == 'true' and 'Tentar' in pg.locator('.pf-enviar').inner_text())
             pg.locator('.pf-enviar').click(); pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent === "Concluído"')
             chk('retry nao repete confirmado', len(calls) == 3 and calls[1]['produto'] == calls[2]['produto'] and calls[0]['produto'] != calls[2]['produto'])
             chk('retry conserva op', calls[1]['op'] == calls[2]['op'])
@@ -114,7 +115,7 @@ try:
             # Nenhum pedido real: recusa do servidor precisa ser exibida e não virar sucesso.
             ctx, pg, state, calls, errors, ids = setup(browser, 390, 844, 'admin.html', mode='deny')
             open_dialog(pg, 'admin.html'); pg.locator('[data-opcao="cores"]').click(); pg.locator('.pf-enviar').click()
-            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("falta")')
+            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("restantes")')
             chk('permissao negada sem falso sucesso', '0 de 2' in pg.locator('.pf-status').inner_text() and 'equipe da Esteira' in pg.locator('.pf-falhas').inner_text())
             pg.locator('.pf-fechar').click(); open_dialog(pg, 'admin.html')
             pg.locator('.pf-fechar').focus(); pg.keyboard.press('Shift+Tab')
@@ -129,7 +130,7 @@ try:
                 ctx, pg, state, calls, errors, ids = setup(browser, width, height, 'index.html')
                 if zoom > 1: pg.add_style_tag(content='html { font-size: 130% !important; }')
                 open_dialog(pg, 'index.html'); pg.locator('[data-opcao="outro"]').click()
-                pg.locator('#pf-outro').fill('Detalhes e costas do produto'); pg.locator('#pf-observacao').fill('Mostrar todos os detalhes da estampa e o caimento da manga.')
+                pg.locator('#pf-outro').fill('Detalhes e costas da peça'); pg.locator('#pf-observacao').fill('Mostrar todos os detalhes da estampa e o caimento da manga.')
                 pg.locator('#pf-observacao').scroll_into_view_if_needed()
                 pg.screenshot(path=str(EVID / f'depois-index-{width}x{height}-texto.png'))
                 chk(f'{width}x{height}: sem rolagem horizontal com texto ampliado', pg.evaluate('document.documentElement.scrollWidth <= innerWidth'))

@@ -775,6 +775,17 @@ function d1() {
     let L = await DB.prepare('SELECT * FROM foto_cliente WHERE id=?').bind(idC1).first();
     chk('fica ligada ao cadastro (WhatsApp e nome da SESSÃO, não do que veio no pedido), com observação e Instagram limpo', L.whats === '88988887777' && L.nome === 'Maria Cliente' && L.origem === 'cliente' && L.vinculo === 'conta' && L.obs === 'Usei no aniversário' && L.instagram === 'maria.cli', L);
     chk('a foto foi para o R2 com o endereço público do Worker de mídia', /^https:\/\/tenkiter-midia\.fake\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(L.url), L.url);
+    // v7.57.0: chave de operação (?op=): a mesma foto reenviada após "sem confirmação" não cria outro registro (e conta 1 só no limite diário)
+    { const antes = (await DB.prepare("SELECT COUNT(*) n FROM foto_cliente").first()).n;
+      const o1 = await C('?aceito=1&op=op-teste-0001', JPG), o2 = await C('?aceito=1&op=op-teste-0001', JPG), o3 = await C('?aceito=1&op=op-teste-0002', JPG);
+      const depois = (await DB.prepare("SELECT COUNT(*) n FROM foto_cliente").first()).n;
+      chk('foto com chave: 1º envio registra', o1.r.status === 200 && o1.j.ok && o1.j.id > 0, o1.j);
+      chk('foto com a MESMA chave: devolve o mesmo registro, sem criar outro', o2.j.ok && o2.j.id === o1.j.id && o2.j.repetido === true, o2.j);
+      chk('foto com chave nova registra outra (total +2 no conjunto)', o3.j.ok && o3.j.id !== o1.j.id && depois === antes + 2, [antes, depois]);
+      const ruim = await C('?aceito=1&op=a%20b', JPG); chk('chave mal formada: 400 em português', ruim.r.status === 400 && /Atualize/.test(ruim.j.erro), ruim.j);
+      const semAut = await C('?op=op-teste-0003', JPG); const retorno = await C('?aceito=1&op=op-teste-0003', JPG);
+      chk('erro definitivo libera a chave: depois de marcar a autorização a mesma chave registra', semAut.r.status === 400 && retorno.j.ok && retorno.j.repetido !== true, [semAut.j, retorno.j]);
+      await DB.prepare("DELETE FROM foto_cliente WHERE id IN (?,?,?)").bind(o1.j.id, o3.j.id, retorno.j.id).run(); }
     x = await C('', JPG); chk('sem marcar a autorização: recusa', x.r.status === 400 && /autoriza/.test(x.j.erro));
     x = await C('?aceito=1', JPG, 'tk2.fantasma'); chk('sem login válido: 401', x.r.status === 401);
     x = await C('?aceito=1', new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])); chk('arquivo que não é imagem (pelos bytes) é recusado com frase', x.r.status === 400 && /Formato não aceito/.test(x.j.erro));

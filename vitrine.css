@@ -32,20 +32,6 @@
  * O catálogo abre com cabeçalho, busca, filtros e faixa de vantagens:
  * são ~12 controles antes da primeira peça. Quem navega por teclado ou
  * leitor de tela precisa de uma porta de entrada direta. */
-.pular-conteudo {
-  position: absolute; left: 8px; top: 8px; z-index: 300;
-  transform: translateY(-220%);
-  background: #E67E22; color: #0d0d0d;
-  font: 800 0.9rem/1 "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
-  padding: 12px 18px; border-radius: 10px; text-decoration: none;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
-  transition: transform .12s ease;
-}
-.pular-conteudo:focus,
-.pular-conteudo:focus-visible {
-  transform: translateY(0);
-  outline: 3px solid #0d0d0d; outline-offset: 2px;
-}
 /* O <main> recebe foco por causa do salto: não precisa desenhar anel nele. */
 main#pecas:focus { outline: none; }
 
@@ -230,7 +216,7 @@ main#pecas:focus { outline: none; }
   }
 }
 @media (forced-colors: active) {
-  .pular-conteudo, .pill-cat, .pill-gen, .chip, .tam-op, .op-btn,
+  .tk-pular, .pill-cat, .pill-gen, .chip, .tam-op, .op-btn,
   .thumb-card, .selo-card, .acoes-card button {
     border: 2px solid CanvasText;
   }

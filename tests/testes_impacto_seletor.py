@@ -85,4 +85,29 @@ check(len(I.M["tests"]) >= 110, "Inventário abrange bateria antiga e testes dir
 check(all(set(tags).issubset(m) and tags for tags in I.M["tests"].values()), "Registro contém somente módulos válidos")
 check(all((BASE / f).is_file() for f in I.M["tests"]), "Todos os arquivos do manifesto existem")
 check(len(set(I.M["tests"])) == len(I.M["tests"]), "Nenhum arquivo duplicado")
+
+# A execução por shards reduz o tempo total, nunca o número de testes.
+# A soma de todos os shards DEVE ser exatamente igual ao plano original.
+for arquivos in (["treinamentos.html"], ["mensagens.html"], ["common.js"],
+                 [".github/workflows/ci.yml"]):
+    pl = select(arquivos)
+    n = I.numero_shards(pl)
+    todos = [(c,tags) for c,tags in I.M["tests"].items() if set(tags).intersection(pl["modulos"])]
+    partes = [I.selecionar_shard(todos, i, n) for i in range(n)]
+    todos_distribuidos = [c for parte in partes for c,_ in parte]
+    check(len(todos_distribuidos) == len(todos) and
+          set(todos_distribuidos) == {c for c,_ in todos} and
+          len(set(todos_distribuidos)) == len(todos),
+          f"{arquivos}: todos os testes distribuídos sem perda/duplicação")
+check(I.numero_shards(select(["common.js"])) == 4, "Impacto amplo usa quatro jobs paralelos")
+check(I.numero_shards(select(["treinamentos.html"], suite="completo")) == 1,
+      "Full/noturno continua único para não duplicar a bateria")
+for indice,total in ((-1,4),(4,4),(0,0)):
+    try:
+        I.selecionar_shard([("a",[])], indice, total)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Shard inválido aceito")
+
 print("SELETOR CI: regressões de segurança e cobertura aprovadas.")

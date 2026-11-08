@@ -621,10 +621,33 @@
   }
   async function lote_(tipoAcao, valor, msg) {
     if (!selecionadosBulk.size) return;
+    if (tipoAcao === 'alterarCategoria' && !ehAdminTotalLote_() && !categorias.some((c) => semAcento_(c) === semAcento_(valor))) { TKAviso.aviso('Só o Admin total cria categorias novas. Escolha uma das categorias da lista.'); return; }
     const r = await chamar_({ action: 'bulkUpdate', ids: Array.from(selecionadosBulk), tipoAcao: tipoAcao, valor: valor });
     if (!r || !r.ok) { TKAviso.erro(erroTexto_(r)); return; }
-    TKAviso.ok(msg + ' em ' + tkPlural(r.afetados, 'produto', 'produtos') + '.');
+    TKAviso.ok(msg + ' em ' + r.afetados + (r.afetados === 1 ? ' produto.' : ' produtos.'));
     selecionadosBulk.clear(); atualizarBarraBulk(); await carregarProdutos();
+  }
+  /* v7.57.0: categoria em lote = ESCOLHER entre as existentes. Só o Admin total (sem 'sem-gerir') cria nome novo, e a checagem é no código. */
+  function ehAdminTotalLote_() { return !document.body.classList.contains('sem-gerir'); }
+  function escolherCategoriaLote_() {
+    const n = selecionadosBulk.size; if (!n) return;
+    const lista = (typeof categorias !== 'undefined' ? categorias : []).slice().sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
+    const criar = ehAdminTotalLote_();
+    abrirFolha_('Categoria de ' + n + (n === 1 ? ' produto' : ' produtos'),
+      '<p class="g-info">Escolha a categoria. Ela substitui a atual ' + (n === 1 ? 'do produto selecionado' : 'dos produtos selecionados') + '.</p>' +
+      '<div class="gl-cat-lote" id="gl-cat-lote">' + (lista.length ? lista.map((c) => '<button type="button" class="gl-cat-op" data-cat="' + esc(c) + '" style="display:block;width:100%;min-height:48px;margin:0 0 8px;padding:0 14px;text-align:left;font-weight:600;background:#fff;color:inherit;border:1px solid #d9d2c5;border-radius:10px">' + esc(c) + '</button>').join('') : '<p class="g-info">Ainda não há categorias cadastradas.</p>') + '</div>' +
+      (criar ? '<div class="gl-cat-nova" id="gl-cat-nova"><label for="gl-cat-nova-in"><b>Criar categoria nova</b> (só Admin total)</label><input type="text" id="gl-cat-nova-in" maxlength="60" autocomplete="off" lang="pt-BR" style="width:100%;min-height:48px;margin:6px 0"><button type="button" class="g-prim" id="gl-cat-nova-ok" style="min-height:48px">Usar essa categoria</button></div>'
+        : '<p class="g-info" id="gl-cat-so-admin">Só o Admin total cria categorias novas: peça a ele.</p>'));
+    const aplicar = async (nome) => {
+      nome = String(nome || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!nome) return;
+      const existente = lista.find((c) => semAcento_(c) === semAcento_(nome));
+      if (!existente && !ehAdminTotalLote_()) { TKAviso.aviso('Só o Admin total cria categorias novas. Escolha uma das categorias da lista.'); return; }
+      fecharFolha_();
+      await lote_('alterarCategoria', existente || nome, 'Categoria alterada');
+    };
+    $('gl-cat-lote').addEventListener('click', (ev) => { const b = ev.target.closest('button[data-cat]'); if (b) aplicar(b.dataset.cat); });
+    const ok = $('gl-cat-nova-ok'); if (ok) ok.addEventListener('click', () => aplicar($('gl-cat-nova-in').value));
   }
   function ligarLote_() {
     const barra = document.querySelector('#bulk-bar .bulk-bar-actions');
@@ -637,11 +660,7 @@
       if (isNaN(n) || n < 0) { TKAviso.aviso('Digite um número (0 ou mais).'); return; }
       await lote_('alterarEstoque', n, 'Estoque alterado');
     }, 'pacote');
-    if (recursos.loteCategoria) add('btn-bulk-categoria', '🏷️ Categoria', async () => {
-      const v = prompt('Categoria para ' + (selecionadosBulk.size === 1 ? '1 produto' : selecionadosBulk.size + ' produtos') + ' (substitui a atual).\nExistentes: ' + categorias.join(', '));
-      if (v === null || !v.trim()) return;
-      await lote_('alterarCategoria', v.trim(), 'Categoria alterada');
-    }, 'etiqueta');
+    if (recursos.loteCategoria) add('btn-bulk-categoria', '🏷️ Categoria', escolherCategoriaLote_, 'etiqueta');
     add('btn-bulk-lista', '📋 Copiar lista p/ WhatsApp', copiarListaWhats_, 'copiar');
     const antes = typeof BOTOES_BULK_IDS !== 'undefined' ? BOTOES_BULK_IDS : null;
     if (antes) antes.push('btn-bulk-estoque', 'btn-bulk-lista', 'btn-bulk-categoria');

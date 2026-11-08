@@ -42,7 +42,8 @@ PERMITIDO = [
     ("*", "peça", r"Peça (ao|para|a ele)|peça a ele|vendidas separadamente"),   # "Peça" = verbo pedir; texto de DADOS já gravado
     ("*", "Apagar (rótulo)", r"apagar o que guardamos|apague os dados"),
     ("privacidade.html", "*", r".*"), ("exclusao-dados.html", "*", r".*"),      # textos jurídicos: revisão própria
-    ("common.js", "*", r".*"),   # sacola/peça/"Sem conexão com o servidor" aqui: ficam para o lote que pode tocar common.js (o APK embute o arquivo)
+    ("common.js", "*", r".*"), ("padrao-dados.js", "sem conexão fora do padrão", r".*"),   # módulo do lote de regras e dados: alinhar a frase com common.js no enforcement
+   # sacola/peça/"Sem conexão com o servidor" aqui: ficam para o lote que pode tocar common.js (o APK embute o arquivo)
     ("*", "Apagar (rótulo)", r"Apague parte do texto"),
     ("treinamentos.html", "sem conexão fora do padrão", r"Sem conexão com o servidor\. Sua nota"),   # mensagem específica: avisa que a nota ficou guardada
     ("*", "peça", r"Peça (ao|para|a ele)|peça a ele|vendidas separadamente"),

@@ -23,7 +23,7 @@
     if (document.getElementById('tk-avisos-css')) return;
     var s = document.createElement('style'); s.id = 'tk-avisos-css';
     s.textContent =
-      '#tk-avisos{position:fixed;left:12px;right:12px;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:2147482000;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:8px;pointer-events:none}' +
+      '#tk-avisos{position:fixed;left:12px;right:12px;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:var(--z-aviso,4000);max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:8px;pointer-events:none}' +
       '#tk-avisos:empty{display:none}' +
       '.tk-aviso{pointer-events:auto;display:flex;align-items:center;gap:10px;background:#0d0d0d;color:#fff;border:2px solid #4caf50;border-radius:14px;padding:10px 12px 10px 14px;font:700 .88rem/1.35 system-ui,-apple-system,Roboto,Arial,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.35)}' +
       '.tk-aviso.tk-aviso-info{border-color:#8a8a8a}' +
@@ -120,7 +120,7 @@
       css();
       if (!document.getElementById('tk-senha-css')) {
         var st = document.createElement('style'); st.id = 'tk-senha-css';
-        st.textContent = '.tk-senha-fundo{position:fixed;inset:0;z-index:2147482500;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}' +
+        st.textContent = '.tk-senha-fundo{position:fixed;inset:0;z-index:var(--z-sobre-tudo,2000);background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}' +
           '.tk-senha-caixa{background:#fff;color:#111;border-radius:14px;padding:18px;width:100%;max-width:380px;font:500 .95rem/1.4 system-ui,-apple-system,Roboto,Arial,sans-serif}' +
           '.tk-senha-caixa h2{margin:0 0 6px;font-size:1.05rem}.tk-senha-caixa p{margin:0 0 10px;color:#444}' +
           '.tk-senha-caixa input{width:100%;min-height:48px;font-size:1rem;padding:0 12px;border:1px solid #888;border-radius:10px;box-sizing:border-box}' +

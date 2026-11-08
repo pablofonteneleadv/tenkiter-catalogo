@@ -146,11 +146,27 @@ def plano(arquivos: list[str], evento: str, suite: str, rotulos: list[str], desc
             "so_docs": so_docs, "suite_completa": completo,
             "graphify_alterado": bool(graphify), "motivos": motivos}
 
+def numero_shards(pl: dict) -> int:
+    """Particiona a MESMA cobertura em jobs paralelos. Full/noturno é único."""
+    if pl["so_docs"] or pl["suite_completa"]:
+        return 1
+    mods = set(pl["modulos"])
+    total = sum(bool(mods.intersection(tags)) for tags in M["tests"].values())
+    return 1 if total <= 8 else (2 if total <= 30 else 4)
+
+def selecionar_shard(escolhidos: list, indice: int = 0, total: int = 1) -> list:
+    """Cada teste exatamente uma vez; divisão determinística e auditável."""
+    if total < 1 or indice < 0 or indice >= total:
+        raise ValueError("Shard inválido: deve ser 0 <= indice < total")
+    return [teste for i, teste in enumerate(escolhidos) if i % total == indice]
+
 def escrever_saida(pl: dict, saida: str, resumo: str) -> None:
     campos = {"so_docs": str(pl["so_docs"]).lower(),
               "suite_completa": str(pl["suite_completa"]).lower(),
               "graphify_alterado": str(pl["graphify_alterado"]).lower(),
-              "modulos": ",".join(pl["modulos"])}
+              "modulos": ",".join(pl["modulos"]),
+              "shards": json.dumps(list(range(numero_shards(pl)))),
+              "shard_count": str(numero_shards(pl))}
     if saida:
         with open(saida, "a", encoding="utf-8") as f:
             for k, v in campos.items():
@@ -158,6 +174,7 @@ def escrever_saida(pl: dict, saida: str, resumo: str) -> None:
     linhas = ["### Plano de testes por impacto",
               f"**Módulos:** {', '.join(pl['modulos']) or 'nenhum (só documentação)'}",
               f"**Modo:** {'completo' if pl['suite_completa'] else 'seletivo'}",
+              f"**Paralelismo:** {numero_shards(pl)} job(s), sem retirar testes selecionados",
               "| Arquivo alterado / gatilho | Cobertura escolhida |", "|---|---|"]
     for k, v in pl["motivos"].items():
         linhas.append(f"| {k.replace('|', '/')} | {', '.join(v) or 'documentação'} |")
@@ -197,12 +214,15 @@ def servidor(cmdline: list[str], porta: int):
         try: p.wait(timeout=5)
         except subprocess.TimeoutExpired: p.kill(); p.wait()
 
-def executar(modulos: list[str]) -> None:
+def executar(modulos: list[str], indice: int = 0, total: int = 1) -> None:
     if not modulos or any(x not in MODULOS for x in modulos):
         raise ValueError("Lista de módulos vazia ou desconhecida; recusar execução silenciosa")
-    escolhidos = [(p, tags) for p, tags in M["tests"].items() if set(tags).intersection(modulos)]
-    if not escolhidos:
+    todos = [(p, tags) for p, tags in M["tests"].items() if set(tags).intersection(modulos)]
+    if not todos:
         raise RuntimeError("Nenhum teste selecionado: configuração inválida")
+    escolhidos = selecionar_shard(todos, indice, total)
+    if not escolhidos:
+        raise RuntimeError(f"Shard {indice + 1}/{total} vazio: configuração inválida")
     faltando = [p for p, _ in escolhidos if not (ROOT / p).is_file()]
     if faltando:
         raise RuntimeError("Arquivo(s) de teste inexistente(s): " + ", ".join(faltando))
@@ -211,7 +231,7 @@ def executar(modulos: list[str]) -> None:
                      not re.search(r"(transcode|video_processor_http|video_partes_encoder|android_manifest_release)",p)
                      for p in escolhido)
     precisa_ffmpeg = "midia" in modulos
-    print(f"Plano: {len(escolhidos)} testes; módulos: {', '.join(modulos)}; "
+    print(f"Plano: {len(escolhidos)} de {len(todos)} testes; shard {indice + 1}/{total}; módulos: {', '.join(modulos)}; "
           f"Chromium={precisa_ui}; ffmpeg={precisa_ffmpeg}", flush=True)
     if precisa_ffmpeg and not shutil.which("ffmpeg"):
         if Path("/etc/apt/apt-mirrors.txt").exists():
@@ -268,6 +288,8 @@ def main() -> int:
     a.add_argument("--resumo", default="")
     b = sub.add_parser("executar")
     b.add_argument("--modulos", default="todos", help="CSV dos módulos ou 'todos'")
+    b.add_argument("--shard", type=int, default=0, help="Índice do shard, começa em 0")
+    b.add_argument("--shards", type=int, default=1, help="Número total de shards (1 = todos os testes)")
     args = p.parse_args()
     if args.acao == "planejar":
         try: rotulos = json.loads(args.rotulos or "[]")
@@ -293,7 +315,7 @@ def main() -> int:
         escrever_saida(pl, args.saida, args.resumo)
     else:
         mods = ORDEM if args.modulos == "todos" else [x.strip() for x in args.modulos.split(",") if x.strip()]
-        executar(mods)
+        executar(mods, args.shard, args.shards)
     return 0
 
 if __name__ == "__main__":

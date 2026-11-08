@@ -45,7 +45,7 @@
     var u = (typeof usuarioAdmin !== 'undefined') ? usuarioAdmin : null, contas = (typeof modoLogin !== 'undefined') && modoLogin;
     var pronta = typeof window.tkAceitarRascunho === 'function' && typeof window.tkAceitarSeparado === 'function' && (typeof produtos !== 'undefined') && produtos && produtos.length;
     if (!pronta || (contas && !u && tent < 40)) { if (tent > 120) fim('Não consegui abrir o cadastro agora. Atualize a página e tente de novo pela Esteira.'); return; }
-    if (u && typeof temPermissao === 'function' && !temPermissao(u, 'catalogo_cadastrar')) return fim('Seu acesso não permite cadastrar produtos. Peça ao Admin total a permissão de cadastrar produtos.');
+    if (u && typeof temPermissao === 'function' && !temPermissao(u, 'catalogo_cadastrar')) return fim('Seu acesso não permite cadastrar produtos. Produto ao Admin total a permissão de cadastrar produtos.');
     var h = cab(); if (!h) return fim('Entre na sua conta para cadastrar com as fotos da caixa.');
     buscando = true;
     fetch(INSTAGRAM_URL + '/esteira/caixa/itens?ids=' + ids.join(','), { headers: h })

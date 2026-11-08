@@ -18,7 +18,7 @@
   function abrir(fonte, confirmar) {
     if (atual) fechar();
     const o = document.createElement('div'); o.className = 'overlay-sheet aberto'; o.id = 'overlay-capa-video';
-    o.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="capa-video-titulo"><div class="sheet-topo"><h2 id="capa-video-titulo">Escolher capa do vídeo</h2><button type="button" id="capa-video-fechar" aria-label="Fechar">✕</button></div><div class="gestao-corpo"><p>Reproduza para conferir. Pause ou mova a barra até o quadro desejado.</p><video id="capa-video-previa" controls playsinline preload="auto" style="width:100%;max-height:50vh;background:#111"></video><label for="capa-video-tempo">Quadro da capa</label><input id="capa-video-tempo" type="range" min="0" max="0" step="0.01" value="0" disabled style="width:100%"><p id="capa-video-aviso" role="status">Carregando vídeo…</p><button type="button" id="capa-video-usar" disabled>Usar quadro como foto de capa</button></div></div>';
+    o.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="capa-video-titulo"><div class="sheet-topo"><h2 id="capa-video-titulo">Escolher capa do vídeo</h2><button type="button" class="sheet-x tk-fechar" id="capa-video-fechar" aria-label="Fechar">✕</button></div><div class="gestao-corpo"><p>Reproduza para conferir. Pause ou mova a barra até o quadro desejado.</p><video id="capa-video-previa" controls playsinline preload="auto" style="width:100%;max-height:50vh;background:#111"></video><label for="capa-video-tempo">Quadro da capa</label><input id="capa-video-tempo" type="range" min="0" max="0" step="0.01" value="0" disabled style="width:100%"><p id="capa-video-aviso" role="status">Carregando vídeo…</p><button type="button" id="capa-video-usar" disabled>Usar quadro como foto de capa</button></div></div>';
     document.body.appendChild(o);
     const v = o.querySelector('video'), range = o.querySelector('input'), btn = o.querySelector('#capa-video-usar'), aviso = o.querySelector('#capa-video-aviso');
     const local = fonte instanceof Blob ? URL.createObjectURL(fonte) : null;
@@ -47,6 +47,7 @@
       if (Number.isFinite(tempo)) v.currentTime = tempo;
     });
     o.querySelector('#capa-video-fechar').addEventListener('click', fechar);
+    o.addEventListener('click', (e) => { if (e.target === o) fechar(); });   /* toque fora fecha, como nas outras folhas */
     o.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(); return; }
       if (e.key !== 'Tab') return;

@@ -137,7 +137,71 @@
     });
   };
 
+  /* ---------- 2b. TKJanela: o mesmo comportamento para janelas montadas por código (fora da lista JANELAS) ----------
+   * TKJanela.prender(el, { fechar, foco }) devolve { soltar }:
+   *   - foco inicial dentro da janela (o elemento `foco`, ou a própria janela);
+   *   - Tab fica preso dentro dela; Esc chama `fechar` (que deve passar por TKCamadas.desempilhar) e NÃO vaza para as de baixo;
+   *   - ao soltar, o foco volta para quem estava com ele antes de abrir (também quando o Voltar do Android fechou a janela).
+   * Use junto com TKCamadas.empilhar(chave, callback) — o callback chama soltar(). */
+  const pilhaJ = [];
+  const prender = (el, o) => {
+    o = o || {};
+    const item = { el, o, antes: document.activeElement };
+    pilhaJ.push(item);
+    if (o.papel !== false) {
+      if (!el.getAttribute('role')) el.setAttribute('role', 'dialog');
+      if (!el.getAttribute('aria-modal')) el.setAttribute('aria-modal', 'true');
+    }
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+    setTimeout(() => {
+      if (!el.isConnected) return;
+      const f0 = typeof o.foco === 'function' ? o.foco() : o.foco;
+      const alvo = (typeof f0 === 'string' ? el.querySelector(f0) : f0) || el;
+      try { alvo.focus({ preventScroll: true }); } catch (e) { alvo.focus(); }
+    }, 30);
+    return {
+      soltar() {
+        const k = pilhaJ.indexOf(item); if (k < 0) return; pilhaJ.splice(k, 1);
+        const a = item.antes;
+        if (o.devolver !== false && a && a !== document.body && document.contains(a) && typeof a.focus === 'function') { try { a.focus({ preventScroll: true }); } catch (e) { /* ignora */ } }
+      }
+    };
+  };
+  document.addEventListener('keydown', (ev) => {
+    while (pilhaJ.length && !pilhaJ[pilhaJ.length - 1].el.isConnected) pilhaJ.pop();
+    const t = pilhaJ[pilhaJ.length - 1];
+    if (!t) return;
+    /* janela com camada no histórico só responde quando é a do topo (outra janela por cima fica com o Esc e o Tab dela) */
+    if (t.o.camada && window.TKCamadas && TKCamadas.aberta(t.o.camada)) { const st = window.history.state; if (!(st && st.overlay === t.o.camada)) return; }
+    if (ev.key === 'Escape') {
+      if (typeof t.o.fechar !== 'function') return;
+      ev.preventDefault(); ev.stopPropagation(); t.o.fechar(); return;
+    }
+    if (ev.key === 'Tab') {
+      const f = [...t.el.querySelectorAll(FOCAVEIS)].filter(visivel);
+      if (!f.length) { ev.preventDefault(); t.el.focus(); return; }
+      const i = f.indexOf(document.activeElement);
+      if (ev.shiftKey && i <= 0) { ev.preventDefault(); f[f.length - 1].focus(); }
+      else if (!ev.shiftKey && (i === f.length - 1 || (i === -1 && !t.el.contains(document.activeElement)))) { ev.preventDefault(); f[0].focus(); }
+    }
+  }, true);
+  window.TKJanela = { prender };
+
+  /* ---------- 3. "Ir para o conteúdo" em toda página (janelas.css traz o visual .tk-pular) ---------- */
+  const pularConteudo = () => {
+    if (document.querySelector('.tk-pular') || document.getElementById('grid')) return;   // a vitrine (vitrine.js) monta o próprio salto, com a mesma classe
+    const alvo = document.querySelector('main,[role=main]');
+    if (!alvo || !document.body) return;
+    if (!alvo.id) alvo.id = 'tk-conteudo';
+    if (!alvo.hasAttribute('tabindex')) alvo.setAttribute('tabindex', '-1');
+    const a = document.createElement('a');
+    a.className = 'tk-pular'; a.href = '#' + alvo.id; a.textContent = 'Ir para o conteúdo';
+    a.addEventListener('click', (ev) => { ev.preventDefault(); try { alvo.focus({ preventScroll: false }); } catch (e) { alvo.focus(); } });
+    document.body.insertBefore(a, document.body.firstChild);
+  };
+
   const iniciar = () => {
+    pularConteudo();
     ligarRotulos(document); tornarTeclado(document);
     observarJanelas();
     /* v7.25: antes cada mudança em qualquer lugar (até um texto trocado) varria a página inteira; no painel, com centenas de
