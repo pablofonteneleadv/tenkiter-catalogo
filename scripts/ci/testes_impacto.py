@@ -50,6 +50,13 @@ def classificar(arquivo: str) -> set[str]:
     nome = p.rsplit("/", 1)[-1]
     if p in ("ag ents.md".replace(" ", ""), "claude.md", "gemini.md"):
         return set(MODULOS)
+    # Metadados de entrega e lista de testes NÃO são código de produto: subir VERSION, registrar um teste no mapa/runner
+    # ou trocar o número do service worker não deve rodar a plataforma inteira (era a espera desnecessária de toda PR).
+    # O seletor e o inventário (módulo "ci") validam o mapa; o service worker tem testes próprios (push/infra).
+    if p in ("version", "scripts/ci/testes_impacto_manifesto.json", "tests/rodar_tudo.py"):
+        return {"ci"}
+    if p == "onesignalsdkworker.js":
+        return {"push", "infra"}
     if p.startswith((".github/", ".agents/", ".claude/", ".codex/", "scripts/ci/", "scripts/deploy/", "scripts/graphify/")):
         return set(MODULOS)
     if nome in ("common.js", "nav.js", "package.json", "package-lock.json", "requirements.txt", "sw.js", "service-worker.js", "wrangler.toml"):
