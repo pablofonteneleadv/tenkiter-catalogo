@@ -94,3 +94,11 @@ Revisar periodicamente o Job Summary, tempos por módulo e os resultados da bate
 `backup/pre-ci-impacto-20261108` é o ponto de recuperação (se existir na ref de trabalho). Na dúvida, restaurar o workflow anterior e reabrir CI; não alterar dados do cliente. Nenhum teste desse planejamento usa credenciais privadas, nem coloca Apps Script .gs no repositório público.
 
 **Restrição importante:** o plano é baseado em arquivos, não consegue provar sozinho que todas as dependências ocultas foram consideradas. A IA responsável precisa adicionar testes quando encontrar uso indireto; o fallback amplia cobertura quando o arquivo é desconhecido. Essas duas camadas se complementam.
+
+## Execução paralela sem perda de cobertura (PR #393)
+
+Quando o plano seleciona mais de 8 testes, o CI distribui os **mesmos testes** em 2 jobs (9–30 testes) ou 4 jobs (31 ou mais). A atribuição é determinística: ordem do manifesto + índice do teste módulo número de shards. Cada teste pertence a **um único shard**; as somas são verificadas por `tests/testes_impacto_seletor.py`. Com poucos testes, só um job é criado.
+
+A distribuição NÃO muda a seleção por impacto. Uma PR ampla como a #393 continua com todos os 119 testes que o seletor considera necessários, mas sem aguardar sua execução sequencial em um único runner. Cada job possui navegador/servidores e diretórios próprios; os nomes dos artifacts incluem o índice para não conflitar. O portão de qualidade só fica verde quando TODOS os shards passam. `fail-fast: false` permite identificar todas as falhas reais, mesmo se uma área reprovar.
+
+A bateria `suite=completo`, a execução noturna e os modos de recuperação continuam **sem shards**, para evitar multiplicar o trabalho de integração. Nunca usar paralelismo como justificativa para retirar testes.
