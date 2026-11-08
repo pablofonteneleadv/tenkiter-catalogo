@@ -17,7 +17,7 @@
   :root { --preto:#0d0d0d; --cinza:#F5F1E8; --branco:#fff; --verde:#198754; --vermelho:#c62828; --borda:#ddd; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--cinza); color:var(--preto); line-height:1.4; padding-bottom:70px; }
-  header { background:var(--preto); background-image:linear-gradient(180deg,#0d0d0d 0%,#14140f 100%); border-bottom:2px solid var(--laranja); color:var(--laranja); padding:16px; text-align:center; position:sticky; top:0; z-index:20; font-weight:700; font-family:"Poppins",sans-serif; letter-spacing:.5px; }
+  header { background:var(--preto); background-image:linear-gradient(180deg,#0d0d0d 0%,#14140f 100%); border-bottom:2px solid var(--laranja); color:var(--laranja); padding:16px; text-align:center; position:sticky; top:0; z-index: var(--z-sticky, 20); font-weight:700; font-family:"Poppins",sans-serif; letter-spacing:.5px; }
   header h1 { margin:0; font:inherit; }
   main { max-width:860px; margin:0 auto; padding:14px; }
   .card { background:var(--branco); border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }

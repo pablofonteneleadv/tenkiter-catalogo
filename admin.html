@@ -26,7 +26,7 @@
   h1, h2, h3 { font-family: "Poppins", sans-serif; font-weight: 800; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 76px; }
-  header { background: var(--preto); color: var(--laranja); padding: 18px 16px; text-align: center; position: sticky; top: 0; z-index: 20; }
+  header { background: var(--preto); color: var(--laranja); padding: 18px 16px; text-align: center; position: sticky; top: 0; z-index: var(--z-sticky, 20); }
   .header-brand-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
   .header-logo-img { height: 32px; width: auto; }
   header h1 { margin: 0; font-size: 1.2rem; letter-spacing: 1px; font-weight: 800; }
@@ -601,7 +601,7 @@
   .acoes-linha .btn-link { background: #eee; color: #333; }
   .acoes-linha .btn-postar { background: #fde7f3; color: #8a1259; }
   /* o menu ⋯ saía cortado: content-visibility recorta o que passa da borda do cartão; com o menu aberto o cartão deixa de recortar */
-  .produto:has(details.mais[open]) { content-visibility: visible; z-index: 20; position: relative; }
+  .produto:has(details.mais[open]) { content-visibility: visible; z-index: var(--z-sticky, 20); position: relative; }
   #btn-bulk-postar { background: #c13584; color: #fff; }
   .sem-postador #btn-bulk-postar, .sem-postador .btn-postar { display: none !important; }
   details.mais { position: absolute; top: 10px; right: 10px; z-index: 5; }
@@ -6530,7 +6530,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 </script>
 <script src="admin-gestao.js?v=7.57.0"></script>
 <script src="admin-push.js?v=7.58.1"></script>
-<script src="admin-conexoes.js?v=7.61.0"></script>
+<script src="admin-conexoes.js?v=7.63.0"></script>
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.61.0">
 <script src="admin-disponibilidade.js?v=7.58.1"></script>
@@ -6540,13 +6540,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-presenca.js?v=7.40.43"></script>
 <script src="mensagens-gestor.js?v=7.61.0"></script>
 <script src="admin-mensagens.js?v=7.61.0"></script>
-<script src="admin-instagram.js?v=7.61.0"></script>
+<script src="admin-instagram.js?v=7.63.0"></script>
 <script src="admin-caixa-fotos.js?v=7.52.0"></script>
 <link rel="stylesheet" href="pedir-fotos.css?v=7.61.0">
 <script src="pedir-fotos.js?v=7.58.1"></script>
 <script src="video-validation.js?v=7.58.1"></script>
 <script src="fotos-novas.js?v=7.49.0"></script>
-<script src="admin-postagens.js?v=7.61.0"></script>
+<script src="admin-postagens.js?v=7.63.0"></script>
 <script src="admin-fotoia.js?v=7.57.0"></script>
 <script src="admin-enquadrar.js?v=7.61.0"></script>
 <script src="admin-capa-video.js"></script>
@@ -6598,7 +6598,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 </script>
 <script src="a11y.js?v=7.61.0"></script>
 <script src="conta.js"></script>
-<script src="push.js?v=7.61.0"></script>
+<script src="push.js?v=7.63.0"></script>
 
 <script>
 /* Atalhos "O que fazer agora": só levam a funções que já existem (nada foi removido). */

@@ -4,7 +4,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 76px; }
 
-  header { background: var(--preto); background-image: linear-gradient(180deg, #0d0d0d 0%, #14140f 100%); border-bottom: 2px solid var(--laranja); color: var(--laranja); padding: 14px 14px 10px; position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+  header { background: var(--preto); background-image: linear-gradient(180deg, #0d0d0d 0%, #14140f 100%); border-bottom: 2px solid var(--laranja); color: var(--laranja); padding: 14px 14px 10px; position: sticky; top: 0; z-index: var(--z-sticky, 20); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
   .header-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; max-width: 900px; margin: 0 auto; }
   .header-titulo { text-align: left; display: flex; align-items: center; gap: 10px; }
   .header-logo-img { height: 38px; width: auto; flex-shrink: 0; }
@@ -48,7 +48,7 @@
     .filtros .busca-campo input[type=text] { margin-bottom: 0; }
     .filtros .filtros-extras { display: none; }
     /* v6.5: painel de tela cheia no celular — rolagem própria, topo e rodapé fixos, nada fica escondido atrás da barra de baixo */
-    .filtros.aberto .filtros-extras, .filtros.compacto.aberto .filtros-extras { display: flex; flex-direction: column; position: fixed; inset: 0; top: 0; z-index: 100; background: var(--branco); padding: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; box-shadow: none; border-radius: 0; }
+    .filtros.aberto .filtros-extras, .filtros.compacto.aberto .filtros-extras { display: flex; flex-direction: column; position: fixed; inset: 0; top: 0; z-index: var(--z-folha, 100); background: var(--branco); padding: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; box-shadow: none; border-radius: 0; }
     .filtros.aberto .fx-topo { display: flex; }
     .filtros.aberto .fx-ver { display: block; }
     .filtros.aberto { z-index: var(--z-folha, 100); }   /* o painel fixo vive dentro de #filtros (z 19): sem isto a barra de baixo (z 90) ficava por cima */
@@ -304,7 +304,7 @@
   .inst-msg { margin: 10px 0 0; min-height: 1em; color: #fff; font-weight: 700; font-size: 0.84rem; }
 
   /* botão flutuante do WhatsApp (sempre o número fixo da loja) */
-  .fab-zap { position: fixed; right: 14px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 50%; background: var(--verde); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 80; text-decoration: none; }
+  .fab-zap { position: fixed; right: 14px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 50%; background: var(--verde); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: var(--z-menu, 80); text-decoration: none; }
   .fab-zap svg { width: 30px; height: 30px; fill: currentColor; }
   .fab-zap:focus-visible { outline: 3px solid var(--preto); outline-offset: 3px; }
 

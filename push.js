@@ -509,7 +509,7 @@
       if (document.querySelector('.aberto, .visivel, [role=dialog][open]')) return;
       if (!document.getElementById('tk-placa-css')) {
         var st = document.createElement('style'); st.id = 'tk-placa-css';
-        st.textContent = '#tk-placa-aviso{position:fixed;left:12px;right:12px;bottom:84px;z-index:80;max-width:460px;margin:0 auto;background:#111;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);font:14px/1.35 system-ui,sans-serif}' +
+        st.textContent = '#tk-placa-aviso{position:fixed;left:12px;right:12px;bottom:84px;z-index: var(--z-menu, 80);max-width:460px;margin:0 auto;background:#111;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);font:14px/1.35 system-ui,sans-serif}' +
           '#tk-placa-aviso b{display:block;font-size:15px;margin-bottom:2px}#tk-placa-aviso p{margin:0 0 10px;color:#e6e6e6}' +
           '#tk-placa-aviso .tkpl-l{display:flex;gap:8px;flex-wrap:wrap}' +
           '#tk-placa-aviso button{width:auto;font:inherit;cursor:pointer;border-radius:10px;padding:9px 14px;min-height:40px}' +
