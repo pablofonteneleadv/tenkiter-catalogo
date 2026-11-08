@@ -394,6 +394,9 @@
     "tests/manual_fidelidade.js": [
       "treinamentos",
       "ci"
+    ],
+    "tests/prova_resiliente.py": [
+      "treinamentos"
     ]
   },
   "evidencias": {

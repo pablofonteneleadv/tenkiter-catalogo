@@ -50,6 +50,7 @@ with sync_playwright() as p:
     chk("diz o motivo (sessão) e que a nota está guardada", "sessão" in txt.lower() and "guardada" in txt.lower(), txt[:300])
     chk("tem o botão 'Enviar de novo'", pg.locator("#reenviar-resultado").count() == 1)
     chk("a nota ficou guardada no aparelho", pg.evaluate("Object.keys(localStorage).some(k => k.startsWith('tm_resultado_pend_'))"))
+    chk("nota pendente sem credenciais", pg.evaluate("""() => Object.keys(localStorage).filter(k => k.startsWith('tm_resultado_pend_')).every(k => (JSON.parse(localStorage.getItem(k) || '[]')).every(x => !('senha' in x) && !('sessao' in x) && !('token' in x)))"""))
     st["resultado_erro"] = None
     pg.click("#reenviar-resultado"); pg.wait_for_timeout(900)
     chk("Enviar de novo funciona quando o servidor volta", pg.locator("#reenviar-resultado").count() == 0 and "avaliação 1 de 3" in pg.inner_text("#quiz-result"), pg.inner_text("#quiz-result")[:300])
