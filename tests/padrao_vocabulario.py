@@ -44,6 +44,7 @@ PERMITIDO = [
     ("privacidade.html", "*", r".*"), ("exclusao-dados.html", "*", r".*"),      # textos jurídicos: revisão própria
     ("common.js", "*", r".*"),   # sacola/peça/"Sem conexão com o servidor" aqui: ficam para o lote que pode tocar common.js (o APK embute o arquivo)
     ("*", "Apagar (rótulo)", r"Apague parte do texto"),
+    ("treinamentos.html", "sem conexão fora do padrão", r"Sem conexão com o servidor\. Sua nota"),   # mensagem específica: avisa que a nota ficou guardada
     ("*", "peça", r"Peça (ao|para|a ele)|peça a ele|vendidas separadamente"),
     ("__", "peça", r"__"),            # mensagens de status do pedido: ficam para o lote que pode tocar common.js (APK embute o arquivo)
     ("admin-postagens.js", "sacola", r".*"), # "Sacola" é o NOME DO DESENHO (ícone de sacola) no editor visual, não a seleção da cliente
