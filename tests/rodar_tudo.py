@@ -202,6 +202,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("video_upload_feedback.py", lambda o: "OK 1440" in o),
     ("video_lote_limites.py", lambda o: "OK vagas" in o),
     ("postagens_video_status.py", lambda o: "OK 320" in o),
+    ("postagens_multi_sem_limite.py", lambda o: "FALHAS=0" in o),  # v7.62.0: produtos juntos sem teto de 8, prévias paginadas, aviso acima de 60
     ("padrao_vocabulario.py", lambda o: "FALHAS=0" in o),   # v7.57.0: vocabulário único (produto, seleção, Gestão…) e avisos
     ("avisos_padrao.py", lambda o: "FALHAS=0" in o),        # v7.57.0: TKAviso, arquivar com Desfazer, campo de senha
 ]
