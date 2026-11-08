@@ -19,6 +19,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.63.0] - 2026-11-08
+
+Pagamento de dívida de padrão (catraca de `check_padroes.py`: 387 para 351 ocorrências), uma regra por commit, sem mudar `common.js`.
+
+- `common.js?v=` igual em todas as páginas (7.59.0): só o parâmetro dos HTML mudou (index, esteira, fotos-ia, admin, treinamentos, currículos).
+- 404, manual (redirecionamento), treino de cadastro (simulação) e fotos-ia passam a carregar `janelas.css`, `a11y.js` e `tk-padrao.css`. Na simulação a Escolha de categoria mantém os 52 px de antes e o "Preciso de uma ajudinha" ganhou área de toque de 44 px.
+- Postagens: o fechar da Colagem e do menu "Adicionar à arte" usa `tk-fechar` (✕ 44 por 44 contornado; a Colagem deixou de ter o texto "✕ Fechar").
+- Erro de envio ao Cloudinary e diagnóstico do Zernio sem "HTTP" na tela (o código aparece como "código 404").
+- Treinamentos e Instagram (Descartar com Desfazer) usam `TKAviso` no lugar de aviso próprio; o teste local do push usa `SITE_URL`.
+- `z-index` 20, 80 e 100 viraram `var(--z-sticky|menu|folha, N)` com o mesmo número (ordem das camadas igual, conferida por estilo calculado nas páginas tocadas).
+
 ## [7.61.1] - 2026-11-08
 
 - Corrige as faixas de abas (Postagens, Avisos e outras): na 7.61.0 cada aba ficou com a largura da tela inteira e só a primeira aparecia (sumiram Fila, Postar à mão, Já postadas…). A regra única das abas agora fixa a largura pelo texto. Teste novo `tests/abas_visiveis.py` (falha no código anterior).

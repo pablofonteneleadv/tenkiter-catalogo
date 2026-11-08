@@ -50,18 +50,13 @@
   },
   "z-index": {
    "admin-mensagens.js": 1,
-   "admin-postagens.js": 1,
-   "admin.html": 8,
-   "catalogo.css": 10,
+   "admin.html": 6,
+   "catalogo.css": 7,
    "common.js": 1,
-   "curriculos.html": 1,
    "fila-lote.js": 1,
-   "fotos-ia.css": 1,
    "nav.js": 1,
    "pedido.js": 1,
-   "push.js": 1,
-   "pwa.js": 1,
-   "treinamentos.html": 2,
+   "treinamentos.html": 1,
    "tutorial-app.js": 5
   }
  }
