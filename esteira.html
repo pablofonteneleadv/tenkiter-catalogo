@@ -276,6 +276,7 @@
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
 
 <script src="common.js?v=7.48.0"></script>
+<script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
 <script src="conta.js"></script>
@@ -661,6 +662,7 @@
     const j = await r.json().catch(() => null);
     if (r.status === 401 || r.status === 403) throw new Error('Seu acesso não permite enviar fotos. Peça ao administrador a permissão de cadastrar peças, ou fotografe pelo painel.');
     if (!r.ok || !j || !j.ok || !j.url) throw new Error(legivel(j && j.erro, 'O servidor de fotos não aceitou a foto. Tente de novo.'));
+    if (window.TKMiniFoto) window.TKMiniFoto.enviar(blob, j.url);   // cópia de 480 px ao lado da foto (vitrine mais leve)
     return j.url;
   }
   /** Sobe as fotos e acrescenta à galeria da peça (sem foto ainda: a primeira vira a capa), pelo mesmo pacote completo do update. */
