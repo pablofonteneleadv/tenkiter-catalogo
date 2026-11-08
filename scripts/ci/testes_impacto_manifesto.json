@@ -407,6 +407,9 @@
     ],
     "tests/worker_post_chave.js": [
       "postagens"
+    ],
+    "tests/worker_mensagens_rapido.js": [
+      "mensagens"
     ]
   },
   "evidencias": {

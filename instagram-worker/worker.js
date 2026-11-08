@@ -250,12 +250,25 @@ async function cfgGet(env, k) { const r = await env.DB.prepare('SELECT valor FRO
 async function cfgSet(env, k, v) { if (v === null || v === undefined) await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(k).run(); else await env.DB.prepare('INSERT INTO cfg (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor').bind(k, String(v)).run(); }
 
 /** Sessão válida + permissões (pergunta ao Apps Script; resultado 2 min no cache da borda). */
-async function permissoes(env, req) {
+/* v7.56.4: a conferência de sessão (Apps Script, 2–3,5 s cada) era feita até 3 vezes SEGUIDAS a cada mensagem enviada (rota, assinatura do texto
+ * e nome do atendente). Agora: (1) uma vez por requisição (memo); (2) as ações de rotina do Mensageiro também usam o cache de 2 min da borda,
+ * igual à leitura das conversas (a tela já consulta o tempo todo, então ele quase sempre está aquecido). Configurações e ações de acesso
+ * (/msg/config, /msg/ligar, /msg/pausar, tudo fora do Mensageiro) continuam conferindo a sessão na hora. */
+const PERMS_MEMO_ = new WeakMap();
+const MSG_ROTINA_POST_ = new Set(['/msg/enviar', '/msg/lida', '/msg/encerrar', '/msg/dono', '/msg/presenca', '/msg/iniciar', '/msg/rotular', '/msg/notas', '/msg/ficha', '/msg/pessoa', '/msg/contexto', '/msg/anexo', '/msg/agendar', '/msg/acompanhamento']);
+function permissoes(env, req) {
+  let m = PERMS_MEMO_.get(req);
+  if (!m) { m = permissoesConferir_(env, req); PERMS_MEMO_.set(req, m); }
+  return m;
+}
+async function permissoesConferir_(env, req) {
   const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
   const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
   if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
   const chave = new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
-  const cache = caches.default, g = req.method === 'GET' && !req.url.includes('/esteira/') ? await cache.match(chave) : null;
+  let caminho = ''; try { caminho = new URL(req.url).pathname; } catch (e) { /* sem caminho: confere na hora */ }
+  const podeCache = !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
+  const cache = caches.default, g = podeCache ? await cache.match(chave) : null;
   if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; v.permissoes.acessosConfiguraveis = v.configuraveis === true;v.permissoes.msgModelos=v.msgModelos||{}; return v.permissoes; }
   let lista = null, perfis = [], nome = '', configuraveis = false, msgModelos = {};
   try {
@@ -4325,17 +4338,30 @@ async function etiquetasDosAlvos_(env, alvos) {
   return mapa;
 }
 // Preferência no cadastro de atendimento: mesma chave com/sem +55 e nono dígito.
-async function perfilAtendente_(env, req, perms) {
+const PERFIL_MEMO_ = new WeakMap();
+function perfilAtendente_(env, req, perms) {
+  if (perms) return perfilAtendenteCalcular_(env, req, perms);
+  let m = PERFIL_MEMO_.get(req);
+  if (!m) { m = perfilAtendenteCalcular_(env, req, null); PERFIL_MEMO_.set(req, m); }
+  return m;
+}
+async function perfilAtendenteCalcular_(env, req, perms) {
   const raw = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0,20), f = pessoaTelefone_(raw);
   const chave = msgTelefone_(raw), nomes = [...new Set([chave, raw, f && f.d, f && f.d.slice(2), f && f.chave, f && f.chave.slice(2)].filter(Boolean))];
+  // uma consulta só (antes: até 6 seguidas) e em paralelo com a conferência da sessão e a assinatura
+  const [linhas, psPronto, assinatura] = await Promise.all([
+    nomes.length ? env.DB.prepare('SELECT chave, valor FROM cfg WHERE chave IN (' + nomes.map(() => '?').join(',') + ')').bind(...nomes.map((k) => 'msg_atendente_' + k)).all().then((r) => (r && r.results) || []) : Promise.resolve([]),
+    perms || permissoes(env, req),
+    cfgGet(env, 'msg_assinatura_' + chave)
+  ]);
   let escolhido = '';
-  for (const k of nomes) { escolhido = (await cfgGet(env, 'msg_atendente_' + k)) || ''; if (escolhido) break; }
-  const ps = perms || await permissoes(env, req), admin = Array.isArray(ps) && ps.includes('gerir_acessos');
+  for (const k of nomes) { const l = linhas.find((x) => x.chave === 'msg_atendente_' + k); if (l && l.valor) { escolhido = l.valor; break; } }
+  const ps = psPronto, admin = Array.isArray(ps) && ps.includes('gerir_acessos');
   const cadastro = Array.isArray(ps) ? String(ps.msgNome || '').trim() : '';
   let padrao = nomeAtendenteLimpo_(cadastro.split(/\s+/)[0] || '');
   if (padrao && padrao === padrao.toUpperCase()) padrao = padrao[0] + padrao.slice(1).toLowerCase();
   return { chave, meuNome: escolhido, nomePadrao: padrao, nomeCadastro: cadastro, podeOcultar: admin,
-    mostrarNome: !admin || (await cfgGet(env, 'msg_assinatura_' + chave)) !== '0' };
+    mostrarNome: !admin || assinatura !== '0' };
 }
 async function meuNomeAtendente_(env, req) {
   const p = await perfilAtendente_(env, req);
@@ -6726,7 +6752,11 @@ export default {
         const d = await req.json().catch(() => ({}));delete d._acompanhamento;delete d._janelaAutomatica;
         if(!perms.includes('gerir_acessos') && String(d.texto||'').trim()){const c=await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(Number(d.conversa)||0).first();if(c)d.texto=await textoAssinadoEquipe_(env,req,c.canal,d.texto);}
         const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
-        if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=?,dono_id=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req),msgTelefone_(req.headers.get('X-TK-Whats')), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } }   // v7.40.6: quem responde primeiro vira o responsável
+        if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) {   // v7.40.6: quem responde primeiro vira o responsável
+          // v7.56.4: é conforto — não faz a pessoa esperar por ele (segue em segundo plano; sem ctx, como nos testes, espera)
+          const donoTarefa = (async () => { try { await env.DB.prepare("UPDATE msg_conversa SET dono=?,dono_id=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), msgTelefone_(req.headers.get('X-TK-Whats')), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } })();
+          if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(donoTarefa); else await donoTarefa;
+        }
         return J(corpo, cod);
       }
       if(p==='/msg/acompanhamento'&&req.method==='GET'){
