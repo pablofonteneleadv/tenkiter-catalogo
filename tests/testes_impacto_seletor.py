@@ -55,6 +55,15 @@ check(p["graphify_alterado"], "Instruções da IA acionam Graphify")
 ci_files = [".github/workflows/ci.yml", "scripts/ci/testes_impacto.py",
             "scripts/ci/testes_impacto_manifesto.json", "tests/testes_impacto_seletor.py",
             "docs/ia/testes-por-impacto.md", "AGENTS.md", "CLAUDE.md"]
+# Metadados de entrega: o número de versão, o mapa de testes e o runner não disparam a bateria inteira.
+p = select(["treinamentos.html", "VERSION", "CHANGELOG.md", "scripts/ci/testes_impacto_manifesto.json", "tests/rodar_tudo.py"])
+check(set(p["modulos"]) == {"treinamentos", "ci"}, "Versão, changelog, mapa de testes e runner somam só o módulo ci")
+p = select(["instagram-worker/worker.js", "VERSION"])
+check("treinamentos" not in p["modulos"] and "catalogo" not in p["modulos"], "Worker de mensagens + versão não roda treinamentos nem catálogo")
+p = select(["OneSignalSDKWorker.js"])
+check(set(p["modulos"]) == {"push", "infra"}, "Número do service worker roda push e infra, não tudo")
+p = select(["scripts/ci/testes_impacto.py", "VERSION"])
+check(set(p["modulos"]) == m, "Mexer na regra do seletor junto com produto continua amplo (fail-safe)")
 p = select(ci_files)
 check(p["modulos"] == ["ci"] and not p["suite_completa"], "CI isolado executa smoke dirigido, não a plataforma inteira")
 p = select(ci_files + ["common.js"])

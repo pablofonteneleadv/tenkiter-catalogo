@@ -75,9 +75,6 @@
     "tests/filtros_tecido.py": [
       "catalogo"
     ],
-    "tests/foto_ia.py": [
-      "fotoia"
-    ],
     "tests/foto_ia_catalogo.py": [
       "catalogo",
       "fotoia"
@@ -85,11 +82,11 @@
     "tests/foto_ia_lotes.py": [
       "fotoia"
     ],
-    "tests/fotoia_plano.js": [
+    "tests/foto_ia.py": [
       "fotoia"
     ],
-    "tests/fotos_mini_script.py": [
-      "midia"
+    "tests/fotoia_plano.js": [
+      "fotoia"
     ],
     "tests/fotos_postadas_ui.py": [
       "esteira",
@@ -104,14 +101,13 @@
     "tests/juntar_admin.py": [
       "catalogo"
     ],
-    "tests/manual_fidelidade.js": [
-      "treinamentos",
-      "ci"
-    ],
     "tests/manual_fidelidade_ui.py": [
       "treinamentos"
     ],
     "tests/manual_rico.py": [
+      "treinamentos"
+    ],
+    "tests/prova_resiliente.py": [
       "treinamentos"
     ],
     "tests/mensagens_acesso_equipe.py": [
@@ -182,22 +178,14 @@
       "esteira",
       "mensagens"
     ],
-    "tests/mensagens_tamanhos.js": [
+    "tests/mensagens_tamanhos_resumo.js": [
       "mensagens"
     ],
-    "tests/mensagens_tamanhos_resumo.js": [
+    "tests/mensagens_tamanhos.js": [
       "mensagens"
     ],
     "tests/menu_selecao_ia.py": [
       "fotoia"
-    ],
-    "tests/midia_r2.py": [
-      "midia",
-      "catalogo"
-    ],
-    "tests/painel_leve.py": [
-      "catalogo",
-      "midia"
     ],
     "tests/pedir_fotos_lote.py": [
       "esteira"
@@ -205,11 +193,11 @@
     "tests/postagens_agora_selecao_ui.py": [
       "postagens"
     ],
-    "tests/postagens_fila.py": [
-      "postagens"
-    ],
     "tests/postagens_fila_midia.py": [
       "midia",
+      "postagens"
+    ],
+    "tests/postagens_fila.py": [
       "postagens"
     ],
     "tests/postagens_prova_falhas_ui.py": [
@@ -290,10 +278,10 @@
     "tests/worker_equipe_inicio.js": [
       "mensagens"
     ],
-    "tests/worker_esteira.js": [
+    "tests/worker_esteira_fotos.js": [
       "esteira"
     ],
-    "tests/worker_esteira_fotos.js": [
+    "tests/worker_esteira.js": [
       "esteira"
     ],
     "tests/worker_eventos_runtime.cjs": [
@@ -334,24 +322,17 @@
       "mensagens",
       "postagens"
     ],
-    "tests/worker_mensagens.js": [
+    "tests/worker_mensagens_conversa.js": [
       "mensagens"
     ],
-    "tests/worker_mensagens_conversa.js": [
+    "tests/worker_mensagens.js": [
       "mensagens"
     ],
     "tests/worker_midia.js": [
       "midia"
     ],
-    "tests/worker_midia_mini.js": [
-      "midia",
-      "catalogo"
-    ],
     "tests/worker_mobile_push.js": [
       "push"
-    ],
-    "tests/worker_og.js": [
-      "catalogo"
     ],
     "tests/worker_og_resiliencia.js": [
       "catalogo"
@@ -359,6 +340,9 @@
     "tests/worker_og_runtime.cjs": [
       "catalogo",
       "infra"
+    ],
+    "tests/worker_og.js": [
+      "catalogo"
     ],
     "tests/worker_postagens_coordenacao.js": [
       "postagens"
@@ -406,6 +390,25 @@
     "tests/worker_zap_proativo.js": [
       "mensagens",
       "postagens"
+    ],
+    "tests/manual_fidelidade.js": [
+      "treinamentos",
+      "ci"
+    ],
+    "tests/fotos_mini_script.py": [
+      "midia"
+    ],
+    "tests/midia_r2.py": [
+      "midia",
+      "catalogo"
+    ],
+    "tests/painel_leve.py": [
+      "catalogo",
+      "midia"
+    ],
+    "tests/worker_midia_mini.js": [
+      "midia",
+      "catalogo"
     ]
   },
   "evidencias": {

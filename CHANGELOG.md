@@ -26,6 +26,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Painel: a lista de produtos e as fotos só são montadas depois do login (antes: ~30 mil nós e ~2,4 MB de fotos atrás da janela de entrada). Lista grande aparece em duas etapas (80 primeiros cartões na hora).
 - `common.js` (`fotoMini`) entra no APK: Android 2.4.23 (versionCode 30), sem mudança de comportamento do aplicativo. Todas as páginas passam a carregar `common.js?v=` igual à versão do site.
 
+## [7.56.3] - 2026-11-07
+
+- Prova do manual: o estagiário (e qualquer pessoa) sempre consegue finalizar. Pergunta impossível de responder (sem alternativas) deixa de travar o botão Corrigir; se algo falhar na correção, o botão é liberado com explicação.
+- Nota da avaliação fica guardada no aparelho até o servidor confirmar. Se o servidor recusar ou a internet cair, a tela diz o motivo em português (sessão, permissão, limite, conexão) e oferece "Enviar de novo"; ao entrar de novo, notas pendentes são reenviadas sozinhas (o servidor ignora repetição).
+
 ## [7.56.2] - 2026-11-07
 
 - Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.
