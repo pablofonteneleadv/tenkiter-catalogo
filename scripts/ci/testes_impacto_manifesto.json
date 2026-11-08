@@ -10,7 +10,8 @@
     "midia",
     "treinamentos",
     "push",
-    "infra"
+    "infra",
+    "ci"
   ],
   "tests": {
     "tests/acessos_perfis.py": [
@@ -33,7 +34,8 @@
       "catalogo"
     ],
     "tests/catalogo_tecido.js": [
-      "catalogo"
+      "catalogo",
+      "ci"
     ],
     "tests/disponibilidade_rapida.py": [
       "mensagens"
@@ -155,7 +157,8 @@
       "mensagens"
     ],
     "tests/mensagens_pendentes_espiar.js": [
-      "mensagens"
+      "mensagens",
+      "ci"
     ],
     "tests/mensagens_relacionamento_ui.py": [
       "mensagens"
@@ -325,7 +328,8 @@
       "midia"
     ],
     "tests/worker_mobile_push.js": [
-      "push"
+      "push",
+      "ci"
     ],
     "tests/worker_og_resiliencia.js": [
       "catalogo"
@@ -383,6 +387,10 @@
     "tests/worker_zap_proativo.js": [
       "mensagens",
       "postagens"
+    ],
+    "tests/manual_fidelidade.js": [
+      "treinamentos",
+      "ci"
     ]
   },
   "evidencias": {
