@@ -17,7 +17,7 @@ Proteger a loja de regressões **sem executar toda a plataforma em toda PR**. O 
 
 O job `escopo` calcula diff **base...head** do PR. No deploy `workflow_call`, lê `HEAD^..HEAD`. Se o diff não puder ser determinado, seleciona todos os módulos. O script `testes_impacto.py planejar` grava no `GITHUB_OUTPUT` os campos `so_docs`, `suite_completa`, `graphify_alterado`, `modulos`. A justificativa aparece no **Job Summary** do GitHub.
 
-As categorias iniciais são `catalogo`, `mensagens`, `postagens`, `esteira`, `fotoia`, `midia`, `treinamentos`, `push` e `infra`. A classificação é por arquivo/impacto e a relação exata **teste → um ou vários módulos** fica no manifesto. Dependências cruzadas são intencionais; um teste pode executar em mais de um cenário. A bateria antiga contém mais de cem arquivos de regressão; nenhum foi simplesmente apagado.
+As categorias são `catalogo`, `mensagens`, `postagens`, `esteira`, `fotoia`, `midia`, `treinamentos`, `push`, `infra` e `padroes` (somada a arquivos de interface, ver abaixo). A classificação é por arquivo/impacto e a relação exata **teste → um ou vários módulos** fica no manifesto. Dependências cruzadas são intencionais; um teste pode executar em mais de um cenário. A bateria antiga contém mais de cem arquivos de regressão; nenhum foi simplesmente apagado.
 
 **Exemplos concretos:**
 
@@ -35,6 +35,10 @@ As categorias iniciais são `catalogo`, `mensagens`, `postagens`, `esteira`, `fo
 
 Os exemplos são **piso**, não teto. Se `treinamentos.html` começar a usar um recurso de mídia compartilhada, a IA deve adicionar `midia` no plano.
 
+## Padrões do site: módulo `padroes` (08/11/2026)
+
+Os padrões obrigatórios do site estão em [`padroes-site.md`](padroes-site.md). Dois mecanismos os travam sem custo de plataforma inteira: (1) `scripts/ci/check_padroes.py` (Python puro, ~2 s, com catraca em `scripts/ci/padroes-baseline.json`) e o teste dele, `tests/padroes_check_teste.py`, rodam no job estático de **toda** PR; (2) `classificar()` soma o módulo `padroes` a **qualquer arquivo de interface** (html, css ou js na raiz do repositório), e esse módulo mapeia os testes de estrutura `janelas_padrao.py`, `padrao_vocabulario.py`, `avisos_padrao.py` e `padrao_regras_dados.py` (~3,5 min somados, medidos). `padrao_aparencia_ui.py` (~4,5 min, o mais pesado) continua nos módulos de área onde já rodava, para o conjunto não passar de 6 min; a IA que mexer em aparência deve acrescentar `CI-EXTRA: catalogo` (ou a área) se o plano não o incluir. Workers, `OneSignalSDKWorker.js`, `VERSION`, `CHANGELOG`, manifesto, testes e docs **não** somam `padroes`; arquivo desconhecido continua fail-safe (todos). `check_padroes.py`, o baseline e `padroes_check_teste.py` contam como módulo `ci` e entram em `ARQUIVOS_CI_ISOLADO` junto com `padroes-site.md` e a skill de estética. Quem paga dívida de padrão baixa o baseline na mesma PR (`check_padroes.py --atualizar`).
+
 ## Metadados de entrega não disparam a bateria (08/11/2026)
 
 Subir o número de versão não muda o que a loja faz, então **não deve** custar a plataforma inteira. `classificar()` trata assim:
@@ -51,7 +55,7 @@ Continuam amplos (fail-safe): `common.js`, `nav.js`, workflows, `scripts/ci/test
 
 **Motivo:** classificar toda mudança em `ci.yml` como risco de produto dispara os ~115 testes mapeados até quando a PR apenas otimiza a maneira de escolher os testes. Era exatamente o gargalo de 15–20+ minutos observado na primeira execução da PR #389.
 
-O `planejar` aplica um perfil `ci` **somente se TODOS os arquivos alterados** pertencerem à lista restrita `ARQUIVOS_CI_ISOLADO` em `scripts/ci/testes_impacto.py`: `.github/workflows/ci.yml`, `scripts/ci/testes_impacto.py`, `scripts/ci/testes_impacto_manifesto.json`, `tests/testes_impacto_seletor.py`, `docs/ia/testes-por-impacto.md`, `AGENTS.md` e `CLAUDE.md`. A lista precisa ser revisada em PR, nunca estendida para caminhos de produto por comodidade.
+O `planejar` aplica um perfil `ci` **somente se TODOS os arquivos alterados** pertencerem à lista restrita `ARQUIVOS_CI_ISOLADO` em `scripts/ci/testes_impacto.py`: `.github/workflows/ci.yml`, `scripts/ci/testes_impacto.py`, `scripts/ci/testes_impacto_manifesto.json`, `tests/testes_impacto_seletor.py`, `docs/ia/testes-por-impacto.md`, `AGENTS.md`, `CLAUDE.md` e, desde a trava dos padrões, `scripts/ci/check_padroes.py`, `scripts/ci/padroes-baseline.json`, `tests/padroes_check_teste.py`, `docs/ia/padroes-site.md` e a skill de estética (SKILL.md e contrato-visual.md nos dois espelhos). A lista precisa ser revisada em PR, nunca estendida para caminhos de produto por comodidade.
 
 Além das verificações de todos os PRs (segredos, sintaxe, contratos, testes do seletor), o perfil executa quatro testes Node rápidos independentes: `cadastro_vinculos.js`, `catalogo_tecido.js`, `mensagens_pendentes_espiar.js` e `manual_fidelidade.js`. Não instala Chromium ou FFmpeg para esses testes. O log mostra cada comando e estabelece limite de 600 segundos **por comando** para diagnosticar travamentos.
 

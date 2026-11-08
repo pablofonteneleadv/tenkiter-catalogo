@@ -26,5 +26,6 @@ O estado atual e as instruções por setor ficam no Cofre privado:
 16. Não confunda simulação com validação Android ou integração real.
 17. Registre mudanças, testes, backup, deploy e pendências no log.
 18. Toda mudança visual ou de comportamento da interface passa pela skill `.claude/skills/tenkiter-estetica-humana/SKILL.md`, com revisão mobile/desktop e evidência antes do merge.
+19. Interface = padrões do site obrigatórios (`docs/ia/padroes-site.md`); use os componentes compartilhados; o CI trava regressão (`scripts/ci/check_padroes.py` + testes de padrão).
 
 [Histórico preservado](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/HISTORICO.md) · [Acessos sem segredos](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/ACESSOS.md)

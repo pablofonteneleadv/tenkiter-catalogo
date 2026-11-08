@@ -18,4 +18,6 @@ A revisão estética é um portão obrigatório: execute a jornada real, valide 
 
 As regras operacionais e de segurança existentes em `CLAUDE.md` continuam obrigatórias.
 
+19. Interface = padrões do site obrigatórios (`docs/ia/padroes-site.md`); use os componentes compartilhados; o CI trava regressão (`scripts/ci/check_padroes.py` + testes de padrão).
+
 Para toda alteração que exija novo APK Android, leia e aplique obrigatoriamente `.agents/skills/tenkiter-android-release/SKILL.md`. Merge/deploy só são considerados completos com APK assinado, manifesto público atualizado e atualização pelo botão interno validada ou limitação de teste explicitada.

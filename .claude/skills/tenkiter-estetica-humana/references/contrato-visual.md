@@ -16,6 +16,10 @@
 
 Os arquivos acima são pontos de partida, não uma autorização para normalizar todo o legado. Confirme o padrão ativo e registre inconsistências preexistentes separadamente.
 
+## Padrões obrigatórios (travados no CI)
+
+`docs/ia/padroes-site.md` é a fonte única dos componentes do site e do que é proibido (janelas/camadas, aparência, avisos, dados e regras, vocabulário). Os arquivos acima (`catalogo.css`, `acabamento*.css`) são ponto de partida; os DONOS dos padrões são `janelas.css`, `tk-padrao.css`, `avisos.js`, `padrao-dados.js` e `a11y.js`. A trava automática é `scripts/ci/check_padroes.py` (dívida antiga no baseline, que só pode descer) mais os testes de padrão em navegador; um desvio novo reprova a PR com a mensagem do componente a usar.
+
 ## Composição e densidade
 
 - Uma ação dominante por área; secundárias disponíveis sem competir. Rótulos estáveis, curtos e específicos em português do Brasil.
