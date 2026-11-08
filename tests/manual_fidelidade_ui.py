@@ -30,6 +30,27 @@ fixture = [
     {"type":"bul","text":"Lista com negrito","level":0,"runs":[{"t":"Lista","b":1},{"t":" com negrito"}]},
     {"type":"img","src":"icon-192.png","width":192,"height":192,"side":"full"},
 ]
+
+# O renderer está em um fechamento privado no HTML. Para testar a função REAL
+# sem sessão nem dados de clientes, extraímos seu corpo e o executamos isoladamente
+# com o TMV real já carregado pela página.
+HTML = (ROOT / "treinamentos.html").read_text(encoding="utf8")
+def extrair(inicio, fim):
+    a = HTML.index(inicio)
+    b = HTML.index(fim, a + len(inicio))
+    return HTML[a:b]
+JS_RENDER = """
+(() => {
+ const TMV = window.TMV;
+ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const ricoHtml_ = (t,runs) => TMV.rico(t,runs);
+ const videoHtml_ = () => '';
+""" + extrair("function fundoDoc_(b)", "/** vídeo da lição") + "\n" + extrair("function renderBlocks(blocks, chaveCap)", "/* ---------------- render: login") + """
+ window.__renderManualTeste = renderBlocks;
+})();
+"""
+
 with sync_playwright() as p:
     browser=p.chromium.launch(args=["--no-sandbox"])
     try:
@@ -40,11 +61,13 @@ with sync_playwright() as p:
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.route("**/script.google.com/**",lambda r:r.fulfill(json={"ok":False}))
             page.goto(f"http://127.0.0.1:{PORT}/treinamentos.html",wait_until="domcontentloaded")
-            page.wait_for_function("typeof renderBlocks === 'function' && typeof TMV !== 'undefined'",timeout=15000)
+            page.wait_for_function("typeof window.TMV?.preparar === 'function' && typeof window.TMV?.rico === 'function'",timeout=15000)
+            page.add_script_tag(content=JS_RENDER)
+            page.wait_for_function("typeof window.__renderManualTeste === 'function'")
             page.evaluate("""(blocks) => {
               const root=document.querySelector('#app');
               root.innerHTML='<section class="chapter" id="fixt-manual"><h2>Manual de atendimento</h2>'+
-                renderBlocks(blocks, 'fixt')+'</section>';
+                window.__renderManualTeste(blocks, 'fixt')+'</section>';
               root.style.width='100%';root.style.minWidth='0';
             }""", fixture)
             sec=page.locator("#fixt-manual")
