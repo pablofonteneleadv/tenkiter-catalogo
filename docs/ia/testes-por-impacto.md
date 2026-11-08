@@ -10,7 +10,7 @@ Proteger a loja de regressões **sem executar toda a plataforma em toda PR**. O 
 - PR por área: testes existentes dessa área + extras quando a alteração passa por serviços compartilhados.
 - Arquivo novo ou desconhecido, módulo central, mudança de workflow/deploy: **toda a cobertura** (fail-safe).
 - PR só com Markdown: validações estáticas/de segurança; Graphify quando sua própria documentação muda. Não iniciar dezenas de browsers.
-- **Bateria completa**: execução diária agendada (00:00 Fortaleza, cron 03:00 UTC), manual por `workflow_dispatch suite=completo`, ou rótulo `ci:todos`. Essa bateria **não** é dispensada.
+- **Bateria completa**: execução diária agendada (00:00 Fortaleza, cron 03:00 UTC), manual por `workflow_dispatch suite=completo`, ou `CI-EXTRA: todos` / rótulo `ci:todos`. Essa bateria **não** é dispensada.
 - Merge/deploy sempre depende do `Portão de qualidade` verde. Nunca force merge ou ignore job falho; o sistema de deploy preserva o controle original.
 
 ## Como a seleção funciona
@@ -39,7 +39,7 @@ Os exemplos são **piso**, não teto. Se `treinamentos.html` começar a usar um 
 1. Ler `AGENTS.md`, `CLAUDE.md`, regras do Cofre e esta política. Consultar Graphify local quando disponível; na ausência dele, usar buscas direcionadas e registrar a limitação.
 2. Descrever **o que mudou**, **o que consome o código**, **qual impacto indireto pode ocorrer**, **o que é crítico**, **o que pode ser testado sem serviço real**.
 3. Conferir o plano automático: `python3 scripts/ci/testes_impacto.py planejar --arquivos treinamentos.html` (trocar pelos arquivos reais). Em PR, ler o Job Summary “Plano de testes por impacto”.
-4. Se o plano parecer estreito, **ampliar**, usando rótulos `ci:mensagens`, `ci:postagens`, `ci:esteira`, `ci:fotoia`, `ci:catalogo`, `ci:midia`, `ci:treinamentos`, `ci:push` ou `ci:infra`. O rótulo **soma** testes; jamais substitui os automáticos. Rótulos `ci:todos` executam todos.
+4. **Forma recomendada para qualquer IA: no corpo da PR**, adicione uma linha `CI-EXTRA: mensagens,postagens` (ajustando as áreas) para ampliar sem criar rótulos. A linha `CI-EXTRA: todos` força cobertura total; o evento `edited` reavalia o plano. Se alguma categoria for desconhecida, o CI seleciona todos por segurança. Alternativamente, se os rótulos existirem no repositório, **ampliar**, usando rótulos `ci:mensagens`, `ci:postagens`, `ci:esteira`, `ci:fotoia`, `ci:catalogo`, `ci:midia`, `ci:treinamentos`, `ci:push` ou `ci:infra`. O complemento **soma** testes; jamais substitui os automáticos. Rótulos `ci:todos` executam todos.
 5. Criou arquivo novo? Classificar explicitamente em `classificar()` ou atualizar o manifesto se for teste. Até isso acontecer, a política seleciona tudo. Não apagar esse fallback para “fazer ficar verde”.
 6. Para mudança de interface, aplicar a skill `tenkiter-estetica-humana`: conferir 320/390/412 px, 1440 px, rolagem, botões, conteúdo, legibilidade e screenshots de jornada real. O CI simulado **não prova aparelho Android físico**.
 7. Para mudança de segurança, autorização, faturamento, mensagens reais, rede, schema, cache, armazenamento ou fontes compartilhadas, amplie a cobertura e registre por quê. Se houver dúvida séria, `ci:todos`.
