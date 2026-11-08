@@ -48,13 +48,6 @@
    "vitrine-v71.js": 2,
    "vitrine.css": 1
   },
-  "location-origin": {
-   "push.js": 1
-  },
-  "toast-proprio": {
-   "admin-instagram.js": 1,
-   "treinamentos.html": 2
-  },
   "z-index": {
    "admin-mensagens.js": 1,
    "admin-postagens.js": 1,
@@ -68,7 +61,7 @@
    "pedido.js": 1,
    "push.js": 1,
    "pwa.js": 1,
-   "treinamentos.html": 3,
+   "treinamentos.html": 2,
    "tutorial-app.js": 5
   }
  }

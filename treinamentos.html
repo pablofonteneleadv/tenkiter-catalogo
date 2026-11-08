@@ -255,12 +255,6 @@ th{background:var(--surface-2); font-weight:700;}
 .qr-extra .btn{width:100%;}
 .qr-link{background:none; border:0; color:var(--accent-txt); text-decoration:underline; font-size:0.88rem; cursor:pointer; padding:10px;}
 .quiz-actions{display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap;}
-.toast{
-  position:fixed; bottom:calc(88px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%);
-  background:var(--text); color:var(--bg); padding:10px 18px; border-radius:9px; font-size:0.88rem;
-  opacity:0; pointer-events:none; transition:opacity .2s; z-index:50;
-}
-.toast.show{opacity:1;}
 .muted-note{color:var(--muted); font-size:0.85rem; margin-top:6px;}
 .admin-btn-topbar{background:var(--accent-2); color:#0d0d0d; border-color:var(--accent-2); font-weight:700;}
 .admin-shell{max-width:1100px; margin:0 auto; padding:20px; width:100%; min-width:0;}
@@ -529,7 +523,6 @@ details.manual-card[open]>summary::after{content:'▴';}
 <body class="pg-treinamentos">
 
 <main id="app"><div class="boot-skel" aria-busy="true" aria-label="Carregando"><div class="sk-top"></div><div class="sk-wrap"><div class="sk" style="height:34px;width:55%"></div><div class="sk" style="height:18px;width:80%;margin-top:12px"></div><div class="sk" style="height:130px;margin-top:22px"></div><div class="sk" style="height:110px;margin-top:14px"></div><div class="sk" style="height:110px;margin-top:14px"></div></div></div></main>
-<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script id="app-data" type="application/json">{"manuals": {}, "titles": {"1": "TM Funcionário Iniciando", "2": "TM Funcionário Estágio", "3": "TM Funcionário Avançado"}, "blurbs": {"1": "Leitura rápida para quem vai ser entrevistado.", "2": "O manual completo de operação do dia a dia.", "3": "Responsabilidades ampliadas de apoio e coordenação."}, "quizzes": {}, "roster": [], "appsScriptUrl": "https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec", "appsScriptToken": "tenkiter2026"}</script>
 <script src="tm-verificado.js?v=7.61.0"></script>
@@ -581,12 +574,12 @@ function esc(s){
   return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 var TOAST_ERRO_RE = /^(n[ãa]o\b|sem conex|erro|falha|voc[êe] n[ãa]o pode)|n[ãa]o foi poss[íi]vel/i;
-function toast(msg){
-  // v7.57.0: erro não some sozinho (aviso fixo com "Fechar"); sucesso continua neste aviso anunciado por leitor de tela
-  if (TOAST_ERRO_RE.test(String(msg || '')) && window.TKAviso) { TKAviso.erro(msg); return; }
-  var t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove('show'); }, Math.max(2200, Math.min(9000, String(msg || '').length * 55))); // aviso longo (ex.: perguntas de exemplo na prova) precisa de tempo para ler
+function avisar(msg){
+  // Avisos na região única da página (avisos.js): erro fica até a pessoa fechar; o resto some sozinho (aviso longo ganha tempo para ler)
+  var texto = String(msg == null ? '' : msg);
+  if (!window.TKAviso) return;
+  if (TOAST_ERRO_RE.test(texto)) { TKAviso.erro(texto); return; }
+  TKAviso.ok(texto, { ms: Math.max(2200, Math.min(9000, texto.length * 55)) });
 }
 function normWhats(w){
   var d = String(w||'').replace(/\D/g,'');
@@ -976,7 +969,7 @@ async function submitResult(payload){
   }
 }
 
-if (window.TMV) TMV.init({ state: function(){ return state; }, data: function(){ return DATA; }, submit: function(p){ return submitResult(p); }, toast: function(m){ toast(m); } });
+if (window.TMV) TMV.init({ state: function(){ return state; }, data: function(){ return DATA; }, submit: function(p){ return submitResult(p); }, toast: function(m){ avisar(m); } });
 function progressKey(whatsapp){ return 'tm_progress_' + whatsapp; }
 function progressHashKey(whatsapp){ return 'tm_progress_hash_' + whatsapp; }
 function progressStableKey(whatsapp){ return 'tm_progress_estavel_' + whatsapp; }
@@ -1204,8 +1197,8 @@ function entrarComResposta(resp){
   goHome();
 }
 function abrirRecuperarConta(ident){
-  if (!window.TKConta){ toast('Não consegui abrir agora. Fale com a gestão.'); return; }
-  TKConta.abrirRecuperar({ identificador: ident || '', chamar: submitResult, aoEntrar: function(r){ toast('Senha trocada! Bem-vindo(a).'); entrarComResposta(r); } });
+  if (!window.TKConta){ avisar('Não consegui abrir agora. Fale com a gestão.'); return; }
+  TKConta.abrirRecuperar({ identificador: ident || '', chamar: submitResult, aoEntrar: function(r){ avisar('Senha trocada! Bem-vindo(a).'); entrarComResposta(r); } });
 }
 
 function renderCadastro(){
@@ -1325,7 +1318,7 @@ async function doCadastro(){
     ls_set('tm_session', { whatsapp: entry.whatsapp });
   }
   state.user = userFromRosterEntry(entry);
-  toast('Conta criada! Bem-vindo(a).');
+  avisar('Conta criada! Bem-vindo(a).');
   goHome();
   loadRoster();
 }
@@ -1597,7 +1590,7 @@ function wirePerfil(){
         if (rosterEntry){ if (tipo === 'corpo') rosterEntry.fotoCorpoUrl = resp.url; else rosterEntry.fotoPerfilUrl = resp.url; }
         var btnLabel = document.getElementById('btn-foto-' + tipo + '-label');
         if (btnLabel) btnLabel.textContent = 'Trocar foto';
-        toast('Foto enviada!');
+        avisar('Foto enviada!');
       }catch(ex){
         err.textContent = 'Não foi possível processar essa imagem.'; err.style.display = 'block';
       }
@@ -1642,7 +1635,7 @@ function wirePerfil(){
     Object.keys(campos).forEach(function(k){ state.user[k] = campos[k]; });
     var rosterEntry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === state.user.whatsapp; });
     if (rosterEntry){ Object.keys(campos).forEach(function(k){ rosterEntry[k] = campos[k]; }); }
-    toast('Perfil atualizado!');
+    avisar('Perfil atualizado!');
     render();
   });
 }
@@ -1710,7 +1703,7 @@ function goHome(){
         var c = (r && r.usuario && r.usuario.cpf) || '';
         state.user.cpf = c;
         var re = DATA.roster.find(function(x){ return normWhats(x.whatsapp) === state.user.whatsapp; }); if (re) re.cpf = c;
-        toast('CPF salvo! Obrigado.');
+        avisar('CPF salvo! Obrigado.');
       } });
   }
   var linkPerfil = document.getElementById('link-completar-perfil');
@@ -2214,7 +2207,7 @@ function resultadoAposEnvio_(r, payload, level){
       b.addEventListener('click', async function(){
         b.disabled = true; b.textContent = 'Enviando…';
         var r2 = await submitResult(payload);
-        if (r2 && r2.ok){ resultadoAposEnvio_(r2, payload, level); b.remove(); toast('Nota enviada!'); }
+        if (r2 && r2.ok){ resultadoAposEnvio_(r2, payload, level); b.remove(); avisar('Nota enviada!'); }
         else { b.disabled = false; b.textContent = 'Enviar de novo'; infoEl.firstChild.textContent = motivoResultado_(r2) + ' '; }
       });
       infoEl.appendChild(document.createElement('br')); infoEl.appendChild(b);
@@ -2313,8 +2306,8 @@ function gradeQuiz(level){
   document.getElementById('copy-result').addEventListener('click', function(){
     var text = decodeURIComponent(waText);
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(text).then(function(){ toast('Resultado copiado!'); }).catch(function(){ toast('Não foi possível copiar.'); });
-    } else { toast('Copie manualmente: ' + text); }
+      navigator.clipboard.writeText(text).then(function(){ avisar('Resultado copiado!'); }).catch(function(){ avisar('Não foi possível copiar.'); });
+    } else { avisar('Copie manualmente: ' + text); }
   });
 }
 
@@ -2342,7 +2335,7 @@ async function fetchAdminData(){
     senhaAdmin: state.user.password
   });
   if (!resp || !resp.ok){
-    toast(TKPadrao.erro(resp, 'Não foi possível carregar os dados da equipe.'));
+    avisar(TKPadrao.erro(resp, 'Não foi possível carregar os dados da equipe.'));
     return;
   }
   state.adminData = { funcionarios: resp.funcionarios || [], resultados: resp.resultados || [] };
@@ -2443,8 +2436,8 @@ function wireTabEquipe(){
         action:'atualizar_nivel_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         whatsappAlvo: whats, novoNivel: parseInt(sel.value, 10)
       });
-      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível atualizar o nível.')); return; }
-      toast('Nível atualizado.');
+      if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível atualizar o nível.')); return; }
+      avisar('Nível atualizado.');
       if (whats === state.user.whatsapp){ state.user.level = parseInt(sel.value, 10); }
       await loadRoster();
       fetchAdminData();
@@ -2456,14 +2449,14 @@ function wireTabEquipe(){
       var ativoAgora = btn.getAttribute('data-ativo') === '1';
       var novoStatus = ativoAgora ? 'Inativo' : 'Ativo';
       if (whats === state.user.whatsapp && novoStatus === 'Inativo'){
-        toast('Você não pode desativar a própria conta por aqui.'); return;
+        avisar('Você não pode desativar a própria conta por aqui.'); return;
       }
       var resp = await submitResult({
         action:'alterar_status_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         whatsappAlvo: whats, novoStatus: novoStatus
       });
-      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível alterar o status.')); return; }
-      toast(novoStatus === 'Ativo' ? 'Funcionário reativado.' : 'Funcionário desativado.');
+      if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível alterar o status.')); return; }
+      avisar(novoStatus === 'Ativo' ? 'Funcionário reativado.' : 'Funcionário desativado.');
       await loadRoster();
       fetchAdminData();
     });
@@ -2477,8 +2470,8 @@ function wireTabEquipe(){
         action:'resetar_senha_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         whatsappAlvo: whats, novaSenha: nova
       });
-      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível resetar a senha.')); return; }
-      toast('Senha redefinida.');
+      if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível resetar a senha.')); return; }
+      avisar('Senha redefinida.');
     });
   });
 }
@@ -2647,11 +2640,11 @@ function wireTabDesempenho(){
     };
     var resp = await submitResult({ action: 'excluir_avaliacao', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
       linha: b.getAttribute('data-linha'), dataHora: dh, whatsappAvaliacao: wh });
-    if (resp && resp.ok){ toast('Avaliação excluída.'); tirarDaTela(); recarregarRelatorioSilencioso_(); return; }
-    if (resp && /já tenha sido apagada|Não encontrei essa avaliação/i.test(resp.erro || '')){ toast('Essa avaliação já estava apagada. Lista atualizada.'); tirarDaTela(); recarregarRelatorioSilencioso_(); return; }
+    if (resp && resp.ok){ avisar('Avaliação excluída.'); tirarDaTela(); recarregarRelatorioSilencioso_(); return; }
+    if (resp && /já tenha sido apagada|Não encontrei essa avaliação/i.test(resp.erro || '')){ avisar('Essa avaliação já estava apagada. Lista atualizada.'); tirarDaTela(); recarregarRelatorioSilencioso_(); return; }
     b.removeAttribute('data-ocupado'); b.disabled = false; b.textContent = rotuloAnt;
-    if (resp && resp.demorou){ toast('O servidor demorou. Vou conferir se a exclusão foi feita…'); recarregarRelatorioSilencioso_(); return; }
-    toast(TKPadrao.erro(resp, 'Não foi possível excluir.'));
+    if (resp && resp.demorou){ avisar('O servidor demorou. Vou conferir se a exclusão foi feita…'); recarregarRelatorioSilencioso_(); return; }
+    avisar(TKPadrao.erro(resp, 'Não foi possível excluir.'));
   });
   var btn = document.getElementById('btn-export-csv');
   if (!btn) return;
@@ -2807,15 +2800,15 @@ function wireTabConteudo(){
   if (importar) importar.addEventListener('click', async function(){
     var campo = document.getElementById('manual-doc-existente');
     var docUrl = campo && campo.value.trim();
-    if (!/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(docUrl || '')) { toast('Cole o link completo de um Google Doc.'); if (campo) campo.focus(); return; }
+    if (!/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(docUrl || '')) { avisar('Cole o link completo de um Google Doc.'); if (campo) campo.focus(); return; }
     importar.disabled = true; importar.textContent = 'Importando…';
     var resp;
     try { resp = await submitResult({ action:'importar_manual_doc', whatsappAdmin:state.user.whatsapp, senhaAdmin:state.user.password, docUrl:docUrl }); }
     catch (e) { resp = null; }
     importar.disabled = false; importar.textContent = 'Importar Doc para revisão';
-    if (!resp || !resp.ok) { toast(TKPadrao.erro(resp, 'Não consegui importar este Doc agora.')); return; }
+    if (!resp || !resp.ok) { avisar(TKPadrao.erro(resp, 'Não consegui importar este Doc agora.')); return; }
     await recarregarManuais_(); render();
-    toast('Manual importado para revisão da gestão. Confira antes de liberar à equipe.');
+    avisar('Manual importado para revisão da gestão. Confira antes de liberar à equipe.');
   });
   if (window.TMV){ var gf = document.getElementById('guia-formatar'); if (gf) TMV.ligar(gf); }
   document.querySelectorAll('details.manual-card').forEach(function(d){
@@ -2833,10 +2826,10 @@ function wireTabConteudo(){
       mudou++;
       var r = await submitResult({ action:'atualizar_manual_config', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         manualId: ids[i], titulo: m.titulo, blurb: m.blurb || '', nivelMinimo: m.nivelMinimo, ordem: i + 1 });
-      if (!r || !r.ok){ falhou = true; toast(TKPadrao.erro(r, 'Não foi possível salvar a ordem.')); break; }
+      if (!r || !r.ok){ falhou = true; avisar(TKPadrao.erro(r, 'Não foi possível salvar a ordem.')); break; }
     }
     await recarregarManuais_();
-    if (!falhou && mudou) toast('Ordem salva. É essa que o candidato vê.');
+    if (!falhou && mudou) avisar('Ordem salva. É essa que o candidato vê.');
     render();
   };
   var lista_ = document.getElementById('mc-lista');
@@ -2896,10 +2889,10 @@ function wireTabConteudo(){
       action:'salvar_config_quiz', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, configs: configs
     });
     btnCfg.disabled = false; btnCfg.textContent = 'Salvar regras das provas';
-    if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível salvar.')); return; }
+    if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível salvar.')); return; }
     await loadQuizConfig();
     await recarregarManuais_();
-    toast('Regras das provas salvas!');
+    avisar('Regras das provas salvas!');
     render();
   });
 
@@ -2922,8 +2915,8 @@ function wireTabConteudo(){
       feitos++;
     }
     await recarregarManuais_();
-    if (falhas.length) toast('Migrei ' + feitos + '. Não deu para: ' + falhas.join(' | '));
-    else toast('Pronto! Manuais e provas migrados. Agora é só editar pelo Google Docs.');
+    if (falhas.length) avisar('Migrei ' + feitos + '. Não deu para: ' + falhas.join(' | '));
+    else avisar('Pronto! Manuais e provas migrados. Agora é só editar pelo Google Docs.');
     render();
   });
 
@@ -2937,8 +2930,8 @@ function wireTabConteudo(){
       action: 'criar_manual_vazio', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
       titulo: titulo, blurb: blurb, nivelMinimo: nivelMinimo
     });
-    if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível criar o manual.')); return; }
-    toast(resp.prova && resp.prova.ok && resp.prova.modelo
+    if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível criar o manual.')); return; }
+    avisar(resp.prova && resp.prova.ok && resp.prova.modelo
       ? 'Manual criado! O Doc da prova também: já vem com 10 perguntas de exemplo para você trocar. Abrindo o Doc do manual…'
       : resp.prova && !resp.prova.ok ? 'Manual criado, mas o Doc da prova não saiu agora. Toque em "Criar Doc da prova" no card. Abrindo o Doc do manual…'
       : 'Manual criado! Abrindo o Google Docs…');
@@ -2958,8 +2951,8 @@ function wireTabConteudo(){
         blurb: card.querySelector('.manual-blurb-input').value.trim(),
         nivelMinimo: parseInt(card.querySelector('.manual-nivel-sel').value, 10)
       });
-      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível salvar.')); return; }
-      toast('Manual atualizado.');
+      if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível salvar.')); return; }
+      avisar('Manual atualizado.');
       await recarregarManuais_();
     });
   });
@@ -2974,8 +2967,8 @@ function wireTabConteudo(){
         manualId: manualId
       });
       btnEl.disabled = false; btnEl.textContent = '🔄 Sincronizar manual';
-      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível sincronizar.')); return; }
-      toast(resp.aviso ? 'Manual atualizado. ' + resp.aviso : 'Manual atualizado a partir do Google Docs!');
+      if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível sincronizar.')); return; }
+      avisar(resp.aviso ? 'Manual atualizado. ' + resp.aviso : 'Manual atualizado a partir do Google Docs!');
       await recarregarManuais_();
       render();
     });
@@ -2986,8 +2979,8 @@ function wireTabConteudo(){
       var manualId = btnEl.closest('.manual-card').getAttribute('data-manual-id');
       btnEl.disabled = true; btnEl.textContent = 'Criando…';
       var resp = await submitResult({ action: 'prova_criar_doc', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, manualId: manualId });
-      if (!resp || !resp.ok){ btnEl.disabled = false; btnEl.textContent = '📄 Criar Doc da prova'; toast(TKPadrao.erro(resp, 'Não foi possível criar o Doc da prova.')); return; }
-      toast('Doc da prova criado! Abrindo…');
+      if (!resp || !resp.ok){ btnEl.disabled = false; btnEl.textContent = '📄 Criar Doc da prova'; avisar(TKPadrao.erro(resp, 'Não foi possível criar o Doc da prova.')); return; }
+      avisar('Doc da prova criado! Abrindo…');
       if (resp.docUrl) window.open(resp.docUrl, '_blank');
       await recarregarManuais_();
       render();
@@ -3001,8 +2994,8 @@ function wireTabConteudo(){
       var resp = await submitResult({ action: 'prova_sincronizar', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, manualId: manualId });
       btnEl.disabled = false; btnEl.textContent = '🔄 Sincronizar prova';
       var avisos = (resp && Array.isArray(resp.avisos)) ? resp.avisos : [];
-      if (!resp || !resp.ok){ toast((TKPadrao.erro(resp, 'Não foi possível sincronizar a prova.')) + (avisos.length ? ' ' + avisos.slice(0, 2).join(' ') : '')); return; }
-      toast('Prova atualizada: ' + resp.perguntas + ' pergunta' + (resp.perguntas === 1 ? '' : 's') + (avisos.length ? '. ATENÇÃO: ' + avisos.length + ' ficaram de fora — ' + avisos.slice(0, 2).join(' ') : '.') +
+      if (!resp || !resp.ok){ avisar((TKPadrao.erro(resp, 'Não foi possível sincronizar a prova.')) + (avisos.length ? ' ' + avisos.slice(0, 2).join(' ') : '')); return; }
+      avisar('Prova atualizada: ' + resp.perguntas + ' pergunta' + (resp.perguntas === 1 ? '' : 's') + (avisos.length ? '. ATENÇÃO: ' + avisos.length + ' ficaram de fora — ' + avisos.slice(0, 2).join(' ') : '.') +
         (Number(resp.modelo) > 0 ? ' ATENÇÃO: ' + resp.modelo + ' pergunta' + (resp.modelo === 1 ? '' : 's') + ' de EXEMPLO ainda ' + (resp.modelo === 1 ? 'está' : 'estão') + ' na prova (começam com "(Modelo)"). Troque no Doc e sincronize de novo.' : ''));
       await recarregarManuais_();
       render();
@@ -3018,8 +3011,8 @@ function wireTabConteudo(){
         action: 'excluir_manual', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
         manualId: manualId
       });
-      if (!resp || !resp.ok){ toast(TKPadrao.erro(resp, 'Não foi possível remover.')); return; }
-      toast('Manual removido do site.');
+      if (!resp || !resp.ok){ avisar(TKPadrao.erro(resp, 'Não foi possível remover.')); return; }
+      avisar('Manual removido do site.');
       await recarregarManuais_();
       render();
     });
@@ -3056,15 +3049,15 @@ function abrirZerarPessoa(whats, nome){
   ov.addEventListener('click', function(e){ if (e.target === ov) sair(); });
   document.getElementById('zr-ok').addEventListener('click', async function(){
     var leitura = document.getElementById('zr-leitura').checked, aval = document.getElementById('zr-aval').checked;
-    if (!leitura && !aval){ toast('Marque o que você quer zerar.'); return; }
+    if (!leitura && !aval){ avisar('Marque o que você quer zerar.'); return; }
     var man = document.getElementById('zr-manual').value;
     var manTxt = man === '*' ? 'de TODOS os manuais' : 'do manual "' + (document.getElementById('zr-manual').selectedOptions[0].textContent) + '"';
     if (!confirm('Zerar ' + [leitura ? 'a leitura' : '', aval ? 'as avaliações' : ''].filter(Boolean).join(' e ') + ' ' + manTxt + ' de ' + (nome || whats) + '? Não dá para desfazer pela tela.')) return;
     var btn = document.getElementById('zr-ok'); btn.disabled = true; btn.textContent = 'Zerando…';
     var r = await submitResult({ action: 'resetar_pessoa', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, whatsappAlvo: whats, itens: { leitura: leitura, avaliacoes: aval }, manualIds: [man] });
-    if (!r || !r.ok){ btn.disabled = false; btn.textContent = 'Zerar agora'; toast(TKPadrao.erro(r, 'Não foi possível zerar.')); return; }
+    if (!r || !r.ok){ btn.disabled = false; btn.textContent = 'Zerar agora'; avisar(TKPadrao.erro(r, 'Não foi possível zerar.')); return; }
     sair();
-    toast('Pronto: ' + (aval ? r.avaliacoesApagadas + ' avaliação(ões) apagada(s)' : '') + (aval && leitura ? ' · ' : '') + (leitura ? 'leitura zerada' : '') + '.');
+    avisar('Pronto: ' + (aval ? r.avaliacoesApagadas + ' avaliação(ões) apagada(s)' : '') + (aval && leitura ? ' · ' : '') + (leitura ? 'leitura zerada' : '') + '.');
     if (state.view === 'admin'){ if (state.adminTab === 'desempenho' || state.adminTab === 'equipe') fetchAdminData(); }
   });
 }
@@ -3352,17 +3345,17 @@ function wireTabAcessos(){
   if (salvar) salvar.addEventListener('click', async function(){
     var nome = document.getElementById('ac-n-nome').value.trim(), w = normWhats(document.getElementById('ac-n-whats').value),
         senha = document.getElementById('ac-n-senha').value, perfil = document.getElementById('ac-n-perfil').value;
-    if (!nome || !w || senha.length < 4){ toast('Preencha nome, WhatsApp e uma senha de pelo menos 4 caracteres.'); return; }
+    if (!nome || !w || senha.length < 4){ avisar('Preencha nome, WhatsApp e uma senha de pelo menos 4 caracteres.'); return; }
     salvar.disabled = true;
     var r = await acessosReq({ action: 'acessos_criar', nome: nome, whatsappNovo: w, senhaNova: senha, perfil: perfil });
     salvar.disabled = false;
-    if (!r || !r.ok){ toast(TKPadrao.erro(r, 'Não foi possível criar.')); return; }
-    toast('Pessoa criada. Passe a senha para ela.');
+    if (!r || !r.ok){ avisar(TKPadrao.erro(r, 'Não foi possível criar.')); return; }
+    avisar('Pessoa criada. Passe a senha para ela.');
     a.criando = false; ['ac-n-nome', 'ac-n-whats', 'ac-n-senha'].forEach(function(i){ document.getElementById(i).value = ''; });
     await carregarAcessos();
   });
   var recarregar = document.getElementById('ac-recarregar');
-  if (recarregar) recarregar.addEventListener('click', async function(){ recarregar.disabled = true; await carregarAcessos(); recarregar.disabled = false; toast('Lista atualizada.'); });
+  if (recarregar) recarregar.addEventListener('click', async function(){ recarregar.disabled = true; await carregarAcessos(); recarregar.disabled = false; avisar('Lista atualizada.'); });
   var logBtn = document.getElementById('ac-log');
   if (logBtn) logBtn.addEventListener('click', async function(){
     var box = document.getElementById('ac-log-box');
@@ -3404,8 +3397,8 @@ function wireTabAcessos(){
       if (!confirm('Confirma a exclusão de ' + p.nome + ' para sempre? Se só quer bloquear o acesso, use Desativar.')) return;
       btn.disabled = true;
       var rex = await acessosReq({ action: 'acessos_excluir', whatsappAlvo: p.whatsapp });
-      if (!rex || !rex.ok){ btn.disabled = false; toast(TKAviso.textoErro(rex, 'Não foi possível excluir.')); return; }
-      toast('Pessoa excluída.');
+      if (!rex || !rex.ok){ btn.disabled = false; avisar(TKAviso.textoErro(rex, 'Não foi possível excluir.')); return; }
+      avisar('Pessoa excluída.');
       await carregarAcessos();
       return;
     }
@@ -3414,14 +3407,14 @@ function wireTabAcessos(){
       var ativoAgora = btn.getAttribute('data-ativo') === '1';
       if (ativoAgora && !confirm('Desativar ' + p.nome + '? A pessoa perde o acesso a tudo até ser reativada.')) return;
       var r = await acessosReq({ action: 'acessos_status', whatsappAlvo: p.whatsapp, novoStatus: ativoAgora ? 'Inativo' : 'Ativo' });
-      if (!r || !r.ok){ toast(TKPadrao.erro(r, 'Não foi possível alterar.')); return; }
-      toast(ativoAgora ? 'Pessoa desativada.' : 'Pessoa reativada.'); carregarAcessos(); return;
+      if (!r || !r.ok){ avisar(TKPadrao.erro(r, 'Não foi possível alterar.')); return; }
+      avisar(ativoAgora ? 'Pessoa desativada.' : 'Pessoa reativada.'); carregarAcessos(); return;
     }
     if (btn.classList.contains('ac-reset')){
       var nova = await TKAviso.pedirSenha({ titulo: 'Nova senha', texto: 'Nova senha para ' + p.nome + ' (mínimo 4 caracteres). Ela é guardada sem aparecer na tela.' });
       if (nova === null) return;
       var r2 = await acessosReq({ action: 'resetar_senha_user', whatsappAlvo: p.whatsapp, novaSenha: nova });
-      toast(r2 && r2.ok ? 'Senha redefinida.' : ((r2 && r2.erro) || 'Não foi possível resetar.'));
+      avisar(r2 && r2.ok ? 'Senha redefinida.' : ((r2 && r2.erro) || 'Não foi possível resetar.'));
     }
   });
   lista.addEventListener('change', async function(e){
@@ -3441,23 +3434,23 @@ function wireTabAcessos(){
       if (!r || !r.ok){
         var msg = TKPadrao.erro(r, 'Não foi possível trocar os perfis.');
         if (perfisNovos.length > 1 && /desconhecido/i.test(msg)) msg = 'Para dar mais de um perfil, o backend de Funcionários precisa estar na versão 3.2 (cole o arquivo novo no Apps Script).';
-        toast(msg); pintarAcessos(); return;
+        avisar(msg); pintarAcessos(); return;
       }
-      toast('Perfis atualizados — permissões somadas automaticamente.');
+      avisar('Perfis atualizados — permissões somadas automaticamente.');
       await carregarAcessos();
       if (p.whatsapp === state.user.whatsapp) refrescarMinhas();
       return;
     }
     if(e.target.matches('select[data-msg-chave]')){
       var select=e.target;select.disabled=true;
-      try{var j=await msgAcessosReq_('POST',{tipo:'pessoa',alvo:p.whatsapp,chave:select.dataset.msgChave,valor:select.value===''?null:select.value==='true'});acessosEstado().msgAcessos=j;toast('Acesso de Mensagens salvo.');}catch(err){toast(err.message);}
+      try{var j=await msgAcessosReq_('POST',{tipo:'pessoa',alvo:p.whatsapp,chave:select.dataset.msgChave,valor:select.value===''?null:select.value==='true'});acessosEstado().msgAcessos=j;avisar('Acesso de Mensagens salvo.');}catch(err){avisar(err.message);}
       await carregarAcessos();return;
     }
     if (e.target.matches('input[type=checkbox][data-chave]')){
       var chave = e.target.getAttribute('data-chave'), marcado = e.target.checked;
       if (chave === 'gerir_acessos' && !marcado && p.whatsapp === state.user.whatsapp && !confirm('Você vai tirar de você mesmo o acesso a este painel. Continuar?')){ e.target.checked = true; return; }
       var r3 = await acessosReq({ action: 'acessos_permissao', whatsappAlvo: p.whatsapp, chave: chave, valor: marcado });
-      if (!r3 || !r3.ok){ toast(TKAviso.textoErro(r3, 'Não foi possível alterar.')); e.target.checked = !marcado; return; }
+      if (!r3 || !r3.ok){ avisar(TKAviso.textoErro(r3, 'Não foi possível alterar.')); e.target.checked = !marcado; return; }
       var o = permObj(p.permissoes); o[chave] = marcado; p.permissoes = o;
       pintarAcessos();
       if (p.whatsapp === state.user.whatsapp) refrescarMinhas();

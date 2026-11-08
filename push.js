@@ -267,7 +267,7 @@
   function testeLocal() {
     if (!('serviceWorker' in navigator)) return Promise.reject(new Error('sem service worker'));
     return navigator.serviceWorker.ready.then(function (r) {
-      return r.showNotification('TENKiTER Modas', { body: 'Teste: é assim que os avisos aparecem neste aparelho. 🔔', icon: '/icon-192.png', badge: '/icon-192.png', tag: 'tk-teste', data: { url: location.origin + '/' } });
+      return r.showNotification('TENKiTER Modas', { body: 'Teste: é assim que os avisos aparecem neste aparelho. 🔔', icon: '/icon-192.png', badge: '/icon-192.png', tag: 'tk-teste', data: { url: (typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/') } });
     });
   }
 

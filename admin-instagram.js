@@ -70,8 +70,6 @@
       .ig-conectar label { display: block; font-size: 0.82rem; font-weight: 700; margin: 8px 0 4px; }
       .ig-conectar input[type=password] { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95rem; }
       .ig-conectar ol { padding-left: 20px; font-size: 0.86rem; line-height: 1.5; }
-      .ig-toast { position: sticky; bottom: 0; background: #222; color: #fff; border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 0.86rem; }
-      .ig-toast button { width: auto; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--laranja); color: #0d0d0d; font-weight: 800; cursor: pointer; }
       .ig-juntar-barra { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: #fff; border: 1px solid #e3e3e3; border-radius: 10px; padding: 8px 10px; margin: 0 0 8px; font-size: 0.84rem; }
       .ig-juntar-barra button { width: auto; flex: 1 1 0; padding: 0 10px; min-height: 44px; white-space: nowrap; border-radius: 8px; border: 0; font-weight: 800; cursor: pointer; } .ig-juntar-barra button:disabled { opacity: .45; cursor: default; }
       .ig-ajuda { font-size: 0.82rem; color: #444; margin: 0 0 8px; } .ig-sec-tit { font-size: 0.95rem; margin: 6px 0 8px; color: #14532d; } .ig-sec-resto { color: #444; margin-top: 14px; }
@@ -194,14 +192,13 @@
     const sel = podeMarcar ? lista.filter((x) => marcados.has(x.id)) : [], resto = podeMarcar ? lista.filter((x) => !marcados.has(x.id)) : lista;
     const corpoLista = sel.length ? '<div class="ig-selecionados"><h3 class="ig-sec-tit">✅ Selecionados (' + sel.length + ') — confira antes de executar</h3>' + sel.map(cartao).join('') + '</div>' + (resto.length ? '<h3 class="ig-sec-tit ig-sec-resto">Demais posts</h3>' : '') + resto.map(cartao).join('') : (lista.length ? lista.map(cartao).join('') : vazio);
     const iaBox = '<div class="ig-ia" id="ig-ia" role="status"' + (iaTxt ? '' : ' hidden') + '>' + esc(iaTxt) + '</div>';
-    $('ig-corpo').innerHTML = avisos + iaBox + abas + ajuda + barra + corpoLista + (mais ? '<div class="ig-acoes" style="justify-content:center"><button type="button" class="ig-sec" data-ig="mais" style="width:auto;padding:10px 16px;border:0;border-radius:8px;min-height:44px;font-weight:700">Carregar mais</button></div>' : '') + rodape() + toast();
+    $('ig-corpo').innerHTML = avisos + iaBox + abas + ajuda + barra + corpoLista + (mais ? '<div class="ig-acoes" style="justify-content:center"><button type="button" class="ig-sec" data-ig="mais" style="width:auto;padding:10px 16px;border:0;border-radius:8px;min-height:44px;font-weight:700">Carregar mais</button></div>' : '') + rodape();
   }
   function rodape() {
     const u = st && st.ultimoCiclo;
     return '<div class="ig-rodape"><span>' + (u ? 'Última busca: ' + esc(dataBr(u.fim)) + (u.erro ? ' (com erro)' : '') + ' · ' : '') + (st && st.novasDesdeOntem != null ? st.novasDesdeOntem + ' novo(s) em 24 h' : '') + '</span>' +
       '<button type="button" class="ig-sec" data-ig="buscar">🔄 Buscar agora</button><button type="button" class="ig-sec" data-ig="config">⚙️ Instagram</button></div><div class="ig-msg" id="ig-msg" role="status"></div>';
   }
-  function toast() { return desfazer ? '<div class="ig-toast" id="ig-toast" role="status"><span>' + esc(desfazer.txt) + '</span><button type="button" data-ig="desfazer">Desfazer</button></div>' : ''; }
   function msg(t, tipo) { const m = $('ig-msg'); if (m) { m.textContent = t || ''; m.className = 'ig-msg' + (tipo ? ' ' + tipo : ''); } }
 
   /* ---------- editor de mídias ---------- */
@@ -476,7 +473,6 @@
     else if (a === 'voltar' || a === 'voltarLista') { editando = null; await carregarLista(true); }
     else if (a === 'descartar' || a === 'naoproduto') await descartarRapido(id, a === 'naoproduto');
     else if (a === 'restaurar') { await ig('/acao', 'POST', { acao: 'restaurar', id: id }); lista = lista.filter((x) => x.id !== id); await carregarStatus(); desenharLista(); }
-    else if (a === 'desfazer') await refazer();
     else if (a === 'buscar') { msg('Buscando no Instagram…'); const r = await ig('/buscar', 'POST', {}); if (r && r.ok) { msg(r.novas ? r.novas + ' novo(s) encontrado(s).' : 'Nada novo.', 'ok'); await carregarStatus(); await carregarLista(true); rodarIA(); } else msg(erroTxt(r), 'erro'); }
     else if (a === 'juntarMarcados') await juntarMarcados();
     else if (a === 'separadoMarcados') await separadoMarcados();
@@ -516,7 +512,8 @@
     lista = lista.filter((x) => x.id !== id); cont[grupoAntes] = Math.max(0, (cont[grupoAntes] || 1) - 1); if (editando && editando.id === id) editando = null;
     desfazer = { id: id, txt: naoProduto ? 'Marcado como "Não é produto".' : 'Descartado.', grupoAntes: grupoAntes };
     desenharLista(); desenharFaixa();
-    clearTimeout(desfazerTimer); desfazerTimer = setTimeout(() => { desfazer = null; if ($('ig-toast')) $('ig-toast').remove(); }, 8000);
+    clearTimeout(desfazerTimer); desfazerTimer = setTimeout(() => { desfazer = null; }, 8000);
+    if (window.TKAviso) TKAviso.ok(desfazer.txt, { ms: 8000, desfazer: { rotulo: 'Desfazer', fn: refazer } });
     const resp = await ig('/acao', 'POST', naoProduto ? { acao: 'grupo', id: id, grupo: 'nao_produto' } : { acao: 'descartar', id: id });
     if (!resp || !resp.ok) { desfazer = null; msg(erroTxt(resp), 'erro'); await carregarLista(true); }
   }

@@ -73,8 +73,10 @@ with sync_playwright() as p:
     # 5) Treinamentos: aviso anunciado por leitor de tela
     ctx = b.new_context(viewport={"width": 390, "height": 844}, service_workers="block"); ctx.add_init_script(SESSION); install(ctx)
     pg = ctx.new_page(); pg.goto(BASE + "treinamentos.html"); pg.wait_for_timeout(1500)
-    at = pg.evaluate("(() => { const t = document.getElementById('toast'); return [t.getAttribute('role'), t.getAttribute('aria-live')]; })()")
-    chk("treinamentos: #toast tem role=status e aria-live", at == ["status", "polite"], at)
+    pg.evaluate("TKAviso.ok('Resultado copiado!'); TKAviso.erro('Não foi possível salvar.')"); pg.wait_for_timeout(300)
+    at = pg.evaluate("(() => { const t = document.getElementById('tk-avisos'); return [t.getAttribute('role'), t.getAttribute('aria-live')]; })()")
+    chk("treinamentos: avisos na região única #tk-avisos com role=status e aria-live", at == ["status", "polite"], at)
+    chk("treinamentos: não existe mais o aviso próprio #toast nem .toast", pg.locator("#toast").count() == 0 and "class=\"toast\"" not in pg.content())
     ctx.close(); b.close()
 print("OK=%d FALHAS=%d" % (len(OK), len(BAD)))
 sys.exit(1 if BAD else 0)
