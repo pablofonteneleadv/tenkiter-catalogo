@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.64.0 — solicitações de clientes com fotos à vista e registro em segundo plano
+
+- Solicitações de clientes mostra até três miniaturas (4:5) lado a lado em cada pedido; o toque amplia e permite passar por todas as fotos, anexar à resposta e voltar à lista.
+- Registrar pedido ou fotos de cliente guarda tudo no aparelho e libera a conversa: o envio segue em segundo plano com um indicador flutuante (enviando, concluído ou precisa de atenção) e um painel para acompanhar, minimizar e tentar de novo.
+- Reenvio seguro: o pedido e cada foto usam sempre os mesmos identificadores; fotos já confirmadas não sobem de novo e, se a página fechar, os envios guardados retomam ao reabrir o Mensageiro na mesma conta. Nenhuma mensagem é enviada ao cliente.
+
 ## [7.63.0] - 2026-11-08
 
 Pagamento de dívida de padrão (catraca de `check_padroes.py`: 387 para 351 ocorrências), uma regra por commit, sem mudar `common.js`.

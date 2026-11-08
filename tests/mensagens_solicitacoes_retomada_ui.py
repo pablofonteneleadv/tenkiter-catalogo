@@ -45,33 +45,43 @@ with sync_playwright() as p:
    pg.goto(BASE+('admin.html?app=mensagens' if largura==390 else 'admin.html'));pg.wait_for_timeout(1800)
    if largura!=390:pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens')
    pg.wait_for_selector('.ms-conv');pg.click('#ms-lista .ms-conv[data-id="1"]');pg.wait_for_selector('#ms-texto');pg.wait_for_timeout(300)
-  abrir();pg.get_by_role('button',name='Pedido do cliente',exact=True).click();pg.get_by_label('Descrição geral do pedido',exact=True).fill('Vestido para sábado; azul, tamanho M.');pg.set_input_files('#ms-registro-fotos',FOTOS[:2]);pg.get_by_role('button',name='Registrar pedido',exact=True).click()
+  abrir();pg.get_by_role('button',name='Pedido do cliente',exact=True).click();pg.get_by_label('Descrição geral do pedido',exact=True).fill('Vestido para sábado; azul, tamanho M.');pg.set_input_files('#ms-registro-fotos',FOTOS[:2])
+  pg.wait_for_function("[...document.querySelectorAll('.ms-solicitacao-arquivo img')].length===2&&[...document.querySelectorAll('.ms-solicitacao-arquivo img')].every(x=>x.naturalWidth>0)")
+  pg.get_by_role('button',name='Registrar pedido',exact=True).click();pg.locator('#ms-gaveta').wait_for(state='detached')
+  def painel():
+   pg.get_by_role('button',name='Acompanhar registros de clientes',exact=True).click();pg.locator('.ms-registro-processo').wait_for()
   try:
-   pg.get_by_role('button',name='Continuar envio',exact=True).wait_for(timeout=6000)
-   assert pg.get_by_role('button',name='Continuar envio',exact=True).is_enabled()
+   # 1) A resposta do pedido se perde: a fila avisa, preserva tudo no aparelho e oferece tentar de novo.
+   pg.get_by_role('button',name='Acompanhar registros de clientes',exact=True).filter(has_text='Envio precisa de atenção').wait_for(timeout=8000)
+   painel();pg.get_by_role('button',name='Tentar de novo',exact=True).wait_for(timeout=6000)
+   assert pg.get_by_role('button',name='Tentar de novo',exact=True).is_enabled()
    if largura==320:pg.evaluate("document.documentElement.style.fontSize='130%'")
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')
-   assert pg.get_by_role('button',name='Continuar envio',exact=True).evaluate('e=>e.getBoundingClientRect().height>=44')
-   pg.wait_for_function("[...document.querySelectorAll('.ms-solicitacao-arquivo img')].length===2&&[...document.querySelectorAll('.ms-solicitacao-arquivo img')].every(x=>x.naturalWidth>0)")
+   assert pg.get_by_role('button',name='Tentar de novo',exact=True).evaluate('e=>e.getBoundingClientRect().height>=44')
+   assert 'Failed' not in pg.locator('#ms-gaveta').inner_text() and 'HTTP' not in pg.locator('#ms-gaveta').inner_text()
    state=json.loads(api('/qa/estado')[1]);assert len(state['solicitacoes'])==1
    ident=state['solicitacoes'][0]['id'];assert not fotos
    pg.screenshot(path=str(OUT/f'pedido-sem-resposta-{largura}.png'))
-   abrir();pg.get_by_role('button',name='Pedido do cliente',exact=True).click();pg.get_by_role('button',name='Continuar envio',exact=True).wait_for()
-   assert pg.get_by_label('Descrição geral do pedido',exact=True).input_value()=='Vestido para sábado; azul, tamanho M.'
-   assert 'foto-1.png' in pg.locator('#ms-gaveta').inner_text() and 'foto-2.png' in pg.locator('#ms-gaveta').inner_text()
-   pg.get_by_role('button',name='Continuar envio',exact=True).click();pg.get_by_role('button',name='Continuar envio',exact=True).wait_for()
-   pg.wait_for_function("!document.querySelector('#ms-gaveta button.ms-btn.prim').disabled")
+   # 2) Recarregar a página mantém o envio guardado; tentar de novo usa o mesmo pedido.
+   abrir();painel();pg.get_by_role('button',name='Tentar de novo',exact=True).wait_for()
+   pg.get_by_role('button',name='Tentar de novo',exact=True).click()
+   # 3) Agora a foto grava, mas a resposta se perde: tentar de novo repete a mesma identificação.
+   for _ in range(100):
+    if fotos:break
+    pg.wait_for_timeout(100)
+   pg.wait_for_function("(()=>{const b=[...document.querySelectorAll('#ms-gaveta button')].find(x=>x.textContent==='Tentar de novo');return !!b&&!b.disabled})()",timeout=8000)
    state=json.loads(api('/qa/estado')[1]);assert len(state['solicitacoes'])==1 and state['solicitacoes'][0]['id']==ident
    assert len(metadados)==2 and metadados[0]['id']==metadados[1]['id']==ident
    pg.screenshot(path=str(OUT/f'foto-sem-resposta-{largura}.png'))
-   pg.get_by_role('button',name='Continuar envio',exact=True).click();pg.get_by_text('Pedido registrado. Nenhuma mensagem foi enviada.',exact=True).wait_for()
+   pg.get_by_role('button',name='Tentar de novo',exact=True).click();pg.get_by_text('Pedido registrado. Nenhuma mensagem foi enviada.',exact=True).wait_for()
    assert len(fotos)==3 and fotos[0]==fotos[1],'Foto sem recibo ganhou outro identificador'
    assert len(json.loads(api('/qa/estado')[1])['solicitacoes'])==1
-   pg.get_by_role('button',name='Ver pedidos deste cliente',exact=True).click();pg.locator('.ms-solicitacao').wait_for();assert pg.locator('.ms-solicitacao-fotos summary').count()==2
-   pg.get_by_role('button',name='Adicionar fotos',exact=True).click();pg.set_input_files('#ms-registro-fotos',[FOTOS[2]]);pg.get_by_role('button',name='Guardar fotos',exact=True).click();pg.get_by_text('Fotos acrescentadas ao pedido. Nenhuma mensagem foi enviada.',exact=True).wait_for()
-   pg.get_by_role('button',name='Ver pedidos deste cliente',exact=True).click();pg.locator('.ms-solicitacao').wait_for();assert pg.locator('.ms-solicitacao-fotos summary').count()==3
-   pg.get_by_role('button',name='Adicionar fotos',exact=True).click();pg.set_input_files('#ms-registro-fotos',[FOTOS[2]]);pg.get_by_role('button',name='Guardar fotos',exact=True).click();pg.get_by_text('Fotos acrescentadas ao pedido. Nenhuma mensagem foi enviada.',exact=True).wait_for()
-   pg.get_by_role('button',name='Ver pedidos deste cliente',exact=True).click();pg.locator('.ms-solicitacao').wait_for();assert pg.locator('.ms-solicitacao-fotos summary').count()==3,'Reanexar a mesma foto criou cópia'
+   pg.get_by_role('button',name='Ver pedidos deste cliente',exact=True).click();pg.locator('.ms-solicitacao').wait_for();assert pg.locator('.ms-solicitacao-mini').count()==2
+   # 4) Adicionar fotos ao pedido existente pela mesma fila; repetir a mesma imagem não cria cópia.
+   for _ in range(2):
+    pg.get_by_role('button',name='Adicionar fotos',exact=True).click();pg.set_input_files('#ms-registro-fotos',[FOTOS[2]]);pg.get_by_role('button',name='Guardar fotos',exact=True).click();pg.locator('#ms-gaveta').wait_for(state='detached')
+    painel();pg.get_by_text('Fotos acrescentadas ao pedido. Nenhuma mensagem foi enviada.',exact=True).wait_for()
+    pg.get_by_role('button',name='Ver pedidos deste cliente',exact=True).click();pg.locator('.ms-solicitacao').wait_for();assert pg.locator('.ms-solicitacao-mini').count()==3,'Reanexar a mesma foto criou cópia'
    assert not st['ig']['msg']['envios'];assert not erros,erros
    pg.add_script_tag(path=str(Path(__file__).with_name('axe.min.js')));violacoes=pg.evaluate("async()=>{const r=await axe.run(document.querySelector('#overlay-mensagens'));return r.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>v.id)}");assert not violacoes,violacoes
    pg.screenshot(path=str(OUT/f'retomada-concluida-{largura}.png'));print('OK',largura,'resposta perdida, reload, mesmas IDs e anexos no pedido existente, sem duplicação ou envio',flush=True)
