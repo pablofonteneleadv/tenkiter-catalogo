@@ -33,7 +33,7 @@ assert.equal(TKTecido.semDescricao('A\r\nTecido: X\r\n\r\nB'), 'A\r\n\r\nB');
 
 // Não interpreta nem executa HTML literal.
 const html = '<img src=x onerror=alert(1)> algodão';
-const htmlGravado = TKTecido.serializar('Peça', html);
+const htmlGravado = TKTecido.serializar('Produto', html);
 assert.equal(TKTecido.ler({ Descricao: htmlGravado }), html);
 
 // Um Tecido explícito, inclusive vazio, sempre tem precedência sobre o legado em Descricao.
@@ -52,5 +52,5 @@ console.log('catalogo_tecido: verificações aprovadas');
 
 TKTecido.aplicar({versao:1,itens:[{nome:'Crepe Dior',apelidos:['Dior','Crepe Diór']}]});
 assert.equal(TKTecido.ler({Descricao:'Tecido: Dior'}),'Crepe Dior');
-assert.equal(TKTecido.serializar('Peça','Dior'),'Peça\nTecido: Crepe Dior');
+assert.equal(TKTecido.serializar('Produto','Dior'),'Produto\nTecido: Crepe Dior');
 assert.deepEqual(Array.from(TKTecido.opcoes([{Descricao:'Tecido: Dior'}])),['Crepe Dior']);

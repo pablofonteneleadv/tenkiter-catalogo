@@ -1,4 +1,4 @@
-"""Solicitar fotos pela seleção da Gestão e do catálogo; serviços externos simulados."""
+"""Pedir fotos pela seleção da Gestão e do catálogo; serviços externos simulados."""
 import os, sys, json, threading, functools, http.server, subprocess
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -129,7 +129,7 @@ try:
                 ctx, pg, state, calls, errors, ids = setup(browser, width, height, 'index.html')
                 if zoom > 1: pg.add_style_tag(content='html { font-size: 130% !important; }')
                 open_dialog(pg, 'index.html'); pg.locator('[data-opcao="outro"]').click()
-                pg.locator('#pf-outro').fill('Detalhes e costas da peça'); pg.locator('#pf-observacao').fill('Mostrar todos os detalhes da estampa e o caimento da manga.')
+                pg.locator('#pf-outro').fill('Detalhes e costas do produto'); pg.locator('#pf-observacao').fill('Mostrar todos os detalhes da estampa e o caimento da manga.')
                 pg.locator('#pf-observacao').scroll_into_view_if_needed()
                 pg.screenshot(path=str(EVID / f'depois-index-{width}x{height}-texto.png'))
                 chk(f'{width}x{height}: sem rolagem horizontal com texto ampliado', pg.evaluate('document.documentElement.scrollWidth <= innerWidth'))

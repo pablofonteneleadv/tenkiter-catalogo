@@ -1,6 +1,6 @@
 /* TENKiTER Modas -- treinamento "verificado" (v1)
  * Checagem dentro da lição, prova com pergunta crítica, prática validada pela gestão e certificado com código.
- * Tudo aqui é OPCIONAL: só aparece em manual que tem "Checagem:" no texto ou capítulo "Prática..." e,
+ * Tudo aqui é OPCIONAL: só aparece em manual que tem "Checagem:" no texto ou capítulo "Prática…" e,
  * para o painel/certificado, só quando o servidor anuncia `certificados` em ?action=versao.
  * Manuais 1 a 3 (sem esses marcadores) ficam exatamente como eram. */
 (function(){
@@ -192,7 +192,7 @@
     return m ? { texto: m[1], critica: true } : { texto: String(texto || ''), critica: false };
   };
 
-  /* ---------- prática: itens vêm do capítulo "Prática..." do próprio manual ---------- */
+  /* ---------- prática: itens vêm do capítulo "Prática…" do próprio manual ---------- */
   TMV.itensPratica = function(manual){
     var itens = [], achou = false;
     ((manual && manual.parts) || []).forEach(function(pt){ (pt.chapters || []).forEach(function(c){

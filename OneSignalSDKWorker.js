@@ -25,7 +25,7 @@ var CACHE_FOTOS = 'tk-fotos-v1';
 var MAX_FOTOS = 160;
 // v3.11: entram catalogo.css e catalogo.js (saíram de dentro do index.html na v3.10 — sem eles o
 // catálogo abre sem estilo offline), mais conta.js e foto-cliente.js, que também são do site.
-var BASICO = ['/', '/index.html', '/catalogo.css', '/catalogo.js', '/fotos-novas.js', '/common.js', '/conta.js', '/foto-cliente.js', '/meta.js', '/pedido.js', '/sessao-rapida.js', '/fila-lote.js', '/push.js', '/pwa.js', '/nav.js', '/menu-lateral.js', '/vitrine.js', '/a11y.js', '/icones.js', '/acabamento.css', '/acabamento-equipe.css', '/privacidade.html', '/site.webmanifest', '/logo-mark.png', '/icon-192.png', '/favicon.ico'];
+var BASICO = ['/', '/index.html', '/catalogo.css', '/catalogo.js', '/fotos-novas.js', '/common.js', '/conta.js', '/foto-cliente.js', '/meta.js', '/pedido.js', '/sessao-rapida.js', '/fila-lote.js', '/avisos.js', '/push.js', '/pwa.js', '/nav.js', '/menu-lateral.js', '/vitrine.js', '/a11y.js', '/icones.js', '/acabamento.css', '/acabamento-equipe.css', '/privacidade.html', '/site.webmanifest', '/logo-mark.png', '/icon-192.png', '/favicon.ico'];
 var PAGINAS = /^\/(index\.html|privacidade\.html)?$/;
 var ESTATICOS = /\.(?:js|css|png|jpg|jpeg|webp|svg|ico|webmanifest|woff2?)$/i;
 var FORA_DO_CACHE = /^\/(admin|treinamentos|curriculos|curriculo|manual)\.html$/;

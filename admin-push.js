@@ -26,7 +26,7 @@
     const sess = (typeof getSessao === 'function' && getSessao()) || null;
     return apiPost(Object.assign({ pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', funcionario: funcionarioNome }, extra));
   }
-  function erroTxt(r) { return (r && r.erro) || (r && r.semRede ? 'Sem conexão agora. Tente de novo.' : 'Não foi possível agora. Tente de novo.'); }
+  function erroTxt(r) { return (r && r.erro) || (r && r.semRede ? 'Sem conexão. Verifique a internet e tente de novo.' : 'Não foi possível agora. Tente de novo.'); }
   function podeGerir() { try { return typeof temPermissao === 'function' && typeof usuarioAdmin !== 'undefined' && !!usuarioAdmin && !!temPermissao(usuarioAdmin, 'gerir_acessos'); } catch (e) { return false; } }
 
   /* ---------- estilo ---------- */
@@ -130,7 +130,7 @@
   const PUBLICOS = [
     ['todos', 'Todos que ativaram os avisos'],
     ['app', 'Quem instalou o app'],
-    ['interesse', 'Por interesse (gênero/tipo de peça)…'],
+    ['interesse', 'Por interesse (gênero/tipo de produto)…'],
     ['g:equipe', 'Equipe (quem acessa o catálogo/gestão)'],
     ['g:alunos', 'Alunos (Aluno e Novato)'],
     ['g:portal', 'Todos do portal de treinamento'],
@@ -176,7 +176,7 @@
         '<div class="av-linha"><button type="button" class="av-sec" id="av-ins-nome">Inserir {nome}</button><span class="g-nota" style="margin:0">{nome} vira o primeiro nome de cada pessoa (só em avisos para contas).</span></div>' +
         '<label for="av-url-in">Ao tocar, abrir</label><input type="text" id="av-url-in" placeholder="https://tenkitermodas.com.br/" autocomplete="off" inputmode="url">' +
         '<div class="av-chips" id="av-links"></div>' +
-        '<label for="av-peca-in">Ou escolher uma peça</label><input type="text" id="av-peca-in" list="av-pecas" placeholder="Digite o nome ou código da peça" autocomplete="off"><datalist id="av-pecas"></datalist>' +
+        '<label for="av-peca-in">Ou escolher um produto</label><input type="text" id="av-peca-in" list="av-pecas" placeholder="Digite o nome ou código do produto" autocomplete="off"><datalist id="av-pecas"></datalist>' +
         '<label for="av-img-in">Imagem grande (opcional, endereço https://)</label><input type="text" id="av-img-in" placeholder="https://…" autocomplete="off" inputmode="url">' +
       '</div>' +
       '<div class="av-bloco"><h3>3. Quando</h3>' +
@@ -356,7 +356,7 @@
       if (!r || !r.ok) { ultimaPrevia = null; el2.innerHTML = '<span class="av-erro">' + esc(erroTxt(r)) + '</span>'; return; }
       ultimaPrevia = r;
       if (r.quantidade === null) el2.innerHTML = '👥 <b>' + esc(r.descricao) + '</b>' + (typeof r.aparelhos === 'number' ? ': cerca de <b>' + r.aparelhos + '</b> aparelho(s) com aviso ativo' : '') + '<br><span class="g-nota">Quem já ativou os avisos no aparelho' + (typeof r.aparelhos === 'number' ? ' (contados pelo site; o número exato do OneSignal aparece no histórico depois de enviar)' : '. O número exato aparece no histórico depois de enviar') + '.</span>';
-      else el2.innerHTML = '👥 <b>' + esc(r.descricao) + '</b>: ' + r.quantidade + ' pessoa(s)' + (typeof r.comAviso === 'number' ? ', <b>' + r.comAviso + '</b> com aviso ativo agora' : '') + (r.amostra.length ? '<br><span class="g-nota">' + esc(r.amostra.join(', ')) + (r.quantidade > r.amostra.length ? ' e mais ' + (r.quantidade - r.amostra.length) : '') + '</span>' : '') +
+      else el2.innerHTML = '👥 <b>' + esc(r.descricao) + '</b>: ' + tkPlural(r.quantidade, 'pessoa', 'pessoas') + '' + (typeof r.comAviso === 'number' ? ', <b>' + r.comAviso + '</b> com aviso ativo agora' : '') + (r.amostra.length ? '<br><span class="g-nota">' + esc(r.amostra.join(', ')) + (r.quantidade > r.amostra.length ? ' e mais ' + (r.quantidade - r.amostra.length) : '') + '</span>' : '') +
         '<br><span class="g-nota">Só recebe quem entrou na conta e ativou os avisos no aparelho.</span>';
     }, 350);
   }
@@ -394,7 +394,7 @@
         if (!d || isNaN(d.getTime())) { res.innerHTML = '<p class="av-erro">Escolha o dia e a hora do agendamento.</p>'; return; }
         corpo.agendarEm = d.toISOString();
       }
-      desc = ultimaPrevia ? ultimaPrevia.descricao + (ultimaPrevia.quantidade != null ? ' (' + ultimaPrevia.quantidade + ' pessoa(s))' : '') : 'o público escolhido';
+      desc = ultimaPrevia ? ultimaPrevia.descricao + (ultimaPrevia.quantidade != null ? ' (' + tkPlural(ultimaPrevia.quantidade, 'pessoa', 'pessoas') + ')' : '') : 'o público escolhido';
       const quando = corpo.agendarEm ? new Date(corpo.agendarEm).toLocaleString('pt-BR') : 'agora';
       // Resumo completo antes de enviar (auditoria 11/10/2026): público, quantidade, texto final, link e horário. Aviso enviado não volta atrás.
       const linhas = ['CONFIRA ANTES DE ENVIAR', '',
@@ -430,7 +430,7 @@
     $('av-corpo').innerHTML = historico.length ? historico.map((h, i) => {
       const res = h.resultado || 'enviado';
       return '<div class="av-hist"><b>' + esc(h.titulo) + '</b> <span class="av-tag ' + esc(res) + '">' + esc(res) + '</span><br>' + esc(h.mensagem) +
-        '<div class="g-nota">' + esc(h.quando) + ' · ' + esc(h.quem) + ' · ' + esc(h.audiencia || (h.segmento === 'Subscribed Users' || !h.segmento ? 'Todos os assinantes' : h.segmento)) + ' · ' + h.destinatarios + ' destinatário(s)' + (h.agendado ? ' · agendado para ' + esc(h.agendado) : '') + '</div>' +
+        '<div class="g-nota">' + esc(h.quando) + ' · ' + esc(h.quem) + ' · ' + esc(h.audiencia || (h.segmento === 'Subscribed Users' || !h.segmento ? 'Todos os assinantes' : h.segmento)) + ' · ' + tkPlural(h.destinatarios, 'destinatário', 'destinatários') + '' + (h.agendado ? ' · agendado para ' + esc(h.agendado) : '') + '</div>' +
         '<div class="av-n" id="av-n-' + i + '"></div>' +
         '<div class="av-linha">' + (h.id ? '<button type="button" class="av-sec" data-num="' + i + '">📊 Ver números</button>' : '') +
         (res === 'agendado' && h.id ? '<button type="button" class="av-perigo" data-canc="' + i + '">Cancelar agendamento</button>' : '') +
@@ -446,7 +446,7 @@
         const i = Number(c.dataset.canc);
         if (!confirm('Cancelar este aviso agendado? Ele não será enviado.')) return;
         const x = await chamar({ action: 'pushCancelar', id: historico[i].id });
-        if (x && x.ok) telaHistorico(); else alert(erroTxt(x));
+        if (x && x.ok) telaHistorico(); else TKAviso.erro(erroTxt(x));
       } else if (u) {
         const h = historico[Number(u.dataset.reusar)];
         telaEnviar.rascunho = { titulo: h.titulo, mensagem: h.mensagem, url: h.url, imagem: h.imagem };
@@ -481,9 +481,9 @@
       if (e) telaModelos(modelos[Number(e.dataset.edit)]);
       else if (d) {
         const x = modelos[Number(d.dataset.del)];
-        if (!confirm('Excluir o modelo "' + x.rotulo + '"?')) return;
+        if (!confirm('Excluir o modelo "' + x.rotulo + '"? Não dá para desfazer.')) return;
         const r = await chamar({ action: 'excluirPushModelo', id: x.id });
-        if (r && r.ok) { modelos = r.modelos; telaModelos(); } else alert(erroTxt(r));
+        if (r && r.ok) { modelos = r.modelos; telaModelos(); } else TKAviso.erro(erroTxt(r));
       }
     });
   }

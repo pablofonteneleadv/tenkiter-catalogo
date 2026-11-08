@@ -13,13 +13,13 @@ with sync_playwright() as p:
         print("== backend",versao,"==")
         ctx=b.new_context(viewport={"width":390,"height":844},is_mobile=True,has_touch=True,service_workers="block")
         st=install(ctx,versao=versao); ctx.add_init_script(SESSION); pg=ctx.new_page(); errs=[]; pg.on("pageerror",lambda e:errs.append(str(e)))
-        st["auditoria"]={st["produtos"][-1]["ID"]:{"criadoPor":"Ana Cadastro","criadoEm":"2026-10-11T17:32:00.000Z","editadoPor":"Beto Edita","editadoEm":"2026-10-11T19:05:00.000Z","ultimaAcao":"Editou a peça"}}
+        st["auditoria"]={st["produtos"][-1]["ID"]:{"criadoPor":"Ana Cadastro","criadoEm":"2026-10-11T17:32:00.000Z","editadoPor":"Beto Edita","editadoEm":"2026-10-11T19:05:00.000Z","ultimaAcao":"Editou o produto"}}
         pg.goto(BASE+"admin.html"); pg.wait_for_timeout(2500)
         txt=pg.inner_text("#lista-produtos")
         if versao=="4.1":
             chk("a lista mostra 'Cadastrou: Ana Cadastro' com dia e hora","Cadastrou: Ana Cadastro" in txt and "14:32" in txt,txt[:200])
             chk("mostra quem editou por último","Editou: Beto Edita" in txt)
-            chk("só a peça com registro mostra a linha",pg.locator(".produto .audit-linha").count()==1)
+            chk("só o produto com registro mostra a linha",pg.locator(".produto .audit-linha").count()==1)
             pg.locator(".produto").first.locator(".mais summary").click()
             pg.locator("[data-hist-id]").first.click(); pg.wait_for_timeout(500)
             chk("🕘 Histórico abre a linha do tempo","Beto Edita" in pg.inner_text("#historico-corpo") and "preço 89 → 99" in pg.inner_text("#historico-corpo"),pg.inner_text("#historico-corpo"))

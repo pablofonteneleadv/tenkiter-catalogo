@@ -109,7 +109,7 @@ function semear(amb) {
   L('102', 'Fantasia "Super-Herói", azul', 'Conjuntos', 'Infantil Menino', 80, 'https://res.cloudinary.com/z/b.jpg', 'Ativo', '', 'TK-0002');
   L('103', 'Blusa Esgotada', 'Blusas', 'Feminino Adulto', 50, 'https://res.cloudinary.com/z/c.jpg', 'Ativo', 0, 'TK-0003');
   L('104', 'Short Arquivado', 'Shorts', 'Masculino Adulto', 60, 'https://res.cloudinary.com/z/d.jpg', 'Inativo', 3, 'TK-0004');
-  L('105', 'Peça Antiga Sem Código', 'Saias', 'Feminino Adulto', 70, 'https://res.cloudinary.com/z/e.jpg', 'Ativo', 2, '');
+  L('105', 'Produto Antigo Sem Código', 'Saias', 'Feminino Adulto', 70, 'https://res.cloudinary.com/z/e.jpg', 'Ativo', 2, '');
   L('106', 'Outra Antiga', 'Saias', 'Feminino Adulto', 75, 'https://res.cloudinary.com/z/f.jpg', 'Ativo', 2, '');
   amb.props.set('ADMIN_PIN', '1234'); // acesso do admin pelo PIN antigo (a autenticação por login é testada nos outros testes)
 }
@@ -143,23 +143,23 @@ console.log('Arquivo testado: ' + ARQ);
   r = amb.post(Object.assign({}, base, { whatsapp: '123' }));
   ok(r.ok === false && /whatsapp/i.test(r.erro), 'WhatsApp inválido é recusado', r.erro);
   r = amb.post(Object.assign({}, base, { itens: [] }));
-  ok(r.ok === false, 'sem peças é recusado');
+  ok(r.ok === false, 'sem produtos é recusado');
   r = amb.post(Object.assign({}, base, { entrega: 'entrega', endereco: 'Rua' }));
   ok(r.ok === false && /entrega/i.test(r.erro), 'entrega sem endereço é recusada', r.erro);
   r = amb.post(Object.assign({}, base, { itens: [{ id: '103' }, { id: '104' }] }));
-  ok(r.ok === false && /dispon/i.test(r.erro), 'só peça esgotada/arquivada: recusa', r.erro);
+  ok(r.ok === false && /dispon/i.test(r.erro), 'só produto esgotado/arquivada: recusa', r.erro);
   ok(amb.ss.getSheetByName('Pedidos') === null || amb.ss.getSheetByName('Pedidos').getLastRow() <= 1, 'pedido recusado não grava linha');
 
   r = amb.post(base);
   ok(r.ok && r.codigo === 'PED-0001', 'primeiro pedido vira PED-0001', JSON.stringify(r));
   ok(r.total === 162, 'o servidor recalculou: (100+80) com 10% à vista = 162 (ignorou o preço 1 mandado pelo navegador)', r.total);
-  ok(r.ignorados === 3, 'peça esgotada, arquivada e inexistente foram ignoradas', r.ignorados);
+  ok(r.ignorados === 3, 'produto esgotado, arquivada e inexistente foram ignoradas', r.ignorados);
   const aba = amb.ss.getSheetByName('Pedidos');
   ok(aba && aba.getLastRow() === 2, 'uma linha na aba Pedidos');
   const linha = aba.d[1];
   ok(linha[4] === '88999991234', 'WhatsApp guardado só com números (DDD+9+8)', linha[4]);
   const r2 = amb.post(base);
-  ok(r2.ok && r2.codigo === 'PED-0001' && r2.repetido === true, 'mesmo cliente + mesmas peças em 2 min devolve o MESMO pedido (duplo toque)', JSON.stringify(r2));
+  ok(r2.ok && r2.codigo === 'PED-0001' && r2.repetido === true, 'mesmo cliente + mesmos produtos em 2 min devolve o MESMO pedido (duplo toque)', JSON.stringify(r2));
   ok(aba.getLastRow() === 2, 'duplo toque não cria 2ª linha');
   const r3 = amb.post(Object.assign({}, base, { whatsapp: '88988887777', nome: '=HYPERLINK("http://x")' }));
   ok(r3.ok && r3.codigo === 'PED-0002', 'outro cliente vira PED-0002', r3.codigo);
@@ -226,7 +226,7 @@ console.log('Arquivo testado: ' + ARQ);
   let r = amb.post({ action: 'gerarCodigosFaltantes' });
   ok(r.ok === false, 'sem PIN/login é negado');
   r = amb.post(adm({ action: 'gerarCodigosFaltantes' }));
-  ok(r.ok && r.geradas.length === 2, 'gera para as 2 peças sem código', JSON.stringify(r));
+  ok(r.ok && r.geradas.length === 2, 'gera para as 2 produtos sem código', JSON.stringify(r));
   ok(r.geradas[0].codigo === 'TK-0005' && r.geradas[1].codigo === 'TK-0006', 'continua depois do maior código existente (TK-0004), sem repetir', JSON.stringify(r.geradas));
   ok(amb.props.get('PROXIMO_CODIGO_NUM') === '6', 'contador acertado para 6', amb.props.get('PROXIMO_CODIGO_NUM'));
   const cods = amb.ss.getSheetByName('Sheet1').d.slice(1).map(l => l[13]);
@@ -257,7 +257,7 @@ console.log('Arquivo testado: ' + ARQ);
   ok(r.ok && !r.semDados, 'com eventos: semDados=false');
   ok(r.totais.visualizacoes === 19 && r.totais.whatsapp === 4, 'totais contam só o período (50 de 90 dias atrás ficam de fora)', JSON.stringify(r.totais));
   ok(r.totais.whatsappPor100Visualizacoes === 21.1, 'taxa = 4/19 = 21,1 por 100', r.totais.whatsappPor100Visualizacoes);
-  ok(r.topProdutos[0].codigo === 'TK-0001' && r.topProdutos[0].visualizacoes === 14 && r.topProdutos[0].whatsapp === 3 && r.topProdutos[0].nome === 'Vestido Floral', 'peça mais vista é o Vestido Floral (14 views / 3 WhatsApp)', JSON.stringify(r.topProdutos[0]));
+  ok(r.topProdutos[0].codigo === 'TK-0001' && r.topProdutos[0].visualizacoes === 14 && r.topProdutos[0].whatsapp === 3 && r.topProdutos[0].nome === 'Vestido Floral', 'produto mais vista é o Vestido Floral (14 views / 3 WhatsApp)', JSON.stringify(r.topProdutos[0]));
   ok(r.porDia.length === 30 && r.porDia[29].visualizacoes === 15 && r.porDia[28].visualizacoes === 4, 'série por dia tem 30 dias (hoje 15 views, ontem 4)', JSON.stringify(r.porDia.slice(-2)));
   const cat = r.categorias.find(c => c.nome === 'Vestidos');
   ok(cat && cat.visualizacoes === 14 && cat.whatsapp === 3, 'por categoria', JSON.stringify(r.categorias));
@@ -279,7 +279,7 @@ console.log('Arquivo testado: ' + ARQ);
     { codigo: 'TK-0001', preco: '130' },
     { codigo: 'TK-0003', nome: 'Blusa Esgotada' },
     { codigo: 'TK-0004', status: 'talvez' },
-    { nome: 'Peça Nova Importada', preco: '89,5', categoria: 'vestidos', genero: 'Feminino Adulto', foto_url: 'https://res.cloudinary.com/z/nova.jpg', estoque: '4', novidade: 'sim' },
+    { nome: 'Produto Novo Importado', preco: '89,5', categoria: 'vestidos', genero: 'Feminino Adulto', foto_url: 'https://res.cloudinary.com/z/nova.jpg', estoque: '4', novidade: 'sim' },
     { nome: 'Sem foto', preco: '10' },
     { codigo: 'TK-9999', preco: '10' }
   ];
@@ -288,14 +288,14 @@ console.log('Arquivo testado: ' + ARQ);
   r = amb.post(adm({ action: 'importarProdutos', linhas: linhas, simular: true }));
   ok(r.ok && r.simulacao === true, 'prévia (simular) responde ok');
   ok(JSON.stringify(aba.d) === antes, 'a prévia NÃO grava nada na planilha');
-  ok(r.atualizados.length === 2, 'prévia: 2 peças seriam atualizadas', JSON.stringify(r.atualizados.map(x => x.codigo)));
+  ok(r.atualizados.length === 2, 'prévia: 2 produtos seriam atualizadas', JSON.stringify(r.atualizados.map(x => x.codigo)));
   const u1 = r.atualizados.find(x => x.codigo === 'TK-0001');
   ok(u1 && u1.campos.some(c => /preço: 100 → 119.9/.test(c)) && u1.campos.some(c => /estoque: 5 → 8/.test(c)), 'a prévia mostra "antes → depois" de preço e estoque', JSON.stringify(u1));
-  ok(r.criados.length === 1 && r.criados[0].nome === 'Peça Nova Importada' && /^TK-\d{4}$/.test(r.criados[0].codigo), 'prévia: 1 peça nova', JSON.stringify(r.criados));
+  ok(r.criados.length === 1 && r.criados[0].nome === 'Produto Novo Importado' && /^TK-\d{4}$/.test(r.criados[0].codigo), 'prévia: 1 produto novo', JSON.stringify(r.criados));
   const motivos = r.ignorados.map(x => x.motivo).join(' | ');
   ok(/Preço inválido/.test(motivos) && /repetida/i.test(motivos) && /Status/.test(motivos) && /nome, preço e foto/.test(motivos) && /Nada mudou|não encontrada/i.test(motivos), 'prévia explica as linhas ignoradas', motivos);
   ok(r.ignorados.some(x => x.codigo === 'TK-9999') , 'código que não existe e sem nome/foto é ignorado');
-  ok(r.criados[0].codigo === 'TK-0005', 'a peça nova ganha TK-0005 (depois do maior código existente, mesmo com o contador zerado)', r.criados[0].codigo);
+  ok(r.criados[0].codigo === 'TK-0005', 'o produto novo ganha TK-0005 (depois do maior código existente, mesmo com o contador zerado)', r.criados[0].codigo);
   const contBefore = amb.props.get('PROXIMO_CODIGO_NUM');
   ok(contBefore === undefined || contBefore === null || contBefore === '0', 'prévia não mexe no contador de códigos', contBefore);
 
@@ -306,9 +306,9 @@ console.log('Arquivo testado: ' + ARQ);
   ok(vest[4] === 119.99 && vest[9] === 8 && vest[1] === 'Vestido Floral', 'TK-0001 mudou preço/estoque e manteve o resto', JSON.stringify([vest[4], vest[9], vest[1]]));
   const fant = d.find(l => l[13] === 'TK-0002');
   ok(fant[1] === 'Fantasia Super-Herói Azul' && fant[11] === 'Azul, Vermelho' && fant[4] === 80, 'TK-0002: nome/cores mudaram, preço intacto', JSON.stringify([fant[1], fant[11], fant[4]]));
-  ok(d.find(l => l[13] === 'TK-0003')[4] === 50, 'linha com preço inválido não alterou a peça');
-  const nova = d.find(l => l[1] === 'Peça Nova Importada');
-  ok(nova && nova[6] === 'Ativo' && nova[4] === 89.43 && nova[9] === 4 && nova[12] === true && /^TK-/.test(nova[13]), 'peça nova criada ativa, com código TK-####, preço 89,5 corrigido para 89,43 (à vista ,49) e novidade', JSON.stringify(nova));
+  ok(d.find(l => l[13] === 'TK-0003')[4] === 50, 'linha com preço inválido não alterou o produto');
+  const nova = d.find(l => l[1] === 'Produto Novo Importado');
+  ok(nova && nova[6] === 'Ativo' && nova[4] === 89.43 && nova[9] === 4 && nova[12] === true && /^TK-/.test(nova[13]), 'produto novo criado ativo, com código TK-####, preço 89,5 corrigido para 89,43 (à vista ,49) e novidade', JSON.stringify(nova));
   const cods = d.slice(1).map(l => l[13]).filter(Boolean);
   ok(new Set(cods).size === cods.length, 'nenhum código repetido depois da importação', cods.join(','));
   ok(amb.props.get('PROXIMO_CODIGO_NUM') === '5', 'contador acertado para 5 depois de criar', amb.props.get('PROXIMO_CODIGO_NUM'));
@@ -331,18 +331,18 @@ console.log('Arquivo testado: ' + ARQ);
   ok(csvOut.mime === 'csv', 'feed CSV com tipo CSV');
   const linhas = csv.trim().split('\r\n');
   ok(linhas[0] === 'id,title,description,availability,condition,price,link,image_link,additional_image_link,brand,gender,age_group,color,product_type,quantity_to_sell_on_facebook', 'cabeçalho do feed no formato da Meta/Google');
-  ok(linhas.length === 1 + 5, 'só peças ATIVAS (arquivada fica de fora): 5', linhas.length - 1);
-  ok(csv.indexOf('TK-0004') === -1, 'peça arquivada não está no feed');
+  ok(linhas.length === 1 + 5, 'só produtos ATIVOS (arquivada fica de fora): 5', linhas.length - 1);
+  ok(csv.indexOf('TK-0004') === -1, 'produto arquivado não está no feed');
   ok(/TK-0001,Vestido Floral,Desc Vestido Floral,in stock,new,100\.00 BRL,https:\/\/tenkitermodas\.com\.br\/p\/TK-0001,https:\/\/res\.cloudinary\.com\/z\/a\.jpg,,TENKiTER Modas,female,adult,"Preto\/Bege"?/.test(csv) || /TK-0001,Vestido Floral,Desc Vestido Floral,in stock,new,100\.00 BRL,https:\/\/tenkitermodas\.com\.br\/p\/TK-0001/.test(csv), 'linha do Vestido: preço CHEIO 100.00 BRL, link /p/TK-0001, in stock', linhas[1]);
-  ok(/TK-0003,Blusa Esgotada,.*,out of stock,/.test(csv), 'peça com estoque 0 aparece como out of stock');
+  ok(/TK-0003,Blusa Esgotada,.*,out of stock,/.test(csv), 'produto com estoque 0 aparece como out of stock');
   ok(/"Fantasia ""Super-Herói"", azul"/.test(csv), 'aspas e vírgula no nome são escapadas (CSV válido)');
   ok(/male,kids/.test(csv), 'infantil menino = male/kids');
-  ok(/105,Peça Antiga Sem Código/.test(csv), 'peça sem código usa o ID como id do feed');
+  ok(/105,Produto Antigo Sem Código/.test(csv), 'produto sem código usa o ID como id do feed');
   const xmlOut = amb.get({ action: 'feed', formato: 'xml' }); const xml = xmlOut.getContent();
   ok(xmlOut.mime === 'xml' && xml.startsWith('<?xml') && /<g:id>TK-0001<\/g:id>/.test(xml) && /<g:price>100\.00 BRL<\/g:price>/.test(xml), 'feed XML (RSS do Google) com g:id e g:price');
   ok(/&quot;Super-Herói&quot;/.test(xml) && !/<g:title>Fantasia "/.test(xml), 'XML escapa aspas');
   const sm = amb.get({ action: 'sitemap' }).getContent();
-  ok(sm.indexOf('<loc>https://tenkitermodas.com.br/p/TK-0001</loc>') !== -1 && sm.indexOf('TK-0004') === -1 && sm.indexOf('<loc>https://tenkitermodas.com.br/</loc>') !== -1, 'sitemap tem a página inicial e as peças ativas com código (sem a arquivada)');
+  ok(sm.indexOf('<loc>https://tenkitermodas.com.br/p/TK-0001</loc>') !== -1 && sm.indexOf('TK-0004') === -1 && sm.indexOf('<loc>https://tenkitermodas.com.br/</loc>') !== -1, 'sitemap tem a página inicial e os produtos ativos com código (sem a arquivada)');
   // cache invalida quando muda produto
   amb.post(adm({ action: 'bulkUpdate', tipoAcao: 'alterarEstoque', ids: ['101'], valor: 0 }));
   ok(/TK-0001,Vestido Floral,.*,out of stock,/.test(amb.get({ action: 'feed', formato: 'csv' }).getContent()), 'depois de mudar o estoque o feed reflete (cache descartado)');
@@ -437,7 +437,7 @@ console.log('Arquivo testado: ' + ARQ);
   ok(r.ok === false, 'histórico sem login é negado');
 
   r = amb.post(adm({ action: 'bulkUpdate', tipoAcao: 'alterarCategoria', ids: ['101', '102'], valor: 'saias' }));
-  ok(r.ok && r.afetados === 2, 'lote: categoria alterada em 2 peças');
+  ok(r.ok && r.afetados === 2, 'lote: categoria alterada em 2 produtos');
   const aba = amb.ss.getSheetByName('Sheet1');
   ok(aba.d[1][2] === 'Saias' && aba.d[2][2] === 'Saias', 'reaproveitou a grafia que já existe ("Saias"), sem acento/maiúscula', aba.d[1][2]);
   r = amb.post(adm({ action: 'bulkUpdate', tipoAcao: 'alterarCategoria', ids: ['101'], valor: 'Roupas de Festa' }));
@@ -507,11 +507,11 @@ console.log('Arquivo testado: ' + ARQ);
   r = amb.post(A({ action: 'excluirCategoria', nome: '' }));
   ok(r.ok === false, 'sem nome: recusa');
   r = amb.post(A({ action: 'excluirCategoria', nome: 'fantasia INFANTIL menina' }));
-  ok(r.ok === false && r.emUso === 1 && lista().indexOf('Fantasia infantil menina') !== -1 && catDa('101') === 'Vestidos, Fantasia infantil menina', 'categoria EM USO: não apaga e diz em quantas peças (1)', JSON.stringify(r));
+  ok(r.ok === false && r.emUso === 1 && lista().indexOf('Fantasia infantil menina') !== -1 && catDa('101') === 'Vestidos, Fantasia infantil menina', 'categoria EM USO: não apaga e diz em quantos produtos (1)', JSON.stringify(r));
   r = amb.post(A({ action: 'excluirCategoria', nome: 'Fantasia infantil menina', confirmar: true }));
   ok(r.ok && r.pecas === 1 && lista().indexOf('Fantasia infantil menina') === -1, 'com confirmação apaga a categoria', JSON.stringify(r));
-  ok(catDa('101') === 'Vestidos', 'a peça perdeu SÓ essa categoria e ficou com a outra ("Vestidos")', catDa('101'));
-  ok(aba.d.filter(x => x[0] === '101').length === 1 && aba.d.find(x => x[0] === '101')[1] === 'Vestido Floral', 'a peça continua no catálogo');
+  ok(catDa('101') === 'Vestidos', 'o produto perdeu SÓ essa categoria e ficou com a outra ("Vestidos")', catDa('101'));
+  ok(aba.d.filter(x => x[0] === '101').length === 1 && aba.d.find(x => x[0] === '101')[1] === 'Vestido Floral', 'o produto continua no catálogo');
   const audit = () => amb.ss.getSheetByName('Acoes_Audit');
   ok(audit() && audit().d.some(l => l[2] === 'excluir_categoria' && l[1] === 'Pablo Admin'), 'ficou registrado em Acoes_Audit com o nome de quem apagou');
   ok(amb.getJson({ action: 'list' }).produtos.find(x => x.ID === '101').Categoria === 'Vestidos', 'a lista pública já mostra a mudança (cache descartado)');
@@ -524,19 +524,19 @@ console.log('Arquivo testado: ' + ARQ);
   aba.d.find(x => x[0] === '102')[2] = 'Conjuntos, aisatnaF Fantasia';
   aba.d.find(x => x[0] === '103')[2] = 'aisatnaF Fantasia';
   r = amb.post(A({ action: 'renomearCategoria', nome: 'aisatnaF Fantasia', novoNome: '  Fantasia  ' }));
-  ok(r.ok && r.nome === 'Fantasia' && r.pecas === 2 && !r.juntou, 'renomeia (nome limpo) e diz quantas peças mudaram (2)', JSON.stringify(r));
+  ok(r.ok && r.nome === 'Fantasia' && r.pecas === 2 && !r.juntou, 'renomeia (nome limpo) e diz quantos produtos mudaram (2)', JSON.stringify(r));
   ok(lista().indexOf('Fantasia') !== -1 && lista().indexOf('aisatnaF Fantasia') === -1, 'a lista tem o nome novo e não tem o velho');
-  ok(catDa('102') === 'Conjuntos, Fantasia' && catDa('103') === 'Fantasia', 'as peças que usavam o nome velho passaram para o novo, mantendo as outras categorias', catDa('102') + ' | ' + catDa('103'));
+  ok(catDa('102') === 'Conjuntos, Fantasia' && catDa('103') === 'Fantasia', 'os produtos que usavam o nome velho passaram para o novo, mantendo as outras categorias', catDa('102') + ' | ' + catDa('103'));
   // juntar com uma que já existe
   aba.d.find(x => x[0] === '105')[2] = 'Saias, Fantasia';
   amb.post(A({ action: 'addCategoria', nome: 'Fantasias Erro' })); aba.d.find(x => x[0] === '106')[2] = 'Fantasias Erro';
   r = amb.post(A({ action: 'renomearCategoria', nome: 'Fantasias Erro', novoNome: 'fantasia' }));
   ok(r.ok && r.juntou === true && r.nome === 'Fantasia', 'nome novo que já existe: JUNTA e usa a grafia que já existia', JSON.stringify(r));
-  ok(lista().filter(c => /^fantasia/i.test(c)).length === 1 && catDa('106') === 'Fantasia', 'continua uma só "Fantasia" na lista e a peça foi para ela');
+  ok(lista().filter(c => /^fantasia/i.test(c)).length === 1 && catDa('106') === 'Fantasia', 'continua uma só "Fantasia" na lista e o produto foi para ela');
   aba.d.find(x => x[0] === '105')[2] = 'Fantasia, Saias, Fantasias Erro2';
   amb.post(A({ action: 'addCategoria', nome: 'Fantasias Erro2' }));
   r = amb.post(A({ action: 'renomearCategoria', nome: 'Fantasias Erro2', novoNome: 'Fantasia' }));
-  ok(catDa('105') === 'Fantasia, Saias', 'peça que já tinha as duas fica com "Fantasia" uma vez só', catDa('105'));
+  ok(catDa('105') === 'Fantasia, Saias', 'produto que já tinha as duas fica com "Fantasia" uma vez só', catDa('105'));
   // só acento/maiúscula
   r = amb.post(A({ action: 'renomearCategoria', nome: 'saias', novoNome: 'SAIAS Longas' }));
   ok(r.ok && lista().indexOf('SAIAS Longas') !== -1 && lista().indexOf('Saias') === -1, 'renomear para algo novo funciona também em categoria padrão');
@@ -878,7 +878,7 @@ function onesignalFalso(amb, est) {
   let pn = est.enviados[est.enviados.length - 1];
   ok(est.enviados.length === 1 && pn && /Novo pedido PED-0001/.test(pn.headings.pt) && pn.url === 'https://tenkitermodas.com.br/admin.html', 'pedido novo: UM aviso para a equipe, com link do painel', JSON.stringify(pn).slice(0, 200));
   const ids = pn.include_aliases.external_id;
-  ok(ids.indexOf(pid('88999990001')) !== -1 && ids.indexOf(pid('88999990002')) !== -1 && ids.indexOf(pid('88999990003')) === -1 && ids.indexOf(pid('88999990005')) === -1, 'quem recebe: equipe que cadastra produtos (Pablo, Ana...), nunca aluno nem cliente', ids.length);
+  ok(ids.indexOf(pid('88999990001')) !== -1 && ids.indexOf(pid('88999990002')) !== -1 && ids.indexOf(pid('88999990003')) === -1 && ids.indexOf(pid('88999990005')) === -1, 'quem recebe: equipe que cadastra produtos (Pablo, Ana…), nunca aluno nem cliente', ids.length);
   ok(/Dani/.test(pn.contents.pt) && pn.contents.pt.indexOf('88999990005') === -1 && pn.contents.pt.indexOf('R$') !== -1, 'texto traz o primeiro nome e o total, NUNCA o telefone');
   const dup = amb.post({ action: 'criarPedido', nome: 'Dani Cliente', whatsapp: '88999990005', entrega: 'retirada', itens });
   ok(dup.ok && dup.repetido === true && dup.pushKey === ped.pushKey && est.enviados.length === 1, 'toque duplo: mesmo pedido, mesma chave e NÃO avisa a equipe de novo');
@@ -945,10 +945,10 @@ function onesignalFalso(amb, est) {
   est.usuarios = [{ external_id: pid('88999990005') }]; est.enviados.length = 0;
   r = amb.post(A({ action: 'create', nome: 'Vestido Novo', preco: 99, categoria: 'Vestidos', genero: 'Feminino Adulto', novidade: true, notificarPush: true, fotoUrlExistente: 'https://res.cloudinary.com/z/novo.jpg' }));
   pn = est.enviados[0];
-  ok(r.ok && pn && Array.isArray(pn.filters) && pn.url === 'https://tenkitermodas.com.br/?c=' + r.codigo && pn.chrome_web_image === 'https://res.cloudinary.com/z/novo.jpg' && /Vestido Novo/.test(pn.contents.pt), 'peça nova com "avisar": link ?c=<código>, foto grande e respeita preferências', JSON.stringify(pn).slice(0, 240));
+  ok(r.ok && pn && Array.isArray(pn.filters) && pn.url === 'https://tenkitermodas.com.br/?c=' + r.codigo && pn.chrome_web_image === 'https://res.cloudinary.com/z/novo.jpg' && /Vestido Novo/.test(pn.contents.pt), 'produto novo com "avisar": link ?c=<código>, foto grande e respeita preferências', JSON.stringify(pn).slice(0, 240));
   est.cai = new Error('fora'); est.enviados.length = 0;
   r = amb.post(A({ action: 'create', nome: 'Vestido Novo 2', preco: 99, categoria: 'Vestidos', genero: 'Feminino Adulto', novidade: true, notificarPush: true, fotoUrlExistente: 'https://res.cloudinary.com/z/novo2.jpg' }));
-  ok(r.ok, 'falha no aviso de novidade não impede o cadastro da peça');
+  ok(r.ok, 'falha no aviso de novidade não impede o cadastro do produto');
   est.cai = null;
 
   // ---------- config pública
@@ -1096,7 +1096,7 @@ function servicosFalsos(amb, est) {
   ok(r.ok && r.criadas.length === 0 && r.jaExistiam === 4 && !metodos().includes('post') && est.rotas.length === 4, 'repetir não cria nada (idempotente)', JSON.stringify(r));
   est.feed = true;
   r = P(A({ action: 'testarConexoes' }));
-  ok(item('feed-csv').ok === true && /3 peça/.test(item('feed-csv').detalhe) && item('feed-xml').ok === true && /2 peça/.test(item('feed-xml').detalhe) && item('sitemap').ok === true && item('render-regras').ok === true, 'com tudo no lugar os itens ficam verdes e contam as peças', JSON.stringify(r.itens.map(x => [x.id, x.ok])));
+  ok(item('feed-csv').ok === true && /3 produto/.test(item('feed-csv').detalhe) && item('feed-xml').ok === true && /2 produto/.test(item('feed-xml').detalhe) && item('sitemap').ok === true && item('render-regras').ok === true, 'com tudo no lugar os itens ficam verdes e contam os produtos', JSON.stringify(r.itens.map(x => [x.id, x.ok])));
   // regra que existe mas aponta para outro lugar: NÃO é mexida, só avisada
   est.rotas.find(x => x.source === '/feed.csv').destination = 'https://outro.exemplo/feed.csv';
   est.chamadas.length = 0;
@@ -1399,7 +1399,7 @@ function servicosFalsos(amb, est) {
   r = P({ action: 'registrarEvento', produtoId: '101', codigo: 'TK-0001', tipo: 'visualizacao', origem: 'app', visitante: V(1) });
   ok(r.ignorado === true, 'o mesmo aparelho repetindo a mesma ação em segundos é ignorado');
   r = P({ action: 'registrarEvento', produtoId: '101', codigo: 'TK-0001', tipo: 'visualizacao', origem: 'site', visitante: V(2) });
-  ok(r.ok && !r.ignorado, 'outro aparelho na mesma peça conta normalmente (a trava agora é por aparelho)');
+  ok(r.ok && !r.ignorado, 'outro aparelho no mesmo produto conta normalmente (a trava agora é por aparelho)');
   // planilha de Eventos antiga (4 colunas) ganha os cabeçalhos sozinha
   const velho = criarAmbiente(); semear(velho);
   const evv = velho.ss.insertSheet('Eventos'); evv.appendRow(['DataHora', 'ProdutoID', 'Codigo', 'Tipo']); evv.appendRow([new Date(), '101', 'TK-0001', 'visualizacao']);
@@ -1466,14 +1466,14 @@ function servicosFalsos(amb, est) {
   ok(r.totais.visitantes === 5 && r.funil.visitantes === 5, 'visitantes únicos = 5 (a mesma pessoa com 2 ações conta uma vez)', JSON.stringify(r.funil));
   ok(r.filtrado === false && r.porHora.length === 24 && r.porDiaSemana.length === 7 && r.porDia.length === 30, 'sem filtro: 24 horas, 7 dias da semana, 30 dias no gráfico');
   ok(r.cobertura.eventos === 7 && r.cobertura.comVisitante === 6 && /^\d\d\/\d\d\/\d{4}$/.test(r.cobertura.desde), 'cobertura diz quantos eventos têm os dados novos e desde quando', JSON.stringify(r.cobertura));
-  ok(r.totais.pessoasViram === 4 && r.totais.pessoasWhats === 1 && r.funil.pessoasViram === 4 && r.funil.pessoasWhats === 1, 'v4.8: pessoas únicas que viram peça (4) e que tocaram no WhatsApp (1) — a conta fecha: 5 entraram ⊇ 4 viram, 1 pediu', JSON.stringify(r.funil));
+  ok(r.totais.pessoasViram === 4 && r.totais.pessoasWhats === 1 && r.funil.pessoasViram === 4 && r.funil.pessoasWhats === 1, 'v4.8: pessoas únicas que viram produto (4) e que tocaram no WhatsApp (1) — a conta fecha: 5 entraram ⊇ 4 viram, 1 pediu', JSON.stringify(r.funil));
   ok(r.cobertura.semCodigo.visualizacoes === 1 && r.cobertura.semCodigo.whatsapp === 0 && r.cobertura.semCodigo.visitas === 0, 'v4.8: registro antigo sem código de pessoa é contado à parte (para a conta fechar)', JSON.stringify(r.cobertura));
-  ok(r.porOrigem.find(x => x.chave === 'app').visitantes === 1 && r.porOrigem.find(x => x.chave === 'site').visitantes === 4 && r.porOrigem.reduce((a, x) => a + x.visitantes, 0) === r.totais.visitantes, 'v4.8: pessoas por origem (quem só entrou, sem ver peça, também conta) somam o total real', JSON.stringify(r.porOrigem));
-  ok(r.porDia.reduce((a, x) => a + x.pessoas, 0) >= r.totais.visitantes && r.porHora.every(x => typeof x.pessoas === 'number') && r.topProdutos.every(x => typeof x.pessoas === 'number') && r.categorias.every(x => typeof x.visitantes === 'number'), 'v4.8: pessoas por dia, hora, peça e categoria');
+  ok(r.porOrigem.find(x => x.chave === 'app').visitantes === 1 && r.porOrigem.find(x => x.chave === 'site').visitantes === 4 && r.porOrigem.reduce((a, x) => a + x.visitantes, 0) === r.totais.visitantes, 'v4.8: pessoas por origem (quem só entrou, sem ver produto, também conta) somam o total real', JSON.stringify(r.porOrigem));
+  ok(r.porDia.reduce((a, x) => a + x.pessoas, 0) >= r.totais.visitantes && r.porHora.every(x => typeof x.pessoas === 'number') && r.topProdutos.every(x => typeof x.pessoas === 'number') && r.categorias.every(x => typeof x.visitantes === 'number'), 'v4.8: pessoas por dia, hora, produto e categoria');
   ok(amb.getJson({ action: 'versao' }).pessoasReais === true, 'versao anuncia pessoasReais');
   ok(r.porOrigem.some(x => x.chave === 'nao_informado' && x.visualizacoes === 1) && r.porOrigem.some(x => x.chave === 'app' && x.visualizacoes === 1 && x.whatsapp === 1), 'origem: o evento antigo aparece como "Não informado", sem inventar', JSON.stringify(r.porOrigem));
   ok(r.porDispositivo.find(x => x.chave === 'android').visualizacoes === 2 && r.porFonte.find(x => x.chave === 'instagram').whatsapp === 1, 'tabelas por aparelho e por fonte');
-  ok(r.porGenero.find(x => x.nome === 'Feminino Adulto').visualizacoes === 4, 'por gênero (peças que a pessoa viu)', JSON.stringify(r.porGenero));
+  ok(r.porGenero.find(x => x.nome === 'Feminino Adulto').visualizacoes === 4, 'por gênero (produtos que a pessoa viu)', JSON.stringify(r.porGenero));
   // horário (opcional)
   r = M({ dias: 30, horaDe: 9, horaAte: 10 });
   ok(r.totais.visualizacoes === 1 && r.totais.whatsapp === 1 && r.totais.visitas === 1 && r.filtrado === true && /das 9h às 10h59/.test(r.filtrosDescricao), 'horário 9h–10h59: pega só o que aconteceu nessa faixa', JSON.stringify(r.totais) + r.filtrosDescricao);
@@ -1504,7 +1504,7 @@ function servicosFalsos(amb, est) {
   r = M({ dias: 30, categoria: 'blusas' });
   ok(r.totais.visualizacoes === 1 && r.totais.visitas === 0 && r.topProdutos.length === 1 && r.topProdutos[0].codigo === 'TK-0003', 'categoria (sem diferenciar maiúscula): só a Blusa', JSON.stringify(r.totais));
   r = M({ dias: 30, genero: 'Infantil Menino' });
-  ok(r.totais.visualizacoes === 1 && r.topProdutos[0].codigo === 'TK-0002', 'gênero: só a peça infantil');
+  ok(r.totais.visualizacoes === 1 && r.topProdutos[0].codigo === 'TK-0002', 'gênero: só o produto infantil');
   ok(r.opcoes.categorias.includes('Vestidos') && r.opcoes.generos.includes('Infantil Menino'), 'devolve as categorias e gêneros que existem para a tela montar os filtros');
   // período por data
   r = M({ de: diaIso(2), ate: diaIso(2) });
@@ -1615,7 +1615,7 @@ function servicosFalsos(amb, est) {
   ok(r.ok && amb.ss.getSheetByName('Eventos').getLastRow() === 2, 'registrarEvento continua gravando');
   r = amb.post({ action: 'create', nome: 'X', preco: 10 });
   ok(r.ok === false, 'criar produto sem PIN continua negado');
-  r = amb.post(adm({ action: 'create', nome: 'Peça nova do admin', preco: 33, categoria: 'Blusas', genero: 'Unissex', fotoUrlExistente: 'https://res.cloudinary.com/z/n.jpg' }));
+  r = amb.post(adm({ action: 'create', nome: 'Produto novo do admin', preco: 33, categoria: 'Blusas', genero: 'Unissex', fotoUrlExistente: 'https://res.cloudinary.com/z/n.jpg' }));
   ok(r.ok && /^TK-\d{4}$/.test(r.codigo), 'criar produto com PIN continua funcionando', JSON.stringify(r));
   r = amb.getJson({ action: 'qualquer' });
   ok(r.ok === false && /desconhecida/i.test(r.erro), 'ação desconhecida continua devolvendo erro');
@@ -1726,16 +1726,16 @@ function servicosFalsos(amb, est) {
   let r = amb.post(A({ action: 'create', nome: 'Vestido Carimbo', preco: 99.9, categoria: 'Vestidos', genero: 'Feminino', funcionario: 'NOME FALSO DIGITADO', fotoUrlExistente: 'https://res.cloudinary.com/z/car.jpg' }));
   ok(r.ok, 'cadastro com login funciona', JSON.stringify(r));
   let l = lin(r.id);
-  ok(l.CriadoPor === 'Ana Cadastro' && l.CriadoEm instanceof Date && l.UltimaAcao === 'Cadastrou a peça', 'cadastro grava o NOME DA CONTA (não o texto digitado no aparelho), a data e a ação', JSON.stringify([l.CriadoPor, l.UltimaAcao]));
-  ok(!l.EditadoPor, 'peça nova ainda não tem "editado por"');
+  ok(l.CriadoPor === 'Ana Cadastro' && l.CriadoEm instanceof Date && l.UltimaAcao === 'Cadastrou o produto', 'cadastro grava o NOME DA CONTA (não o texto digitado no aparelho), a data e a ação', JSON.stringify([l.CriadoPor, l.UltimaAcao]));
+  ok(!l.EditadoPor, 'produto novo ainda não tem "editado por"');
   const id = r.id;
   r = amb.post(B({ action: 'update', id: id, nome: 'Vestido Carimbo', preco: 109.9, categoria: 'Vestidos', genero: 'Feminino' }));
   ok(r.ok, 'edição funciona', JSON.stringify(r)); l = lin(id);
-  ok(l.EditadoPor === 'Beto Edita' && l.EditadoEm instanceof Date && l.UltimaAcao === 'Editou a peça' && l.CriadoPor === 'Ana Cadastro', 'edição grava quem editou e mantém quem cadastrou');
+  ok(l.EditadoPor === 'Beto Edita' && l.EditadoEm instanceof Date && l.UltimaAcao === 'Editou o produto' && l.CriadoPor === 'Ana Cadastro', 'edição grava quem editou e mantém quem cadastrou');
   r = amb.post(B({ action: 'arquivarRapido', id: id })); l = lin(id);
   ok(r.ok && l.UltimaAcao === 'Arquivou pelo X do catálogo' && l.EditadoPor === 'Beto Edita', 'X do catálogo também carimba');
   r = amb.post(B({ action: 'bulkUpdate', tipoAcao: 'marcarNovidade', ids: [id, '101'], valor: true })); 
-  ok(lin('101').EditadoPor === 'Beto Edita' || r.ok === false, 'lote carimba as peças afetadas (ou recusa sem carimbar)', JSON.stringify(r));
+  ok(lin('101').EditadoPor === 'Beto Edita' || r.ok === false, 'lote carimba os produtos afetados (ou recusa sem carimbar)', JSON.stringify(r));
   // ---- leitura: só equipe; nunca na lista pública
   r = amb.post(Cr({ action: 'auditoriaProdutos' }));
   ok(r.semPermissao === true || r.ok === false, 'cliente comum NÃO vê quem editou');
@@ -1773,7 +1773,7 @@ function servicosFalsos(amb, est) {
   const row = (id) => { const d = sh.getDataRange().getValues(); const i = d.findIndex((r) => String(r[0]) === String(id)); return i < 0 ? null : { r: d[i], cab: d[0] }; };
   const col = (cab, nome) => cab.indexOf(nome) + 1;
 
-  let r = amb.post(adm({ action: 'create', nome: 'Peça 3 vídeos', preco: 100, categoria: 'Vestidos', genero: 'Feminino',
+  let r = amb.post(adm({ action: 'create', nome: 'Produto 3 vídeos', preco: 100, categoria: 'Vestidos', genero: 'Feminino',
     fotoUrlExistente: 'https://res.cloudinary.com/z/x.jpg', videos: [U(1), U(2), U(3)] }));
   ok(r.ok && Array.isArray(r.videos) && r.videos.length === 3, 'create aceita lista de vídeos', JSON.stringify(r));
   const id1 = r.id;
@@ -1787,7 +1787,7 @@ function servicosFalsos(amb, est) {
   ok(p && Array.isArray(p.Videos) && p.Videos.join(',') === [U(1), U(2), U(3)].join(','), 'lista pública devolve Videos (array, na ordem)', p && JSON.stringify(p.Videos));
 
   // peça que só manda um vídeo (site antigo): nada de coluna cheia de vírgula
-  r = amb.post(adm({ action: 'create', nome: 'Peça 1 vídeo', preco: 60, categoria: 'Blusas', genero: 'Feminino',
+  r = amb.post(adm({ action: 'create', nome: 'Produto 1 vídeo', preco: 60, categoria: 'Blusas', genero: 'Feminino',
     fotoUrlExistente: 'https://res.cloudinary.com/z/y.jpg', videoUrlExistente: U(4) }));
   ok(r.ok && r.videos.length === 1 && r.videos[0] === U(4), 'sem body.videos: grava 1 vídeo como antes', JSON.stringify(r.videos));
   L = row(r.id);
@@ -1810,7 +1810,7 @@ function servicosFalsos(amb, est) {
   r = amb.post(adm({ action: 'videoAdicionar', id: id1, url: 'javascript:alert(1)' }));
   ok(r.ok === false && /inv[aá]lido/i.test(r.erro), 'recusa endereço que não é https', r.erro);
   r = amb.post(adm({ action: 'videoAdicionar', id: '999', url: U(9) }));
-  ok(r.ok === false, 'peça inexistente: erro claro');
+  ok(r.ok === false, 'produto inexistente: erro claro');
 
   // tirar o principal promove o próximo
   r = amb.post(adm({ action: 'videoRemover', id: id1, url: U(1) }));
@@ -1846,18 +1846,18 @@ function servicosFalsos(amb, est) {
   const base = { action: 'create', nome: 'Vestido idempotente', preco: 99, categoria: 'Blusas', genero: 'Unissex', fotoUrlExistente: 'https://res.cloudinary.com/z/idem.jpg' };
   const antes = sh.getLastRow();
   let r1 = amb.post(adm(Object.assign({ opId: 'e1abc-OPID_001' }, base)));
-  ok(r1.ok && r1.id && r1.codigo, 'primeiro envio cria a peça', JSON.stringify(r1));
+  ok(r1.ok && r1.id && r1.codigo, 'primeiro envio cria o produto', JSON.stringify(r1));
   ok(sh.getLastRow() === antes + 1, 'uma linha nova');
   // reenvio IMEDIATO (cairia no freio de 10 s) e reenvio com outra foto: ambos devolvem a ORIGINAL
   let r2 = amb.post(adm(Object.assign({ opId: 'e1abc-OPID_001' }, base)));
-  ok(r2.ok && r2.repetido === true && r2.id === r1.id && r2.codigo === r1.codigo, 'mesmo opId devolve a peça original (repetido)', JSON.stringify(r2));
+  ok(r2.ok && r2.repetido === true && r2.id === r1.id && r2.codigo === r1.codigo, 'mesmo opId devolve o produto original (repetido)', JSON.stringify(r2));
   ok(sh.getLastRow() === antes + 1, 'reenvio NÃO cria outra linha');
   let r3 = amb.post(adm(Object.assign({}, base, { opId: 'e1abc-OPID_001', fotoUrlExistente: 'https://res.cloudinary.com/z/outra.jpg' })));
-  ok(r3.ok && r3.repetido && r3.id === r1.id && sh.getLastRow() === antes + 1, 'mesmo opId com outra capa continua sendo a mesma peça');
+  ok(r3.ok && r3.repetido && r3.id === r1.id && sh.getLastRow() === antes + 1, 'mesmo opId com outra capa continua sendo o mesmo produto');
   ok(r2.fotoUrl === 'https://res.cloudinary.com/z/idem.jpg', 'a resposta repetida traz a capa gravada', r2.fotoUrl);
   // opId diferente = outra peça (capa diferente passa pelo freio de 10 s)
   let r4 = amb.post(adm(Object.assign({}, base, { opId: 'e1abc-OPID_002', fotoUrlExistente: 'https://res.cloudinary.com/z/idem2.jpg' })));
-  ok(r4.ok && !r4.repetido && r4.id !== r1.id && sh.getLastRow() === antes + 2, 'opId novo cria outra peça');
+  ok(r4.ok && !r4.repetido && r4.id !== r1.id && sh.getLastRow() === antes + 2, 'opId novo cria outro produto');
   // opId inválido é ignorado (comportamento de sempre)
   let r5 = amb.post(adm(Object.assign({}, base, { opId: 'x', nome: 'Sem opId valido', fotoUrlExistente: 'https://res.cloudinary.com/z/idem3.jpg' })));
   ok(r5.ok && !r5.repetido, 'opId curto/ inválido é ignorado');
@@ -1881,7 +1881,7 @@ function servicosFalsos(amb, est) {
 
 // ------------------------------------------------------------------ 8k. "Consultar valor" (v4.20)
 (function consultarValor() {
-  console.log('\n[8k Consultar valor: peça sem preço]');
+  console.log('\n[8k Consultar valor: produto sem preço]');
   const amb = criarAmbiente(); semear(amb);
   const sh = amb.ss.getSheetByName('Sheet1');
   const preco = (id) => { const d = sh.getDataRange().getValues(); const i = d.findIndex((r) => String(r[0]) === String(id)); return i < 0 ? null : d[i][4]; };
@@ -1892,7 +1892,7 @@ function servicosFalsos(amb, est) {
   r = amb.post(adm({ action: 'create', nome: 'Preço zero', preco: 0, categoria: 'Vestidos', genero: 'Feminino', fotoUrlExistente: FOTO }));
   ok(r.ok === false, 'preço 0 sem a marca continua recusado');
   // com a marca: grava Preco 0
-  r = amb.post(adm({ action: 'create', nome: 'Peça sob consulta', consultarValor: true, categoria: 'Vestidos', genero: 'Feminino', fotoUrlExistente: FOTO }));
+  r = amb.post(adm({ action: 'create', nome: 'Produto sob consulta', consultarValor: true, categoria: 'Vestidos', genero: 'Feminino', fotoUrlExistente: FOTO }));
   ok(r.ok && r.id, 'create com consultarValor:true cadastra sem preço', JSON.stringify(r));
   const idC = r.id;
   ok(Number(preco(idC)) === 0, 'a planilha guarda Preco 0', String(preco(idC)));
@@ -1902,7 +1902,7 @@ function servicosFalsos(amb, est) {
   ok(amb.getJson({ action: 'versao' }).consultarValor === true, 'versao anuncia consultarValor');
   // editar: marcar / desmarcar
   r = amb.post(adm({ action: 'update', id: '101', consultarValor: true }));
-  ok(r.ok && Number(preco('101')) === 0, 'update com consultarValor:true zera o preço da peça', JSON.stringify(r));
+  ok(r.ok && Number(preco('101')) === 0, 'update com consultarValor:true zera o preço do produto', JSON.stringify(r));
   r = amb.post(adm({ action: 'update', id: '101', consultarValor: false }));
   ok(r.ok === false && /pre[cç]o/i.test(r.erro), 'desmarcar sem informar preço é recusado', JSON.stringify(r));
   r = amb.post(adm({ action: 'update', id: '101', consultarValor: false, preco: 120 }));
@@ -1923,7 +1923,7 @@ function servicosFalsos(amb, est) {
   r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'consultarValor' }));
   ok(r.ok && r.afetados === 2 && Number(preco('102')) === 0 && Number(preco('105')) === 0, 'lote consultarValor passa as marcadas para sem preço', JSON.stringify(r));
   r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '106'], tipoAcao: 'ajustarPrecoPorcento', valor: '10' }));
-  ok(r.ok && r.afetados === 1 && r.semPreco === 1 && Number(preco('102')) === 0 && Math.abs(Number(preco('106')) - 82.77) < 0.01, 'lote % pula a peça "Consulte valor" e reajusta as outras', JSON.stringify(r) + ' ' + preco('106'));
+  ok(r.ok && r.afetados === 1 && r.semPreco === 1 && Number(preco('102')) === 0 && Math.abs(Number(preco('106')) - 82.77) < 0.01, 'lote % pula o produto "Consulte valor" e reajusta as outras', JSON.stringify(r) + ' ' + preco('106'));
   r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'valorEscrito', valor: '99,9' }));
   ok(r.ok === false, 'lote valorEscrito sem número válido é recusado', JSON.stringify(r));
   r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'valorEscrito', valor: '99.9' }));
@@ -1936,12 +1936,12 @@ function servicosFalsos(amb, est) {
   const amb2 = criarAmbiente(); semear(amb2);
   amb2.post(adm({ action: 'update', id: '102', consultarValor: true }));
   r = amb2.post({ action: 'criarPedido', nome: 'Cliente Teste', whatsapp: '88999991111', entrega: 'retirada', itens: [{ id: '101' }, { id: '102' }] });
-  ok(r.ok && Math.abs(r.total - 90) < 0.01 && r.ignorados === 0, 'pedido com 1 peça com preço + 1 "Consulte valor": total só da com preço', JSON.stringify(r));
-  ok(r.itens && r.itens.some((i) => i.consultar === true), 'a resposta marca qual peça é "Consulte valor"');
+  ok(r.ok && Math.abs(r.total - 90) < 0.01 && r.ignorados === 0, 'pedido com 1 produto com preço + 1 "Consulte valor": total só da com preço', JSON.stringify(r));
+  ok(r.itens && r.itens.some((i) => i.consultar === true), 'a resposta marca qual produto é "Consulte valor"');
   const ab = amb2.ss.getSheetByName('Pedidos').getDataRange().getValues();
   ok(ab.slice(1).some((l) => String(l[8]).indexOf('"consultar":true') > -1), 'o pedido guardado leva consultar:true no item');
   r = amb2.post({ action: 'criarPedido', nome: 'Cliente Dois', whatsapp: '88999992222', entrega: 'retirada', itens: [{ id: '102' }] });
-  ok(r.ok && r.total === 0, 'pedido só com peça "Consulte valor" também vale (total 0)', JSON.stringify(r));
+  ok(r.ok && r.total === 0, 'pedido só com produto "Consulte valor" também vale (total 0)', JSON.stringify(r));
   // página de compartilhar (?action=share) sem preço
   const html = amb2.getHtml ? amb2.getHtml({ action: 'share', id: '102' }) : null;
   if (html != null) ok(/Consulte valor/.test(html) && !/R\$ 0,00/.test(html), 'página de compartilhar diz "Consulte valor" (sem R$ 0,00)');
@@ -2016,20 +2016,20 @@ function servicosFalsos(amb, est) {
     { id: '105', fotoBase64: 'AAAA' }
   ] }));
   const leiturasLote = leituras; sh.getDataRange = orig;
-  ok(r.ok && Array.isArray(r.resultados) && r.resultados.length === 6, 'responde uma linha por peça', JSON.stringify(r));
+  ok(r.ok && Array.isArray(r.resultados) && r.resultados.length === 6, 'responde uma linha por produto', JSON.stringify(r));
   const res = (k) => r.resultados[k] || {};
-  ok(res(0).ok && linha('101')[1] === 'Vestido Floral Novo' && Number(linha('101')[9]) === 7 && linha('101')[10] === 'P, M, G' && linha('101')[12] === true, 'grava os dados da peça como o update', JSON.stringify(linha('101')));
+  ok(res(0).ok && linha('101')[1] === 'Vestido Floral Novo' && Number(linha('101')[9]) === 7 && linha('101')[10] === 'P, M, G' && linha('101')[12] === true, 'grava os dados do produto como o update', JSON.stringify(linha('101')));
   ok(Number(linha('101')[4]) === 99.99, 'preço segue a regra do à vista (,99/,49)', String(linha('101')[4]));
   ok(res(1).ok && Number(linha('102')[4]) === 0, 'preço 0 = "Consultar valor" (regra 4.27)', JSON.stringify(res(1)));
-  ok(!res(2).ok && /Preço inválido/.test(res(2).erro) && Number(linha('103')[4]) === 50, 'preço negativo recusado só nesta peça; a linha fica como estava', JSON.stringify(res(2)));
-  ok(!res(3).ok && /não encontrado/i.test(res(3).erro), 'peça inexistente devolve erro legível', JSON.stringify(res(3)));
-  ok(!res(4).ok && /repetida/i.test(res(4).erro) && linha('101')[1] === 'Vestido Floral Novo', 'peça repetida no lote não é gravada duas vezes', JSON.stringify(res(4)));
+  ok(!res(2).ok && /Preço inválido/.test(res(2).erro) && Number(linha('103')[4]) === 50, 'preço negativo recusado só neste produto; a linha fica como estava', JSON.stringify(res(2)));
+  ok(!res(3).ok && /não encontrado/i.test(res(3).erro), 'produto inexistente devolve erro legível', JSON.stringify(res(3)));
+  ok(!res(4).ok && /repetida/i.test(res(4).erro) && linha('101')[1] === 'Vestido Floral Novo', 'produto repetido no lote não é gravada duas vezes', JSON.stringify(res(4)));
   ok(!res(5).ok && /edição normal/.test(res(5).erro), 'foto nova em base64 é recusada no lote', JSON.stringify(res(5)));
   ok(JSON.stringify(r.salvos) === JSON.stringify(['101', '102']), 'salvos lista só as que gravaram', JSON.stringify(r.salvos));
-  ok(leiturasLote <= 2, 'a planilha é lida uma vez para o lote (não uma por peça)', String(leiturasLote));
+  ok(leiturasLote <= 2, 'a planilha é lida uma vez para o lote (não uma por produto)', String(leiturasLote));
   ok(amb.post(adm({ action: 'updateLote', itens: [] })).ok === false, 'lote vazio é recusado');
   const muitos = []; for (let i = 0; i < 61; i++) muitos.push({ id: '101' });
-  ok(amb.post(adm({ action: 'updateLote', itens: muitos })).ok === false, 'mais de 60 peças por vez é recusado');
+  ok(amb.post(adm({ action: 'updateLote', itens: muitos })).ok === false, 'mais de 60 produtos por vez é recusado');
   ok(amb.post({ action: 'updateLote', itens: [{ id: '101', nome: 'Invasor' }] }).ok === false && linha('101')[1] === 'Vestido Floral Novo', 'sem login/permissão não grava nada');
   ok(/updateLote: 'catalogo_cadastrar'/.test(codigoFonte), 'mesma permissão do update (catalogo_cadastrar)');
 })();

@@ -48,7 +48,7 @@ with sync_playwright() as p:
             if EVID: pg.locator("[data-passo=fotos]").screenshot(path=os.path.join(EVID, "varios-passo1-390.png"))
             if not pg.locator("#card-menu-cadastro").evaluate("e => e.open"): pg.click("#card-menu-cadastro > summary")
             pg.click("#menu-cad-nova"); pg.wait_for_timeout(600)
-            chk("voltar para UM produto: passo 1 'Fotos da peça (0 de 8)' sem a explicação do lote", pg.locator("#galeria-box .dica-midia-expansivel").is_visible() and pg.locator("#passo-fotos-nome").inner_text() == "Fotos da peça" and not pg.locator("#passo-fotos-varias").is_visible() and pg.locator("#galeria-contador").inner_text() == "(0 de 8)", pg.locator("#galeria-contador").inner_text())
+            chk("voltar para UM produto: passo 1 'Fotos do produto (0 de 8)' sem a explicação do lote", pg.locator("#galeria-box .dica-midia-expansivel").is_visible() and pg.locator("#passo-fotos-nome").inner_text() == "Fotos do produto" and not pg.locator("#passo-fotos-varias").is_visible() and pg.locator("#galeria-contador").inner_text() == "(0 de 8)", pg.locator("#galeria-contador").inner_text())
         chk("sem erros de JavaScript", not erros, erros)
         ctx.close()
     b.close()

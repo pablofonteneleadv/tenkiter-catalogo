@@ -116,7 +116,7 @@ try { tkSelExpirar_(); } catch (e) {}
 
   function mostrarToastCarregando(texto) {
     const toast = document.getElementById('toast-carregando');
-    document.getElementById('texto-toast').textContent = texto || 'Carregando produtos...';
+    document.getElementById('texto-toast').textContent = texto || 'Carregando produtos…';
     toast.classList.add('visivel');
   }
 
@@ -131,7 +131,7 @@ try { tkSelExpirar_(); } catch (e) {}
     generosDisponiveis = new Set();
     coresDisponiveis = new Set(); tamanhosDisponiveis = new Set(); tecidosDisponiveis = new Set();
     produtos.forEach(p => {
-      if (estaEsgotado(p)) return;   // v6.6: o menu só oferece o que tem peça ativa
+      if (estaEsgotado(p)) return;   // v6.6: o menu só oferece o que tem produto ativo
       tagsTamanhoCliente_(p).forEach(t => { if (!/consult/i.test(t)) tamanhosDisponiveis.add(t); });
       listaDeTags(textoPlano(p.Cores)).forEach(c => coresDisponiveis.add(c));
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
@@ -192,7 +192,7 @@ try { tkSelExpirar_(); } catch (e) {}
         if (Array.isArray(novos) && novos.length) { aplicarProdutosRecebidos(novos); avisoOffline_(navigator.onLine === false); }
       }).catch(function () {});
     } else {
-      mostrarToastCarregando('Carregando produtos...');
+      mostrarToastCarregando('Carregando produtos…');
       // esqueleto: cartões cinza no formato do real (em vez de tela vazia) até a lista chegar
       const grade = document.getElementById('grid');
       grade.innerHTML = Array.from({ length: 8 }, () =>
@@ -223,7 +223,7 @@ try { tkSelExpirar_(); } catch (e) {}
         tentar.addEventListener('click', () => { vazio.style.display = 'none'; carregarCatalogo(); });
         const zap = document.createElement('a');
         zap.className = 'btn-zap'; zap.id = 'vazio-zap'; zap.target = '_blank'; zap.rel = 'noopener';
-        zap.href = linkWhatsApp('Olá! Não consegui abrir o catálogo no site. Pode me ajudar a escolher uma peça?');
+        zap.href = linkWhatsApp('Olá! Não consegui abrir o catálogo no site. Pode me ajudar a escolher um produto?');
         zap.innerHTML = ic_('whatsapp') + ' Falar com a loja no WhatsApp';
         acoes.appendChild(tentar); acoes.appendChild(zap);
         vazio.appendChild(msg); vazio.appendChild(acoes);
@@ -376,7 +376,7 @@ try { tkSelExpirar_(); } catch (e) {}
       return true;
     };
     let porBusca = termos.length ? produtos.filter(p => casaBusca(p, termos)) : produtos;
-    // Nada achou? Tenta sinônimos (camisa -> camiseta, blusa...) e avisa que são peças parecidas.
+    // Nada achou? Tenta sinônimos (camisa -> camiseta, blusa…) e avisa que são peças parecidas.
     buscaPorSinonimo_ = '';
     if (termos.length && !porBusca.length) {
       const grupos = termos.map(t => [t].concat(sinonimosMapa_[t] || []));
@@ -420,7 +420,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const itens = [];
     const busca = document.getElementById('busca').value.trim();
     const min = document.getElementById('preco-min').value, max = document.getElementById('preco-max').value;
-    if (selecaoFixa) itens.push(['Peças separadas para você', () => { selecaoFixa = null; }]);
+    if (selecaoFixa) itens.push(['Produtos separados para você', () => { selecaoFixa = null; }]);
     if (apenasNovidades) itens.push(['Novidades', () => { apenasNovidades = false; renderizarChipExtra(); }]);
     if (apenasFavoritos) itens.push(['Favoritos', () => { apenasFavoritos = false; renderizarChipExtra(); }]);
     filtroCategorias.forEach(c => itens.push([c, () => { filtroCategorias.delete(c); }]));
@@ -615,7 +615,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (soSelecao_ && nSac === 0) { soSelecao_ = false; setTimeout(aplicarFiltros, 0); }
     else if (soSelecao_ && nSac !== ultimoNSac_ && ultimoNSac_ !== -1) { ultimoNSac_ = nSac; setTimeout(aplicarFiltros, 0); }
     ultimoNSac_ = nSac;
-    if (ams) { ams.hidden = !soSelecao_; const at = document.getElementById('aviso-minha-sel-txt'); if (at) at.textContent = 'Mostrando só a sua seleção: ' + nSac + (nSac === 1 ? ' peça.' : ' peças.'); }
+    if (ams) { ams.hidden = !soSelecao_; const at = document.getElementById('aviso-minha-sel-txt'); if (at) at.textContent = 'Mostrando só a sua seleção: ' + nSac + (nSac === 1 ? ' produto.' : ' produtos.'); }
     {
       const jaTem = new Set(getSacola().map(String)), lf = listaFiltradaAtual || [];
       const faltam = lf.filter(p => !estaEsgotado(p) && !jaTem.has(String(p.ID))).length;
@@ -625,17 +625,17 @@ try { tkSelExpirar_(); } catch (e) {}
         bt.hidden = !mostrar; bt.disabled = faltam === 0;
         const tx_ = bt.querySelector('.txt'); if (tx_) tx_.textContent = faltam === 0 ? 'Todos já estão na seleção' : 'Adicionar estes ' + faltam + ' à seleção';
       });
-      const fv = document.getElementById('fx-ver'); if (fv) fv.textContent = lf.length === 0 ? 'Nenhuma peça — ajuste os filtros' : 'Ver ' + lf.length + (lf.length === 1 ? ' peça' : ' peças');
-      const fc = document.getElementById('fx-cont'); if (fc) fc.textContent = lf.length + (lf.length === 1 ? ' peça' : ' peças');
+      const fv = document.getElementById('fx-ver'); if (fv) fv.textContent = lf.length === 0 ? 'Nenhum produto — ajuste os filtros' : 'Ver ' + lf.length + (lf.length === 1 ? ' produto' : ' produtos');
+      const fc = document.getElementById('fx-cont'); if (fc) fc.textContent = lf.length + (lf.length === 1 ? ' produto' : ' produtos');
     }
     const blm = document.getElementById('btn-lote-menu'); if (blm) { blm.hidden = !(equipe_.pode && nSac > 0); if (blm.hidden) { const lm = document.getElementById('lote-menu'); if (lm) lm.hidden = true; } }
     if (!ativo) { bar.hidden = true; modoLink_ = false; return; }
     bar.classList.toggle('so-botao', modoLink_);
     if (modoLink_) { document.getElementById('barra-filtros-txt').textContent = ''; document.getElementById('barra-filtros-limpar').textContent = 'Ver os outros produtos do site'; bar.hidden = false; return; }
     const n = listaFiltradaAtual.length;
-    let t = selecaoFixa ? 'Seleção' : (n + (n === 1 ? ' peça' : ' peças'));
+    let t = selecaoFixa ? 'Seleção' : (n + (n === 1 ? ' produto' : ' produtos'));
     if (!selecaoFixa && nFiltros) t += ' · ' + nFiltros + (nFiltros === 1 ? ' filtro' : ' filtros');
-    if (selecaoFixa) t = 'Seleção · ' + n + (n === 1 ? ' peça' : ' peças');
+    if (selecaoFixa) t = 'Seleção · ' + n + (n === 1 ? ' produto' : ' produtos');
     document.getElementById('barra-filtros-txt').textContent = t;
     document.getElementById('barra-filtros-limpar').textContent = selecaoFixa ? 'Sair da seleção compartilhada' : 'Limpar filtros';
     bar.hidden = false;
@@ -667,7 +667,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (!s || !s.sessao) { avisoEquipe_('Entre na sua conta para usar a edição em lote.'); const bc = document.getElementById('btn-conta-header'); if (bc) bc.click(); return; }
     if (b.dataset.lote === 'btn-bulk-pedir-fotos') {
       if (!equipe_.pode) return;
-      if (!window.TKPedirFotos) return avisoEquipe_('A solicitação de fotos ainda está carregando. Tente novamente.');
+      if (!window.TKPedirFotos) return avisoEquipe_('O pedido de fotos ainda está carregando. Tente de novo.');
       document.getElementById('lote-menu').hidden = true;
       document.getElementById('btn-lote-menu').setAttribute('aria-expanded', 'false');
       const ids = new Set(getSacola().map(String));
@@ -714,8 +714,8 @@ try { tkSelExpirar_(); } catch (e) {}
     if (!selecaoFixa) { box.hidden = true; return; }
     const total = selecaoFixa.length;
     const achadas = produtos.length ? produtos.filter(naSelecaoFixa_).length : total;
-    let t = 'Peças separadas para você: ' + achadas + (achadas === 1 ? ' peça' : ' peças') + '.';
-    if (produtos.length && achadas < total) t += ' ' + (total - achadas) + (total - achadas === 1 ? ' peça desta seleção não está mais disponível.' : ' peças desta seleção não estão mais disponíveis.');
+    let t = 'Produtos separados para você: ' + achadas + (achadas === 1 ? ' produto' : ' produtos') + '.';
+    if (produtos.length && achadas < total) t += ' ' + (total - achadas) + (total - achadas === 1 ? ' produto desta seleção não está mais disponível.' : ' produtos desta seleção não estão mais disponíveis.');
     document.getElementById('aviso-selecao-txt').textContent = t;
     box.hidden = false;
   }
@@ -730,21 +730,21 @@ try { tkSelExpirar_(); } catch (e) {}
     const contagem = document.getElementById('contagem');
     const btnMais = document.getElementById('btn-carregar-mais');
     const lista = listaFiltradaAtual;
-    const qtd = lista.length + (lista.length === 1 ? ' peça' : ' peças');
+    const qtd = lista.length + (lista.length === 1 ? ' produto' : ' produtos');
 
     atualizarAvisoSelecao_();
     contagem.textContent = buscaIgnorouFiltros
       ? 'Nada com esses filtros — mostrando ' + qtd + ' de toda a loja'
       : (selecaoFixa && !buscaPorSinonimo_)
-        ? lista.length + (lista.length === 1 ? ' peça da seleção' : ' peças da seleção')
+        ? lista.length + (lista.length === 1 ? ' produto da seleção' : ' produtos da seleção')
       : buscaPorSinonimo_
         ? 'Nada com “' + buscaPorSinonimo_ + '” — mostrando ' + qtd + ' parecida' + (lista.length === 1 ? '' : 's')
-        : lista.length + (lista.length === 1 ? ' peça disponível' : ' peças encontradas');
+        : lista.length + (lista.length === 1 ? ' produto disponível' : ' produtos encontrados');
     if (!lista.length) {
       grid.innerHTML = ''; btnMais.style.display = 'none'; atualizarBarraFiltros_();
       const q = document.getElementById('busca').value.trim();
       mostrarVazio_(q
-        ? 'Não achamos "' + q + '". Tente outra palavra (ex.: vestido, blusa, calça) ou o código da peça.'
+        ? 'Não achamos "' + q + '". Tente outra palavra (ex.: vestido, blusa, calça) ou o código do produto.'
         : 'Nenhum produto encontrado para estes filtros.');
       return;
     }
@@ -765,7 +765,7 @@ try { tkSelExpirar_(); } catch (e) {}
           <div class="img-wrap">
             <img ${atribSrc(fotoMini(p.Foto_URL, larguraMini()))} ${atribSrcSet(p.Foto_URL)}alt="${escaparHtml(p.Nome)}" ${pos === 0 ? 'fetchpriority="high" decoding="async"' : (pos < 4 ? 'decoding="async"' : 'loading="lazy" decoding="async"')}>
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
-            ${equipe_.pode ? `<button type="button" class="x-equipe" data-x-prod="${escaparHtml(p.ID)}" title="Arquivar esta peça (equipe)" aria-label="Arquivar a peça: ${escaparHtml(p.Nome)}">✕</button>` : ''}
+            ${equipe_.pode ? `<button type="button" class="x-equipe" data-x-prod="${escaparHtml(p.ID)}" title="Arquivar este produto (equipe)" aria-label="Arquivar o produto: ${escaparHtml(p.Nome)}">✕</button>` : ''}
             <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar" aria-label="${favoritado ? 'Remover dos favoritos' : 'Favoritar'}: ${escaparHtml(p.Nome)}" aria-pressed="${favoritado}">${coracao_(favoritado)}</button>
             ${nFotos > 1 || temVideo ? `<span class="mini-selos" aria-hidden="true">${nFotos > 1 ? `<span class="mini-selo">${ic_('camera', '📷')} ${nFotos}</span>` : ''}${temVideo ? '<span class="mini-selo">' + ic_('play', '▶') + ' vídeo</span>' : ''}</span>` : ''}
             ${ultimas ? '<span class="selo-ultimas" aria-hidden="true">' + (Number(p.Estoque) === 1 ? 'Última!' : 'Últimas ' + Number(p.Estoque)) + '</span>' : ''}
@@ -829,7 +829,7 @@ try { tkSelExpirar_(); } catch (e) {}
       const texto = document.getElementById('barra-minha-selecao-qtd');
       barra.hidden = qtdSacola === 0;
       let antiga = false; try { const t = parseInt(localStorage.getItem('tk_sel_ativ_v1') || '0', 10); antiga = !!t && (Date.now() - t) > 2 * 60 * 60 * 1000; } catch (e) {}
-      if (texto) texto.textContent = qtdSacola === 0 ? 'Minha seleção' : (antiga ? 'Sua seleção de antes: ' : '') + qtdSacola + (qtdSacola === 1 ? ' peça' : ' peças');
+      if (texto) texto.textContent = qtdSacola === 0 ? 'Minha seleção' : (antiga ? 'Sua seleção de antes: ' : '') + qtdSacola + (qtdSacola === 1 ? ' produto' : ' produtos');
       document.body.classList.toggle('tem-selecao', qtdSacola > 0);
     }
   }
@@ -855,7 +855,7 @@ try { tkSelExpirar_(); } catch (e) {}
     ultimaSel_ = { ids: ids, fotos: fotos };
     limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_();
     const t = document.getElementById('toast-desfazer'), tx = document.getElementById('toast-desfazer-txt');
-    if (tx) tx.textContent = 'Seleção limpa (' + ids.length + (ids.length === 1 ? ' peça).' : ' peças).'); if (t) t.hidden = false;
+    if (tx) tx.textContent = 'Seleção limpa (' + ids.length + (ids.length === 1 ? ' produto).' : ' produtos).'); if (t) t.hidden = false;
     clearTimeout(desfazerT_); desfazerT_ = setTimeout(esconderDesfazer_, 8000);
   });
   const desfazerBtn = document.getElementById('toast-desfazer-btn');
@@ -874,7 +874,7 @@ try { tkSelExpirar_(); } catch (e) {}
     ultimaSel_ = { ids: getSacola().slice(), adicionados: novos };
     atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_();
     const t = document.getElementById('toast-desfazer'), tx = document.getElementById('toast-desfazer-txt');
-    if (tx) tx.textContent = novos.length + (novos.length === 1 ? ' peça entrou' : ' peças entraram') + ' na seleção (agora ' + getSacola().length + ').'; if (t) t.hidden = false;
+    if (tx) tx.textContent = novos.length + (novos.length === 1 ? ' produto entrou' : ' produtos entraram') + ' na seleção (agora ' + getSacola().length + ').'; if (t) t.hidden = false;
     clearTimeout(desfazerT_); desfazerT_ = setTimeout(esconderDesfazer_, 8000);
   }));
 
@@ -1054,7 +1054,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const texto = document.createElement('div');
     const titulo = document.createElement('strong'); titulo.textContent = q.Nome; texto.appendChild(titulo);
     const preco = document.createElement('p'); preco.textContent = ehConsulta(q) ? TEXTO_CONSULTA : formatarReal(Number(q.Preco) * (1 - DESCONTO_AVISTA)) + ' à vista'; texto.appendChild(preco);
-    if (estaEsgotado(q)) { const aviso = document.createElement('p'); aviso.textContent = 'Peça esgotada'; texto.appendChild(aviso); }
+    if (estaEsgotado(q)) { const aviso = document.createElement('p'); aviso.textContent = 'Produto esgotado'; texto.appendChild(aviso); }
     [['Ver produto completo', 0]].concat(String(q.Fotos_Galeria || '').trim() ? [['Mais fotos do produto', 1]] : []).forEach(([rotulo, slide]) => {
       const a = document.createElement('a'); a.href = linkProduto(q); a.textContent = rotulo;
       a.addEventListener('click', e => { e.preventDefault(); abrirDetalhe(q.ID, slide); }); texto.appendChild(a);
@@ -1087,19 +1087,19 @@ try { tkSelExpirar_(); } catch (e) {}
       <div class="carrossel-wrap">
         <div class="slide-area" id="slide-area"><img id="foto-principal-modal" alt="${escaparHtml(p.Nome)}"></div>
         ${equipe_.pode ? `<a class="btn-editar-peca" id="btn-editar-peca" href="admin.html?editar=${encodeURIComponent(p.ID)}">✎ Editar produto</a>` : ''}
-        ${equipe_.pode ? `<button type="button" class="x-equipe" id="x-slide" title="Tirar esta foto/vídeo da peça (equipe)" aria-label="Tirar esta foto ou vídeo da peça">✕</button>` : ''}
+        ${equipe_.pode ? `<button type="button" class="x-equipe" id="x-slide" title="Tirar esta foto/vídeo do produto (equipe)" aria-label="Tirar esta foto ou vídeo do produto">✕</button>` : ''}
         ${totalSlides > 1 ? `<button type="button" class="seta-slide esq" id="seta-esq" aria-label="Anterior">‹</button><button type="button" class="seta-slide dir" id="seta-dir" aria-label="Próxima">›</button><span class="contador-slide" id="contador-slide">1 / ${totalSlides}</span>` : ''}
         ${esgotado ? '<span class="selo-card esgotado" style="top:12px;left:12px;font-size:0.7rem;">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade" style="top:12px;left:12px;font-size:0.7rem;">NOVIDADE</span>' : '')}
       </div>
       ${totalSlides > 1 ? `
         <div class="thumbs-galeria">
-          ${fotosGaleria.map((f, idx) => { const im = `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`; return equipe_.pode ? `<span class="thumb-wrap">${im}<button type="button" class="x-equipe mini" data-x-idx="${idx}" aria-label="Tirar a foto ${idx+1} da peça">✕</button></span>` : im; }).join('')}
-          ${pecasIA.map((q, i) => `<button type="button" class="thumb-item thumb-composicao" data-idx="${fotosGaleria.length + (idVid ? 1 : 0) + i}" aria-label="Ver peça: ${escaparHtml(q.Nome)}"><img ${atribSrc(fotoMini(q.Foto_URL || '', 120))} alt="" width="50" height="62"></button>`).join('')}
-          ${idVid ? (equipe_.pode ? `<span class="thumb-wrap"><div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div><button type="button" class="x-equipe mini" data-x-idx="${fotosGaleria.length}" aria-label="Tirar o vídeo da peça">✕</button></span>` : `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>`) : ''}
+          ${fotosGaleria.map((f, idx) => { const im = `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`; return equipe_.pode ? `<span class="thumb-wrap">${im}<button type="button" class="x-equipe mini" data-x-idx="${idx}" aria-label="Tirar a foto ${idx+1} do produto">✕</button></span>` : im; }).join('')}
+          ${pecasIA.map((q, i) => `<button type="button" class="thumb-item thumb-composicao" data-idx="${fotosGaleria.length + (idVid ? 1 : 0) + i}" aria-label="Ver produto: ${escaparHtml(q.Nome)}"><img ${atribSrc(fotoMini(q.Foto_URL || '', 120))} alt="" width="50" height="62"></button>`).join('')}
+          ${idVid ? (equipe_.pode ? `<span class="thumb-wrap"><div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div><button type="button" class="x-equipe mini" data-x-idx="${fotosGaleria.length}" aria-label="Tirar o vídeo do produto">✕</button></span>` : `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>`) : ''}
         </div>
       ` : ''}
-      ${composicoesFalharam_ && String(p.Descricao || '').startsWith('Composição com peças vendidas separadamente.') ? '<p class="composicao-ia-dica" role="status">Não foi possível carregar as peças deste look. Atualize a página para tentar novamente; o valor da composição continua a consultar.</p>' : ''}
-      ${pecasIA.length ? '<p class="composicao-ia-dica">Composição · deslize para ver cada peça e seu preço. Use também as setas.</p>' : ''}
+      ${composicoesFalharam_ && String(p.Descricao || '').startsWith('Composição com peças vendidas separadamente.') ? '<p class="composicao-ia-dica" role="status">Não foi possível carregar os produtos deste look. Atualize a página para tentar de novo; o valor da composição continua a consultar.</p>' : ''}
+      ${pecasIA.length ? '<p class="composicao-ia-dica">Composição · deslize para ver cada produto e seu preço. Use também as setas.</p>' : ''}
       <div class="modal-conteudo">
         <div class="codigo-tecido">${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
         <div class="nome">${escaparHtml(p.Nome)}</div>
@@ -1137,7 +1137,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (slideValido) urlAbertura.searchParams.set('f', String(slideInicial + 1));
     const jaAberto = document.getElementById('overlay').classList.contains('aberto');
     abrirComHistorico_('overlay', urlAbertura);
-    if (jaAberto) { try { window.history.replaceState(window.history.state, '', urlAbertura); } catch (e) {} }   // v7.44.0: trocar de tamanho com a peça aberta
+    if (jaAberto) { try { window.history.replaceState(window.history.state, '', urlAbertura); } catch (e) {} }   // v7.44.0: trocar de tamanho com o produto aberto
     pintarOutrosTamanhos_(p);
     habilitarArrastarParaFechar(document.getElementById('modal-conteudo'), fecharDetalhe);
     document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
@@ -1162,7 +1162,7 @@ try { tkSelExpirar_(); } catch (e) {}
     } else {
       document.getElementById('btn-perguntar').addEventListener('click', () => {
         registrarEvento(p.ID, p.Codigo, 'whatsapp');
-        window.open(linkWhatsApp('Olá! A peça ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' está esgotada no catálogo. Vai chegar mais?\n' + linkProduto(p, slideAtualModal_ + 1)), '_blank');
+        window.open(linkWhatsApp('Olá! O produto ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' está esgotada no catálogo. Vai chegar mais?\n' + linkProduto(p, slideAtualModal_ + 1)), '_blank');
       });
     }
 
@@ -1227,7 +1227,7 @@ try { tkSelExpirar_(); } catch (e) {}
       } else {
         const fr = document.createElement('iframe');
         fr.src = 'https://drive.google.com/file/d/' + s.video.id + '/preview';
-        fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true; fr.title = 'Vídeo da peça';
+        fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true; fr.title = 'Vídeo do produto';
         area.appendChild(fr);
       }
       const c = document.getElementById('contador-slide'); if (c) c.textContent = (atual + 1) + ' / ' + slides.length;
@@ -1377,7 +1377,7 @@ try { tkSelExpirar_(); } catch (e) {}
   /* v6.2: Juntar produtos repetidos SEM sair do catálogo (usa a ação juntarProdutos do backend 3.7+) */
   function abrirJuntarCatalogo_() {
     const sel = getSacola().map(String).map(id => produtos.find(p => String(p.ID) === id)).filter(Boolean);
-    if (sel.length < 2) { avisoEquipe_('Marque pelo menos 2 peças para juntar.'); return; }
+    if (sel.length < 2) { avisoEquipe_('Marque pelo menos 2 produtos para juntar.'); return; }
     const lista = document.getElementById('juntar-lista'); lista.innerHTML = '';
     sel.forEach((p, i) => {
       const fotos = 1 + listaGaleria_(p).length;
@@ -1398,15 +1398,15 @@ try { tkSelExpirar_(); } catch (e) {}
     const destino = sel.find(p => String(p.ID) === marcado.value), outros = sel.filter(p => String(p.ID) !== marcado.value);
     if (!destino || !outros.length) return;
     if (!window.TKFilaLote) { er.textContent = 'Não consegui preparar o envio agora. Atualize a página e tente de novo.'; er.hidden = false; return; }
-    if (TKFilaLote.ocupado(sel.map(p => p.ID))) { er.textContent = 'Alguma dessas peças já está sendo juntada. Espere o aviso de “Pronto” e tente de novo.'; er.hidden = false; return; }
-    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' peça' : ' peças') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nAs outras ficam arquivadas e as fotos delas passam para esta. Você pode continuar usando a loja enquanto junta.')) return;
+    if (TKFilaLote.ocupado(sel.map(p => p.ID))) { er.textContent = 'Algum desses produtos já está sendo juntado. Espere o aviso de “Pronto” e tente de novo.'; er.hidden = false; return; }
+    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' produto' : ' produtos') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nAs outras ficam arquivadas e as fotos delas passam para esta. Você pode continuar usando a loja enquanto junta.')) return;
     TKFilaLote.juntar({ id: destino.ID, codigo: destino.Codigo, nome: destino.Nome }, outros.map(p => ({ id: p.ID, codigo: p.Codigo, nome: p.Nome })));
     limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards();
     fecharComHistorico_('overlay-juntar'); atualizarBarraFiltros_();
   });
   if (window.TKFilaLote) TKFilaLote.configurar({
     chamar: (corpo) => pedirEquipe_(corpo),
-    aoConcluir: async () => {   // a lista pública já sem as peças arquivadas e com as fotos juntas
+    aoConcluir: async () => {   // a lista pública já sem os produtos arquivados e com as fotos juntas
       try { const resp = await buscarListaPublica(); if (Array.isArray(resp.produtos)) { const rec = resp.produtos.reverse(); salvarCatalogoCache(rec); aplicarProdutosRecebidos(rec); } } catch (e) {}
     }
   });
@@ -1420,13 +1420,13 @@ try { tkSelExpirar_(); } catch (e) {}
   function listaGaleria_(p) { return String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean); }
   async function arquivarProdutoX_(id) {
     const p = produtos.find(x => String(x.ID) === String(id)); if (!p) return;
-    if (!confirm('Arquivar a peça "' + p.Nome + '"' + (p.Codigo ? ' (' + p.Codigo + ')' : '') + '?\n\nEla some do catálogo. Fica registrado e um Encarregado pode reativar.')) return;
+    if (!confirm('Arquivar o produto "' + p.Nome + '"' + (p.Codigo ? ' (' + p.Codigo + ')' : '') + '?\n\nEla some do catálogo. Fica registrado e um Encarregado pode reativar.')) return;
     const r = await pedirEquipe_({ action: 'arquivarRapido', id: p.ID });
     if (!r || !r.ok) { avisoEquipe_(erroEquipe_(r)); return; }
     produtos = produtos.filter(x => String(x.ID) !== String(id));
     try { salvarCatalogoCache(produtos); } catch (e) {}
     fecharDetalhe && document.getElementById('overlay').classList.contains('aberto') && fecharDetalhe();
-    aplicarFiltros(); avisoEquipe_('Peça arquivada. Para voltar, um Encarregado reativa em Gestão → Arquivadas.');
+    aplicarFiltros(); avisoEquipe_('Produto arquivado. Para voltar, um Encarregado reativa em Gestão → Arquivadas.');
   }
   async function arquivarMidiaX_(p, slide, idx) {
     if (!slide) return;
@@ -1434,7 +1434,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const url = ehVideo ? String(p.Video_URL || '').trim() : String(slide.url || '').trim();
     // v4.18 (foto 09): se for a única foto e não houver vídeo, o ✕ arquiva a PEÇA inteira (mesmo caminho do ✕ da peça)
     if (!ehVideo && listaGaleria_(p).length === 0) { if (!(p.Video_URL || '').trim()) { return arquivarProdutoX_(p.ID); } }
-    if (!confirm((ehVideo ? 'Tirar o VÍDEO' : 'Tirar esta FOTO') + ' da peça "' + p.Nome + '"?\n\nO arquivo não é apagado: fica guardado e dá para desfazer.')) return;
+    if (!confirm((ehVideo ? 'Tirar o VÍDEO' : 'Tirar esta FOTO') + ' do produto "' + p.Nome + '"?\n\nO arquivo não é apagado: fica guardado e dá para desfazer.')) return;
     const r = await pedirEquipe_({ action: 'arquivarMidia', id: p.ID, tipo: ehVideo ? 'video' : 'foto', url: url });
     if (!r || !r.ok) { avisoEquipe_(erroEquipe_(r)); return; }
     if (ehVideo) p.Video_URL = '';
@@ -1445,12 +1445,12 @@ try { tkSelExpirar_(); } catch (e) {}
     }
     try { salvarCatalogoCache(produtos); } catch (e) {}
     aplicarFiltros(); abrirDetalhe(p.ID, Math.max(0, idx - 1), true);
-    avisoEquipe_((ehVideo ? 'Vídeo' : 'Foto') + ' tirada da peça.', async () => {
+    avisoEquipe_((ehVideo ? 'Vídeo' : 'Foto') + ' tirada do produto.', async () => {
       const d = await pedirEquipe_({ action: 'restaurarMidia', registro: r.registro });
       if (!d || !d.ok) { avisoEquipe_(erroEquipe_(d)); return; }
       try { const resp = await buscarListaPublica(); if (Array.isArray(resp.produtos)) { const rec = resp.produtos.reverse(); salvarCatalogoCache(rec); aplicarProdutosRecebidos(rec); } } catch (e) {}
       if (document.getElementById('overlay').classList.contains('aberto')) abrirDetalhe(p.ID, 0, true);
-      avisoEquipe_('Pronto, voltou para a peça.');
+      avisoEquipe_('Pronto, voltou para o produto.');
     });
   }
 
@@ -1498,7 +1498,7 @@ try { tkSelExpirar_(); } catch (e) {}
       corpo.textContent = '';
       if (usuario) {
         corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Olá, ' + usuario.name + '!' }));
-        corpo.appendChild(el('p', { text: 'Seus favoritos e sua sacola ficam salvos na sua conta e aparecem em qualquer aparelho em que você entrar.' }));
+        corpo.appendChild(el('p', { text: 'Seus favoritos e sua seleção ficam salvos na sua conta e aparecem em qualquer aparelho em que você entrar.' }));
         // CPF: da equipe (Estagiário em diante) é obrigatório = faixa vermelha aqui mesmo; cliente comum só é convidado (opcional)
         if (window.TKConta && TKConta.precisaCpf(usuario)) {
           TKConta.faixaCpf(corpo, { usuario, salvar: (cpf) => chamarConta({ action: 'salvar_identificadores', whatsapp: getSessao() && getSessao().whatsapp, sessao: getSessao() && getSessao().sessao, cpf }), aoSalvar: (r) => { if (r.usuario) { usuario = r.usuario; desenhar(); } } });
@@ -1530,7 +1530,7 @@ try { tkSelExpirar_(); } catch (e) {}
         return;
       }
       corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Minha conta' }));
-      corpo.appendChild(el('p', { text: 'Entre para guardar seus favoritos e sua sacola e vê-los em qualquer aparelho. Você continua podendo navegar sem conta.' }));
+      corpo.appendChild(el('p', { text: 'Entre para guardar seus favoritos e sua seleção e vê-los em qualquer aparelho. Você continua podendo navegar sem conta.' }));
       const abas = el('div', { className: 'conta-abas' });
       [['entrar', 'Entrar'], ['criar', 'Criar conta']].forEach(([id, rotulo]) => {
         const b = el('button', { type: 'button', text: rotulo, className: aba === id ? 'ativa' : '' });
@@ -1559,7 +1559,7 @@ try { tkSelExpirar_(); } catch (e) {}
         if (!whats.value || !senha.value || (aba === 'criar' && !nome.value.trim())) { erroEl.textContent = 'Preencha todos os campos.'; return; }
         if (aba === 'criar' && senha.value.length < 4) { erroEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
         if (aba === 'criar' && cpfNovo.value && window.TKConta && !TKConta.cpfValido(cpfNovo.value)) { erroEl.textContent = 'CPF inválido. Confira os 11 números (ou deixe em branco).'; return; }
-        ok.disabled = true; const rotulo = ok.textContent; ok.textContent = 'Aguarde...';
+        ok.disabled = true; const rotulo = ok.textContent; ok.textContent = 'Aguarde…';
         const r = aba === 'criar' ? await registrarClienteApi(nome.value.trim(), whats.value, senha.value, { cpf: cpfNovo.value, email: emailNovo.value }) : await entrarComSenha(whats.value, senha.value);
         ok.disabled = false; ok.textContent = rotulo;
         if (r && r.contaExiste && window.TKConta) {
@@ -1629,7 +1629,7 @@ try { tkSelExpirar_(); } catch (e) {}
   const badge = document.getElementById('badge-filtros');
   if (!f || !busca || !btn) return;
   let ultimoY = window.scrollY, yAbertura = 0;
-  const CELULAR = window.matchMedia('(max-width: 600px)').matches;   // no celular as peças vêm primeiro: filtros ficam na gaveta (botão Filtros)
+  const CELULAR = window.matchMedia('(max-width: 600px)').matches;   // no celular os produtos vêm primeiro: filtros ficam na gaveta (botão Filtros)
 
   function contarAtivos() {
     let n = f.querySelectorAll('.filtros-extras .chip.selecionado').length;
@@ -1750,7 +1750,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (!temSelecao_() || TKCamadas.aberta('overlay-sair-sel')) return false;
     destino_ = op.destino || ''; modoVolta_ = !!op.volta;
     const n = nSelecao_(), doLink = !getSacola().length && !!selecaoFixa;
-    const pecas = n === 1 ? '1 peça' : n + ' peças';
+    const pecas = n === 1 ? '1 produto' : n + ' produtos';
     if (modoVolta_) {
       textos_({ titulo: 'Você já tinha uma seleção \u{1F9E1}', segura: '\u{1F9E1} Manter minha seleção', libera: 'Começar do zero', fica: '' });
       document.getElementById('sair-sel-txt').textContent = (doLink ? 'Separamos ' + pecas + ' para você de outro momento.' : 'Você deixou ' + pecas + ' separada' + (n === 1 ? '' : 's') + ' de outro momento.') + ' Quer manter ou começar do zero?';
@@ -1768,7 +1768,7 @@ try { tkSelExpirar_(); } catch (e) {}
   document.getElementById('sair-sel-segura').addEventListener('click', () => {
     if (modoVolta_) {
       const n = getSacola().length; tkSelSoltarSegura_(); try { tkSelAtiv_(getSacola()); } catch (e) {} decidiu_();   // manter = volta a valer o prazo normal, contado de agora
-      avisoEquipe_('Mantive ' + (n === 1 ? 'sua peça' : 'suas ' + n + ' peças') + ' \u{1F9E1}');
+      avisoEquipe_('Mantive ' + (n === 1 ? 'seu produto' : 'suas ' + n + ' produtos') + ' \u{1F9E1}');
       fecharPlaca_(false); return;
     }
     tkSelSegurar_(); decidiu_();
@@ -1949,7 +1949,7 @@ try { tkSelExpirar_(); } catch (e) {}
     col.appendChild(novoEl_('span', 'sug-txt', (it.tipo === 'sinonimo' ? 'Parecido: ' : it.tipo === 'quis' ? 'Você quis dizer: ' : '') + it.texto));
     if (it.sub) col.appendChild(novoEl_('span', 'sug-sub', it.sub));
     d.appendChild(col);
-    if (it.qtd != null) d.appendChild(novoEl_('span', 'sug-qtd', it.qtd === 1 ? '1 peça' : it.qtd + ' peças'));
+    if (it.qtd != null) d.appendChild(novoEl_('span', 'sug-qtd', it.qtd === 1 ? '1 produto' : it.qtd + ' produtos'));
     opcoes_().appendChild(d);
   }
   function pintar_(manter) {
@@ -1960,7 +1960,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (r.aviso) { const a = novoEl_('div', 'sug-aviso sug-aviso-topo', r.aviso); a.setAttribute('role', 'presentation'); lista.appendChild(a); }
     // 1) peças que combinam (toque = abre a peça)
     if (achadas.length) {
-      secao_('Peças que combinam');
+      secao_('Produtos que combinam');
       achadas.slice(0, 4).forEach((p) => linha_({
         tipo: 'peca', foto: p.Foto_URL || '', texto: (p.Codigo ? p.Codigo + ' · ' : '') + p.Nome,
         sub: ehConsulta(p) ? TEXTO_CONSULTA : 'À vista ' + formatarReal(Number(p.Preco) * (1 - DESCONTO_AVISTA)),
@@ -1978,7 +1978,7 @@ try { tkSelExpirar_(); } catch (e) {}
       return { f, ordem };
     }).filter((g) => g.ordem.length > (g.f.id === 'cat' || g.f.id === 'gen' ? 0 : 0));
     // "Ver todas" é opção da lista: vem antes do Refinar (que fica fora da lista)
-    if (achadas.length > 4) linha_({ tipo: 'todas', texto: 'Ver as ' + achadas.length + ' peças de “' + txt.trim() + '”', acao: () => aplicarBusca_(txt.trim()) });
+    if (achadas.length > 4) linha_({ tipo: 'todas', texto: 'Ver os ' + achadas.length + ' produtos de “' + txt.trim() + '”', acao: () => aplicarBusca_(txt.trim()) });
     if (achadas.length && grupos.length) {
       secao_('Refinar a busca', true);
       grupos.forEach(({ f, ordem }) => {

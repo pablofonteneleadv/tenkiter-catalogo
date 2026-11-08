@@ -20,7 +20,7 @@ with sync_playwright() as p:
     chk("o atalho abre a janela de Postagens", pg.locator("#overlay-postagens.aberto").count() == 1)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     pg.locator(".foto-ampliar").first.scroll_into_view_if_needed(); pg.locator(".foto-ampliar").first.click(); pg.wait_for_timeout(500)
-    chk("tocar na miniatura da peça abre a foto grande", pg.locator("#tkfg-palco img").count() == 1 and pg.locator("#tkfg-palco img").get_attribute("src").startswith("http"))
+    chk("tocar na miniatura do produto abre a foto grande", pg.locator("#tkfg-palco img").count() == 1 and pg.locator("#tkfg-palco img").get_attribute("src").startswith("http"))
     chk("a foto grande não é a miniatura reduzida", "=w200" not in (pg.locator("#tkfg-palco img").get_attribute("src") or ""))
     chk("sem erros de JavaScript", not erros, erros[:3])
     b.close()

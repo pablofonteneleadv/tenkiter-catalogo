@@ -136,7 +136,7 @@
       b.addEventListener('click', function () { fecharEDepois(function () { irParaCategoria(par[0]); }); });
       caixa.appendChild(b);
     });
-    var todas = no('button', 'ml-sub ml-todas', 'Ver todas as peças'); todas.type = 'button';
+    var todas = no('button', 'ml-sub ml-todas', 'Ver todos os produtos'); todas.type = 'button';
     todas.addEventListener('click', function () { fecharEDepois(verTodas); });
     caixa.appendChild(todas);
     cab.addEventListener('click', function () {
@@ -149,7 +149,7 @@
       fecharEDepois(function () { if (typeof abrirFavoritos === 'function') abrirFavoritos(); else { var f = document.getElementById('btn-favoritos-header'); if (f) f.click(); } });
     }));
     var n = qtdSelecao();
-    corpo.appendChild(item('Minha seleção', n ? (n + (n === 1 ? ' peça' : ' peças')) : '', function () {
+    corpo.appendChild(item('Minha seleção', n ? (n + (n === 1 ? ' produto' : ' produtos')) : '', function () {
       fecharEDepois(function () { if (typeof abrirSacola === 'function') abrirSacola(); else { var s = document.getElementById('btn-sacola-header'); if (s) s.click(); } });
     }));
     corpo.appendChild(item('Minha conta', logado() ? '' : 'Entrar', function () {
@@ -159,9 +159,9 @@
 
     var ajuda = no('div', 'ml-ajuda');
     ajuda.appendChild(no('p', '', 'Precisa de ajuda para escolher?'));
-    ajuda.appendChild(no('span', '', 'Fale com a equipe da loja pelo WhatsApp sobre qualquer peça.'));
+    ajuda.appendChild(no('span', '', 'Fale com a equipe da loja pelo WhatsApp sobre qualquer produto.'));
     var consulte = no('button', '', 'Consulte a loja'); consulte.type = 'button';
-    consulte.addEventListener('click', function () { fecharEDepois(function () { window.open(linkWhatsApp('Olá! Preciso de ajuda para escolher uma peça.'), '_blank', 'noopener'); }); });
+    consulte.addEventListener('click', function () { fecharEDepois(function () { window.open(linkWhatsApp('Olá! Preciso de ajuda para escolher um produto.'), '_blank', 'noopener'); }); });
     ajuda.appendChild(consulte); corpo.appendChild(ajuda);
 
     var rod = no('div', 'ml-rodape');

@@ -1,5 +1,5 @@
 """Compartilhar a FOTO (ou o vídeo) ESCOLHIDA: o link leva ?f=<n>, o arquivo enviado é aquele, o catálogo abre já nela e a sacola lembra da escolha.
-Cobre: janela da peça (setas, miniaturas, endereço), "Compartilhar foto e link" (foto, vídeo da Cloudinary, vídeo do Drive, cancelar, sem
+Cobre: janela do produto (setas, miniaturas, endereço), "Compartilhar foto e link" (foto, vídeo da Cloudinary, vídeo do Drive, cancelar, sem
 compartilhar nativo), "Pedir no WhatsApp", "Perguntar se volta" (esgotada), abrir por ?c=&f=, números inválidos e a sacola (link e miniatura).
 O Apps Script e a internet são SIMULADOS (mock.py)."""
 import sys, os, re, json
@@ -54,7 +54,7 @@ def url_ok(pg, f):
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
 
-    print("== Janela da peça: o endereço e os botões acompanham a foto na tela ==")
+    print("== Janela do produto: o endereço e os botões acompanham a foto na tela ==")
     ctx, pg, erros, buscas = nova_pagina(b); abrir(pg)
     chk("abre na capa: contador 1 / 5 (capa + 3 da galeria + vídeo)", contador(pg) == "1 / 5", contador(pg))
     chk("na capa o endereço não tem ?f", url_ok(pg, 0), pg.url)
@@ -149,7 +149,7 @@ with sync_playwright() as p:
     chk("link antigo por ?id= também aceita ?f=", contador(pg) == "2 / 5", contador(pg))
     ctx.close()
 
-    print("== Peça esgotada: 'Perguntar se volta' ==")
+    print("== Produto esgotado: 'Perguntar se volta' ==")
     ctx, pg, erros, _ = nova_pagina(b, esgotada=True); abrir(pg)
     pg.click('.thumb-item[data-idx="1"]'); pg.wait_for_timeout(300)
     pg.evaluate("window.__opened=[]"); pg.click("#btn-perguntar"); pg.wait_for_timeout(300)
@@ -168,7 +168,7 @@ with sync_playwright() as p:
     ctx, pg, erros, _ = nova_pagina(b); abrir(pg)
     pg.click('.thumb-item[data-idx="2"]'); pg.wait_for_timeout(300)
     pg.click("#btn-sacola-modal"); pg.wait_for_timeout(300)
-    chk("guardou a foto 3 para a peça na sacola", pg.evaluate("JSON.parse(localStorage.getItem('tenkiter_sacola_foto_v1')||'{}')['1790000000001']") == 3)
+    chk("guardou a foto 3 para o produto na sacola", pg.evaluate("JSON.parse(localStorage.getItem('tenkiter_sacola_foto_v1')||'{}')['1790000000001']") == 3)
     pg.click("#btn-fechar-modal"); pg.wait_for_timeout(500)
     pg.evaluate("abrirSacola()"); pg.wait_for_timeout(600)
     img = pg.evaluate("document.querySelector('.item-sacola img').getAttribute('src')")
@@ -176,7 +176,7 @@ with sync_playwright() as p:
     pg.fill("#ped-nome", "Maria Teste"); pg.fill("#ped-whats", "88999990000"); pg.evaluate("window.__opened=[]")
     pg.click("#btn-enviar-sacola"); pg.wait_for_timeout(1200)
     op = [unquote(o) for o in pg.evaluate("window.__opened")]
-    chk("a mensagem do pedido leva o link da peça NA FOTO escolhida", any("/p/TK-0001?f=3" in o for o in op), op)
+    chk("a mensagem do pedido leva o link do produto NA FOTO escolhida", any("/p/TK-0001?f=3" in o for o in op), op)
     chk("sem erro de JavaScript", not erros, erros)
     pg.evaluate("limparSacola()")
     chk("esvaziar a sacola apaga a foto guardada", pg.evaluate("localStorage.getItem('tenkiter_sacola_foto_v1')") in ("{}", None))

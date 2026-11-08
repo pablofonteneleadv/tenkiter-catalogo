@@ -19,7 +19,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const KV = { async get(k) { return kv.has(k) ? kv.get(k) : null; }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   // catálogo falso: 70 peças ativas + 1 inativa; vestidos e saias em grupos
   const produtos = [];
-  for (let i = 0; i < 70; i++) produtos.push({ ID: String(1000 + i), Nome: 'Peça ' + i, Codigo: 'TK-' + i, Categoria: i % 3 === 0 ? 'Vestidos' : i % 3 === 1 ? 'Saias' : 'Blusas', Genero: 'Feminino Adulto', Estoque: String(i % 5), Tamanhos: 'P, M, G', Cores: 'Preto', Foto_URL: '', Status: 'Ativo', Data_Cadastro: dia(10 + i) });
+  for (let i = 0; i < 70; i++) produtos.push({ ID: String(1000 + i), Nome: 'Produto ' + i, Codigo: 'TK-' + i, Categoria: i % 3 === 0 ? 'Vestidos' : i % 3 === 1 ? 'Saias' : 'Blusas', Genero: 'Feminino Adulto', Estoque: String(i % 5), Tamanhos: 'P, M, G', Cores: 'Preto', Foto_URL: '', Status: 'Ativo', Data_Cadastro: dia(10 + i) });
   produtos.push({ ID: '9999', Nome: 'Inativa', Status: 'Inativo', Data_Cadastro: dia(400) });
   const usuarios = { '88999990001': { nome: 'Pablo', permissoes: ['gerir_acessos', 'catalogo_admin'] }, '88999990002': { nome: 'Iara', permissoes: ['catalogo_cadastrar'] }, '88999990003': { nome: 'Clarice', permissoes: ['catalogo_cadastrar'] }, '88999990004': { nome: 'Visitante', permissoes: [] } };
   let listas = 0, LISTAS_ON = false, listasPedidas = 0;   // v7.48.0: listas da Gestão (categorias, públicos, tamanhos e cores) ligadas só nos testes novos
@@ -62,14 +62,14 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
 
   // lista do dia
   const h1 = await A(IARA, 'GET', '/esteira/hoje');
-  chk('Iara recebe 20 peças', h1.j.ok && h1.j.total === 20 && h1.j.lista.length === 20, { t: h1.j.total, e: h1.j.erro });
+  chk('Iara recebe 20 produtos', h1.j.ok && h1.j.total === 20 && h1.j.lista.length === 20, { t: h1.j.total, e: h1.j.erro });
   const h2 = await A(CLARICE, 'GET', '/esteira/hoje');
   const idsI = new Set(h1.j.lista.map((x) => x.id)), idsC = h2.j.lista.map((x) => x.id);
-  chk('listas não repetem peça entre as funcionárias', h2.j.total === 20 && idsC.every((id) => !idsI.has(id)));
-  chk('peça inativa nunca entra', !idsI.has('9999') && !idsC.includes('9999'));
+  chk('listas não repetem produto entre as funcionárias', h2.j.total === 20 && idsC.every((id) => !idsI.has(id)));
+  chk('produto inativo nunca entra', !idsI.has('9999') && !idsC.includes('9999'));
   const grupos = h1.j.lista.map((x) => x.grupo);
-  chk('peças agrupadas: a lista vem em blocos da mesma categoria', grupos.filter((g, k) => k === 0 || g !== grupos[k - 1]).length <= 4, grupos);
-  chk('cada peça traz data de cadastro e de atualização', h1.j.lista.every((x) => 'cadastro' in x && 'atualizado_em' in x));
+  chk('produtos agrupadas: a lista vem em blocos da mesma categoria', grupos.filter((g, k) => k === 0 || g !== grupos[k - 1]).length <= 4, grupos);
+  chk('cada produto traz data de cadastro e de atualização', h1.j.lista.every((x) => 'cadastro' in x && 'atualizado_em' in x));
   const h1b = await A(IARA, 'GET', '/esteira/hoje');
   chk('abrir de novo não muda a lista do dia', h1b.j.lista.map((x) => x.id).join() === h1.j.lista.map((x) => x.id).join());
   chk('catálogo vem do cache (uma consulta só)', listas === 1, listas);
@@ -79,14 +79,14 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const cf = await A(IARA, 'POST', '/esteira/conferir', { id: alvo.id, achou: true, estoqueAntes: '4', estoqueDepois: '2' });
   chk('conferir marca divergência quando o estoque mudou', cf.j.ok && cf.j.divergiu === true, cf.j);
   const h1c = await A(IARA, 'GET', '/esteira/hoje');
-  chk('peça conferida aparece como feita e conta no progresso', h1c.j.feitas === 1 && h1c.j.lista.find((x) => x.id === alvo.id).feito === true);
+  chk('produto conferido aparece como feita e conta no progresso', h1c.j.feitas === 1 && h1c.j.lista.find((x) => x.id === alvo.id).feito === true);
 
   // regra: atualizada à mão há pouco fica de fora
   const montar = W.estMontarListas_;
   const cat = [{ id: 'a', cadastro: dia(200), categoria: 'X', genero: '', estoque: '1' }, { id: 'b', cadastro: dia(200), categoria: 'X', genero: '', estoque: '1' }, { id: 'c', cadastro: dia(5), categoria: 'Y', genero: '', estoque: '' }];
   const cfg = { porPessoa: 3, diasSemRepetir: 21, pesos: { nunca: 40, diaConf: 1, diaCadastro: 0.5, diaSemEdicao: 0.3, estoqueBaixo: 15, divergiu: 20 } };
   const r1 = montar(cat, { b: { atualizado_em: dia(3) } }, cfg, ['p'], [], Date.now()).p.map((x) => x.p.id);
-  chk('peça atualizada à mão há 3 dias não entra (respeita os 21 dias)', !r1.includes('b') && r1.includes('a'), r1);
+  chk('produto atualizado à mão há 3 dias não entra (respeita os 21 dias)', !r1.includes('b') && r1.includes('a'), r1);
   const r2 = montar(cat, { a: { conferido_em: dia(30) } }, cfg, ['p'], [], Date.now()).p.map((x) => x.p.id);
   chk('nunca conferida e antiga vem antes da recente', r2[0] === 'b' && r2.at(-1) === 'c', r2);
   const tq = await A(IARA, 'POST', '/esteira/toque', { ids: [h2.j.lista[0].id] });
@@ -101,9 +101,9 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   await A(PABLO, 'POST', '/esteira/escala', { tipo: 'dia', funcao: 'Fotos', whats: IARA });
   hc = await A(IARA, 'GET', '/esteira/hoje');
   chk('troca manual do dia vale sobre o padrão', hc.j.funcoes.some((f) => f.funcao === 'Fotos') && hc.j.escala.find((e) => e.funcao === 'Fotos').alterado === true, hc.j.escala);
-  await A(PABLO, 'POST', '/esteira/config', { config: { porPessoa: 20, diasSemRepetir: 21, funcoes: ['Limpeza', 'Caixa', 'Fotos', 'Atendimento online'], instrucoes: { Fotos: 'Fotografar as peças novas no manequim.' } } });
+  await A(PABLO, 'POST', '/esteira/config', { config: { porPessoa: 20, diasSemRepetir: 21, funcoes: ['Limpeza', 'Caixa', 'Fotos', 'Atendimento online'], instrucoes: { Fotos: 'Fotografar os produtos novos no manequim.' } } });
   hc = await A(IARA, 'GET', '/esteira/hoje');
-  chk('instruções da função aparecem para quem está nela', (hc.j.funcoes.find((f) => f.funcao === 'Fotos') || {}).instrucoes === 'Fotografar as peças novas no manequim.');
+  chk('instruções da função aparecem para quem está nela', (hc.j.funcoes.find((f) => f.funcao === 'Fotos') || {}).instrucoes === 'Fotografar os produtos novos no manequim.');
 
   // painel
   const pn = await A(PABLO, 'GET', '/esteira/painel');
@@ -118,13 +118,13 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const cfgP = await A(PABLO, 'GET', '/esteira/config');
   chk('modelos padrão da preparação: 5 tarefas, fotos com a função Fotos', cfgP.j.config.modelosPreparacao.length === 5 && cfgP.j.config.modelosPreparacao.filter((m) => m.tipo === 'foto').every((m) => m.funcao === 'Fotos') && cfgP.j.config.modelosPreparacao[0].titulo === 'Cadastro conferido', cfgP.j.config.modelosPreparacao);
   const prI = await A(IARA, 'POST', '/esteira/preparar', { id: '9999' });
-  chk('quem não aceita não coloca peça em preparação', prI.r.status === 403 && /aceita/.test(prI.j.erro), prI.j);
+  chk('quem não aceita não coloca produto em preparação', prI.r.status === 403 && /aceita/.test(prI.j.erro), prI.j);
   const pr1 = await A(CLARICE, 'POST', '/esteira/preparar', { id: '9999', nome: 'Inativa', codigo: 'TK-9999', foto: 'javascript:alert(1)' });
-  chk('quem aceita coloca peça (arquivada) em preparação com as 5 tarefas', pr1.j.ok && pr1.j.criadas === 5, pr1.j);
+  chk('quem aceita coloca produto (arquivada) em preparação com as 5 tarefas', pr1.j.ok && pr1.j.criadas === 5, pr1.j);
   chk('colocar de novo não duplica tarefas', (await A(CLARICE, 'POST', '/esteira/preparar', { id: '9999' })).j.jaEstava === true);
   let pp = await A(IARA, 'GET', '/esteira/preparacao');
   const prod = (pp.j.produtos || [])[0] || {};
-  chk('preparação lista a peça com nome guardado, tarefas e progresso 0/5', pp.j.ok && pp.j.produtos.length === 1 && prod.nome === 'Inativa' && prod.foto === '' && prod.total === 5 && prod.feitas === 0 && prod.noSite === false, pp.j);
+  chk('preparação lista o produto com nome guardado, tarefas e progresso 0/5', pp.j.ok && pp.j.produtos.length === 1 && prod.nome === 'Inativa' && prod.foto === '' && prod.total === 5 && prod.feitas === 0 && prod.noSite === false, pp.j);
   chk('quem está em Fotos hoje pode marcar as tarefas; não pode aceitar', prod.tarefas.every((t) => t.posso && t.quem === 'Iara') && pp.j.podeAceitar === false);
   let hI = await A(IARA, 'GET', '/esteira/hoje');
   chk('aba Hoje traz as tarefas da função do dia', hI.j.tarefas.length === 5 && hI.j.tarefas.every((t) => t.produtoNome === 'Inativa' && t.funcao === 'Fotos'), hI.j.tarefas);
@@ -153,18 +153,18 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('pedir foto nova cria tarefa (sem duplicar)', cfN.j.tarefaFoto > 0 && cfN2.j.tarefaFoto === cfN.j.tarefaFoto, [cfN.j, cfN2.j]);
   pp = await A(IARA, 'GET', '/esteira/preparacao');
   const fn = pp.j.outras.find((t) => t.produto === pecaFoto) || {};
-  chk('foto nova aparece em Preparação (outras) para a função Fotos, com nome da peça', fn.titulo === 'Foto nova' && fn.funcao === 'Fotos' && fn.origem === 'conferencia' && fn.tipo === 'foto' && /^Peça /.test(fn.produtoNome) && /Iara/.test(fn.instrucao), fn);
+  chk('foto nova aparece em Preparação (outras) para a função Fotos, com nome do produto', fn.titulo === 'Foto nova' && fn.funcao === 'Fotos' && fn.origem === 'conferencia' && fn.tipo === 'foto' && /^Produto /.test(fn.produtoNome) && /Iara/.test(fn.instrucao), fn);
   hI = await A(IARA, 'GET', '/esteira/hoje');
   chk('foto nova entra nas tarefas do Hoje de quem está em Fotos', hI.j.tarefas.some((t) => t.id === cfN.j.tarefaFoto));
 
   // aceitar para o site
-  chk('quem não aceita não aceita peça', (await A(IARA, 'POST', '/esteira/aceitar', { id: '9999' })).r.status === 403);
+  chk('quem não aceita não aceita produto', (await A(IARA, 'POST', '/esteira/aceitar', { id: '9999' })).r.status === 403);
   const ac = await A(CLARICE, 'POST', '/esteira/aceitar', { id: '9999' });
   chk('aceitar marca no_site e dispensa o que faltava (3 do modelo + 1 avulsa)', ac.j.ok && ac.j.dispensadas === 4, ac.j);
   const linhaP = await env.DB.prepare('SELECT etapa, aceito_por, aceito_em FROM est_produto WHERE id=?').bind('9999').first();
   chk('produto gravado com etapa, quem e quando aceitou', linhaP.etapa === 'no_site' && linhaP.aceito_por === CLARICE && !!linhaP.aceito_em, linhaP);
   pp = await A(IARA, 'GET', '/esteira/preparacao');
-  chk('peça aceita sai da preparação; a foto nova continua', pp.j.produtos.length === 0 && pp.j.outras.length === 1);
+  chk('produto aceito sai da preparação; a foto nova continua', pp.j.produtos.length === 0 && pp.j.outras.length === 1);
   chk('aceitar de novo: aviso de que não está em preparação', (await A(CLARICE, 'POST', '/esteira/aceitar', { id: '9999' })).r.status === 400);
   const disp = await A(IARA, 'POST', '/esteira/tarefa', { id: prod.tarefas[2].id, feita: true });
   chk('tarefa dispensada não é marcada', disp.r.status === 400 && /dispensada/.test(disp.j.erro), disp.j);
@@ -174,11 +174,11 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('modelos vazios são recusados', (await A(PABLO, 'POST', '/esteira/config', { config: { modelosPreparacao: [{ titulo: '  ' }] } })).r.status === 400);
   chk('funcionária não muda os modelos', (await A(IARA, 'POST', '/esteira/config', { config: { modelosPreparacao: [{ titulo: 'X' }] } })).r.status === 403);
   const cm = await A(PABLO, 'POST', '/esteira/config', { config: { modelosPreparacao: [{ tipo: 'foto', titulo: 'Foto de capa', instrucao: 'Fundo claro', funcao: 'Fotos' }, { tipo: 'xx', titulo: 'Etiqueta', funcao: 'Caixa' }] } });
-  chk('modelos salvos sem mexer nas outras regras', cm.j.ok && cm.j.config.modelosPreparacao.length === 2 && cm.j.config.modelosPreparacao[1].tipo === 'outro' && cm.j.config.porPessoa === 20 && cm.j.config.instrucoes.Fotos === 'Fotografar as peças novas no manequim.', cm.j.config);
-  const pr2 = await A(PABLO, 'POST', '/esteira/preparar', { id: '1005', nome: 'Peça 5' });
+  chk('modelos salvos sem mexer nas outras regras', cm.j.ok && cm.j.config.modelosPreparacao.length === 2 && cm.j.config.modelosPreparacao[1].tipo === 'outro' && cm.j.config.porPessoa === 20 && cm.j.config.instrucoes.Fotos === 'Fotografar os produtos novos no manequim.', cm.j.config);
+  const pr2 = await A(PABLO, 'POST', '/esteira/preparar', { id: '1005', nome: 'Produto 5' });
   chk('nova preparação usa os modelos editados', pr2.j.criadas === 2);
   pp = await A(PABLO, 'GET', '/esteira/preparacao');
-  chk('peça ativa em preparação mostra dados do catálogo', pp.j.produtos[0].noSite === true && pp.j.produtos[0].codigo === 'TK-5' && pp.j.podeAceitar === true, pp.j.produtos[0]);
+  chk('produto ativo em preparação mostra dados do catálogo', pp.j.produtos[0].noSite === true && pp.j.produtos[0].codigo === 'TK-5' && pp.j.podeAceitar === true, pp.j.produtos[0]);
 
 
   // ---- v7.43.0: pedido ao fornecedor → chegada com contagem cega → aprovação ----
@@ -187,11 +187,11 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('funcionária não cria pedido', (await P(IARA, 'salvar', { fornecedor: 'X', itens: [] })).r.status === 403);
   chk('pedido sem fornecedor é recusado', (await P(PABLO, 'salvar', { fornecedor: ' ', itens: [] })).r.status === 400);
   const itensPed = [
-    { tipo: 'reposicao', produto: '1003', nome: 'Peça 3', fotos: ['https://midia.fake/m/p3.jpg'], qtd_pedida: 5, custo: '45,90' },
-    { tipo: 'reposicao', produto: '1006', nome: 'Peça 6', qtd_pedida: 4, custo: 30 },
+    { tipo: 'reposicao', produto: '1003', nome: 'Produto 3', fotos: ['https://midia.fake/m/p3.jpg'], qtd_pedida: 5, custo: '45,90' },
+    { tipo: 'reposicao', produto: '1006', nome: 'Produto 6', qtd_pedida: 4, custo: 30 },
     { tipo: 'novo', nome: 'Vestido Chemise Novo', categoria: 'Vestidos', genero: 'Feminino Adulto', preco: '159,90', tamanhos: 'P, M, G', cores: 'Verde', fotos: ['https://midia.fake/m/forn1.jpg', 'javascript:alert(1)'], qtd_pedida: 6, custo: 70 },
     { tipo: 'novo', nome: 'Saia Lápis Nova', categoria: 'Saias', genero: 'Feminino Adulto', preco: '', qtd_pedida: 3, custo: 40 },
-    { tipo: 'reposicao', produto: '1009', nome: 'Peça 9', qtd_pedida: 2, custo: 20 },
+    { tipo: 'reposicao', produto: '1009', nome: 'Produto 9', qtd_pedida: 2, custo: 20 },
   ];
   chk('quantidade zero é recusada com o nome do item', /Peça 6/.test((await P(PABLO, 'salvar', { fornecedor: 'Confecção Aurora', itens: [itensPed[0], Object.assign({}, itensPed[1], { qtd_pedida: 0 })] })).j.erro || ''));
   chk('custo inválido é recusado', (await P(PABLO, 'salvar', { fornecedor: 'Confecção Aurora', itens: [Object.assign({}, itensPed[0], { custo: 'abc' })] })).r.status === 400);
@@ -288,13 +288,13 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const lf = montar(catF, {}, cfgF, ['ana', 'bia'], [], Date.now(), famMap);
   const idsAna = lf.ana.map((x) => x.p.id), idsBia = lf.bia.map((x) => x.p.id);
   const unid = (l) => new Set(l.map((x) => x.familia || x.p.id)).size;
-  chk('família conta como 1 item das 3 (3 itens = 5 peças)', unid(lf.ana) === 3 && lf.ana.length === 5, idsAna);
+  chk('família conta como 1 item das 3 (3 itens = 5 produtos)', unid(lf.ana) === 3 && lf.ana.length === 5, idsAna);
   chk('família vai inteira para a mesma pessoa, na ordem da família', idsAna.join().includes('f1a,f1b,f1c') && !idsBia.some((id) => id.startsWith('f1')), [idsAna, idsBia]);
-  chk('pontuação da família = maior entre os membros (entra primeiro pela peça mais antiga)', lf.ana[0].p.id === 'f1a', idsAna);
+  chk('pontuação da família = maior entre os membros (entra primeiro pelo produto mais antiga)', lf.ana[0].p.id === 'f1a', idsAna);
   const lf2 = montar(catF, { f1c: { conferido_em: dia(2) } }, cfgF, ['ana'], [], Date.now(), famMap).ana.map((x) => x.p.id);
   chk('membro conferido há pouco fica fora; os demais da família vêm juntos', !lf2.includes('f1c') && lf2.join().includes('f1a,f1b'), lf2);
   const lf3 = montar(catF, {}, cfgF, ['ana'], [], Date.now()).ana.map((x) => x.p.id);
-  chk('sem famílias a montagem é a de sempre (3 peças)', lf3.length === 3, lf3);
+  chk('sem famílias a montagem é a de sempre (3 produtos)', lf3.length === 3, lf3);
   // rota: família ligada pelo /familias/ligar aparece num cartão só e o progresso conta 1
   const RITA = '88999990005'; usuarios[RITA] = { nome: 'Rita', permissoes: ['catalogo_cadastrar'] };
   await A(PABLO, 'POST', '/esteira/equipe', { whats: RITA, nome: 'Rita', confere: true, rodizio: false });
@@ -311,7 +311,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const posF = hr.j.lista.map((x, k) => (x.familia ? k : -1)).filter((k) => k >= 0);
   chk('Hoje: tamanhos da família ficam lado a lado na lista', posF.length === 3 && posF[2] - posF[0] === 2, posF);
   chk('Hoje: tamanho conferido há pouco fica fora da família na lista', !hr.j.lista.some((x) => x.id === recente));
-  chk('progresso X/20 conta a família como 1 (20 itens, 22 peças)', hr.j.total === 20 && hr.j.pecas === 22 && hr.j.feitas === 0, { t: hr.j.total, p: hr.j.pecas });
+  chk('progresso X/20 conta a família como 1 (20 itens, 22 produtos)', hr.j.total === 20 && hr.j.pecas === 22 && hr.j.feitas === 0, { t: hr.j.total, p: hr.j.pecas });
   await A(RITA, 'POST', '/esteira/conferir', { id: m3, achou: true }); await A(RITA, 'POST', '/esteira/conferir', { id: m2, achou: true });
   let hr2 = await A(RITA, 'GET', '/esteira/hoje');
   chk('família só conta como feita quando todos os tamanhos foram conferidos (2 de 3 = ainda não)', hr2.j.feitas === 0 && hr2.j.pecasFeitas === 2, { f: hr2.j.feitas, pf: hr2.j.pecasFeitas });
@@ -327,7 +327,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   ['Blusas', 'Vestidos', 'Shorts', 'Saias'].forEach((c, k) => { for (let i = 0; i < 6; i++) catFo.push({ id: c[0] + i, cadastro: dia(200 - k * 20 - i), categoria: c, genero: 'Feminino', estoque: '' }); });
   const catsDe = (l) => [...new Set(l.map((x) => x.p.categoria))];
   const dd1 = montar(catFo, {}, cfgFo, ['ana', 'bia', 'cris'], [], Date.now(), {}, {});
-  chk('foco: cada uma das 3 recebe as peças de uma categoria só', ['ana', 'bia', 'cris'].every((w) => dd1[w].length === 4 && catsDe(dd1[w]).length === 1), ['ana', 'bia', 'cris'].map((w) => catsDe(dd1[w])));
+  chk('foco: cada uma das 3 recebe os produtos de uma categoria só', ['ana', 'bia', 'cris'].every((w) => dd1[w].length === 4 && catsDe(dd1[w]).length === 1), ['ana', 'bia', 'cris'].map((w) => catsDe(dd1[w])));
   chk('foco: categorias diferentes entre as pessoas e guardadas em _foco', new Set(Object.values(dd1._foco)).size === 3 && dd1._foco.ana === catsDe(dd1.ana)[0] && !Object.keys(dd1).includes('_foco'), dd1._foco);
   chk('foco: a categoria mais urgente vai para a primeira e as mais urgentes vêm primeiro', dd1._foco.ana === 'Blusas' && dd1.ana.map((x) => x.p.id).join() === 'B0,B1,B2,B3', dd1.ana.map((x) => x.p.id));
   const hist = {}; Object.entries(dd1._foco).forEach(([w, c]) => { hist[w] = { [c]: 1 }; });
@@ -344,7 +344,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const famFo = { fA: { familia: 'FX', ordem: 0 }, fB: { familia: 'FX', ordem: 1 }, fC: { familia: 'FX', ordem: 2 } };
   const catFam = [{ id: 'fA', cadastro: dia(300), categoria: 'Sungas', genero: '', estoque: '' }, { id: 'fB', cadastro: dia(300), categoria: 'Sungas', genero: '', estoque: '' }, { id: 'fC', cadastro: dia(30), categoria: 'Sungas', genero: '', estoque: '' }, { id: 'sg1', cadastro: dia(100), categoria: 'Sungas', genero: '', estoque: '' }, { id: 'sg2', cadastro: dia(90), categoria: 'Sungas', genero: '', estoque: '' }, { id: 'sg3', cadastro: dia(80), categoria: 'Sungas', genero: '', estoque: '' }].concat(catFo);
   const d6 = montar(catFam, {}, Object.assign({}, cfgFo, { porPessoa: 3, categoriasFixas: { ana: 'Sungas' } }), ['ana'], [], Date.now(), famFo, {});
-  chk('foco: família conta como 1 item (3 itens = 5 peças da mesma categoria)', d6.ana.length === 5 && new Set(d6.ana.map((x) => x.familia || x.p.id)).size === 3 && d6.ana.slice(0, 3).map((x) => x.p.id).join() === 'fA,fB,fC' && catsDe(d6.ana).join() === 'Sungas', d6.ana.map((x) => x.p.id));
+  chk('foco: família conta como 1 item (3 itens = 5 produtos da mesma categoria)', d6.ana.length === 5 && new Set(d6.ana.map((x) => x.familia || x.p.id)).size === 3 && d6.ana.slice(0, 3).map((x) => x.p.id).join() === 'fA,fB,fC' && catsDe(d6.ana).join() === 'Sungas', d6.ana.map((x) => x.p.id));
   // rota: categoria do dia guardada por pessoa e mostrada no Hoje
   const focoHoje = (await env.DB.prepare('SELECT whats, categoria FROM est_foco').all()).results || [];
   const hIc = await A(IARA, 'GET', '/esteira/hoje');
@@ -362,14 +362,14 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const tOk = await L('tirar', { whats: IARA, produto: tirarId });
   pl = await painelL();
   chk('gestor tira item pendente da lista', tOk.j.ok && !lI().itens.some((x) => x.id === tirarId), tOk.j);
-  chk('tirar peça que não está na lista: aviso legível', (await L('tirar', { whats: IARA, produto: tirarId })).r.status === 404);
+  chk('tirar produto que não está na lista: aviso legível', (await L('tirar', { whats: IARA, produto: tirarId })).r.status === 404);
   const emListas = new Set(pl.listas.flatMap((x) => x.itens.map((i) => i.id)));
   const livre = produtos.find((x) => x.Status === 'Ativo' && !emListas.has(x.ID)).ID;
   const co1 = await L('colocar', { whats: IARA, produto: livre });
   pl = await painelL();
-  chk('gestor coloca peça do catálogo no fim da lista', co1.j.ok && co1.j.colocadas === 1 && lI().itens.at(-1).id === livre, co1.j);
-  chk('colocar peça que já está na lista de outra pessoa: avisa quem e sugere mover', /lista de Clarice hoje\. Use “Mover”/.test((await L('colocar', { whats: IARA, produto: lC().itens[0].id })).j.erro || ''));
-  chk('colocar peça fora do site é recusado', (await L('colocar', { whats: IARA, produto: '9999' })).r.status === 400);
+  chk('gestor coloca produto do catálogo no fim da lista', co1.j.ok && co1.j.colocadas === 1 && lI().itens.at(-1).id === livre, co1.j);
+  chk('colocar produto que já está na lista de outra pessoa: avisa quem e sugere mover', /lista de Clarice hoje\. Use “Mover”/.test((await L('colocar', { whats: IARA, produto: lC().itens[0].id })).j.erro || ''));
+  chk('colocar produto fora do site é recusado', (await L('colocar', { whats: IARA, produto: '9999' })).r.status === 400);
   const emListas2 = new Set(pl.listas.flatMap((x) => x.itens.map((i) => i.id)));
   const livres2 = produtos.filter((x) => x.Status === 'Ativo' && !emListas2.has(x.ID)).map((x) => x.ID);
   const lgF2 = await A(PABLO, 'POST', '/familias/ligar', { produtos: [livres2[0], livres2[1]], nome: 'Saia família', rotulos: { [livres2[0]]: 'P', [livres2[1]]: 'M' } });
@@ -409,7 +409,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('cron antes da hora configurada (7h): nada pesado', (await cron(env, horaF(3, 6))).pulou === 'cedo' && listas === listasAntes);
   const r1c = await cron(env, horaF(3, 9));
   const ret1 = (await env.DB.prepare('SELECT COUNT(*) AS n FROM est_estoque WHERE data=?').bind(diaStr(3)).first()).n;
-  chk('primeiro retrato do dia grava o estoque de cada peça ativa', r1c.produtos === 70 && r1c.mudaram === 70 && ret1 === 70 && listas === listasAntes + 1, r1c);
+  chk('primeiro retrato do dia grava o estoque de cada produto ativo', r1c.produtos === 70 && r1c.mudaram === 70 && ret1 === 70 && listas === listasAntes + 1, r1c);
   chk('segunda chamada no mesmo dia não refaz (marca no KV)', (await cron(env, horaF(3, 10))).pulou === 'feito' && listas === listasAntes + 1);
   kv.delete('est:retrato:dia');
   chk('sem a marca do KV, o D1 lembra que já foi feito hoje', (await cron(env, horaF(3, 11))).pulou === 'feito' && listas === listasAntes + 1);
@@ -433,7 +433,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const pr = par(catP, { q6: { etapa: 'preparacao' }, m2: { ult_queda_em: dia(5) } }, famP, Date.now(), dia(400), [30, 60, 90], { FN: 'Saia família' });
   const deg = Object.fromEntries(pr.map((x) => [x.chave, x.degrau]));
   chk('degraus: 35 dias = 30, 65 = 60, 95 = 90; recente fica fora', deg['p:q1'] === 1 && deg['p:q2'] === 2 && deg['p:q3'] === 3 && !deg['p:q4'], deg);
-  chk('estoque 0 e peça em preparação não entram como paradas', !deg['p:q5'] && !deg['p:q6'], deg);
+  chk('estoque 0 e produto em preparação não entram como paradas', !deg['p:q5'] && !deg['p:q6'], deg);
   chk('família: se um tamanho vendeu, a família não está parada', !deg['f:FM'], deg);
   const fn2 = pr.find((x) => x.chave === 'f:FN') || {};
   chk('família parada aparece uma vez, com o nome e os tamanhos', fn2.degrau === 3 && fn2.nome === 'Saia família' && fn2.ids.join() === 'n1,n2' && fn2.estoque === 4, fn2);
@@ -449,8 +449,8 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const de = (id) => tr.filter((t) => t.produto === id).map((t) => t.titulo).sort().join();
   const p40 = soltos.find((x) => Number(x.ID) - 1000 >= 25 && Number(x.ID) - 1000 <= 45), p70 = soltos.find((x) => Number(x.ID) - 1000 >= 55);
   chk('30 dias: tarefa "Foto nova" para Fotos (origem reativação)', r3c.tarefas > 0 && de(p40.ID) === 'Foto nova' && fotoR.length >= 10 && fotoR.every((t) => t.funcao === 'Fotos' && t.tipo === 'foto'), { criadas: r3c.tarefas, p40: de(p40.ID) });
-  chk('60 dias: "Foto nova" e "Vídeo curto"; peça com venda recente e peça em preparação ficam fora', de(p70.ID) === 'Foto nova,Vídeo curto' && videoR.length < fotoR.length && !tr.some((t) => t.produto === '1013' || t.produto === '1005'), { p70: de(p70.ID), video: videoR.length });
-  chk('peça com venda recente (estoque caiu) não ganha tarefa; pouco tempo (menos de 30 dias) também não', de('1013') === '' && de(soltos.find((x) => Number(x.ID) - 1000 < 15).ID) === '');
+  chk('60 dias: "Foto nova" e "Vídeo curto"; produto com venda recente e produto em preparação ficam fora', de(p70.ID) === 'Foto nova,Vídeo curto' && videoR.length < fotoR.length && !tr.some((t) => t.produto === '1013' || t.produto === '1005'), { p70: de(p70.ID), video: videoR.length });
+  chk('produto com venda recente (estoque caiu) não ganha tarefa; pouco tempo (menos de 30 dias) também não', de('1013') === '' && de(soltos.find((x) => Number(x.ID) - 1000 < 15).ID) === '');
   chk('Foto nova pedida na conferência não é duplicada pela reativação', (await env.DB.prepare("SELECT COUNT(*) AS n FROM est_tarefa WHERE produto=? AND titulo='Foto nova' AND status='pendente'").bind(pecaFoto).first()).n === 1);
   const famT = tr.filter((t) => naFam.has(t.produto));
   chk('família parada ganha uma tarefa só (no primeiro tamanho), dizendo que vale para todos', famT.length === 0 || new Set(famT.map((t) => t.produto + t.titulo)).size === famT.length);
@@ -462,7 +462,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   await env.DB.prepare("UPDATE est_tarefa SET status='feita' WHERE origem='reativacao' AND produto=? AND titulo='Foto nova'").bind(umaFoto.produto).run();
   await env.DB.prepare("DELETE FROM cfg WHERE chave='est_retrato_ult'").run(); kv.delete('est:retrato:dia');
   const r5c = await cron(env, horaF(0, 10));
-  chk('tarefa feita não volta enquanto a peça segue no mesmo período parado', !r5c.pulou && !(await env.DB.prepare("SELECT 1 AS x FROM est_tarefa WHERE produto=? AND titulo='Foto nova' AND status='pendente'").bind(umaFoto.produto).first()), r5c);
+  chk('tarefa feita não volta enquanto o produto segue no mesmo período parado', !r5c.pulou && !(await env.DB.prepare("SELECT 1 AS x FROM est_tarefa WHERE produto=? AND titulo='Foto nova' AND status='pendente'").bind(umaFoto.produto).first()), r5c);
   // ---- painel completo ----
   await A(PABLO, 'POST', '/esteira/config', { config: { reativacao: [10, 20, 30] } });
   const pc5 = await painelL(), ra = pc5.reativacao || {};
@@ -494,7 +494,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const sq = await A(IARA, 'POST', '/esteira/conferir', { id: alvo2.id, achou: true, estoqueAntes: alvo2.estoque, estoqueDepois: '' });
   const cq = await ultConf();
   chk('7.48: conferir sem quantidade funciona e não muda o estoque registrado', sq.j.ok && sq.j.contou === false && cq.estoque_depois === '' && cq.divergiu === 0 && cq.achou === 1, [sq.j, cq]);
-  chk('7.48: a peça conferida sem quantidade conta como feita', (await A(IARA, 'GET', '/esteira/hoje')).j.lista.find((x) => x.id === alvo2.id).feito === true);
+  chk('7.48: o produto conferido sem quantidade conta como feita', (await A(IARA, 'GET', '/esteira/hoje')).j.lista.find((x) => x.id === alvo2.id).feito === true);
   const sqT = await A(IARA, 'POST', '/esteira/conferir', { id: alvo2.id, achou: true, estoqueAntes: '3', estoqueDepois: '3', mudouTamanhos: true });
   chk('7.48: sem quantidade, tirar tamanho ainda marca diferença; com quantidade igual não', sqT.j.ok && sqT.j.contou === true && sqT.j.divergiu === true);
   const sqE = await A(IARA, 'POST', '/esteira/conferir', { id: alvo2.id, achou: true, estoqueAntes: '3', estoqueDepois: 'três' });
@@ -536,7 +536,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const fl = await A(PABLO, 'GET', '/esteira/fornecedores');
   chk('7.48: lista de fornecedores em ordem alfabética', fl.j.ok && fl.j.fornecedores.map((x) => x.nome).join() === 'Ateliê Aurora,Malhas Ceará', fl.j);
   chk('7.48: pedido com fornecedor que não existe é recusado', /não está mais no cadastro/.test((await P(PABLO, 'salvar', { fornecedorId: 9999, fornecedor: 'X', itens: [] })).j.erro || ''));
-  const pF = await P(PABLO, 'salvar', { fornecedorId: F1.id, fornecedor: 'qualquer coisa', itens: [{ tipo: 'reposicao', produto: '1003', nome: 'Peça 3', qtd_pedida: 1 }] });
+  const pF = await P(PABLO, 'salvar', { fornecedorId: F1.id, fornecedor: 'qualquer coisa', itens: [{ tipo: 'reposicao', produto: '1003', nome: 'Produto 3', qtd_pedida: 1 }] });
   chk('7.48: pedido guarda o id do fornecedor e o nome do cadastro', pF.j.ok && pF.j.pedido.fornecedorId === F1.id && pF.j.pedido.fornecedor === 'Malhas Ceará', pF.j);
   const pF2 = await P(PABLO, 'salvar', { id: pF.j.pedido.id, fornecedor: 'Malhas Ceará', itens: pF.j.pedido.itens });
   chk('7.48: salvar de novo sem mandar o id mantém o fornecedor ligado', pF2.j.ok && pF2.j.pedido.fornecedorId === F1.id, pF2.j);
@@ -550,7 +550,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const FL = W.estFornecedorLimpo_;
   chk('7.48: telefone com 11 dígitos aceito; com letras e poucos números recusado', FL({ nome: 'A', fone3: '88 9 9999-0000' }).fornecedor.fone3 === '88999990000' && /Telefone 1/.test(FL({ nome: 'A', fone1: 'abc12' }).erro || ''));
   // decisão de "veio a mais" e extra da equipe também só com nomes da lista
-  const pD = await P(PABLO, 'salvar', { fornecedorId: F2.id, itens: [{ tipo: 'reposicao', produto: '1004', nome: 'Peça 4', qtd_pedida: 1, custo: 10 }] });
+  const pD = await P(PABLO, 'salvar', { fornecedorId: F2.id, itens: [{ tipo: 'reposicao', produto: '1004', nome: 'Produto 4', qtd_pedida: 1, custo: 10 }] });
   const PD = pD.j.pedido.id; await P(PABLO, 'enviar', { id: PD });
   await P(IARA, 'contar', { id: PD, item: pD.j.pedido.itens[0].id, qtd: 1 });
   const exBad = await P(IARA, 'extra', { id: PD, nome: 'Top', qtd: 1, cores: 'Roxo' });
@@ -566,7 +566,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('nenhuma resposta para quem não é Admin total contém custo ou qtd_pedida (' + respostasEquipe.length + ' respostas)', !vaz && respostasEquipe.some((x) => x.rota.includes('/pedidos')), vaz);
   { // v7.54: resposta perdida/concorrrente consulta o mesmo recibo, nunca cria outra tarefa.
   const recibo=async(whats,op,corpo,consulta=false)=>{const r=await w.fetch(new Request('https://ig.fake'+(consulta?'/esteira/operacoes/status?op='+op:'/esteira/preparar'),{method:consulta?'GET':'POST',headers:{'Content-Type':'application/json','X-TK-Whats':whats,'X-TK-Sessao':'tk3.sessao-'+whats,'X-TK-Operacao':op},body:consulta?undefined:JSON.stringify(corpo)}),env,ctx);return{status:r.status,j:await r.json()}};
-  const op='teste-recibo-20261104',corpo={id:'1005',nome:'Peça do recibo',codigo:'TK-5'};
+  const op='teste-recibo-20261104',corpo={id:'1005',nome:'Produto do recibo',codigo:'TK-5'};
   const [r1,r2]=await Promise.all([recibo(PABLO,op,corpo),recibo(PABLO,op,corpo)]);
   const r3=await recibo(PABLO,op,corpo),r4=await recibo(PABLO,op,null,true);
   chk('processo simultâneo e resposta perdida mantêm confirmação original',r1.j.ok&&r3.j.ok&&r4.j.ok&&JSON.stringify(r1.j)===JSON.stringify(r3.j)&&JSON.stringify(r3.j)===JSON.stringify(r4.j),{r1,r2,r3});

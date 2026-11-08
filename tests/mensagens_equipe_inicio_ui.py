@@ -57,13 +57,13 @@ with sync_playwright() as p:
         pg.select_option('#ms-nova-canal', 'whatsapp1'); pg.wait_for_timeout(120)
         assert pg.locator('#ms-nova-texto').is_visible(), 'Voltar ao WhatsApp precisa reexibir o campo'
         pg.fill('#ms-nova-destino', '(88) 99123-4567')
-        pg.fill('#ms-nova-texto', 'Oi, Maria! A peça chegou.')
+        pg.fill('#ms-nova-texto', 'Oi, Maria! O produto chegou.')
         ax = pg.evaluate("document.documentElement.scrollWidth<=innerWidth"); assert ax, 'Rolagem horizontal em Nova conversa'
         pg.screenshot(path=str(OUT / f'nova-conversa-{w}-{h}.png'))
         pg.click('[data-ms="nova-conversa-ir"]'); pg.wait_for_timeout(700)
         assert st["ig"]["msg"].get('iniciadas'), 'Abrir conversa deveria chamar /msg/iniciar'
         assert st["ig"]["msg"]["iniciadas"][-1]["canal"] == 'whatsapp1'
-        assert st["ig"]["msg"]["iniciadas"][-1]["texto"] == 'Oi, Maria! A peça chegou.', 'A mensagem escrita vai no pedido'
+        assert st["ig"]["msg"]["iniciadas"][-1]["texto"] == 'Oi, Maria! O produto chegou.', 'A mensagem escrita vai no pedido'
         assert st["ig"]["msg"]["iniciadas"][-1].get('idLocal'), 'Precisa do idLocal para não enviar duas vezes'
         assert not [e for e in errors], errors
 

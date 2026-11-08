@@ -45,7 +45,7 @@
     var u = (typeof usuarioAdmin !== 'undefined') ? usuarioAdmin : null, contas = (typeof modoLogin !== 'undefined') && modoLogin;
     var pronta = typeof window.tkAceitarRascunho === 'function' && typeof window.tkAceitarSeparado === 'function' && (typeof produtos !== 'undefined') && produtos && produtos.length;
     if (!pronta || (contas && !u && tent < 40)) { if (tent > 120) fim('Não consegui abrir o cadastro agora. Atualize a página e tente de novo pela Esteira.'); return; }
-    if (u && typeof temPermissao === 'function' && !temPermissao(u, 'catalogo_cadastrar')) return fim('Seu acesso não permite cadastrar peças. Peça ao administrador a permissão de cadastrar peças.');
+    if (u && typeof temPermissao === 'function' && !temPermissao(u, 'catalogo_cadastrar')) return fim('Seu acesso não permite cadastrar produtos. Peça ao Admin total a permissão de cadastrar produtos.');
     var h = cab(); if (!h) return fim('Entre na sua conta para cadastrar com as fotos da caixa.');
     buscando = true;
     fetch(INSTAGRAM_URL + '/esteira/caixa/itens?ids=' + ids.join(','), { headers: h })
@@ -57,7 +57,7 @@
         var usadas = itens.filter(function (x) { return x.status === 'usada'; }).length;
         var descr = itens.map(function (x) { return x.descricao || x.descricaoLote; }).filter(Boolean).filter(function (x, k, a) { return a.indexOf(x) === k; }).slice(0, 4);
         var quem = itens[0].por || 'equipe';
-        var txt = 'Fotos da caixa da equipe (enviadas por ' + quem + ')' + (descr.length ? ': “' + descr.join('”, “') + '”' : '') + '.' + (usadas ? ' Atenção: ' + usadas + ' já foi(ram) usada(s) em outra peça.' : '');
+        var txt = 'Fotos da caixa da equipe (enviadas por ' + quem + ')' + (descr.length ? ': “' + descr.join('”, “') + '”' : '') + '.' + (usadas ? ' Atenção: ' + usadas + ' já foi(ram) usada(s) em outro produto.' : '');
         if (varias && itens.length >= 2 && typeof window.tkVariasComFotos === 'function') {   // "Cadastrar vários produtos" com "Unir fotos" (7.50.0)
           window.tkVariasComFotos(itens.map(function (x) { return { url: x.url, caixaId: x.id }; }));
           var alv = document.getElementById('aviso-lote'); if (alv) { alv.hidden = false; alv.textContent = 'Cada foto vira um produto com os dados que você preencher. Fotos do mesmo produto? Toque em “Unir fotos”. ' + txt; }
@@ -69,7 +69,7 @@
         } else {
           window.tkAceitarRascunho({ id: 'caixa:' + itens.slice(0, 8).map(function (x) { return x.id; }).join('.'), legenda: '', midias: itens.slice(0, 8).map(function (x, k) { return { tipo: 'foto', url: x.url, capa: k === 0 }; }) });
           var t2 = document.getElementById('titulo-form'); if (t2) t2.textContent = 'Produto novo com fotos da caixa';
-          var al2 = document.getElementById('aviso-lote'); if (al2) { al2.hidden = false; al2.textContent = txt + (itens.length > 8 ? ' Só as 8 primeiras entraram (limite por peça).' : ''); }
+          var al2 = document.getElementById('aviso-lote'); if (al2) { al2.hidden = false; al2.textContent = txt + (itens.length > 8 ? ' Só as 8 primeiras entraram (limite por produto).' : ''); }
         }
         fim('');
       })

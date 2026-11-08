@@ -86,7 +86,7 @@ const F = (n) => 'https://res.cloudinary.com/z/image/upload/v1/' + n + '.jpg';
   await DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, agendado_em, status, publicado_em, canal) VALUES ('feed','auto','', ?, 'TK-0103', ?, 'publicado', ?, 'instagram')").bind(JSON.stringify([{ url: 'https://tenkiter-midia.fake/m/antiga-modelo.jpg', tipo: 'imagem' }, { url: 'https://x.fake/v.mp4', tipo: 'video' }]), T1, T1).run();
   fp = await A('GET', '/post/fotos-postadas');
   const leg = fp.j.legado.find((x) => x.c === 'TK-0103');
-  chk('postagem antiga vira legado com código da peça e só as fotos (vídeo fora)', leg && leg.u.length === 1 && leg.em === T1, fp.j.legado);
+  chk('postagem antiga vira legado com código do produto e só as fotos (vídeo fora)', leg && leg.u.length === 1 && leg.em === T1, fp.j.legado);
 
   // ---- repostar leva fotos_origem junto ----
   await DB.prepare("UPDATE postagem SET status='erro' WHERE id=?").bind(semOrigem.j.ids[0]).run();
@@ -115,13 +115,13 @@ const F = (n) => 'https://res.cloudinary.com/z/image/upload/v1/' + n + '.jpg';
   // peça nova (nunca vista) só vira referência
   produtos.push({ ID: '104', Nome: 'Saia', Codigo: 'TK-0104', Foto_URL: F('d1'), Fotos_Galeria: F('d2'), Status: 'Ativo' });
   v = await W.fpVarrer_(env, await W.estCatalogo_(env, true), '2026-11-03T10:05:00.000Z');
-  chk('peça nova (já vai pelo cadastro) não ganha "foto nova"', v.novas === 0 && v.base === 2, v);
+  chk('produto novo (já vai pelo cadastro) não ganha "foto nova"', v.novas === 0 && v.base === 2, v);
   // tirar uma foto ou reordenar não é foto nova
   produtos[1].Foto_URL = F('b2'); produtos[1].Fotos_Galeria = F('b1');
   v = await W.fpVarrer_(env, await W.estCatalogo_(env, true), '2026-11-03T10:06:00.000Z');
   chk('trocar a capa por outra foto que já existia não é foto nova', v.novas === 0, v);
   pb = await PUB();
-  chk('mapa público: peça 101 com a data da última foto nova', pb.j.fotosNovas['101'] === '2026-11-03T10:00:00.000Z' && Object.keys(pb.j.fotosNovas).length === 1, pb.j);
+  chk('mapa público: produto 101 com a data da última foto nova', pb.j.fotosNovas['101'] === '2026-11-03T10:00:00.000Z' && Object.keys(pb.j.fotosNovas).length === 1, pb.j);
   const txt = JSON.stringify(pb.j);
   chk('mapa público só tem id → data (sem URL, nome, telefone ou quem salvou)', !/https?:|88999|Pablo|Vestido/.test(txt) && Object.values(pb.j.fotosNovas).every((x) => /^\d{4}-\d\d-\d\dT/.test(x)), txt);
 
@@ -129,7 +129,7 @@ const F = (n) => 'https://res.cloudinary.com/z/image/upload/v1/' + n + '.jpg';
   const tq = await A('POST', '/esteira/toque', { ids: ['103'], antes: [F('c1')], fotos: [{ url: F('c2') }, { url: F('c1-recorte'), de: F('c1') }] });
   chk('/esteira/toque com foto nova registra 1 foto nova (o recorte não conta)', tq.j.ok && tq.j.fotosNovas === 1, tq.j);
   pb = await PUB();
-  chk('o mapa público já mostra a peça 103 (cache limpo na hora)', !!pb.j.fotosNovas['103'], pb.j);
+  chk('o mapa público já mostra o produto 103 (cache limpo na hora)', !!pb.j.fotosNovas['103'], pb.j);
   const tq2 = await A('POST', '/esteira/toque', { ids: ['102'] });
   chk('/esteira/toque sem fotos (preço, tamanho, estoque) não registra foto nova', tq2.j.ok && tq2.j.fotosNovas === 0, tq2.j);
   fp = await A('GET', '/post/fotos-postadas');

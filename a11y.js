@@ -73,7 +73,7 @@
   const BOTOES_FECHAR = '[aria-label="Fechar"],.sheet-x,.conta-fechar,.btn-fechar,#btn-fechar-arte-config,#btn-fechar-auditoria';
   const FOCAVEIS = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   const NOMES = {
-    'overlay': 'Detalhes da peça', 'overlay-sacola': 'Sua sacola', 'overlay-compartilhar': 'Compartilhar',
+    'overlay': 'Detalhes do produto', 'overlay-sacola': 'Sua seleção', 'overlay-compartilhar': 'Compartilhar',
     'login-overlay': 'Entrar', 'modal-conta': 'Minha conta', 'overlay-categorias': 'Escolher categoria', 'tkp-janela': 'Avisos', 'tkc-recuperar': 'Esqueci minha senha'
   };
   const lembrar = new WeakMap();      // janela -> elemento que tinha o foco antes de abrir
@@ -194,7 +194,7 @@
     let n = '';
     try { n = window.WHATSAPP_NUMERO || ''; } catch (e) {}
     window.open('https://wa.me/' + (n || '5588993223998') + '?text=' +
-      encodeURIComponent('Ol\u00e1! Vim pelo cat\u00e1logo e quero ajuda para escolher uma pe\u00e7a.'), '_blank', 'noopener');
+      encodeURIComponent('Ol\u00e1! Vim pelo cat\u00e1logo e quero ajuda para escolher um produto.'), '_blank', 'noopener');
   };
 
   const MONTAR = () => {
@@ -249,7 +249,7 @@
     } catch (e) { return 0; }
   };
   const FACETAS = () => {
-    [['chips-categoria', 'Categoria'], ['chips-genero', 'Genero'], ['chips-cor', 'cor'], ['chips-tamanho', 'tamanho']].forEach(([id, c]) => {
+    [['chips-categoria', 'Categoria'], ['chips-genero', 'Público'], ['chips-cor', 'cor'], ['chips-tamanho', 'tamanho']].forEach(([id, c]) => {
       const box = document.getElementById(id);
       if (!box) return;
       box.querySelectorAll('button.chip').forEach((el) => {
@@ -259,7 +259,7 @@
         const n = CONTAR(v, c), s = document.createElement('span');
         s.className = 'chip-n'; s.setAttribute('aria-hidden', 'true'); s.textContent = n;
         el.appendChild(s);
-        el.setAttribute('aria-label', v + ': ' + n + (n === 1 ? ' pe\u00e7a' : ' pe\u00e7as'));
+        el.setAttribute('aria-label', v + ': ' + n + (n === 1 ? ' produto' : ' produtos'));
       });
     });
   };

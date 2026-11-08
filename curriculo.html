@@ -105,7 +105,7 @@ async function api(action, corpo) {
   } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
 }
 function tela(html) { $app.innerHTML = html; window.scrollTo(0, 0); }
-function erroBox(msg) { const e = document.getElementById('erro'); if (e) { e.textContent = msg || ''; e.classList.toggle('oculto', !msg); if (msg) e.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+function erroBox(msg) { const e = document.getElementById('erro'); if (e) { e.textContent = msg ? TKAviso.textoErro(msg, 'Não consegui concluir agora. Tente de novo.') : ''; e.classList.toggle('oculto', !msg); if (msg) e.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
 function carregando(btn, on) { if (btn) { btn.disabled = on; btn.dataset.t = btn.dataset.t || btn.textContent; btn.textContent = on ? 'Aguarde…' : btn.dataset.t; } }
 const val = n => { const e = document.querySelector('[name="' + n + '"]'); return e ? e.value.trim() : ''; };
 const radio = n => { const e = document.querySelector('input[name="' + n + '"]:checked'); return e ? e.value : ''; };
@@ -655,6 +655,7 @@ function viewFim() {
   viewWhats();
 })();
 </script>
+<script src="avisos.js?v=7.57.0"></script>
 <script src="icones.js?v=7.17.0"></script>
 <script src="nav.js?v=7.38.2" data-ativo="candidatura"></script>
 <script src="a11y.js"></script>

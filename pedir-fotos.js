@@ -14,17 +14,17 @@
   function mesmaConta(a, b) { return !!(a && b && normalizarWhats(a.whatsapp) === normalizarWhats(b.whatsapp)); }
   function mensagem(erro) {
     const t = String(erro || '').trim();
-    return t && t.length <= 350 && !/^[\[{<]/.test(t) ? t : 'Não consegui registrar o pedido. Tente novamente.';
+    return t && t.length <= 350 && !/^[\[{<]/.test(t) ? t : 'Não consegui registrar o pedido. Tente de novo.';
   }
   function abrir(lista, origem) {
     const s = sessao();
-    if (!s) { alert('Entre na sua conta da equipe para solicitar fotos.'); return; }
+    if (!s) { TKAviso.aviso('Entre na sua conta da equipe para pedir fotos.'); return; }
     const vistos = new Set();
     const pecas = (lista || []).filter(p => {
       if (!p || p.ID == null || vistos.has(String(p.ID))) return false;
       vistos.add(String(p.ID)); return true;
     });
-    if (!pecas.length) { alert('Selecione os produtos que precisam de fotos.'); return; }
+    if (!pecas.length) { TKAviso.aviso('Selecione os produtos que precisam de fotos.'); return; }
     if (atual && !atual.fundo.hidden) return;
     const chave = [...vistos].sort().join('|');
     if (atual && atual.chave === chave && atual.confirmados.size < pecas.length && mesmaConta(atual.conta, s)) {
@@ -35,8 +35,8 @@
     atual = estado;
     const anterior = document.activeElement, fundo = el('div', 'pf-overlay'); fundo.id = ID;
     const folha = el('section', 'pf-folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-labelledby', 'pf-titulo');
-    const topo = el('header', 'pf-topo'), titulo = el('h2', '', 'Solicitar fotos'); titulo.id = 'pf-titulo';
-    const fechar = el('button', 'pf-fechar', '✕'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar solicitação de fotos');
+    const topo = el('header', 'pf-topo'), titulo = el('h2', '', 'Pedir fotos'); titulo.id = 'pf-titulo';
+    const fechar = el('button', 'pf-fechar', '✕'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar pedido de fotos');
     topo.append(titulo, fechar);
     const corpo = el('div', 'pf-corpo');
     corpo.append(el('p', 'pf-resumo', pecas.length === 1 ? '1 produto selecionado' : pecas.length + ' produtos selecionados'));
@@ -60,7 +60,7 @@
     const status = el('p', 'pf-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     outro.oninput = obs.oninput = () => { if (!estado.fixado) status.textContent = ''; };
     const falhas = el('ul', 'pf-falhas'); falhas.hidden = true;
-    const pe = el('footer', 'pf-pe'), enviar = el('button', 'pf-enviar', 'Solicitar fotos'); enviar.type = 'button';
+    const pe = el('footer', 'pf-pe'), enviar = el('button', 'pf-enviar', 'Pedir fotos'); enviar.type = 'button';
     corpo.append(status, falhas); pe.append(enviar); folha.append(topo, corpo, pe); fundo.append(folha); document.body.append(fundo);
     estado.fundo = fundo;
     estado.ajustar = () => {
@@ -91,7 +91,7 @@
     });
     enviar.onclick = async () => {
       if (estado.enviando) return;
-      if (!mesmaConta(s, sessao())) { status.textContent = 'Sua conta mudou. Entre novamente e confira os produtos antes de solicitar fotos.'; return; }
+      if (!mesmaConta(s, sessao())) { status.textContent = 'Sua conta mudou. Entre novamente e confira os produtos antes de pedir fotos.'; return; }
       if (!estado.fixado) {
         if (!escolhidas.size) { status.textContent = 'Escolha como quer as fotos.'; botoes[0].focus(); return; }
         if (escolhidas.has('outro') && !outro.value.trim()) { status.textContent = 'Escreva como quer a foto em “Outro”, ou desmarque essa opção.'; outro.focus(); return; }
@@ -100,14 +100,19 @@
         botoes.forEach(b => { b.disabled = true; }); outro.readOnly = obs.readOnly = true;
       }
       estado.enviando = true; enviar.disabled = true; folha.setAttribute('aria-busy', 'true');
+      enviar.textContent = 'Pedindo…';
+      const fimOcupado = window.TKOcupado ? TKOcupado.inicio() : function () {};
+      // as chaves de operação sobrevivem a recarregar a página: refazer o pedido não duplica
+      const chaveOps = 'tk_pf_ops|' + estado.chave + '|' + JSON.stringify(estado.pedido);
+      try { const salvas = JSON.parse(sessionStorage.getItem(chaveOps) || '{}'); Object.keys(salvas).forEach(k => { if (!estado.ops.has(k)) estado.ops.set(k, salvas[k]); }); } catch (e) { /* sem armazenamento: só em memória */ }
       estado.falhas.clear(); falhas.replaceChildren(); falhas.hidden = true;
       for (const p of pecas) {
         const id = String(p.ID);
         if (estado.confirmados.has(id)) continue;
         const agora = sessao();
         if (!mesmaConta(s, agora)) { estado.falhas.set(id, 'Sua conta mudou. Entre novamente para continuar.'); break; }
-        status.textContent = 'Solicitando fotos: ' + estado.confirmados.size + ' de ' + pecas.length + ' produtos confirmados…';
-        if (!estado.ops.has(id)) estado.ops.set(id, 'pf-' + (window.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)));
+        status.textContent = 'Pedindo fotos: ' + estado.confirmados.size + ' de ' + pecas.length + (pecas.length === 1 ? ' produto confirmado…' : ' produtos confirmados…');
+        if (!estado.ops.has(id)) { estado.ops.set(id, 'pf-' + (window.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2))); try { sessionStorage.setItem(chaveOps, JSON.stringify(Object.fromEntries(estado.ops))); } catch (e) { /* só em memória */ } }
         const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25000);
         try {
           const resposta = await fetch(INSTAGRAM_URL + '/esteira/fotos/pedir', {
@@ -119,16 +124,17 @@
           if (!resposta.ok || !r?.ok) throw Error(mensagem(r?.erro));
           estado.confirmados.add(id);
         } catch (e) {
-          estado.falhas.set(id, e.name === 'AbortError' || e instanceof TypeError ? 'Não houve confirmação. Confira a conexão e tente novamente.' : mensagem(e.message));
+          estado.falhas.set(id, e.name === 'AbortError' || e instanceof TypeError ? 'Não houve confirmação. Confira a conexão e tente de novo.' : mensagem(e.message));
         } finally { clearTimeout(timer); }
       }
-      estado.enviando = false; folha.removeAttribute('aria-busy');
+      estado.enviando = false; folha.removeAttribute('aria-busy'); fimOcupado();
       const n = estado.confirmados.size, faltam = pecas.length - n;
+      if (!faltam) { try { sessionStorage.removeItem(chaveOps); } catch (e) { /* nada a limpar */ } }
       if (!faltam) { status.textContent = n === 1 ? 'Pedido registrado. A equipe pode vê-lo em Fotos, na Esteira.' : 'Pedidos registrados para os ' + n + ' produtos. A equipe pode vê-los em Fotos, na Esteira.'; enviar.textContent = 'Concluído'; enviar.disabled = true; }
       else {
-        status.textContent = n + ' de ' + pecas.length + ' produtos confirmados. Faltam ' + faltam + '. Tente novamente para enviar apenas os que faltam.';
+        status.textContent = n + ' de ' + pecas.length + (pecas.length === 1 ? ' produto confirmado. ' : ' produtos confirmados. ') + (faltam === 1 ? 'Falta 1' : 'Faltam ' + faltam) + '. Toque em “Tentar de novo” para pedir só ' + (faltam === 1 ? 'o que falta' : 'os que faltam') + '.';
         estado.falhas.forEach((erro, id) => { const p = pecas.find(x => String(x.ID) === id); falhas.append(el('li', '', (p.Codigo || p.Nome || 'Produto') + ': ' + erro)); });
-        falhas.hidden = false; enviar.textContent = 'Tentar os ' + faltam + ' restantes'; enviar.disabled = false;
+        falhas.hidden = false; enviar.textContent = faltam === 1 ? 'Tentar de novo (falta 1)' : 'Tentar de novo (faltam ' + faltam + ')'; enviar.disabled = false;
       }
     };
     estado.mostrar();

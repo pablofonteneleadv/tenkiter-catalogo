@@ -2,7 +2,7 @@
  * TENKiTER — push.js (v3.4) — avisos no celular (Android, iPhone e computador)
  *
  * O envio e a entrega são do OneSignal (serviço pronto, usado no mundo todo). Este arquivo cuida do que é nosso:
- *  - carrega o OneSignal só onde ele pode funcionar (e explica com clareza onde não pode: iPhone no Safari, Instagram/WhatsApp embutido, permissão bloqueada...);
+ *  - carrega o OneSignal só onde ele pode funcionar (e explica com clareza onde não pode: iPhone no Safari, Instagram/WhatsApp embutido, permissão bloqueada…);
  *  - pede a permissão DO JEITO CERTO: sempre num toque da pessoa (o navegador exige), com um convite nosso antes e ajuda passo a passo se ela estiver bloqueada;
  *  - liga o aparelho à CONTA (OneSignal.login com o pushId que o servidor calcula) -- é assim que a gestão escolhe avisar clientes, equipe, alunos,
  *    perfis, acessos ou uma pessoa só. O navegador nunca decide quem ele é: o servidor confere o token de sessão e devolve o pushId;

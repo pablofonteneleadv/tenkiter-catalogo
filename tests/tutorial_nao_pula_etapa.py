@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get("TK_BASE", "http://127.0.0.1:8766/")
 TELA = """<style>#um{position:fixed;left:0;right:0;bottom:0;height:64px}</style>
 <button id='um'>Um</button><button id='dois'>Dois</button>
-<button id='tres'>Cadastrar nova peça</button><button id='quatro'>Adicionar foto</button>"""
+<button id='tres'>Cadastrar novo produto</button><button id='quatro'>Adicionar foto</button>"""
 TUTORIAL = {
     "id": "sequencia", "titulo": "Sequência", "descricao": "", "pagina": "index.html",
     "status": "publicado", "versao": 1, "preparacao": [],
@@ -12,7 +12,7 @@ TUTORIAL = {
         {"selector": f"#{nome}", "alvoNome": rotulo, "acao": "click", "regra": "acao",
          "valor": "", "instrucao": f"Toque em {rotulo}", "observacao": "", "erro": ""}
         for nome, rotulo in (("um", "Um"), ("dois", "Dois"),
-                             ("tres", "Cadastrar nova peça"), ("quatro", "Adicionar foto"))
+                             ("tres", "Cadastrar novo produto"), ("quatro", "Adicionar foto"))
     ]
 }
 

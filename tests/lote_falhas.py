@@ -1,4 +1,4 @@
-"""Ação em lote: quando alguma peça NÃO é alterada, o painel diz quais e deixa só elas marcadas."""
+"""Ação em lote: quando algum produto NÃO é alterado, o painel diz quais e deixa só elas marcadas."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
@@ -20,7 +20,7 @@ with sync_playwright() as p:
     chks = pg.locator("#lista-produtos .produto-chk")
     chks.nth(0).check(); chks.nth(1).check(); pg.wait_for_timeout(200)
     ids = pg.evaluate("Array.from(selecionadosBulk).map(String)")
-    chk("2 peças marcadas", len(ids) == 2, ids)
+    chk("2 produtos marcados", len(ids) == 2, ids)
     st["lote_faltar"] = [ids[0]]
     pg.click("#btn-bulk-arquivar"); pg.wait_for_timeout(1500)
     msgs = [m for t, m in D if t == "alert"]

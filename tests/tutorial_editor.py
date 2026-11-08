@@ -10,7 +10,7 @@ with sync_playwright() as p:
     page.set_default_timeout(5000)
     for q in ("tutorial_editor=1", "tutorial_teste=1"):
         page.route(f"**/index.html?{q}", lambda route: route.fulfill(
-            status=200, content_type="text/html", body='<button id="cadastrar">Cadastrar nova peça</button>'))
+            status=200, content_type="text/html", body='<button id="cadastrar">Cadastrar novo produto</button>'))
     page.goto(BASE + "404.html")
     page.evaluate("""document.body.innerHTML='<div id="tut-editor-slot"></div>';
       window.__saved=[];
@@ -37,7 +37,7 @@ with sync_playwright() as p:
     page.locator('#tut-tipo').select_option('conteudo')
     assert not page.locator('#tut-manual-label').is_visible()
     assert '[[TUTORIAL:' in page.locator('#tut-vinculo-ajuda').inner_text()
-    page.locator("#tut-titulo").fill("Cadastrar uma peça")
+    page.locator("#tut-titulo").fill("Cadastrar um produto")
     page.locator("#tut-desc").fill("Tutorial criado pelo editor visual")
     page.get_by_role("button", name="Adicionar explicando").click()
     page.get_by_role("button", name="Começar a gravação daqui").click()
@@ -76,7 +76,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Salvar rascunho").click()
     page.wait_for_function("window.__saved.length === 1")
     saved = page.evaluate("window.__saved[0]")
-    assert saved["titulo"] == "Cadastrar uma peça"
+    assert saved["titulo"] == "Cadastrar um produto"
     assert saved["manualId"] == ""
     assert saved["tipo"] == "conteudo"
     assert saved["etapas"][0]["instrucao"] == "Toque neste controle"

@@ -170,10 +170,10 @@ with sync_playwright() as p:
     chk("erro aparece como frase, nunca JSON", "❌" in r and "plataforma Web" in r and '"ok"' not in r and "{" not in r, r)
     st["pushcfg"].pop("falhar")
 
-    print("== Peça como atalho ==")
+    print("== Produto como atalho ==")
     cod = st["produtos"][2]["Codigo"]
     pg.fill("#av-peca-in", cod); pg.dispatch_event("#av-peca-in", "change"); pg.wait_for_timeout(300)
-    chk("escolher a peça põe o link curto dela", pg.input_value("#av-url-in").startswith(SITE + "p/" + cod), pg.input_value("#av-url-in"))
+    chk("escolher o produto põe o link curto dela", pg.input_value("#av-url-in").startswith(SITE + "p/" + cod), pg.input_value("#av-url-in"))
 
     print("== Modelos ==")
     aba(pg, "modelos")

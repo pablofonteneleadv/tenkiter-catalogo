@@ -29,7 +29,7 @@
   }
   function bloco() {
     const caixa = el('div', { className: 'conta-opc', id: 'foto-cli' });
-    caixa.appendChild(el('h3', { text: '📸 Já usou uma peça nossa? Mande sua foto!', style: 'margin:0 0 4px;font-size:1rem' }));
+    caixa.appendChild(el('h3', { text: '📸 Já usou um produto nossa? Mande sua foto!', style: 'margin:0 0 4px;font-size:1rem' }));
     caixa.appendChild(el('p', { className: 'conta-opc-txt', text: 'Sua foto pode aparecer nos Stories da loja 🧡 É só escolher e enviar.' }));
     const rotulo = el('label', { htmlFor: 'foto-cli-arq', text: 'Escolher foto', style: 'display:block;font-weight:700;font-size:0.85rem;margin:6px 0 4px' });
     const arq = el('input', { type: 'file', id: 'foto-cli-arq', accept: 'image/jpeg,image/png,image/webp,image/*' });
@@ -53,14 +53,15 @@
       if (!blobPronto) { msg.textContent = 'Escolha a foto primeiro.'; return; }
       if (!aut.checked) { msg.textContent = 'Marque a autorização para usarmos a foto nos Stories.'; return; }
       env.disabled = true; env.textContent = 'Enviando…';
+      const fimOcupado = window.TKOcupado ? TKOcupado.inicio() : function () {};
       try {
         const q = '?aceito=1&obs=' + encodeURIComponent(obs.value.trim()) + '&ig=' + encodeURIComponent(ig.value.trim());
         const r = await fetch(INSTAGRAM_URL + '/cliente/foto' + q, { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'image/jpeg' }, body: blobPronto });
         let j = null; try { j = await r.json(); } catch (e) { j = null; }
         if (r.ok && j && j.ok) { msg.style.color = '#1b5e20'; msg.textContent = 'Recebemos! Muito obrigada 🧡 Se a gente usar, você aparece nos nossos Stories.'; arq.value = ''; obs.value = ''; previa.style.display = 'none'; blobPronto = null; aut.checked = false; }
-        else msg.textContent = (j && j.erro) || 'Não consegui enviar agora. Tente de novo em instantes.';
-      } catch (e) { msg.textContent = 'Sem conexão agora. Tente de novo.'; }
-      env.disabled = false; env.textContent = 'Enviar foto';
+        else msg.textContent = window.TKAviso ? TKAviso.textoErro(j, 'Não consegui enviar agora. Tente de novo em instantes.') : 'Não consegui enviar agora. Tente de novo em instantes.';
+      } catch (e) { msg.textContent = 'Sem conexão. Verifique a internet e tente de novo.'; }
+      fimOcupado(); env.disabled = false; env.textContent = 'Enviar foto';
     });
     [rotulo, arq, previa, obs, ig, autL, msg, env].forEach((n) => caixa.appendChild(n));
     return caixa;

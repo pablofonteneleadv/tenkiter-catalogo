@@ -31,7 +31,7 @@
   }
   function conteudo() {
     if(!api.disponivel())return '<div class="rp-estado"><h2>Permissões por acesso</h2><p>Esta configuração precisa da atualização do servidor de acessos. As permissões atuais continuam disponíveis em Acessos.</p><button type="button" id="rp-atualizar">Verificar novamente</button></div>';
-    if(!s.carregado)return '<div class="rp-estado" role="status"><p>'+esc(s.erro||'Carregando os acessos…')+'</p>'+(!s.busy?'<button id="rp-atualizar">Tentar novamente</button>':'')+'</div>';
+    if(!s.carregado)return '<div class="rp-estado" role="status"><p>'+esc(s.erro||'Carregando os acessos…')+'</p>'+(!s.busy?'<button id="rp-atualizar">Tentar de novo</button>':'')+'</div>';
     var feedback=(s.erro?'<p class="rp-erro" role="alert">'+esc(s.erro)+'</p>'+(s.draft?'<button type="button" id="rp-recarregar">Atualizar a lista</button>':''):'')+(s.aviso?'<p class="rp-sucesso" role="status">'+esc(s.aviso)+'</p>':'');
     if(!s.draft)return '<div class="rp-cab"><div><h2>Permissões por acesso</h2><p>Configure o que cada acesso permite. As pessoas recebem a soma dos seus acessos, com os ajustes individuais preservados.</p></div><button type="button" class="rp-prim" id="rp-novo"'+(s.busy?' disabled':'')+'>+ Novo acesso</button></div><button type="button" id="rp-recarregar">Atualizar lista</button>'+feedback+'<label class="rp-busca">Buscar acesso<input type="search" id="rp-busca" value="'+esc(s.busca)+'" placeholder="Nome ou descrição"></label><div id="rp-lista">'+lista()+'</div>';
     var d=s.draft, grupos={};s.permissoes.forEach(function(p){(grupos[p.grupo]||(grupos[p.grupo]=[])).push(p);});

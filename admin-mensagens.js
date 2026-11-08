@@ -122,14 +122,14 @@
       if (dados.ok && (!metodo || metodo==='GET')) await recentes_(caminho,dados);
       if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
       return dados;
-    } catch (e) { return { ok: false, erro: 'Sem conexão agora. Tente de novo.', semRede: true }; }
+    } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
   }
   function podeGerir() {
     try { if(window.TKMensagensAcessos)return TKMensagensAcessos.pode('acessar'); return typeof temPermissao === 'function' && typeof usuarioAdmin !== 'undefined' && !!usuarioAdmin && !!temPermissao(usuarioAdmin, 'gerir_acessos'); } catch (e) { return false; }
   }
   function podeGestorTotal_(){try{return !!getSessao()&&typeof usuarioAdmin!=='undefined'&&!!usuarioAdmin&&temPermissao(usuarioAdmin,'gerir_acessos');}catch(_){return false;}}
   async function abrirGestao_(){
-    if(!podeGestorTotal_()){aviso_('Esta área é exclusiva do gestor total.');return;}
+    if(!podeGestorTotal_()){aviso_('Esta área é exclusiva do Admin total.');return;}
     if(!globalThis.TKMensagensGestor){aviso_('A gestão ainda está carregando. Reabra Mensagens.');return;}
     if(window.TKCamadas?.aberta('ms-gaveta'))await new Promise(resolve=>{const h=e=>{if(e.detail?.chave!=='ms-gaveta')return;document.removeEventListener('tk:camada-fechada',h);resolve();};document.addEventListener('tk:camada-fechada',h);fecharGaveta_();});else fecharGaveta_();
     if(!podeGestorTotal_())return;$('ms-voltar-gestor')?.remove();
@@ -943,7 +943,7 @@
       const c = contagemDe_(id);
       const b = botao('ms-aba', '', 'aba', { canal: id }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === canal));
       b.appendChild(document.createTextNode(nome)); b.title=c.conversas+' conversas';
-      if (c.nao_lidas > 0) { const p = el('span', 'ms-pt', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); p.setAttribute('aria-label', c.nao_lidas + ' não lidas'); b.appendChild(p); }
+      if (c.nao_lidas > 0) { const p = el('span', 'ms-pt', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); p.setAttribute('aria-label', c.nao_lidas + (Number(c.nao_lidas) === 1 ? ' não lida' : ' não lidas')); b.appendChild(p); }
       abas.appendChild(b);
     });
   }
@@ -1391,7 +1391,7 @@
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
     const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : semFormatacao_(c.previa))); l2.appendChild(pv);
-    if (nova) { const bd = el('span', 'ms-badge', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); bd.setAttribute('aria-label', c.nao_lidas + ' não lidas'); l2.appendChild(bd); }
+    if (nova) { const bd = el('span', 'ms-badge', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); bd.setAttribute('aria-label', c.nao_lidas + (Number(c.nao_lidas) === 1 ? ' não lida' : ' não lidas')); l2.appendChild(bd); }
     corpo.append(l1, l2); if (l3.firstChild) corpo.appendChild(l3);
     if (espera) { const desde = c.ult_entrada_em || c.ultima_em, atrasou = Date.now() - Date.parse(desde) > META_RESPOSTA_MS; corpo.appendChild(el('span', 'ms-aguarda' + (atrasou ? ' atrasada' : ''), (atrasou ? '⚠ ' : '') + 'Falta responder · há ' + espera_(desde))); }
     if (c.outro_id) corpo.appendChild(el('span', 'ms-ambos-tag', 'Também no ' + NOME_CANAL[outroCanal_(c)]));
@@ -1521,7 +1521,7 @@
     const q = el('input', 'ms-busca ms-busca-prod'); q.id = 'ms-prod-busca'; q.type = 'search'; q.placeholder = 'Nome, código, cor, tecido ou tamanho'; q.setAttribute('aria-label', 'Buscar produto');
     const so = el('label', 'ms-cfg-linha ms-prod-filtro'), chk = el('input'); chk.type = 'checkbox'; chk.id = 'ms-prod-estoque'; chk.checked = true; so.append(chk, document.createTextNode(' Só com estoque'));
     const ul = el('ul', 'ms-prod-lista'); ul.id = 'ms-prod-lista'; ul.setAttribute('aria-live', 'polite');
-    const dica = el('p', 'ms-prod-dica', 'Toque na foto para selecionar várias peças e mandar um link só.');
+    const dica = el('p', 'ms-prod-dica', 'Toque na foto para selecionar vários produtos e mandar um link só.');
     const filtrosProd = el('details', 'ms-prod-filtros'); filtrosProd.id='ms-prod-filtros';
     const tituloFiltros=el('summary','','Filtros · tamanho, categoria, cor e tecido');
     const opcoesFiltros=el('div','ms-prod-opcoes');opcoesFiltros.id='ms-prod-opcoes';
@@ -1550,7 +1550,7 @@
       if(!opcoesFiltros.childElementCount)opcoesFiltros.appendChild(el('p','','Nenhuma opção para esta busca. Apague parte do texto ou limpe os filtros.'));
       if(campos.some(c=>refinados[c.id].size)){const limpar=botao('ms-btn','Limpar filtros','');limpar.addEventListener('click',()=>{campos.forEach(c=>refinados[c.id].clear());pintar();});resumoFiltros.appendChild(limpar);}
     }
-    const bar = el('div', 'ms-prod-selbar'); bar.id = 'ms-prod-selbar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Peças selecionadas'); bar.hidden = true;
+    const bar = el('div', 'ms-prod-selbar'); bar.id = 'ms-prod-selbar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Produtos selecionados'); bar.hidden = true;
     const conta = el('span', 'ms-prod-conta'); conta.id = 'ms-prod-conta'; conta.setAttribute('aria-live', 'polite');
     const env = el('div', 'ms-prod-env');
     env.append(botao('ms-btn', 'Copiar link', 'prodsel-link'), botao('ms-btn prim', 'Enviar seleção', 'prodsel-usar'));
@@ -1565,16 +1565,16 @@
       if (chk.checked) ps = ps.filter((p) => !esgotado_(p));
       if (termos.length) ps = ps.filter((p) => { const t = semAcento_([p.Nome, p.Codigo, p.Categoria, p.Cores, p.Tamanhos, p.Genero,window.TKTecido&&TKTecido.ler(p)].join(' ')); return termos.every((x) => t.indexOf(x) >= 0); });
       pintarFiltros(ps);ps=ps.filter(p=>combina(p));
-      resultado.textContent=ps.length+' '+(ps.length===1?'peça encontrada':'peças encontradas');
+      resultado.textContent=ps.length+' '+(ps.length===1?'produto encontrado':'produtos encontrados');
       ul.textContent = '';
       if (!produtosCatalogo_().length) { ul.appendChild(el('li', 'ms-vazio', 'O catálogo ainda está carregando. Tente de novo em alguns segundos.')); return; }
-      if (!ps.length) { ul.appendChild(el('li', 'ms-vazio', termos.length ? 'Nenhum produto com “' + q.value.trim() + '”.' + (chk.checked ? ' Desmarque “Só com estoque” para ver os esgotados.' : '') : 'Nenhuma peça com os filtros escolhidos. Use Limpar filtros ou desmarque Só com estoque.')); return; }
+      if (!ps.length) { ul.appendChild(el('li', 'ms-vazio', termos.length ? 'Nenhum produto com “' + q.value.trim() + '”.' + (chk.checked ? ' Desmarque “Só com estoque” para ver os esgotados.' : '') : 'Nenhum produto com os filtros escolhidos. Use Limpar filtros ou desmarque Só com estoque.')); return; }
       ps.slice(0, 40).forEach((p) => {
         const li = el('li', 'ms-prod');
         const img = el('img', 'ms-prod-foto'); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
         const src = typeof fotoMini === 'function' ? fotoMini(p.Foto_URL, 160) : p.Foto_URL; if (src) img.setAttribute('src', src);
         const sim = prodSelecionado_(p.ID), marca = botao('ms-prod-marca', '', 'prod-marcar', { id: String(p.ID) });
-        marca.setAttribute('aria-pressed', sim ? 'true' : 'false'); marca.setAttribute('aria-label', 'Selecionar ' + (p.Nome || 'peça') + (p.Codigo ? ' ' + p.Codigo : ''));
+        marca.setAttribute('aria-pressed', sim ? 'true' : 'false'); marca.setAttribute('aria-label', 'Selecionar ' + (p.Nome || 'produto') + (p.Codigo ? ' ' + p.Codigo : ''));
         marca.append(img, el('span', 'ms-prod-caixa', sim ? '✓' : '')); marca.lastChild.setAttribute('aria-hidden', 'true');
         if (sim) li.classList.add('marcado');
         const info = el('div', 'ms-prod-info');
@@ -1635,8 +1635,8 @@
     const n = Math.min(ps.length, MAX_SEL_PROD), link = linkSelecao_(ps);
     let mostrar = Math.min(n, 12), msg = '';
     do {
-      const linhas = ps.slice(0, mostrar).map((p) => '• ' + (p.Nome || 'Peça') + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' — ' + precoTexto_(p)).join('\n') + (n > mostrar ? '\n… e mais ' + (n - mostrar) + (n - mostrar === 1 ? ' peça' : ' peças') : '');
-      msg = 'Olha as peças que separei na TENKiTER Modas (' + n + (n === 1 ? ' peça' : ' peças') + '):\n' + linhas + (link ? '\n\nToque para ver as fotos de cada uma:\n' + link : '');
+      const linhas = ps.slice(0, mostrar).map((p) => '• ' + (p.Nome || 'Produto') + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' — ' + precoTexto_(p)).join('\n') + (n > mostrar ? '\n… e mais ' + (n - mostrar) + (n - mostrar === 1 ? ' produto' : ' produtos') : '');
+      msg = 'Olha os produtos que separei na TENKiTER Modas (' + n + (n === 1 ? ' produto' : ' produtos') + '):\n' + linhas + (link ? '\n\nToque para ver as fotos de cada uma:\n' + link : '');
       mostrar--;
     } while (msg.length > 1500 && mostrar > 0);
     return msg;
@@ -1646,12 +1646,12 @@
     const bar = $('ms-prod-selbar'); if (!bar) return;
     const n = produtosSelecionados_().length;
     bar.hidden = !n;
-    const c = $('ms-prod-conta'); if (c) c.textContent = n + (n === 1 ? ' peça selecionada' : ' peças selecionadas');
+    const c = $('ms-prod-conta'); if (c) c.textContent = n + (n === 1 ? ' produto selecionado' : ' produtos selecionados');
   }
   function marcarProduto_(b) {
     const id = String(b.dataset.id), li = b.closest('.ms-prod'), k = prodSel.indexOf(id);
     if (k >= 0) prodSel.splice(k, 1);
-    else { if (prodSel.length >= MAX_SEL_PROD) { aviso_('Dá para mandar até ' + MAX_SEL_PROD + ' peças num link.'); return; } prodSel.push(id); }
+    else { if (prodSel.length >= MAX_SEL_PROD) { aviso_('Dá para mandar até ' + MAX_SEL_PROD + ' produtos num link.'); return; } prodSel.push(id); }
     const sim = k < 0;
     b.setAttribute('aria-pressed', sim ? 'true' : 'false');
     const cx = b.querySelector('.ms-prod-caixa'); if (cx) cx.textContent = sim ? '✓' : '';
@@ -1663,7 +1663,7 @@
     const L = typeof LOJA !== 'undefined' ? LOJA : null, site = typeof SITE_URL !== 'undefined' ? SITE_URL : '';
     return [
       L && L.endereco ? { t: 'Endereço da loja', x: 'Nosso endereço: ' + L.endereco + (L.mapaUrl ? '\nComo chegar: ' + L.mapaUrl : '') } : null,
-      site ? { t: 'Catálogo no site', x: 'Veja todas as peças no nosso catálogo: ' + site } : null,
+      site ? { t: 'Catálogo no site', x: 'Veja todos os produtos no nosso catálogo: ' + site } : null,
       L && L.instagramUrl ? { t: 'Instagram', x: 'Siga a gente no Instagram: ' + L.instagramUrl } : null
     ].filter(Boolean);
   }
@@ -1809,7 +1809,7 @@
     const enviado=JSON.parse(JSON.stringify(autoEdit_)),epoca=epocaConta_,gen=$('ms-gaveta')?.dataset.gen,status=$('ms-auto-status');
     b.disabled = true;if(status)status.textContent='Salvando…'; const r = await worker_('/msg/auto', 'POST', enviado); b.disabled = false;
     if(epoca!==epocaConta_||$('ms-gaveta')?.dataset.gen!==gen)return;
-    if (!r.ok) { if(status)status.textContent=r.erro||'Não foi possível salvar. Tente novamente.';b.focus();return; }
+    if (!r.ok) { if(status)status.textContent=r.erro||'Não foi possível salvar. Tente de novo.';b.focus();return; }
     autoUlt_=r;
     if(JSON.stringify(autoEdit_)!==JSON.stringify(enviado)){if(status)status.textContent='Salvo. Há novas alterações na tela para salvar.';return;}
     autoEdit_ = JSON.parse(JSON.stringify(r.auto)); desenharAuto_();if(status)status.textContent='Configurações salvas.';b.focus();
@@ -2177,6 +2177,7 @@
     meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
+    if (m.etapa && m.status === 'pendente') b.appendChild(el('span', 'ms-etapa', m.etapa));
     if (m.status === 'incerta') b.appendChild(el('span', 'ms-erro', 'Sem confirmação. Confira no ' + (canalDaConversa() === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.'));
     if (falhou) { const e = el('span', 'ms-erro', (m.erro || 'Não enviada.') + ' '); e.appendChild(botao('', 'Tentar de novo', 'reenviar', { tmp: String(m.id) })); e.appendChild(botao('', 'Descartar', 'descartar', { tmp: String(m.id) })); b.appendChild(e); }
     return b;
@@ -2306,7 +2307,7 @@
       const q=new URLSearchParams({status:f.status,canal:f.canal,tipo:f.tipo,busca:f.busca,minhas:f.minhas?'1':'0',de:f.de,ate:f.ate,cursor:proximo});
       const r=await worker_('/msg/agendadas?'+q,'GET');if(!atual()||consulta!==versao)return;
       lista.removeAttribute('aria-busy');mais.disabled=false;
-      if(!r.ok){status.textContent=r.erro||'Não foi possível carregar. Use Atualizar para tentar novamente.';pe.hidden=true;return;}
+      if(!r.ok){status.textContent=r.erro||'Não foi possível carregar. Use Atualizar para tentar de novo.';pe.hidden=true;return;}
       itens=reset?r.agendamentos||[]:itens.concat(r.agendamentos||[]);cursor=r.proximo||'';pe.hidden=!r.temMais;pintar();status.textContent=itens.length+(itens.length===1?' agendamento':' agendamentos')+(r.temMais?' · há mais resultados':'');
     }
     bus.addEventListener('input',()=>{f.busca=bus.value;clearTimeout(timer);timer=setTimeout(()=>{if(atual())carregar(true);},350);});
@@ -2345,7 +2346,7 @@
     agendaQuando_ = 0; agendaAtalho_ = '';
     const w = el('div', 'ms-agenda');
     const s1 = el('section', 'ms-agenda-sec'), lb = el('label', 'ms-agenda-rot', 'Mensagem'); lb.htmlFor = 'ms-ag-texto';
-    const ta = el('textarea', 'ms-copia'); ta.id = 'ms-ag-texto'; ta.rows = 4; ta.maxLength = 1000; ta.value = rascunho.slice(0, 1000); ta.placeholder = 'Ex.: Oi! A peça que você pediu chegou. Posso separar?';
+    const ta = el('textarea', 'ms-copia'); ta.id = 'ms-ag-texto'; ta.rows = 4; ta.maxLength = 1000; ta.value = rascunho.slice(0, 1000); ta.placeholder = 'Ex.: Oi! O produto que você pediu chegou. Posso separar?';
     s1.append(lb, ta);
     const anexo=el('div','ms-ag-anexo'),seletor=el('input');seletor.type='file';seletor.accept='image/*,video/*';seletor.hidden=true;seletor.id='ms-ag-arquivo';
     const seletorAudio=el('input');seletorAudio.type='file';seletorAudio.accept='audio/*';seletorAudio.hidden=true;seletorAudio.id='ms-ag-arquivo-audio';
@@ -2362,7 +2363,7 @@
       let blob;try{const ss=getSessao();blob=tipo==='imagem'?await reduzirImagem_(f):tipo==='vídeo'?await TKVideoPreparation.preparar(f,{perfil:'mensageiro',base:INSTAGRAM_URL,conta:contaSessao_(ss),headers:{'X-TK-Whats':ss.whatsapp,'X-TK-Sessao':ss.sessao}}):f;}catch(e){anexar.disabled=false;feedback.textContent=e.message;return;}
       if(!aberta||aberta.id!==conv.id||$('ms-gaveta')?.dataset.gen!==gen||epoca!==epocaConta_)return;
       anexar.disabled=false;
-      if(!blob||blob.size>(tipo==='vídeo'?15000000:(tipo==='imagem'?8:16)*1048576)){feedback.textContent='Arquivo muito grande ou em formato não aceito. Use foto até 8 MiB, vídeo até 15 MB ou áudio até 16 MiB.';return;}
+      if(!blob||blob.size>(tipo==='vídeo'?15000000:(tipo==='imagem'?8:16)*1048576)){feedback.textContent='Arquivo muito grande ou em formato não aceito. Use foto até 8 MB, vídeo até 15 MB ou áudio até 16 MB.';return;}
       agendaAnexo_={blob,tipo,nome:f.name||'Anexo'};agendaPedido_=null;feedback.textContent='';pintar();
     }));
     anexo.append(anexar,anexarAudio,seletor,seletorAudio,nomeAnexo,remover);s1.appendChild(anexo);pintar();
@@ -2429,13 +2430,13 @@
     try{
       if(arquivo&&!arquivo.chave){
         const r=await subirAnexo_(arquivo);if(!atual())return;
-        if(!r.ok){informar(r.erro||'Não foi possível preparar o anexo. Tente novamente.');return;}
+        if(!r.ok){informar(r.erro||'Não foi possível preparar o anexo. Tente de novo.');return;}
         arquivo.chave=r.anexo;
       }
       if(!atual())return;
       const r=await worker_('/msg/agendar','POST',{conversa:conv,texto:assinado,quando,anexo:arquivo?.chave||'',anexoNome:arquivo?.nome||'',idLocal});
       if(!atual())return;
-      if(!r.ok){informar(r.erro||'Não consegui confirmar. Tente novamente para conferir o mesmo pedido.');return;}
+      if(!r.ok){informar(r.erro||'Não consegui confirmar. Tente de novo para conferir o mesmo pedido.');return;}
       const comp=$('ms-texto');if(comp&&comp.value.trim()===texto){comp.value='';comp.dispatchEvent(new Event('input',{bubbles:true}));}
       if(arquivo&&anexoPend?.blob===arquivo.blob)limparAnexo_(true);
       ta.value='';agendaAnexo_=null;agendaPedido_=null;agendaQuando_=0;agendaAtalho_='';$('ms-ag-quando').value='';marcarAgenda_();
@@ -2493,8 +2494,8 @@
     sub.appendChild(el('p','ms-ficha-vazio','Não encontrou? Escolha preencher livremente. As sugestões de bairros e localidades são parciais.'));loc.appendChild(sub);
     const atualizarLocal=()=>{const v=cidade.value;sub.hidden=!['Crateús','Interior'].includes(v);blocoCr.hidden=v!=='Crateús';blocoIn.hidden=v!=='Interior';outra.hidden=v!=='__outra';outra.previousSibling.hidden=outra.hidden;};cidade.addEventListener('change',atualizarLocal);atualizarLocal();
     const pref=sec('Preferências','ms-fi-h-pref'),lp=el('label','ms-ficha-rot','Observações'),tp=el('textarea','ms-copia');lp.htmlFor='ms-fi-pref';tp.id='ms-fi-pref';tp.rows=2;tp.maxLength=300;tp.value=f.preferencias||'';tp.placeholder='Ex.: gosta de vestido longo e cores claras';pref.append(lp,tp);
-    const gostos=sec('Tamanhos e peças de interesse','ms-fi-h-gostos');
-    const grupos=[['tamanhos','Tamanhos'],['generos','Gêneros'],['tecidos','Tecidos'],['cores','Cores']], paineis=[];
+    const gostos=sec('Tamanhos e produtos de interesse','ms-fi-h-gostos');
+    const grupos=[['tamanhos','Tamanhos'],['generos','Públicos'],['tecidos','Tecidos'],['cores','Cores']], paineis=[];
     const produtos=typeof tkProdutosLista==='function'?tkProdutosLista():[];
     const norm=x=>semAcento_(String(x)).trim(), tokens=x=>String(x||'').split(/[,;|]/).map(v=>v.trim()).filter(Boolean);
     const vals=(prod,key)=>key==='tamanhos'?(window.TKTamanhos?TKTamanhos.cliente(String(prod.Tamanhos||''),prod.Genero).valores:tokens(prod.Tamanhos)).filter(v=>!/consult/i.test(v)):key==='tecidos'?[window.TKTecido&&TKTecido.ler(prod)].filter(Boolean):tokens(prod[key==='generos'?'Genero':'Cores']);
@@ -2547,7 +2548,7 @@
   async function enviarFotoRegistro_(rota,blob,sinal){
     const s=getSessao();if(!s)throw Error('Entre novamente para continuar.');
     const r=await fetch(INSTAGRAM_URL+rota,{method:'POST',headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},body:blob,signal:sinal});
-    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.erro||'Não consegui guardar a foto. Tente novamente.');return j;
+    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.erro||'Não consegui guardar a foto. Tente de novo.');return j;
   }
   async function abrirRegistroCliente_(modo,existente){
     if(!getSessao()){aviso_('Entre com seu login para registrar fotos do cliente.');return;}
@@ -2593,20 +2594,20 @@
       r.enviando=true;r.mensagem='Preparando os arquivos…';r.atualizar();
       try{
         const conferir=()=>{if(epoca!==epocaConta_||conta!==contaSessao_(getSessao()))throw Error('A conta mudou. Entre na conta original para continuar.');};
-        for(const [i,f]of r.fotos.entries()){if(f.salva||f.blob)continue;conferir();r.mensagem='Preparando foto '+(i+1)+' de '+r.fotos.length+'…';r.atualizar();f.blob=await registroComPrazo_(()=>reduzirImagem_(f.file));if(!f.blob||f.blob.size>5*1048576)throw Error('Não consegui preparar '+f.nome+'. Use uma foto JPG, PNG ou WebP até 5 MiB.');}
+        for(const [i,f]of r.fotos.entries()){if(f.salva||f.blob)continue;conferir();r.mensagem='Preparando foto '+(i+1)+' de '+r.fotos.length+'…';r.atualizar();f.blob=await registroComPrazo_(()=>reduzirImagem_(f.file));if(!f.blob||f.blob.size>5*1048576)throw Error('Não consegui preparar '+f.nome+'. Use uma foto JPG, PNG ou WebP até 5 MB.');}
         await persistir();conferir();
         if(modo!=='foto'&&!r.registrado){r.tentado=true;await persistir();r.mensagem='Registrando a descrição do pedido…';r.atualizar();const j=await registroComPrazo_(sinal=>worker_('/msg/solicitacoes','POST',{id:r.id,conversa:conv.id,descricao:r.descricao},false,sinal));if(!j.ok)throw Error(j.erro);r.registrado=true;await persistir();}
         for(const [i,f]of r.fotos.entries()){if(f.salva)continue;conferir();f.tentada=true;await persistir();r.mensagem='Guardando foto '+(i+1)+' de '+r.fotos.length+'…';r.atualizar();
           const rota=modo==='foto'?'/msg/cliente-foto?'+new URLSearchParams({conversa:conv.id,op:f.id}):'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:r.id,foto:f.id});await registroComPrazo_(sinal=>enviarFotoRegistro_(rota,f.blob,sinal),60000);conferir();f.salva=true;await persistir();}
         r.concluido=true;r.mensagem=modo==='foto'?'Fotos guardadas com os dados da ficha. Nenhuma mensagem foi enviada.':existente?'Fotos acrescentadas ao pedido. Nenhuma mensagem foi enviada.':'Pedido registrado. Nenhuma mensagem foi enviada.';
         solicitacoesRascunhos_.delete(key);await guardarRegistro_(key,null).catch(()=>{});
-      }catch(e){r.mensagem=(r.registrado?'O pedido foi preservado. ':'')+(e.message||'Não consegui concluir. Use Continuar envio para tentar novamente.');}
+      }catch(e){r.mensagem=(r.registrado?'O pedido foi preservado. ':'')+(e.message||'Não consegui concluir. Use Continuar envio para tentar de novo.');}
       finally{r.enviando=false;r.atualizar?.();}
     };
     corpo.append(label,input,lista,st,salvar);atualizar();
   }
   async function fotoSolicitacao_(id,foto){
-    const s=getSessao(),r=await fetch(INSTAGRAM_URL+'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:id,foto}),{headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},signal:AbortSignal.timeout(30000)});if(!r.ok)throw Error('Não consegui abrir a foto. Tente novamente.');return r.blob();
+    const s=getSessao(),r=await fetch(INSTAGRAM_URL+'/msg/solicitacoes/foto?'+new URLSearchParams({solicitacao:id,foto}),{headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},signal:AbortSignal.timeout(30000)});if(!r.ok)throw Error('Não consegui abrir a foto. Tente de novo.');return r.blob();
   }
   async function fecharSolicitacaoParaConversa_(){const g=$('ms-gaveta');if(g){g.remove();await desempilharEsperando_('ms-gaveta');}}
   async function responderSolicitacao_(item,foto){
@@ -2624,7 +2625,7 @@
     const corpo=gaveta_('Solicitações de clientes');if(!corpo)return;corpo.classList.add('ms-solicitacoes-corpo');
     const filtro=el('select','ms-copia');filtro.setAttribute('aria-label','Situação das solicitações');for(const [v,t]of [['abertas','Em aberto'],...Object.entries(SOL_STATUS_),['todas','Todas']]){const op=el('option','',t);op.value=v;filtro.append(op);}
     const lista=el('div'),st=el('p','ms-auto-exp');st.setAttribute('role','status');corpo.append(filtro,st,lista);let geracao=0;
-    const carregar=async(antes='')=>{const g=++geracao;st.textContent='Carregando solicitações…';const r=await worker_('/msg/solicitacoes?'+new URLSearchParams({status:filtro.value,...(conversa?{conversa}:{}),...(antes?{antes}:{})}));if(g!==geracao||!corpo.isConnected)return;if(!r.ok){st.textContent=r.erro||'Não consegui carregar.';const tentar=el('button','ms-btn','Tentar carregar solicitações novamente');tentar.type='button';tentar.onclick=()=>{tentar.remove();carregar(antes);};lista.append(tentar);return;}st.textContent=r.itens.length?'':'Nenhuma solicitação neste filtro.';if(!antes)lista.replaceChildren();for(const item of r.itens){const card=el('section','ms-solicitacao');card.append(el('h4','',item.nome||'Cliente'),el('p','ms-auto-exp ms-solicitacao-resumo',(NOME_CANAL[item.canal]||item.canal)+' · '+hora(item.criado_em)+' · '+SOL_STATUS_[item.status]),el('p','ms-solicitacao-descricao',item.descricao));
+    const carregar=async(antes='')=>{const g=++geracao;st.textContent='Carregando solicitações…';const r=await worker_('/msg/solicitacoes?'+new URLSearchParams({status:filtro.value,...(conversa?{conversa}:{}),...(antes?{antes}:{})}));if(g!==geracao||!corpo.isConnected)return;if(!r.ok){st.textContent=r.erro||'Não consegui carregar.';const tentar=el('button','ms-btn','Tentar de novo: carregar solicitações');tentar.type='button';tentar.onclick=()=>{tentar.remove();carregar(antes);};lista.append(tentar);return;}st.textContent=r.itens.length?'':'Nenhuma solicitação neste filtro.';if(!antes)lista.replaceChildren();for(const item of r.itens){const card=el('section','ms-solicitacao');card.append(el('h4','',item.nome||'Cliente'),el('p','ms-auto-exp ms-solicitacao-resumo',(NOME_CANAL[item.canal]||item.canal)+' · '+hora(item.criado_em)+' · '+SOL_STATUS_[item.status]),el('p','ms-solicitacao-descricao',item.descricao));
       if(item.responsavel)card.append(el('small','',item.responsavel===String(getSessao()?.whatsapp)?'Responsável: você':'Responsável: '+(item.responsavel_nome||'Pessoa da equipe')));
       card.append(el('p','ms-auto-exp',item.fotos?.length?item.fotos.length+' foto(s) anexada(s)':'Sem fotos anexadas'));const fotos=el('div','ms-solicitacao-fotos');for(const f of item.fotos||[]){const detalhes=el('details');detalhes.append(el('summary','','Foto '+((item.fotos||[]).indexOf(f)+1)));const img=el('div');detalhes.append(img);let urlLocal='';detalhes.ontoggle=async()=>{if(!detalhes.open||urlLocal)return;try{const blob=await fotoSolicitacao_(item.id,f.id);if(!img.isConnected)return;urlLocal=URL.createObjectURL(blob);img.innerHTML='<img alt="Foto do pedido do cliente" '+atribSrc(urlLocal)+' style="display:block;max-width:100%;max-height:240px;object-fit:contain">';img.firstElementChild.onload=()=>URL.revokeObjectURL(urlLocal);}catch(e){st.textContent=e.message;}};if(podeFerramenta_('responder')){const b=el('button','ms-btn','Anexar à resposta');b.type='button';b.onclick=()=>responderSolicitacao_(item,f.id);detalhes.append(b);}fotos.append(detalhes);}card.append(fotos);
       const abrir=el('button','ms-btn','Abrir conversa');abrir.type='button';abrir.onclick=async()=>{const epoca=epocaConta_;await fecharSolicitacaoParaConversa_();if(epoca!==epocaConta_)return;if(canal!=='todos'&&canal!==item.canal){canal=item.canal;desenharFiltros();desenharAbas();await carregarLista(true);}await abrirConversa(item.conversa_id,true);};card.append(abrir);
@@ -2651,13 +2652,13 @@
     const anterior=$('ms-conversa')?.querySelector('.ms-relacionamento-abrir')||document.activeElement,corpo=gaveta_('Histórico de relacionamento');if(!corpo)return;propostaGaveta_('relacionamento',anterior);
     const p=el('p','','Carregando histórico…');p.setAttribute('role','status');corpo.appendChild(p);
     const r=await worker_('/msg/relacionamento?conversa='+encodeURIComponent(id),'GET');if(!corpo.isConnected)return;corpo.textContent='';
-    if(!r.ok||!r.relacionamento){corpo.appendChild(el('p','','Não consegui consultar o histórico agora.'));corpo.appendChild(botao('ms-btn','Tentar novamente','relacionamento',{id:String(id)}));return;}
+    if(!r.ok||!r.relacionamento){corpo.appendChild(el('p','','Não consegui consultar o histórico agora.'));corpo.appendChild(botao('ms-btn','Tentar de novo','relacionamento',{id:String(id)}));return;}
     const h=r.relacionamento;if(aberta?.id===id){aberta.relacionamento=h;const b=$('ms-conversa')?.querySelector('.ms-relacionamento-abrir');if(b)b.textContent=rotuloRelacionamento_(h);}const c=lista.find(x=>x.id===id);if(c){c.relacionamento=h;pintarLista();}corpo.appendChild(el('h3','',h.pontos+' de 100 · relacionamento'));
     corpo.appendChild(el('p','ms-relacionamento-ajuda','Informação para orientar seu atendimento. A ordem da fila permanece igual.'));
     if(!h.totalEventos)corpo.appendChild(el('p','','Nenhum encerramento registrado para este cliente. Isso não significa ausência de compras.'));
     else for(const x of h.historico){const n=NOME_MOTIVO_[x.motivo]||x.motivo;corpo.appendChild(el('p','ms-relacionamento-evento',x.total+(x.total===1?' vez · ':' vezes · ')+n));}
     const d=el('details');d.appendChild(el('summary','','Como a nota foi calculada'));d.appendChild(el('p','','Base: '+h.base+' pontos.'));
-    for(const x of h.motivos)d.appendChild(el('p','',(NOME_MOTIVO_[x.motivo]||x.motivo)+': '+x.ocorrencias+' ocorrência(s) nos últimos '+x.validadeDias+' dias; '+x.eventos+' conta(m), '+(x.pontos>=0?'+':'')+x.pontos+' pontos.'));
+    for(const x of h.motivos)d.appendChild(el('p','',(NOME_MOTIVO_[x.motivo]||x.motivo)+': '+ tkPlural(x.ocorrencias, 'ocorrência', 'ocorrências') + ' nos últimos '+x.validadeDias+' dias; '+x.eventos+' conta(m), '+(x.pontos>=0?'+':'')+x.pontos+' pontos.'));
     if(!h.motivos.length)d.appendChild(el('p','','Sem eventos válidos nos prazos atuais. A nota fica na base.'));
     d.appendChild(el('p','','A nota é limitada de 0 a 100. As regras são definidas pelo gestor.'));corpo.appendChild(d);
     corpo.appendChild(el('p','ms-relacionamento-ajuda','Motivos de encerramento registrados; não comprovam pagamento nem explicam por que o cliente deixou de responder. Canais vinculados contam o mesmo evento uma vez.'));
@@ -2747,7 +2748,7 @@
         return {url:u.href,titulo:p.Nome||'TENKiTER Modas',descricao:precoTexto_(p)+(tam.length?' · '+tam.join(', '):''),imagem:imagemCartaoSegura_(foto)};
       }
     }
-    if(sel){const n=sel.split(',').filter(Boolean).length;return {url:u.href,titulo:'Peças separadas para você',descricao:n+(n===1?' peça':' peças')+' na TENKiTER Modas'};}
+    if(sel){const n=sel.split(',').filter(Boolean).length;return {url:u.href,titulo:'Produtos separados para você',descricao:n+(n===1?' produto':' produtos')+' na TENKiTER Modas'};}
     return {url:u.href,titulo:'TENKiTER Modas',descricao:''};
   }
   function imgCartao_(p){
@@ -2910,7 +2911,7 @@
     st.textContent = ''; st.hidden = !anexoPend;
     if (bt) bt.disabled = !anexoPend && !(ta && ta.value.trim());
     if (!anexoPend) return;
-    if (anexosFila_.length) st.appendChild(el('span','ms-stage-nome','Mais '+anexosFila_.length+' mídia(s) para enviar'));
+    if (anexosFila_.length) st.appendChild(el('span','ms-stage-nome','Mais '+ tkPlural(anexosFila_.length, 'mídia', 'mídias') + ' para enviar'));
     const a = anexoPend, m = el(a.tipo === 'imagem' ? 'img' : a.tipo === 'vídeo' ? 'video' : 'audio');
     if (a.tipo === 'áudio') m.controls = true; else if (a.tipo === 'vídeo') { m.muted = true; m.preload = 'metadata'; } else m.alt = 'Prévia da foto';
     m.src = a.urlLocal; st.appendChild(m);
@@ -2933,8 +2934,8 @@
     // Foto da câmera do app (2.4.22+): já sai em pé, na maior resolução que cabe em 5 MB (limite de imagem da Wafly/WhatsApp); não reduz de novo.
     const fotoApp = tipo === 'imagem' && f.type === 'image/jpeg' && /^TENKiTER-foto-/.test(f.name || '') && f.size > 0 && f.size <= 5000000;
     if (fotoApp) blob = f;
-    else if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outra.'); return; } }
-    else if (tipo!=='vídeo' && blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MiB).'); return; }
+    else if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outro.'); return; } }
+    else if (tipo!=='vídeo' && blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MB).'); return; }
     if (tipo === 'vídeo') {
       const sessao=getSessao(),id=aberta?.id,epoca=epocaConta_;
       if(!window.TKVideoPreparation){aviso_('Preparação de vídeo indisponível. Recarregue a página.');return;}
@@ -3099,12 +3100,12 @@
       notas.slice().reverse().forEach(n => {
         const li = el('li', 'ms-nota-item'), texto = el('div');
         texto.append(el('p', '', n.texto), el('small', '', [n.autor, dataFicha_(n.em)].filter(Boolean).join(' · ')));
-        const x = botao('ms-ico', '×', ''); x.title = 'Apagar nota'; x.setAttribute('aria-label', 'Apagar nota de ' + (n.autor || 'Equipe'));
+        const x = botao('ms-ico', '×', ''); x.title = 'Excluir nota'; x.setAttribute('aria-label', 'Excluir nota de ' + (n.autor || 'Equipe'));
         x.addEventListener('click', async () => {
           x.disabled = true; estado.textContent = 'Apagando nota…';
           const r = await worker_('/msg/notas?conversa=' + c.id + '&id=' + n.id, 'DELETE');
           if (!corpo.isConnected) return;
-          if (!r.ok) { x.disabled = false; estado.textContent = r.erro || 'Não foi possível apagar. Tente novamente.'; return; }
+          if (!r.ok) { x.disabled = false; estado.textContent = r.erro || 'Não foi possível apagar. Tente de novo.'; return; }
           if (aberta && aberta.id === c.id) { sincronizarNotas_(r.notas || []); pintarFio(false); }
           desenhar(r.notas || []); aviso_('Nota apagada. Exclusão registrada no histórico.');
         });
@@ -3117,7 +3118,7 @@
       const r = await worker_('/msg/notas', 'POST', { conversa: c.id, texto });
       if (!corpo.isConnected) return;
       ta.disabled = false; salvar.disabled = false;
-      if (!r.ok) { estado.textContent = r.erro || 'Não foi possível salvar. Tente novamente.'; return; }
+      if (!r.ok) { estado.textContent = r.erro || 'Não foi possível salvar. Tente de novo.'; return; }
       ta.value = ''; salvar.disabled = true;
       if (aberta && aberta.id === c.id) { msgs.push(notaMsg_(r.nota)); atualizarAtalhoNotas_(); pintarFio(false); }
       const notas = msgs.filter(m => m.direcao === 'nota').map(m => ({ id: Number(String(m.id).slice(5)), texto: m.texto, autor: m.autor, em: m.enviada_em }));
@@ -3125,7 +3126,7 @@
     });
     const r = await worker_('/msg/notas?conversa=' + c.id, 'GET');
     if (!corpo.isConnected) return;
-    if (!r.ok) { estado.textContent = r.erro || 'Não foi possível carregar. Feche e tente novamente.'; return; }
+    if (!r.ok) { estado.textContent = r.erro || 'Não foi possível carregar. Feche e tente de novo.'; return; }
     if (aberta && aberta.id === c.id) { sincronizarNotas_(r.notas || []); pintarFio(false); }
     desenhar(r.notas || []);
   }
@@ -3134,12 +3135,13 @@
     if (!reenvio && !daFila && envioMultimidiaEmCurso_) return;
     const donoDaFila = !reenvio && !daFila;
     if (donoDaFila) envioMultimidiaEmCurso_ = true;
+    let fimOcupado_ = function () {};   // v7.57.0: TKOcupado — fechar a tela no meio do envio avisa antes de perder
     try {
     if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
     if (!aberta) return;
     const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
     if (modoNota && !reenvio) { await salvarNota_(c, ta); return; }
-    if(!reenvio&&assinaturaLigada_()&&!nomeAtendente_()){aviso_('Atualizando seu nome do cadastro. Tente enviar novamente em instantes.');carregarCfgLeitura_();return;}
+    if(!reenvio&&assinaturaLigada_()&&!nomeAtendente_()){aviso_('Atualizando seu nome do cadastro. Tente enviar de novo em instantes.');carregarCfgLeitura_();return;}
     let tmp, texto, idLocal;
     if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; /* A citação do retry pertence somente ao envio pendente. */ }
     else {
@@ -3159,11 +3161,15 @@
       pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
       ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; citacaoPend_ = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
     }
+    fimOcupado_ = window.TKOcupado ? TKOcupado.inicio() : fimOcupado_;
+    { const bEnv = $('ms-enviar'); if (bEnv) bEnv.textContent = 'Enviando…'; }
+    if (tmp.anexo && !tmp.anexo.chave) tmp.msg.etapa = 'Enviando o anexo… pode demorar. Não feche esta tela.';
     pintarFio(true);
     const idTmp = tmp.msg.id;
     let r;
     if (tmp.anexo && !tmp.anexo.chave) {
       const up = await subirAnexo_(tmp.anexo);
+      tmp.msg.etapa = '';
       if (!up.ok) r = { ok: false, erro: up.erro || 'Não foi possível enviar o arquivo.', semRede: up.semRede, semEnvio: true };
       else tmp.anexo.chave = up.anexo;
     }
@@ -3182,7 +3188,7 @@
       if (r.incerto) aviso_(r.erro || 'Sem confirmação do envio.'); else aviso_('');
       carregarLista(false);
     } else {
-      tmp.msg.status = 'falhou'; tmp.msg.erro = r.erro || 'Não foi possível enviar agora.';
+      tmp.msg.status = 'falhou'; tmp.msg.erro = TKAviso.textoErro(r, 'Não foi possível enviar agora.');
       if (r.semRede && !r.semEnvio) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
     }
     if (aberta && aberta.id === c.id) pintarFio(true);
@@ -3191,7 +3197,11 @@
       while(anexosFila_.length&&!aceito&&aberta?.id===c.id)aceito=!!(await escolherArquivo_(anexosFila_.shift()));
       if (aceito && anexoPend && aberta && aberta.id === c.id) await enviar(null, true);
     }
-    } finally { if (donoDaFila) envioMultimidiaEmCurso_ = false; }
+    } finally {
+      fimOcupado_();
+      { const bEnv = $('ms-enviar'); if (bEnv && bEnv.textContent === 'Enviando…') bEnv.textContent = 'Enviar'; }
+      if (donoDaFila) envioMultimidiaEmCurso_ = false;
+    }
   }
 
   /* ---------- ao vivo ---------- */
@@ -3265,7 +3275,7 @@
     /* WhatsApp: a loja pode escrever primeiro. Instagram: a Meta só deixa responder. */
     const texto = el('textarea', 'ms-copia'); texto.id = 'ms-nova-texto'; texto.rows = 3;
     texto.setAttribute('aria-label', 'Mensagem'); texto.maxLength = 4000;
-    texto.placeholder = 'Ex.: Oi, Maria! Chegou a peça que você pediu.';
+    texto.placeholder = 'Ex.: Oi, Maria! Chegou o produto que você pediu.';
     const lbTexto = el('label', 'ms-nova-linha'); lbTexto.append(el('span', '', 'Mensagem'), texto);
     const troca = () => {
       const ig = canal.value === 'instagram';
@@ -3470,7 +3480,7 @@
     const selo = b.querySelector('.ferr-badge');
     if (selo) { selo.textContent = n > 0 ? String(n) : ''; selo.hidden = !(n > 0); }
     else b.textContent = '💬 Mensagens' + (n > 0 ? ' (' + n + ')' : '');
-    b.setAttribute('aria-label', 'Mensagens' + (n > 0 ? ', ' + n + ' conversas não lidas' : ''));
+    b.setAttribute('aria-label', 'Mensagens' + (n > 0 ? ', ' + n + ' ' + (n === 1 ? 'conversa não lida' : 'conversas não lidas') : ''));
   }
   async function sondarSelo() {
     clearTimeout(timerSelo);
@@ -3500,7 +3510,7 @@
       const r = await fetch(INSTAGRAM_URL + '/msg/exportar?formato=txt&conversa=' + aberta.id, { headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao } });
       if (!r.ok) { aviso_('Não foi possível preparar agora.'); return; }
       await navigator.clipboard.writeText((await r.text()).replace(/^﻿/, ''));
-      aviso_('Conversa copiada. Cole no ChatGPT, Claude ou Gemini e peça a análise.');
+      aviso_('Conversa copiada. Cole no ChatGPT, Claude ou Gemini e produto a análise.');
     } catch (e) { aviso_('Não consegui copiar. Use “Exportar esta conversa (TXT)”.'); }
   }
 
@@ -3819,7 +3829,7 @@
     }
     else if(a==='entrada-reprocessar'){
       b.disabled=true;
-      try{const r=await worker_('/msg/entrada/reprocessar','POST',{});const texto=$('ms-saude')?.querySelector('span');if(texto)texto.textContent=r.ok?'Nova tentativa iniciada.':r.erro||'Não consegui iniciar. Tente novamente.';}
+      try{const r=await worker_('/msg/entrada/reprocessar','POST',{});const texto=$('ms-saude')?.querySelector('span');if(texto)texto.textContent=r.ok?'Nova tentativa iniciada.':r.erro||'Não consegui iniciar. Tente de novo.';}
       finally{if(b.isConnected)b.disabled=false;}
     }
     else if (a === 'gaveta-produtos') abrirProdutos_();
@@ -3907,7 +3917,7 @@
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }
     else if (a === 'conexao') { painel = painel === 'conexao' ? '' : 'conexao'; desenharEstado(); }
     else if (a === 'trocar-usuario') abrirTrocaUsuario_();
-    else if (a === 'app-atualizar') { try { window.TKAndroid.atualizar(); } catch (e) { alert('Atualize pelo instalador mais recente do app.'); } }
+    else if (a === 'app-atualizar') { try { window.TKAndroid.atualizar(); } catch (e) { TKAviso.aviso('Atualize pelo instalador mais recente do app.'); } }
     else if (a === 'app-permissoes') { try { window.TKAndroid.permissoes(); } catch (e) {} }
     else if (a === 'usar-conta') { const l = contasSalvas_(), c = l.find((x) => x.whatsapp === b.dataset.w); if (!c) return; salvarSessao(c.whatsapp, c.sessao); location.reload(); }
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
@@ -3976,7 +3986,7 @@
   (function init() {
     const botao_ = $('btn-abrir-mensagens'); if (!botao_) return;
     botao_.hidden = false;
-    botao_.addEventListener('click', () => { if (!podeGerir()) { alert('Sua conta não tem acesso a Mensagens.'); return; } abrir(); });
+    botao_.addEventListener('click', () => { if (!podeGerir()) { TKAviso.aviso('Sua conta não tem acesso a Mensagens.'); return; } abrir(); });
     timerSelo = setTimeout(sondarSelo, 4000);
     const obs = new MutationObserver(() => { const o = $('overlay-mensagens'); if (o && !o.classList.contains('aberto')) { pararAoVivo(); fecharMenu(); } });
     const espiar = () => { const o = $('overlay-mensagens'); if (o) obs.observe(o, { attributes: true, attributeFilter: ['class'] }); };

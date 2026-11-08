@@ -57,7 +57,7 @@ with sync_playwright() as p:
     assert pg.evaluate('fotosItens.length === MAX_GALERIA && !document.getElementById("overlay-capa-video")')
     pg.evaluate('fotosItens = window.__fotosCapa; desenharFotos()')
     # O quadro usa a fila normal de fotos, e os bytes do vídeo continuam preservados.
-    pg.fill('#nome', 'Peça com capa de vídeo')
+    pg.fill('#nome', 'Produto com capa de vídeo')
     pg.fill('#preco', '99.90')
     pg.fill('#estoque', '2')
     pg.click('#btn-abrir-categorias')

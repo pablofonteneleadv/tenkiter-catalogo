@@ -6,7 +6,7 @@
  *   • Gerar códigos das peças antigas, lista de peças para o WhatsApp, lote de categoria e estoque
  *   • (Integrações passaram para Conexões → Meta, Google e busca)
  *   • Avisos (push): modelos, segmento e histórico
- * Carrega DEPOIS do script de admin.html e usa o que ele já tem (adminPin, funcionarioNome, produtos, carregarProdutos...).
+ * Carrega DEPOIS do script de admin.html e usa o que ele já tem (adminPin, funcionarioNome, produtos, carregarProdutos…).
  * Cada recurso só aparece se o backend (?action=versao) disser que tem — com backend antigo o painel fica como sempre foi.
  * ==================================================================== */
 (function () {
@@ -19,7 +19,7 @@
     const sess = (typeof getSessao === 'function' && getSessao()) || null;
     return apiPost(Object.assign({ pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', funcionario: funcionarioNome }, extra));
   }
-  function erroTexto_(r) { return (r && r.erro) || (r && r.semRede ? 'Sem conexão agora. Tente de novo.' : 'Não foi possível agora. Tente de novo.'); }
+  function erroTexto_(r) { return (r && r.erro) || (r && r.semRede ? 'Sem conexão. Verifique a internet e tente de novo.' : 'Não foi possível agora. Tente de novo.'); }
   const esc = (v) => escaparHtml(v);
   function dataHora_(iso) { return iso || ''; }
   function dois_(n) { return String(n).padStart(2, '0'); }
@@ -32,7 +32,7 @@
   }
   function fecharFolha_() { fecharComHistorico_('overlay-gestao'); }
   function copiar_(texto, ok) {
-    const aviso = () => alert(ok || 'Copiado!');
+    const aviso = () => TKAviso.ok(ok || 'Copiado.');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(aviso).catch(() => window.prompt('Copie o texto abaixo:', texto));
     else window.prompt('Copie o texto abaixo:', texto);
   }
@@ -113,7 +113,7 @@
     atualizarResumoPed_();
     const lista = pedidos.filter((p) => filtroPed === 'todos' ? true : filtroPed === 'abertos' ? ABERTOS.indexOf(p.status) !== -1 : p.status === filtroPed);
     if (!lista.length) {
-      $('ped-lista').innerHTML = '<p class="ped-vazio">' + (pedidos.length ? 'Nenhum pedido nesta etapa.' : 'Nenhum pedido ainda. Quando alguém enviar a sacola pelo catálogo, aparece aqui.') + '</p>';
+      $('ped-lista').innerHTML = '<p class="ped-vazio">' + (pedidos.length ? 'Nenhum pedido nesta etapa.' : 'Nenhum pedido ainda. Quando alguém enviar a seleção pelo catálogo, aparece aqui.') + '</p>';
       return;
     }
     $('ped-lista').innerHTML = lista.map(cartaoPedido_).join('');
@@ -124,7 +124,7 @@
     if (!p || p.status === etapa) return;
     if ((etapa === 'cancelado' || etapa === 'concluido') && !confirm((etapa === 'cancelado' ? 'Cancelar' : 'Concluir') + ' o pedido ' + codigo + '?')) return;
     const r = await chamar_({ action: 'atualizarPedido', codigo: codigo, status: etapa });
-    if (!r || !r.ok) { alert(erroTexto_(r)); return; }
+    if (!r || !r.ok) { TKAviso.erro(erroTexto_(r)); return; }
     Object.assign(p, r.pedido);
     await carregarPedidos_(true);
   }
@@ -132,7 +132,7 @@
     const campo = $('nota-' + codigo);
     if (!campo) return;
     const r = await chamar_({ action: 'atualizarPedido', codigo: codigo, nota: campo.value });
-    if (!r || !r.ok) { alert(erroTexto_(r)); return; }
+    if (!r || !r.ok) { TKAviso.erro(erroTexto_(r)); return; }
     const p = pedidos.find((x) => x.codigo === codigo);
     if (p) Object.assign(p, r.pedido);
     campo.classList.add('salvo');
@@ -183,19 +183,19 @@
     let h = '<div class="filtros-lista">' + chips + '</div>';
     if (r.semDados) h += '<p class="g-info">Ainda não há visitas nem pedidos neste período. Os números aparecem conforme as pessoas usam o catálogo.</p>';
     h += '<div class="mt-cards">' +
-      '<div class="mt-card"><span>Visualizações de peças</span><strong>' + t.visualizacoes + '</strong></div>' +
+      '<div class="mt-card"><span>Visualizações de produtos</span><strong>' + t.visualizacoes + '</strong></div>' +
       '<div class="mt-card"><span>Toques em “Pedir no WhatsApp”</span><strong>' + t.whatsapp + '</strong></div>' +
       '<div class="mt-card"><span>Toques por 100 visualizações</span><strong>' + taxa + '</strong></div>' +
       '<div class="mt-card"><span>Pedidos pelo site</span><strong>' + ped.total + '</strong><small>' + formatarReal(ped.valor) + ' à vista (sem cancelados)</small></div></div>';
     h += '<p class="g-nota">Toque no WhatsApp não é venda confirmada: é a pessoa que pediu para falar com a loja. Venda confirmada é o pedido marcado como “Concluído”' + (ped.concluidos ? ' (' + ped.concluidos + ' no período, ' + formatarReal(ped.valorConcluidos) + ')' : '') + '.</p>';
     h += '<h3>Visualizações por dia</h3><div class="mt-grafico" role="img" aria-label="Gráfico de visualizações por dia nos últimos ' + r.dias + ' dias' + (melhor && melhor.visualizacoes ? '. Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' com ' + melhor.visualizacoes + ' visualizações' : '') + '">' + r.porDia.map((d) => barraDia_(d, max)).join('') + '</div>' +
       '<div class="mt-eixo"><span>' + formatarDiaCurto_(r.porDia[0].dia) + '</span><span>' + (melhor && melhor.visualizacoes ? 'Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' (' + melhor.visualizacoes + ')' : '') + '</span><span>' + formatarDiaCurto_(r.porDia[r.porDia.length - 1].dia) + '</span></div>';
-    h += '<h3>Peças mais vistas</h3>';
-    h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Peça</th><th>Pessoas</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
-      r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td>' + x.visualizacoes + '</td><td>' + x.whatsapp + '</td><td>' + (x.taxa === null ? '—' : String(x.taxa).replace('.', ',') + '%') + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados.</p>';
+    h += '<h3>Produtos mais vistas</h3>';
+    h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Produto</th><th>Pessoas</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
+      r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td>' + x.visualizacoes + '</td><td>' + x.whatsapp + '</td><td>' + (x.taxa === null ? '—' : String(x.taxa).replace('.', ',') + '%') + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste período. Escolha um período maior acima.</p>';
     h += '<h3>Por categoria</h3>';
     h += r.categorias.length ? '<table class="mt-tab"><thead><tr><th>Categoria</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
-      r.categorias.map((x) => '<tr><td>' + esc(x.nome) + '</td><td>' + x.visualizacoes + '</td><td>' + x.whatsapp + '</td><td>' + (x.taxa === null ? '—' : String(x.taxa).replace('.', ',') + '%') + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados.</p>';
+      r.categorias.map((x) => '<tr><td>' + esc(x.nome) + '</td><td>' + x.visualizacoes + '</td><td>' + x.whatsapp + '</td><td>' + (x.taxa === null ? '—' : String(x.taxa).replace('.', ',') + '%') + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste período. Escolha um período maior acima.</p>';
     const etapas = Object.keys(ped.porStatus || {});
     if (etapas.length) h += '<h3>Pedidos por etapa</h3><p class="g-info">' + etapas.map((k) => esc(rotuloEtapa_(k, '')) + ': <b>' + ped.porStatus[k] + '</b>').join(' · ') + '</p>';
     h += '<p class="g-nota">Atualizado em ' + esc(r.geradoEm) + '. Os números ficam guardados por até 2 minutos.</p>';
@@ -256,7 +256,7 @@
       '<div class="form-linha"><div><label for="mt-origem">Como usaram</label><select id="mt-origem">' + mtOpcoesHtml_(MT_ORIGENS, mt.origem) + '</select></div>' +
       '<div><label for="mt-dispositivo">Aparelho</label><select id="mt-dispositivo">' + mtOpcoesHtml_(MT_DISPOSITIVOS, mt.dispositivo) + '</select></div></div>' +
       '<div class="form-linha"><div><label for="mt-fonte">Veio de</label><select id="mt-fonte">' + mtOpcoesHtml_(MT_FONTES, mt.fonte) + '</select></div>' +
-      '<div><label for="mt-categoria">Categoria da peça</label><select id="mt-categoria"><option value="">Todas</option></select></div></div>' +
+      '<div><label for="mt-categoria">Categoria do produto</label><select id="mt-categoria"><option value="">Todas</option></select></div></div>' +
       '<div class="form-linha"><div><label for="mt-genero">Para quem é</label><select id="mt-genero"><option value="">Todos</option></select></div><div></div></div>' +
       '<div class="g-linha"><button type="button" id="mt-limpar" class="g-sec">Limpar filtros</button></div>' +
       '</details>';
@@ -303,7 +303,7 @@
   }
   function mtTabela_(titulo, linhas, opts) {
     opts = opts || {};
-    if (!linhas.length) return '<h3>' + titulo + '</h3><p class="g-info">Sem dados neste recorte.</p>';
+    if (!linhas.length) return '<h3>' + titulo + '</h3><p class="g-info">Sem dados neste recorte. Troque o período ou o filtro acima.</p>';
     const filtravel = opts.filtro;
     const nome = (x) => filtravel && x.chave ? '<button type="button" class="mt-link" data-mt-set="' + filtravel + '" data-v="' + esc(x.chave) + '" aria-label="Filtrar só por ' + esc(x.nome) + '">' + esc(x.nome) + '</button>' : esc(x.nome);
     return '<h3>' + titulo + '</h3><table class="mt-tab"><thead><tr><th>' + (opts.cab || 'Item') + '</th>' + (opts.pessoas ? '<th>Pessoas</th>' : '') + '<th>Vistas</th><th>WhatsApp</th>' + (opts.pessoas ? '' : '<th>Taxa</th>') + '</tr></thead><tbody>' +
@@ -325,7 +325,7 @@
     if (r.semDados) h += '<p class="g-info">Nada neste recorte. ' + (r.filtrado ? 'Experimente tirar algum filtro.' : 'Os números aparecem conforme as pessoas usam o catálogo.') + '</p>';
     h += '<h3 class="mt-grupo">Interesse <small>quem olhou</small></h3><div class="mt-cards">' +
       mtCartao_('👤 Pessoas reais que entraram', temVis ? mtNum_(t.visitantes) : '—', temVis ? 'pessoas diferentes, sem repetir — em qualquer app ou navegador' : 'conta a partir da atualização') +
-      (t.pessoasViram !== undefined && temVis ? mtCartao_('👁️ Pessoas que viram peças', mtNum_(t.pessoasViram), 'de ' + mtNum_(t.visitantes) + ' que entraram · ' + mtNum_(t.visualizacoes) + ' visualizações no total') : mtCartao_('👁️ Visualizações de peças', mtNum_(t.visualizacoes))) +
+      (t.pessoasViram !== undefined && temVis ? mtCartao_('👁️ Pessoas que viram produtos', mtNum_(t.pessoasViram), 'de ' + mtNum_(t.visitantes) + ' que entraram · ' + mtNum_(t.visualizacoes) + ' visualizações no total') : mtCartao_('👁️ Visualizações de produtos', mtNum_(t.visualizacoes))) +
       (t.visitas ? mtCartao_('🚪 Visitas à loja', mtNum_(t.visitas), 'quantas vezes abriram o site') : '') + '</div>';
     h += '<h3 class="mt-grupo">Intenção <small>pediram para falar com a loja — ainda não é venda</small></h3><div class="mt-cards">' +
       (t.pessoasWhats !== undefined && temVis ? mtCartao_('💬 Pessoas que pediram no WhatsApp', mtNum_(t.pessoasWhats), 'de ' + mtNum_(t.visitantes) + ' que entraram · ' + mtNum_(t.whatsapp) + ' toques no total') : mtCartao_('💬 Toques em “Pedir no WhatsApp”', mtNum_(t.whatsapp))) +
@@ -353,15 +353,15 @@
     // ---- funil
     const linhasFunil = [];
     if (temVis && fun.pessoasViram !== undefined) {
-      linhasFunil.push(['👤 Pessoas que entraram', fun.visitantes], ['👁️ Pessoas que viram alguma peça', fun.pessoasViram], ['💬 Pessoas que tocaram em pedir no WhatsApp', fun.pessoasWhats], ['🧾 Pedidos feitos pelo site (pedidos, não pessoas)', fun.pedidos]);
+      linhasFunil.push(['👤 Pessoas que entraram', fun.visitantes], ['👁️ Pessoas que viram algum produto', fun.pessoasViram], ['💬 Pessoas que tocaram em pedir no WhatsApp', fun.pessoasWhats], ['🧾 Pedidos feitos pelo site (pedidos, não pessoas)', fun.pedidos]);
     } else {
       if (temVis) linhasFunil.push(['👤 Pessoas que entraram', fun.visitantes]);
-      linhasFunil.push(['👁️ Viram peças (visualizações)', fun.visualizacoes], ['💬 Tocaram em pedir no WhatsApp', fun.whatsapp], ['🧾 Fizeram pedido pelo site', fun.pedidos]);
+      linhasFunil.push(['👁️ Viram produtos (visualizações)', fun.visualizacoes], ['💬 Tocaram em pedir no WhatsApp', fun.whatsapp], ['🧾 Fizeram pedido pelo site', fun.pedidos]);
     }
     const maxF = linhasFunil.reduce((m, l) => Math.max(m, l[1] || 0), 0);
     h += '<h3>🔻 Do acesso ao pedido</h3><div class="mt-funil">' + linhasFunil.map((l) =>
       '<div class="mt-funil-l"><span>' + l[0] + '</span><b>' + mtNum_(l[1]) + '</b></div><div class="mt-trilho" aria-hidden="true"><div class="mt-fbarra" style="width:' + (maxF ? Math.max(1, Math.round(((l[1] || 0) / maxF) * 100)) : 0) + '%"></div></div>').join('') + '</div>' +
-      (temVis && fun.pessoasViram !== undefined ? '<p class="g-nota">Cada linha conta <b>pessoas diferentes</b>, sem repetir (quem entrou duas vezes, ou pelo app e pelo navegador, conta 1). Quem viu peça ou pediu no WhatsApp já está entre os que entraram. Ao todo foram ' + mtNum_(fun.visualizacoes) + ' visualizações e ' + mtNum_(fun.whatsapp) + ' toques no WhatsApp (uma pessoa pode ver e tocar várias vezes).' + semCodigoTxt_(cob) + '</p>' : '');
+      (temVis && fun.pessoasViram !== undefined ? '<p class="g-nota">Cada linha conta <b>pessoas diferentes</b>, sem repetir (quem entrou duas vezes, ou pelo app e pelo navegador, conta 1). Quem viu produto ou pediu no WhatsApp já está entre os que entraram. Ao todo foram ' + mtNum_(fun.visualizacoes) + ' visualizações e ' + mtNum_(fun.whatsapp) + ' toques no WhatsApp (uma pessoa pode ver e tocar várias vezes).' + semCodigoTxt_(cob) + '</p>' : '');
 
     // ---- por dia
     const max = r.porDia.reduce((m, d) => Math.max(m, d.visualizacoes), 0);
@@ -388,9 +388,9 @@
     h += mtTabela_('Como usaram', r.porOrigem, { cab: 'Como', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'origem' });
     h += mtTabela_('Aparelho', r.porDispositivo, { cab: 'Aparelho', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'dispositivo' });
     h += mtTabela_('De onde vieram', r.porFonte, { cab: 'Origem', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'fonte' });
-    h += '<h3>Peças mais vistas</h3>';
-    h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Peça</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
-      r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td><b>' + (x.pessoas === undefined ? '—' : mtNum_(x.pessoas)) + '</b></td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + mtPct_(x.taxa) + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste recorte.</p>';
+    h += '<h3>Produtos mais vistas</h3>';
+    h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Produto</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
+      r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td><b>' + (x.pessoas === undefined ? '—' : mtNum_(x.pessoas)) + '</b></td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + mtPct_(x.taxa) + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste recorte. Troque o período ou o filtro acima.</p>';
     h += mtTabela_('Por categoria', r.categorias.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Categoria', pessoas: true, filtro: 'categoria' });
     h += mtTabela_('Para quem é', r.porGenero.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Para quem', pessoas: true, filtro: 'genero' });
     const etapas = Object.keys(ped.porStatus || {});
@@ -473,7 +473,7 @@
       (p.Novidade === true || String(p.Novidade).toLowerCase() === 'true') ? 'sim' : 'não', inativo ? 'Inativo' : 'Ativo', p.Foto_URL].map(celulaCsv_).join(';');
   }
   function exportarCsv_() {
-    if (!produtos.length) { alert('A lista de peças ainda não carregou.'); return; }
+    if (!produtos.length) { TKAviso.aviso('A lista de produtos ainda não carregou.'); return; }
     const csv = '﻿' + COLUNAS_CSV.join(';') + '\r\n' + produtos.map(linhaDoProduto_).join('\r\n') + '\r\n';
     const d = new Date();
     const nome = 'tenkiter-pecas-' + d.getFullYear() + '-' + dois_(d.getMonth() + 1) + '-' + dois_(d.getDate()) + '.csv';
@@ -539,12 +539,12 @@
 
   function telaImportar_() {
     abrirFolha_('⬆️ Importar planilha (CSV)',
-      '<p class="g-info">Serve para mudar preço, estoque, nome, categoria etc. de várias peças de uma vez, ou cadastrar peças novas. Primeiro toque em <b>Exportar planilha</b> (abaixo), edite no Excel/Google Planilhas e volte aqui com o arquivo. <b>Nada é gravado antes de você conferir a prévia.</b></p>' +
+      '<p class="g-info">Serve para mudar preço, estoque, nome, categoria etc. de vários produtos de uma vez, ou cadastrar produtos novos. Primeiro toque em <b>Exportar planilha</b> (abaixo), edite no Excel/Google Planilhas e volte aqui com o arquivo. <b>Nada é gravado antes de você conferir a prévia.</b></p>' +
       '<div class="g-linha"><button type="button" id="imp-exportar" class="g-sec">' + ((window.TKIcone && TKIcone('pacote')) || '⬇️') + ' Exportar planilha atual</button></div>' +
       // v7.19: o campo de arquivo do navegador aparecia em inglês ("Choose File"); agora é um botão em português com o nome do arquivo escolhido
       '<span class="g-rot">Arquivo CSV</span><input type="file" id="imp-arquivo" class="g-arquivo-inp" accept=".csv,.txt,text/csv">' +
       '<label for="imp-arquivo" class="g-arquivo"><span class="g-arquivo-bt">Escolher arquivo</span><span class="g-arquivo-nome" id="imp-arquivo-nome">Nenhum arquivo escolhido</span></label>' +
-      '<p class="g-nota">Coluna <b>codigo</b> identifica a peça. Célula vazia = não mexe. Peça nova precisa de nome, preço e foto (link https://).</p>' +
+      '<p class="g-nota">Coluna <b>codigo</b> identifica o produto. Célula vazia = não mexe. Produto novo precisa de nome, preço e foto (link https://).</p>' +
       '<div id="imp-previa" aria-live="polite"></div>');
     $('imp-exportar').addEventListener('click', exportarCsv_);
     $('imp-arquivo').addEventListener('change', async (ev) => {
@@ -567,11 +567,11 @@
   function desenharPrevia_(res) {
     const a = res.atualizados, c = res.criados, ig = res.ignorados.filter((x) => !x.semMudanca), sem = res.ignorados.length - ig.length;
     let h = '<div class="mt-cards"><div class="mt-card ok"><span>Vão ser atualizadas</span><strong>' + a.length + '</strong></div>' +
-      '<div class="mt-card ok"><span>Peças novas</span><strong>' + c.length + '</strong></div>' +
+      '<div class="mt-card ok"><span>Produtos novos</span><strong>' + c.length + '</strong></div>' +
       '<div class="mt-card ' + (ig.length ? 'atencao' : '') + '"><span>Ignoradas (com problema)</span><strong>' + ig.length + '</strong></div>' +
       '<div class="mt-card"><span>Sem mudança</span><strong>' + sem + '</strong></div></div>';
-    if (a.length) h += '<details class="g-det" open><summary>Peças que vão mudar (' + a.length + ')</summary>' + a.map((x) => '<div class="imp-item"><b>' + esc(x.codigo) + '</b> ' + esc(x.nome) + '<ul>' + x.campos.map((k) => '<li>' + esc(k) + '</li>').join('') + '</ul></div>').join('') + '</details>';
-    if (c.length) h += '<details class="g-det" open><summary>Peças novas (' + c.length + ')</summary>' + c.map((x) => '<div class="imp-item"><b>Linha ' + x.linha + ':</b> ' + esc(x.nome) + ' <span class="ped-cod">vai ganhar código automático</span></div>').join('') + '<p class="g-nota">Confira: se uma destas deveria ser uma peça que já existe, o código da linha está errado ou vazio.</p></details>';
+    if (a.length) h += '<details class="g-det" open><summary>Produtos que vão mudar (' + a.length + ')</summary>' + a.map((x) => '<div class="imp-item"><b>' + esc(x.codigo) + '</b> ' + esc(x.nome) + '<ul>' + x.campos.map((k) => '<li>' + esc(k) + '</li>').join('') + '</ul></div>').join('') + '</details>';
+    if (c.length) h += '<details class="g-det" open><summary>Produtos novos (' + c.length + ')</summary>' + c.map((x) => '<div class="imp-item"><b>Linha ' + x.linha + ':</b> ' + esc(x.nome) + ' <span class="ped-cod">vai ganhar código automático</span></div>').join('') + '<p class="g-nota">Confira: se uma destas deveria ser um produto que já existe, o código da linha está errado ou vazio.</p></details>';
     if (ig.length) h += '<details class="g-det" open><summary>Linhas ignoradas (' + ig.length + ')</summary>' + ig.map((x) => '<div class="imp-item ig">Linha ' + x.linha + (x.codigo ? ' (' + esc(x.codigo) + ')' : '') + ': ' + esc(x.motivo) + '</div>').join('') + '</details>';
     const n = a.length + c.length;
     h += n ? '<button type="button" id="imp-aplicar" class="g-prim">✅ Aplicar ' + n + ' alteraç' + (n > 1 ? 'ões' : 'ão') + '</button>' : '<p class="g-info">Não há nada para aplicar.</p>';
@@ -582,7 +582,7 @@
       btn.disabled = true;
       const r = await enviarLotes_(importacao.objs, false, (x, y) => { btn.textContent = 'Gravando ' + x + ' de ' + y + '…'; });
       if (r.erro) { $('imp-previa').innerHTML = '<p class="g-erro">' + esc(r.erro) + '</p><p class="g-info">Parte das linhas pode já ter sido gravada. Reabra a lista e confira antes de tentar de novo.</p>'; await carregarProdutos(); return; }
-      $('imp-previa').innerHTML = '<p class="g-ok">✅ Pronto! ' + r.atualizados.length + ' peça(s) atualizada(s) e ' + r.criados.length + ' nova(s).</p>' +
+      $('imp-previa').innerHTML = '<p class="g-ok">✅ Pronto! ' + tkPlural(r.atualizados.length, 'produto atualizado', 'produtos atualizados') + ' e ' + tkPlural(r.criados.length, 'produto novo', 'produtos novos') + '.</p>' +
         (r.criados.length ? '<p class="g-info">Novas: ' + r.criados.map((x) => esc(x.codigo) + ' ' + esc(x.nome)).join(', ') + '</p>' : '');
       importacao = null;
       await carregarProdutos();
@@ -597,33 +597,33 @@
     const el = $('aviso-codigos'); if (!el) return;
     const n = recursos.codigos ? semCodigo_().length : 0;
     el.hidden = !n;
-    if (n) el.innerHTML = '⚠️ <b>' + n + (n === 1 ? ' peça está' : ' peças estão') + ' sem código.</b> Sem código, o link curto da peça e o catálogo para a Meta/Google não funcionam direito. <button type="button" id="btn-gerar-codigos">Gerar códigos agora</button>';
+    if (n) el.innerHTML = '⚠️ <b>' + n + (n === 1 ? ' produto está' : ' produtos estão') + ' sem código.</b> Sem código, o link curto do produto e o catálogo para a Meta/Google não funcionam direito. <button type="button" id="btn-gerar-codigos">Gerar códigos agora</button>';
   }
   async function gerarCodigos_() {
-    if (!confirm('Dar um código (TK-0000) para as ' + semCodigo_().length + ' peças que estão sem? Os códigos que já existem não mudam.')) return;
+    if (!confirm('Dar um código (TK-0000) para ' + (semCodigo_().length === 1 ? 'o produto que está sem' : 'os ' + semCodigo_().length + ' produtos que estão sem') + '? Os códigos que já existem não mudam.')) return;
     const btn = $('btn-gerar-codigos'); if (btn) btn.disabled = true;
     const r = await chamar_({ action: 'gerarCodigosFaltantes' });
-    if (!r || !r.ok) { alert(erroTexto_(r)); if (btn) btn.disabled = false; return; }
+    if (!r || !r.ok) { TKAviso.erro(erroTexto_(r)); if (btn) btn.disabled = false; return; }
     await carregarProdutos();
     abrirFolha_('Códigos gerados', r.geradas.length
-      ? '<p class="g-ok">✅ ' + r.geradas.length + ' peça(s) ganharam código:</p><ul class="g-lista">' + r.geradas.map((g) => '<li><b>' + esc(g.codigo) + '</b> — ' + esc(g.nome) + '</li>').join('') + '</ul>' + (r.duplicados && r.duplicados.length ? '<p class="g-erro">Atenção: estes códigos aparecem repetidos na planilha: ' + r.duplicados.map(esc).join(', ') + '. Corrija à mão.</p>' : '')
-      : '<p class="g-info">Todas as peças já tinham código.</p>');
+      ? '<p class="g-ok">✅ ' + tkPlural(r.geradas.length, 'produto', 'produtos') + ' ganharam código:</p><ul class="g-lista">' + r.geradas.map((g) => '<li><b>' + esc(g.codigo) + '</b> — ' + esc(g.nome) + '</li>').join('') + '</ul>' + (r.duplicados && r.duplicados.length ? '<p class="g-erro">Atenção: estes códigos aparecem repetidos na planilha: ' + r.duplicados.map(esc).join(', ') + '. Corrija à mão.</p>' : '')
+      : '<p class="g-info">Todos os produtos já tinham código.</p>');
   }
 
   function textoListaWhats_(lista) {
     const linhas = lista.map((p) => '*' + p.Nome + '*' + (p.Codigo ? ' (' + p.Codigo + ')' : '') + '\n' + formatarReal(p.Preco) + ' · à vista ' + formatarReal(p.Preco * (1 - DESCONTO_AVISTA)) + '\n' + linkProduto(p));
-    return '🛍️ *' + LOJA.nome + '* — peças disponíveis\n\n' + linhas.join('\n\n') + '\n\nVeja tudo no catálogo: ' + SITE_URL;
+    return '🛍️ *' + LOJA.nome + '* — produtos disponíveis\n\n' + linhas.join('\n\n') + '\n\nVeja tudo no catálogo: ' + SITE_URL;
   }
   function copiarListaWhats_() {
     const sel = produtos.filter((p) => selecionadosBulk.has(String(p.ID)) && !ehInativo_(p) && !estaEsgotado(p));
-    if (!sel.length) { alert('Selecione peças ativas e disponíveis para montar a lista.'); return; }
-    copiar_(textoListaWhats_(sel.slice(0, 30)), 'Lista copiada (' + Math.min(sel.length, 30) + ' peças)! É só colar no WhatsApp.' + (sel.length > 30 ? ' (Limitei a 30 peças por mensagem.)' : ''));
+    if (!sel.length) { TKAviso.aviso('Selecione produtos ativos e disponíveis para montar a lista.'); return; }
+    copiar_(textoListaWhats_(sel.slice(0, 30)), 'Lista copiada (' + Math.min(sel.length, 30) + ' produtos)! É só colar no WhatsApp.' + (sel.length > 30 ? ' (Limitei a 30 produtos por mensagem.)' : ''));
   }
   async function lote_(tipoAcao, valor, msg) {
     if (!selecionadosBulk.size) return;
     const r = await chamar_({ action: 'bulkUpdate', ids: Array.from(selecionadosBulk), tipoAcao: tipoAcao, valor: valor });
-    if (!r || !r.ok) { alert(erroTexto_(r)); return; }
-    alert(msg + ' em ' + r.afetados + ' peça(s).');
+    if (!r || !r.ok) { TKAviso.erro(erroTexto_(r)); return; }
+    TKAviso.ok(msg + ' em ' + tkPlural(r.afetados, 'produto', 'produtos') + '.');
     selecionadosBulk.clear(); atualizarBarraBulk(); await carregarProdutos();
   }
   function ligarLote_() {
@@ -631,14 +631,14 @@
     // ícone de linha (icones.js) quando houver; senão o emoji de reserva
     const add = (id, txt, fn, ico) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; const svg = ico && window.TKIcone && TKIcone(ico); if (svg) b.innerHTML = '<span class="ic">' + svg + '</span> ' + txt.replace(/^\S+\s/, ''); else b.textContent = txt; b.addEventListener('click', fn); barra.appendChild(b); };
     add('btn-bulk-estoque', '📦 Estoque', async () => {
-      const v = prompt('Novo estoque para as ' + selecionadosBulk.size + ' peças selecionadas (número, 0 = esgotado):');
+      const v = prompt('Novo estoque para ' + (selecionadosBulk.size === 1 ? '1 produto selecionado' : selecionadosBulk.size + ' produtos selecionados') + ' (número, 0 = esgotado):');
       if (v === null || v.trim() === '') return;
       const n = Number(v.replace(',', '.'));
-      if (isNaN(n) || n < 0) { alert('Digite um número (0 ou mais).'); return; }
+      if (isNaN(n) || n < 0) { TKAviso.aviso('Digite um número (0 ou mais).'); return; }
       await lote_('alterarEstoque', n, 'Estoque alterado');
     }, 'pacote');
     if (recursos.loteCategoria) add('btn-bulk-categoria', '🏷️ Categoria', async () => {
-      const v = prompt('Categoria para as ' + selecionadosBulk.size + ' peças (substitui a atual).\nExistentes: ' + categorias.join(', '));
+      const v = prompt('Categoria para ' + (selecionadosBulk.size === 1 ? '1 produto' : selecionadosBulk.size + ' produtos') + ' (substitui a atual).\nExistentes: ' + categorias.join(', '));
       if (v === null || !v.trim()) return;
       await lote_('alterarCategoria', v.trim(), 'Categoria alterada');
     }, 'etiqueta');
@@ -651,9 +651,9 @@
    * AVISOS (PUSH): modelos, segmento, histórico
    * ==================================================================== */
   const MODELOS_PUSH = [
-    { rotulo: 'Novidades', titulo: 'Chegou novidade! 🆕', msg: 'Peças novas na TENKiTER Modas. Vem conferir no catálogo!' },
-    { rotulo: 'Últimas peças', titulo: 'Últimas peças! ⏳', msg: 'Algumas peças estão acabando. Garanta a sua no catálogo.' },
-    { rotulo: 'Reposição', titulo: 'Voltou ao estoque ✨', msg: 'As peças que você pediu chegaram de novo. Confira no catálogo.' },
+    { rotulo: 'Novidades', titulo: 'Chegou novidade! 🆕', msg: 'Produtos novos na TENKiTER Modas. Vem conferir no catálogo!' },
+    { rotulo: 'Últimos produtos', titulo: 'Últimos produtos! ⏳', msg: 'Alguns produtos estão acabando. Garanta a sua no catálogo.' },
+    { rotulo: 'Reposição', titulo: 'Voltou ao estoque ✨', msg: 'Os produtos que você pediu chegaram de novo. Confira no catálogo.' },
     { rotulo: 'Fantasias', titulo: 'Fantasias infantis 🎭', msg: 'Veja as fantasias disponíveis na TENKiTER Modas, em Crateús.' }
   ];
   async function prepararPush_() {
@@ -681,7 +681,7 @@
     const r = await chamar_({ action: 'pushHistorico', limite: 50 });
     if (!r || !r.ok) { $('gestao-corpo').innerHTML = '<p class="g-erro">' + esc(erroTexto_(r)) + '</p>'; return; }
     $('gestao-corpo').innerHTML = r.historico.length ? r.historico.map((h) => '<div class="imp-item"><b>' + esc(h.titulo) + '</b><br>' + esc(h.mensagem) +
-      '<div class="g-nota">' + esc(h.quando) + ' · ' + esc(h.quem) + ' · ' + (h.segmento === 'Subscribed Users' ? 'todos' : esc(h.segmento)) + ' · ' + h.destinatarios + ' assinante(s)</div></div>').join('') : '<p class="g-info">Nenhum aviso enviado por aqui ainda.</p>';
+      '<div class="g-nota">' + esc(h.quando) + ' · ' + esc(h.quem) + ' · ' + (h.segmento === 'Subscribed Users' ? 'todos' : esc(h.segmento)) + ' · ' + tkPlural(h.destinatarios, 'assinante', 'assinantes') + '</div></div>').join('') : '<p class="g-info">Nenhum aviso enviado por aqui ainda.</p>';
   }
 
   /* ====================================================================

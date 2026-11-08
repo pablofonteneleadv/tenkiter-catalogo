@@ -27,7 +27,7 @@ with sync_playwright() as pw:
   assert not vio,vio
   s['reprocessar_erro']=True;pg.click('[data-ms=entrada-reprocessar]');pg.wait_for_timeout(200)
   assert pg.locator('[data-ms=entrada-reprocessar]').is_enabled()
-  assert 'Tente novamente' in pg.locator('#ms-saude').inner_text()
+  assert 'Tente de novo' in pg.locator('#ms-saude').inner_text()
   s['reprocessar_erro']=False;pg.click('[data-ms=entrada-reprocessar]');pg.wait_for_timeout(200)
   assert len(s.get('reprocessamentos',[]))==2
   assert 'Nova tentativa iniciada' in pg.locator('#ms-saude').inner_text()

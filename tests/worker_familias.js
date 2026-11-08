@@ -38,7 +38,7 @@ function d1() {
     ['Saia midi 2', 'saia midi', '2'],
   ];
   casos.forEach(([nome, base, rot]) => { const r = sep(nome); chk('nome "' + nome + '" → base "' + base + '" + "' + rot + '"', r.base === base && r.rotulo === rot, r); });
-  chk('número fora das faixas (ex.: "Kit 3 peças 20") não vira tamanho', sep('Kit 20').rotulo === '' && sep('Vestido 2024').rotulo === '', [sep('Kit 20'), sep('Vestido 2024')]);
+  chk('número fora das faixas (ex.: "Kit 3 produtos 20") não vira tamanho', sep('Kit 20').rotulo === '' && sep('Vestido 2024').rotulo === '', [sep('Kit 20'), sep('Vestido 2024')]);
   chk('nome sem tamanho fica inteiro', sep('Vestido longo floral').rotulo === '' && sep('P').rotulo === '');
   chk('nome base original preserva acento e caixa', sep('Conjunto Bebê 6 meses').baseOriginal === 'Conjunto Bebê');
   const ordem = ['G', 'RN', '4 anos', 'P', '6 meses', 'M', 'GG', '2 anos', 'PP'].sort((a, b) => W.famPesoRotulo_(a) - W.famPesoRotulo_(b));
@@ -56,7 +56,7 @@ function d1() {
     { ID: '31', Nome: 'Calça Jeans Tam 40', Status: 'Ativo' },
     { ID: '40', Nome: 'Body RN', Status: 'Ativo' },
     { ID: '41', Nome: 'Body 3 meses', Status: 'Inativo' },
-    { ID: '50', Nome: 'Blusa única peça', Status: 'Ativo' },
+    { ID: '50', Nome: 'Blusa único produto', Status: 'Ativo' },
     { ID: '60', Nome: 'Short tactel Nº 10', Status: 'Ativo' },
     { ID: '61', Nome: 'Short tactel nº 12', Status: 'Ativo' },
     { ID: '71', Nome: 'Conjunto longo Farm', Codigo: 'CF-RS', Status: 'Ativo' },   // v7.47.0: estampas (mesmo nome, sem tamanho)
@@ -100,7 +100,7 @@ function d1() {
 
   // ---- ligar ----
   const lg0 = await A(IARA, 'POST', '/familias/ligar', { produtos: ['10'] });
-  chk('ligar com uma peça só é recusado', lg0.r.status === 400 && /duas/.test(lg0.j.erro));
+  chk('ligar com um produto só é recusado', lg0.r.status === 400 && /duas/.test(lg0.j.erro));
   const lg = await A(IARA, 'POST', '/familias/ligar', { produtos: ['12', '10', '11'] });
   chk('ligar cria a família com nome base e rótulos na ordem P, M, G', lg.j.ok && lg.j.criada && lg.j.familia.nome === 'Sunga infantil masculino' && lg.j.familia.membros.map((m) => m.produto + m.rotulo).join() === '10P,11M,12G', lg.j);
   const fid = lg.j.familia.id;
@@ -115,13 +115,13 @@ function d1() {
   const lv = await A(PABLO, 'POST', '/familias/ligar', { produtos: ['20', '21', '22'], nome: 'Vestido de festa infantil', rotulos: { 20: '2 anos', 21: '4 anos', 22: '6 anos' } });
   chk('ligar com nome escolhido e rótulos conferidos', lv.j.ok && lv.j.familia.nome === 'Vestido de festa infantil' && lv.j.familia.membros.map((m) => m.rotulo).join() === '2 anos,4 anos,6 anos', lv.j);
   const conflito = await A(IARA, 'POST', '/familias/ligar', { produtos: ['10', '20'] });
-  chk('juntar peças de famílias diferentes é recusado (409) com aviso claro', conflito.r.status === 409 && /famílias diferentes/.test(conflito.j.erro), conflito.j);
+  chk('juntar produtos de famílias diferentes é recusado (409) com aviso claro', conflito.r.status === 409 && /famílias diferentes/.test(conflito.j.erro), conflito.j);
 
   // "+ Novo tamanho": a peça nova (GG) entra na família da original com o rótulo informado
   const semEscolha = await A(IARA, 'POST', '/familias/ligar', { produtos: ['11', '99'], rotulos: { 99: 'GG' } });
-  chk('v7.47.1: peça que já tem família não entra sem a escolha de juntar (409, sem gravar)', semEscolha.r.status === 409 && semEscolha.j.precisaEscolher === true && /já está na família “Sunga infantil masculino”/.test(semEscolha.j.erro) && (await PUB()).j.familias.find((f) => f.id === fid).membros.length === 3, semEscolha.j);
+  chk('v7.47.1: produto que já tem família não entra sem a escolha de juntar (409, sem gravar)', semEscolha.r.status === 409 && semEscolha.j.precisaEscolher === true && /já está na família “Sunga infantil masculino”/.test(semEscolha.j.erro) && (await PUB()).j.familias.find((f) => f.id === fid).membros.length === 3, semEscolha.j);
   const novo = await A(IARA, 'POST', '/familias/ligar', { produtos: ['11', '99'], rotulos: { 99: 'GG' }, juntar: true });
-  chk('ligar peça nova a uma peça que já tem família usa a mesma família', novo.j.ok && novo.j.criada === false && novo.j.familia.id === fid && novo.j.familia.membros.map((m) => m.rotulo).join() === 'P,M,G,GG', novo.j);
+  chk('ligar produto novo o um produto que já tem família usa a mesma família', novo.j.ok && novo.j.criada === false && novo.j.familia.id === fid && novo.j.familia.membros.map((m) => m.rotulo).join() === 'P,M,G,GG', novo.j);
 
   // ---- membro ----
   const mb = await A(IARA, 'POST', '/familias/membro', { produto: '98', familia: fid, rotulo: 'PP' });
@@ -130,15 +130,15 @@ function d1() {
   chk('membro com ordem e rótulo novos é atualizado', mb2.j.ok && mb2.j.familia.membros.at(-1).produto === '98' && mb2.j.familia.membros.at(-1).rotulo === 'XPP', mb2.j);
   chk('membro em família inexistente: 404', (await A(IARA, 'POST', '/familias/membro', { produto: '50', familia: 'fnaoexiste', rotulo: 'P' })).r.status === 404);
   chk('membro de outra família: 409', (await A(IARA, 'POST', '/familias/membro', { produto: '20', familia: fid, rotulo: 'P' })).r.status === 409);
-  chk('membro sem peça: 400', (await A(IARA, 'POST', '/familias/membro', { familia: fid })).r.status === 400);
+  chk('membro sem produto: 400', (await A(IARA, 'POST', '/familias/membro', { familia: fid })).r.status === 400);
 
   // ---- desligar ----
   const dl = await A(IARA, 'POST', '/familias/desligar', { produto: '98' });
-  chk('tirar da família mantém as outras peças ligadas', dl.j.ok && !dl.j.dissolvida && dl.j.familia.membros.length === 4 && dl.j.familia.membros.map((m) => m.ordem).join() === '0,1,2,3', dl.j);
-  chk('tirar peça que não está em família não dá erro', (await A(IARA, 'POST', '/familias/desligar', { produto: '50' })).j.jaEstava === true);
+  chk('tirar da família mantém os outros produtos ligados', dl.j.ok && !dl.j.dissolvida && dl.j.familia.membros.length === 4 && dl.j.familia.membros.map((m) => m.ordem).join() === '0,1,2,3', dl.j);
+  chk('tirar produto que não está em família não dá erro', (await A(IARA, 'POST', '/familias/desligar', { produto: '50' })).j.jaEstava === true);
   await A(PABLO, 'POST', '/familias/ligar', { produtos: ['30', '31'] });
   const dl2 = await A(PABLO, 'POST', '/familias/desligar', { produto: '30' });
-  chk('família que fica com uma peça só é desfeita', dl2.j.ok && dl2.j.dissolvida === true, dl2.j);
+  chk('família que fica com um produto só é desfeita', dl2.j.ok && dl2.j.dissolvida === true, dl2.j);
   pb = await PUB();
   chk('pública reflete o desligar', pb.j.familias.length === 2 && !pb.j.familias.some((f) => f.membros.some((m) => m.produto === '31' || m.produto === '98')), pb.j);
 
@@ -151,9 +151,9 @@ function d1() {
   // ---- v7.47.0: estampas do mesmo produto (nome igual, sem tamanho) ----
   const est = (sg.j.sugestoes || []).find((g) => g.chave === 'conjunto longo farm');
   chk('v7.47.0: nomes iguais sem tamanho (estampas) também viram sugestão, sem rótulo', est && est.membros.length === 2 && est.membros.every((m) => m.rotulo === '') && est.nome === 'Conjunto longo Farm', est);
-  chk('v7.47.0: "Blusa única peça" sozinha continua sem sugestão (grupo de 1)', !(sg.j.sugestoes || []).some((g) => g.chave.startsWith('blusa')));
+  chk('v7.47.0: "Blusa único produto" sozinha continua sem sugestão (grupo de 1)', !(sg.j.sugestoes || []).some((g) => g.chave.startsWith('blusa')));
   const le = await A(IARA, 'POST', '/familias/ligar', { produtos: ['71', '70'] });
-  chk('v7.47.0: ligar estampas sem nome nem rótulo: nome vem da peça, nada é inventado', le.j.ok && le.j.familia.nome.toLowerCase() === 'conjunto longo farm' && le.j.familia.membros.every((m) => m.rotulo === '') && le.j.familia.membros.length === 2, le.j);
+  chk('v7.47.0: ligar estampas sem nome nem rótulo: nome vem do produto, nada é inventado', le.j.ok && le.j.familia.nome.toLowerCase() === 'conjunto longo farm' && le.j.familia.membros.every((m) => m.rotulo === '') && le.j.familia.membros.length === 2, le.j);
   chk('rota desconhecida responde 404 em português', /não existe/.test((await A(IARA, 'GET', '/familias/xyz')).j.erro));
 
   // ---- erro do D1 vira mensagem legível ----

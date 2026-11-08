@@ -882,7 +882,7 @@ function d1() {
     let it = jj.itens.find((x) => x.id === id1); chk('ficou PRONTA, com endereço da imagem e o modelo usado', it && it.status === 'pronta' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado) && it.modelo === 'gemini-3.1-flash-lite-image', it);
     const c1 = imgChamadas[0];
     chk('1º jeito = Interactions, com a chave no CABEÇALHO e nunca na URL', c1 && c1.viaInter && c1.headers.get('x-goog-api-key') === GEMINI_OK && !c1.url.includes(GEMINI_OK), c1 && c1.url);
-    chk('o pedido leva a instrução do Pablo, o nome da peça, a observação e as 2 fotos como imagem', c1.body.input[0].text.includes('FIDELIDADE ABSOLUTA') && /Cropped Farm/.test(c1.body.input[0].text) && /fundo areia/.test(c1.body.input[0].text) && c1.body.input.filter((x) => x.type === 'image' && x.data).length === 2 && c1.body.response_format.aspect_ratio === '9:16', c1.body.response_format);
+    chk('o pedido leva a instrução do Pablo, o nome do produto, a observação e as 2 fotos como imagem', c1.body.input[0].text.includes('FIDELIDADE ABSOLUTA') && /Cropped Farm/.test(c1.body.input[0].text) && /fundo areia/.test(c1.body.input[0].text) && c1.body.input.filter((x) => x.type === 'image' && x.data).length === 2 && c1.body.response_format.aspect_ratio === '9:16', c1.body.response_format);
     chk('"--ar 9:16" vira texto comum (não é comando de Midjourney)', !/--ar/.test(c1.body.input[0].text) && /proporção 9:16/.test(c1.body.input[0].text));
     const resChave = (await DB.prepare("SELECT resultado FROM fotoia WHERE id=?").bind(id1).first()).resultado;
     chk('a imagem foi guardada no R2 (e fonte em t/, a temporária)', objs.has(resChave) && JSON.parse((await DB.prepare('SELECT fontes FROM fotoia WHERE id=?').bind(id1).first()).fontes).every((k) => /^t\//.test(k) && objs.has(k)));
@@ -995,7 +995,7 @@ function d1() {
     const idc1 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc1);
     chk('Gemini cota 0 + Cloudflare ligado: a imagem SAI pelo Cloudflare (pronta, modelo cloudflare:…)', it && it.status === 'pronta' && it.modelo === 'cloudflare:flux-2-klein-4b' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado), it);
     const ac = aiChamadas[0] || { campos: {} };
-    chk('foi pedido com 2 fotos de referência, tamanho 720×1280 (9:16) e o nome da peça na instrução', aiChamadas.length === 1 && ac.modelo === '@cf/black-forest-labs/flux-2-klein-4b' && ac.campos.input_image_0 && ac.campos.input_image_1 && !ac.campos.input_image_2 && ac.campos.width === '720' && ac.campos.height === '1280' && /Product: Cropped Farm\./.test(ac.campos.prompt) && /fundo areia/.test(ac.campos.prompt) && /Copy each garment EXACTLY/.test(ac.campos.prompt) && /full outfit from image 1/.test(ac.campos.prompt), ac);
+    chk('foi pedido com 2 fotos de referência, tamanho 720×1280 (9:16) e o nome do produto na instrução', aiChamadas.length === 1 && ac.modelo === '@cf/black-forest-labs/flux-2-klein-4b' && ac.campos.input_image_0 && ac.campos.input_image_1 && !ac.campos.input_image_2 && ac.campos.width === '720' && ac.campos.height === '1280' && /Product: Cropped Farm\./.test(ac.campos.prompt) && /fundo areia/.test(ac.campos.prompt) && /Copy each garment EXACTLY/.test(ac.campos.prompt) && /full outfit from image 1/.test(ac.campos.prompt), ac);
     chk('o Gemini foi tentado antes (e esbarrou na cota) — ficou de molho para não repetir', imgChamadas.length >= 1 && !!(await env.CACHE.get('ia_esgotados')));
 
     // b) Gemini com cota: ele vem primeiro e o Cloudflare nem é chamado
@@ -1059,7 +1059,7 @@ function d1() {
       chk('P-29 limita nome, remove código inválido e não persiste preço não finito', mal.ok && mal.plano.pecas[0].codigo === '' && mal.plano.pecas[0].nome.length === 120 && mal.plano.pecas[0].avista === null);
 
       let r1 = mp({ papeis: ['cima', 'cima', 'cima', 'baixo'] }, 4, {});
-      chk('3 de cima e 1 de baixo: recusa e diz que faltam 2 de baixo (e qual filtro mostrar)', r1.ok === false && r1.faltam === 'baixo' && /Faltam 2 peças de baixo/.test(r1.erro) && /não inventa peças/.test(r1.erro), r1);
+      chk('3 de cima e 1 de baixo: recusa e diz que faltam 2 de baixo (e qual filtro mostrar)', r1.ok === false && r1.faltam === 'baixo' && /Faltam 2 produtos de baixo/.test(r1.erro) && /não inventa produtos/.test(r1.erro), r1);
       r1 = mp({ papeis: ['baixo', 'cima'] }, 2, {}); chk('1 de cima + 1 de baixo = 1 look só (cima e baixo na mesma pessoa)', r1.ok && r1.plano.looks.length === 1 && r1.plano.looks[0].partes.map((x) => x.papel).sort().join() === 'baixo,cima');
       r1 = mp({ papeis: ['cima', 'baixo', 'look', 'look', 'look', 'look'] }, 6, {}); chk('1 de cima + 1 de baixo + 4 looks inteiros = 5 pessoas', r1.ok && r1.plano.looks.length === 5, r1);
       r1 = mp({ papeis: ['cima', 'cima', 'cima', 'baixo', 'baixo', 'baixo'] }, 6, {}); chk('3 de cima + 3 de baixo = 3 pessoas, pares na ordem', r1.ok && r1.plano.looks.length === 3 && r1.plano.looks[0].partes[0].i === 0 && r1.plano.looks[0].partes[1].i === 3 && r1.plano.looks[2].partes[1].i === 5, r1);
@@ -1080,7 +1080,7 @@ function d1() {
     const idl1 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl1);
     const tx1 = imgChamadas[0] ? imgChamadas[0].body.input[0].text : '', nImg1 = imgChamadas[0] ? imgChamadas[0].body.input.filter((x) => x.type === 'image').length : 0;
     chk('6 fotos viram 5 looks: pedido pronto pelo Gemini com as 6 fotos de referência', it && it.status === 'pronta' && nImg1 === 6 && it.plano && it.plano.looks === 5 && it.plano.destino === 'reels' && it.plano.seta === false, { it, nImg1 });
-    chk('o texto diz "5 pessoas", lista Look 1…5 e liga cada foto ao seu look (cima + baixo juntos)', /NÚMERO DE LOOKS = NÚMERO DE PESSOAS NA IMAGEM: 5/.test(tx1) && /Look 1 — pessoa 1 \([^)]+\): veste a peça de CIMA da Foto 1 \(Blusa Canelada\) \+ a peça de BAIXO da Foto 2 \(Saia Floral\)/.test(tx1) && /Look 2 — pessoa 2 \([^)]+\): veste o LOOK INTEIRO \/ PEÇA ÚNICA da Foto 3/.test(tx1) && /Look 5 — pessoa 5/.test(tx1) && !/Look 6/.test(tx1), tx1.slice(-1500));
+    chk('o texto diz "5 pessoas", lista Look 1…5 e liga cada foto ao seu look (cima + baixo juntos)', /NÚMERO DE LOOKS = NÚMERO DE PESSOAS NA IMAGEM: 5/.test(tx1) && /Look 1 — pessoa 1 \([^)]+\): veste o produto de CIMA da Foto 1 \(Blusa Canelada\) \+ o produto de BAIXO da Foto 2 \(Saia Floral\)/.test(tx1) && /Look 2 — pessoa 2 \([^)]+\): veste o LOOK INTEIRO \/ PRODUTO ÚNICA da Foto 3/.test(tx1) && /Look 5 — pessoa 5/.test(tx1) && !/Look 6/.test(tx1), tx1.slice(-1500));
     chk('cada pessoa tem um perfil diferente (idade, pele, cabelo, manequim)', (function () { const ps = (tx1.match(/Look \d — pessoa \d \(([^)]+)\)/g) || []); return ps.length === 5 && new Set(ps).size === 5; })());
     chk('NUNCA pede seta nem chamada: manda "SEM TEXTO E SEM ENFEITES" (texto, seta e emoji a loja coloca depois); Reels deixa 22% livre embaixo; observação vai junto', !/SETA E CHAMADA/.test(tx1) && !/ARRASTE E VEJA/.test(tx1) && /SEM TEXTO E SEM ENFEITES/.test(tx1) && /seta, emoji, adesivo/.test(tx1) && /22% embaixo/.test(tx1) && /luz de fim de tarde/.test(tx1), tx1.slice(-900));
     chk('a instrução padrão proíbe escrita/seta/emoji na imagem e diz que a loja coloca depois no editor de visuais', /NADA ESCRITO, NADA DESENHADO POR CIMA/.test(tx1) && /editor de visuais/.test(tx1) && !/EXCETO o que o pedido/.test(tx1));
@@ -1093,7 +1093,7 @@ function d1() {
     chk('capa de carrossel = 4:5; perfil infantil; também sem texto', /SEM TEXTO/.test(tx2) && !/ARRASTE/.test(tx2) && imgChamadas[0].body.response_format.aspect_ratio === '4:5' && /criança de uns/.test(tx2) && !/mulher de uns/.test(tx2), tx2.slice(-700));
     // c) 3 de cima e 1 de baixo: recusa no servidor também
     ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [foto, foto, foto, foto], papeis: ['cima', 'cima', 'cima', 'baixo'] }));
-    chk('servidor recusa 3 de cima + 1 de baixo (400) e diz qual falta', rr.status === 400 && jj.faltam === 'baixo' && /Faltam 2 peças de baixo/.test(jj.erro), jj);
+    chk('servidor recusa 3 de cima + 1 de baixo (400) e diz qual falta', rr.status === 400 && jj.faltam === 'baixo' && /Faltam 2 produtos de baixo/.test(jj.erro), jj);
     ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [foto, foto, foto, foto, foto, foto, foto], papeis: ['look', 'look', 'look', 'look', 'look', 'look', 'look'] }));
     chk('mais de 6 fotos = 400 com frase', rr.status === 400 && /No máximo 6 fotos/.test(jj.erro), jj);
     // d) Cloudflare com looks: referências na ORDEM das fotos (image 1, image 2…), proporção do destino

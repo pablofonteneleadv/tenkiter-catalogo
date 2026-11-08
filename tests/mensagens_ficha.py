@@ -38,7 +38,7 @@ with sync_playwright() as p:
     b=p.chromium.launch(args=['--no-sandbox'])
     # Tarefa completa em 390×844: localização livre, cascata e persistência.
     ctx,pg,S,errs=open_ficha(b,390,844,True,1.3)
-    chk('ordem Nome → Cidade/localização → Preferências → Tamanhos e peças',pg.locator('#ms-fi-nome').evaluate("e=>e.compareDocumentPosition(document.querySelector('#ms-fi-cid'))&Node.DOCUMENT_POSITION_FOLLOWING")!=0 and pg.locator('#ms-fi-cid').evaluate("e=>e.compareDocumentPosition(document.querySelector('#ms-fi-h-pref'))&Node.DOCUMENT_POSITION_FOLLOWING")!=0)
+    chk('ordem Nome → Cidade/localização → Preferências → Tamanhos e produtos',pg.locator('#ms-fi-nome').evaluate("e=>e.compareDocumentPosition(document.querySelector('#ms-fi-cid'))&Node.DOCUMENT_POSITION_FOLLOWING")!=0 and pg.locator('#ms-fi-cid').evaluate("e=>e.compareDocumentPosition(document.querySelector('#ms-fi-h-pref'))&Node.DOCUMENT_POSITION_FOLLOWING")!=0)
     chk('Crateús aparece antes de Interior e município livre tem Outra cidade',pg.locator('#ms-fi-cid option').nth(1).inner_text()=='Crateús' and pg.locator('#ms-fi-cid option').nth(2).inner_text()=='Interior' and pg.locator('#ms-fi-cid option').last.inner_text()=='Outra cidade')
     saved_size=pg.locator('[data-ficha-grupo=tamanhos][data-valor="XXS arquivado"]')
     pg.locator('.ms-fi-faceta').filter(has=pg.locator('summary',has_text='Tecidos')).locator('summary').click()

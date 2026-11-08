@@ -23,7 +23,7 @@
     const v = o.querySelector('video'), range = o.querySelector('input'), btn = o.querySelector('#capa-video-usar'), aviso = o.querySelector('#capa-video-aviso');
     const local = fonte instanceof Blob ? URL.createObjectURL(fonte) : null;
     const s = { overlay: o, video: v, local, foco: document.activeElement, carregado: false, buscando: false, gerando: false }; atual = s;
-    s.timer = setTimeout(() => { if (atual === s && !s.carregado) aviso.textContent = 'O vídeo demorou para abrir. Feche e tente novamente com o arquivo do aparelho.'; }, 15000);
+    s.timer = setTimeout(() => { if (atual === s && !s.carregado) aviso.textContent = 'O vídeo demorou para abrir. Feche e tente de novo com o arquivo do aparelho.'; }, 15000);
     v.crossOrigin = 'anonymous'; v.muted = true;
     function pronto() { btn.disabled = !s.carregado || s.buscando || s.gerando; }
     v.addEventListener('loadeddata', () => {

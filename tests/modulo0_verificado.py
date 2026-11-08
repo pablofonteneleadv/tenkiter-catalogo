@@ -99,7 +99,7 @@ with sync_playwright() as p:
     pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
     print("== Administrador vê o manual de teste ==")
     pg.goto(BASE + "treinamentos.html"); pg.wait_for_timeout(2500)
-    chk("a tela inicial mostra o card do módulo 0 com a etiqueta 'SÓ ADMINISTRADOR'", "SÓ ADMINISTRADOR" in pg.inner_text("#app"), pg.inner_text("#app")[:300])
+    chk("a tela inicial mostra o card do módulo 0 com a etiqueta 'SÓ ADMIN TOTAL'", "SÓ ADMIN TOTAL" in pg.inner_text("#app"), pg.inner_text("#app")[:300])
     shot(pg, "01-inicio-card-so-admin")
     pg.locator(".card[data-manual='m900']").click(); pg.wait_for_timeout(900)
     print("== Lição com checagem ==")

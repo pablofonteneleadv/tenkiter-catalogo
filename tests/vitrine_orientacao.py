@@ -1,4 +1,4 @@
-"""Vitrine (auditoria 11/10/2026): textos de consulta/seleção, filtros ativos removíveis, rolagem preservada ao voltar da peça, ajuda no fim da lista."""
+"""Vitrine (auditoria 11/10/2026): textos de consulta/seleção, filtros ativos removíveis, rolagem preservada ao voltar do produto, ajuda no fim da lista."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
@@ -14,7 +14,7 @@ with sync_playwright() as p:
     pg.goto(BASE + "index.html"); pg.wait_for_selector(".card"); pg.wait_for_timeout(900)
     # v7.0 (VIT-6): o CTA do cartão diz o que faz e onde — "Pedir no WhatsApp" —
     # em vez do genérico "Consultar", que não dizia para onde o toque levava.
-    chk("cartão: CTA é 'Consulte esta peça' (mockup 24/10; nunca 'pedir')", "Consulte esta peça" in pg.locator(".ac-pedir").first.inner_text(), pg.locator(".ac-pedir").first.inner_text())
+    chk("cartão: CTA é 'Consulte este produto' (mockup 24/10; nunca 'pedir')", "Consulte este produto" in pg.locator(".ac-pedir").first.inner_text(), pg.locator(".ac-pedir").first.inner_text())
     chk("cartão: botão 'Selecionar' e título da seleção", "Selecionar" in pg.locator(".ac-sacola").first.inner_text() and pg.get_attribute("#btn-sacola-header", "title") == "Abrir minha seleção")
     # v7.1 (Pacote 1, item a): a faixa de vantagens passou a nascer RECOLHIDA no
     # celular (é a 3ª coisa antes do 1º produto e não ajuda a escolher). O texto
@@ -28,7 +28,7 @@ with sync_playwright() as p:
     pg.click("#btn-filtros-toggle"); pg.wait_for_timeout(200)
     pg.locator("#chips-extra button").first.click(); pg.wait_for_timeout(500)
     chk("filtro ligado aparece como etiqueta removível", pg.locator("#etiquetas-ativas .etiqueta-ativa").count() == 1 and "Novidades" in pg.inner_text("#etiquetas-ativas"), pg.inner_text("#etiquetas-ativas"))
-    chk("a contagem de peças acompanha", "peças encontradas" in pg.inner_text("#contagem") or "peça encontrada" in pg.inner_text("#contagem"), pg.inner_text("#contagem"))
+    chk("a contagem de produtos acompanha", "produtos encontrados" in pg.inner_text("#contagem") or "produto encontrado" in pg.inner_text("#contagem"), pg.inner_text("#contagem"))
     pg.fill("#preco-min", "100"); pg.wait_for_timeout(600)
     chk("preço mínimo vira outra etiqueta", pg.locator("#etiquetas-ativas .etiqueta-ativa").count() == 2 and "a partir de R$ 100" in pg.inner_text("#etiquetas-ativas"), pg.inner_text("#etiquetas-ativas"))
     if pg.locator("#fx-fechar").is_visible(): pg.click("#fx-fechar"); pg.wait_for_timeout(300)   # v6.5: o menu é um painel de tela cheia no celular
@@ -39,7 +39,7 @@ with sync_playwright() as p:
     # rolagem preservada ao voltar da peça
     pg.evaluate("window.scrollTo(0,700)"); pg.wait_for_timeout(300)
     pg.evaluate("document.querySelectorAll('.card .abrir-peca')[6].click()"); pg.wait_for_timeout(600)
-    chk("a peça abriu", pg.locator("#overlay.aberto").count() == 1)
+    chk("o produto abriu", pg.locator("#overlay.aberto").count() == 1)
     chk("botão do modal diz 'Consultar no WhatsApp'", "Consultar no WhatsApp" in pg.inner_text("#btn-quero"), pg.inner_text("#btn-quero"))
     pg.go_back(); pg.wait_for_timeout(600)
     chk("ao voltar, a lista continua onde estava (rolagem preservada)", abs(pg.evaluate("scrollY") - 700) < 5, pg.evaluate("scrollY"))

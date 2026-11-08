@@ -1,5 +1,5 @@
-"""Compartilhar seleção (v3.4): o link TEM que levar as peças escolhidas (?sel=TK-0010,TK-0011,…) e abrir mostrando só elas.
-Bug real reportado: 4 favoritos viravam só "https://tenkitermodas.com.br/" (o atendente não via quais peças eram)."""
+"""Compartilhar seleção (v3.4): o link TEM que levar os produtos escolhidos (?sel=TK-0010,TK-0011,…) e abrir mostrando só elas.
+Bug real reportado: 4 favoritos viravam só "https://tenkitermodas.com.br/" (o atendente não via quais produtos eram)."""
 import sys, os, re
 from urllib.parse import unquote, urlparse, parse_qs
 AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +31,7 @@ with sync_playwright() as p:
     pg = pag(ctx, erros)
     pg.goto(BASE + "index.html"); pg.wait_for_timeout(1800)
 
-    print("== Favoritos -> link com as peças ==")
+    print("== Favoritos -> link com os produtos ==")
     D = ".card:not(.esqueleto):has(.ac-sacola)"
     ids = []
     for i in (1, 2, 3, 4):
@@ -39,7 +39,7 @@ with sync_playwright() as p:
     chk("4 favoritos marcados", pg.locator("#badge-favoritos").inner_text() == "4")
     cods = pg.evaluate("(ids)=>ids.map(id=>{const p=produtos.find(x=>String(x.ID)===id);return p.Codigo||p.ID})", ids)
     pg.evaluate("document.querySelector('.favoritos-chip').click()"); pg.wait_for_timeout(500)
-    chk("filtro 'Favoritos' mostra 4 peças", len(visiveis(pg)) == 4, visiveis(pg))
+    chk("filtro 'Favoritos' mostra 4 produtos", len(visiveis(pg)) == 4, visiveis(pg))
     if not pg.locator("#btn-share-filtros").is_visible(): pg.click("#btn-filtros-toggle"); pg.wait_for_timeout(300)
     pg.click("#btn-share-filtros"); pg.wait_for_timeout(500)
     link = pg.input_value("#sel-link")
@@ -48,37 +48,37 @@ with sync_playwright() as p:
     chk("sem caixinha 'lista fixa' (favoritos já é lista fixa)", pg.locator("#sel-fixa").count() == 0)
     zap = unquote(pg.get_attribute("#sel-zap", "href") or "")
     chk("mensagem do WhatsApp termina com o link completo e clicável", zap.startswith("https://wa.me/5588993223998?text=") and zap.rstrip().endswith(link), zap[-120:])
-    chk("mensagem lista as peças com preço", zap.count("• ") == 4 and "à vista" in zap, zap)
+    chk("mensagem lista os produtos com preço", zap.count("• ") == 4 and "à vista" in zap, zap)
     chk("texto não cita atendente", "atendente" not in pg.inner_text("#selecao-conteudo").lower())
     pg.click("#btn-fechar-selecao"); pg.wait_for_timeout(250)
 
-    print("== Quem abre o link vê só essas peças ==")
+    print("== Quem abre o link vê só esses produtos ==")
     ctx2 = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     install(ctx2, versao="3.3")
     pg2 = pag(ctx2, erros)
     pg2.goto(BASE + "index.html?" + urlparse(link).query); pg2.wait_for_timeout(1800)
-    chk("abre com exatamente 4 peças", len(visiveis(pg2)) == 4, visiveis(pg2))
-    chk("são as mesmas peças", set(visiveis(pg2)) == set(ids), visiveis(pg2))
-    chk("faixa 'Peças separadas para você: 4 peças'", "Peças separadas para você: 4 peças" in pg2.inner_text("#aviso-selecao"), pg2.inner_text("#aviso-selecao"))
-    chk("contagem diz 4 peças da seleção", "4 peças da seleção" in pg2.inner_text("#contagem"), pg2.inner_text("#contagem"))
+    chk("abre com exatamente 4 produtos", len(visiveis(pg2)) == 4, visiveis(pg2))
+    chk("são os mesmos produtos", set(visiveis(pg2)) == set(ids), visiveis(pg2))
+    chk("faixa 'Produtos separados para você: 4 produtos'", "Produtos separados para você: 4 produtos" in pg2.inner_text("#aviso-selecao"), pg2.inner_text("#aviso-selecao"))
+    chk("contagem diz 4 produtos da seleção", "4 produtos da seleção" in pg2.inner_text("#contagem"), pg2.inner_text("#contagem"))
     chk("o endereço continua com ?sel= (copiar da barra também funciona)", "sel=" in pg2.url)
     # reabrir a seleção recebida e compartilhar de novo mantém a lista
     if not pg2.locator("#btn-share-filtros").is_visible(): pg2.click("#btn-filtros-toggle"); pg2.wait_for_timeout(300)
     pg2.click("#btn-share-filtros"); pg2.wait_for_timeout(400)
-    chk("recompartilhar a seleção recebida mantém as mesmas peças", set(parse_qs(urlparse(pg2.input_value('#sel-link')).query)['sel'][0].split(',')) == set(cods))
+    chk("recompartilhar a seleção recebida mantém os mesmos produtos", set(parse_qs(urlparse(pg2.input_value('#sel-link')).query)['sel'][0].split(',')) == set(cods))
     pg2.click("#btn-fechar-selecao"); pg2.wait_for_timeout(250)
     if pg2.locator("#fx-fechar").is_visible(): pg2.click("#fx-fechar"); pg2.wait_for_timeout(300)   # v6.5: o menu de filtros é um painel; fecha antes de seguir
     pg2.click("#aviso-selecao-todas"); pg2.wait_for_timeout(500)
-    chk("'Ver todas as peças' sai da seleção", pg2.locator("#aviso-selecao").is_hidden() and len(visiveis(pg2)) > 4 and "sel=" not in pg2.url, pg2.url)
+    chk("'Ver todos os produtos' sai da seleção", pg2.locator("#aviso-selecao").is_hidden() and len(visiveis(pg2)) > 4 and "sel=" not in pg2.url, pg2.url)
 
-    print("== Código em minúsculas, peça sem código (ID) e peça que não existe mais ==")
+    print("== Código em minúsculas, produto sem código (ID) e produto que não existe mais ==")
     ids_sem_cod = pg2.evaluate("()=>produtos.filter(x=>!x.Codigo).slice(0,1).map(x=>String(x.ID))")
     cod1 = cods[0] if cods[0].startswith("TK-") else ""
     tokens = [t for t in [cod1.lower(), (ids_sem_cod[0] if ids_sem_cod else ""), "TK-9999"] if t]
     pg2.goto(BASE + "index.html?sel=" + ",".join(tokens)); pg2.wait_for_timeout(1800)
     esperadas = len(tokens) - 1
     chk("casa por código sem diferenciar maiúscula e por ID quando não tem código", len(visiveis(pg2)) == esperadas, (tokens, visiveis(pg2)))
-    chk("avisa que 1 peça não está mais disponível", "1 peça desta seleção não está mais disponível" in pg2.inner_text("#aviso-selecao"), pg2.inner_text("#aviso-selecao"))
+    chk("avisa que 1 produto não está mais disponível", "1 produto desta seleção não está mais disponível" in pg2.inner_text("#aviso-selecao"), pg2.inner_text("#aviso-selecao"))
     pg2.goto(BASE + "index.html?sel=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E,TK-0001"); pg2.wait_for_timeout(1500)
     chk("sel com HTML: a faixa mostra texto, nunca tag", pg2.locator("#aviso-selecao img").count() == 0 and not erros)
 
@@ -100,7 +100,7 @@ with sync_playwright() as p:
     v = pg2.input_value("#sel-link")
     chk("por padrão o link leva os filtros (q=vestido), como sempre", v.startswith(SITE) and "q=vestido" in v and "sel=" not in v, v)
     tem_caixa = pg2.locator("#sel-fixa").count() == 1
-    chk("há a caixinha 'Enviar só estas N peças (lista fixa)'", tem_caixa or n > 60 or n == 0, n)
+    chk("há a caixinha 'Enviar só estas N produtos (lista fixa)'", tem_caixa or n > 60 or n == 0, n)
     if tem_caixa:
         pg2.check("#sel-fixa"); pg2.wait_for_timeout(300)
         v2 = pg2.input_value("#sel-link")

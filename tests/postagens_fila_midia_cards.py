@@ -32,7 +32,7 @@ def chk(cond, nome):
 
 
 def jpeg(fundo, roupa):
-    """Foto sintética de peça (silhueta de vestido) — nada de foto real de cliente."""
+    """Foto sintética de produto (silhueta de vestido) — nada de foto real de cliente."""
     im = Image.new('RGB', (360, 450), fundo)
     d = ImageDraw.Draw(im)
     d.polygon([(150, 60), (210, 60), (230, 150), (290, 420), (70, 420), (130, 150)], fill=roupa)

@@ -52,9 +52,9 @@ with sync_playwright() as p:
     pg.locator(".card").first.click(); pg.wait_for_selector("#overlay.aberto")
     pg.evaluate("TKFotoGrande.abrir({itens:[{url:'icon-256.png'}]})"); pg.wait_for_selector("#tkfg.aberto")
     volta(pg)
-    chk("foto fecha, peça continua", pg.locator("#tkfg.aberto").count() == 0 and pg.locator("#overlay.aberto").count() == 1)
+    chk("foto fecha, produto continua", pg.locator("#tkfg.aberto").count() == 0 and pg.locator("#overlay.aberto").count() == 1)
     volta(pg)
-    chk("peça fecha, fica no catálogo", pg.locator("#overlay.aberto").count() == 0 and aqui(pg, "index.html"))
+    chk("produto fecha, fica no catálogo", pg.locator("#overlay.aberto").count() == 0 and aqui(pg, "index.html"))
     volta(pg); chk("sem janela, sai", not aqui(pg, "index.html"), pg.url); ctx.close()
     ctx, pg, st, er = novo(b, "index.html", ".card")
     pg.click("#btn-conta") if pg.locator("#btn-conta").count() else None

@@ -4,13 +4,13 @@ from mock import install,SESSION,PERMS_ALL
 from playwright.sync_api import sync_playwright
 BASE=os.environ.get('TK_BASE','http://localhost:8765/')
 OUT=pathlib.Path(os.environ.get('TK_EVID','tests/saida/rh-permissoes'));OUT.mkdir(parents=True,exist_ok=True)
-novas=[('esteira','Esteira','Acessar a Esteira e participar do rodízio'),('esteira_aceitar','Esteira','Aceitar peças preparadas para o site'),('postador','Postador','Preparar e publicar postagens'),('fotoia','Geração de fotos com IA','Gerar fotos com IA')]+[('msg_'+k,'Mensageiro',r) for k,r in [('acessar','Acessar o Mensageiro'),('responder','Responder atendimentos'),('produtos','Selecionar produtos'),('arquivos','Baixar arquivos'),('contatos','Editar contatos'),('etiquetas','Alterar etapas'),('notas','Editar notas'),('agenda','Agendar mensagens'),('respostas','Respostas rápidas'),('funil','Ver o funil'),('metricas','Ver métricas'),('exportar','Exportar atendimentos'),('configuracoes','Configurar Mensageiro')]]
+novas=[('esteira','Esteira','Acessar a Esteira e participar do rodízio'),('esteira_aceitar','Esteira','Aceitar produtos preparados para o site'),('postador','Postador','Preparar e publicar postagens'),('fotoia','Geração de fotos com IA','Gerar fotos com IA')]+[('msg_'+k,'Mensageiro',r) for k,r in [('acessar','Acessar o Mensageiro'),('responder','Responder atendimentos'),('produtos','Selecionar produtos'),('arquivos','Baixar arquivos'),('contatos','Editar contatos'),('etiquetas','Alterar etapas'),('notas','Editar notas'),('agenda','Agendar mensagens'),('respostas','Respostas rápidas'),('funil','Ver o funil'),('metricas','Ver métricas'),('exportar','Exportar atendimentos'),('configuracoes','Configurar Mensageiro')]]
 def fixture(c):
  st=install(c,perms=PERMS_ALL+['avaliacoes','manual_1'],versao='3.7')
  acessos=st['_post']({'action':'acessos_listar'})
  defs=acessos['permissoes']+[{'chave':k,'grupo':g,'rotulo':r} for k,g,r in novas]
  modelos=[dict(p,permissoes={k:True for k in p['permissoes']},pessoas=3,protegido=p['nome'] in ['Cliente','Admin total']) for p in acessos['perfis']]
- modelos.append({'nome':'Esteira','desc':'Conferência de peças e rodízio da equipe','permissoes':{'esteira':True,'cliente':True},'pessoas':4,'protegido':False})
+ modelos.append({'nome':'Esteira','desc':'Conferência de produtos e rodízio da equipe','permissoes':{'esteira':True,'cliente':True},'pessoas':4,'protegido':False})
  data={'ok':True,'modelos':modelos,'permissoes':defs,'revisao':0};calls=[];fail={'save':False}
  def route(r):
   req=r.request
@@ -22,7 +22,7 @@ def fixture(c):
   if action.startswith('acessos_modelos_'):
    calls.append(d)
    if action!='acessos_modelos_listar':
-    if fail['save']:return r.fulfill(json={'ok':False,'erro':'Servidor indisponível. Tente novamente.'})
+    if fail['save']:return r.fulfill(json={'ok':False,'erro':'Servidor indisponível. Tente de novo.'})
     original=d.get('original');data['modelos']=[m for m in data['modelos'] if m['nome']!=original]
     if action.endswith('salvar'):data['modelos'].append({'nome':d['nome'],'desc':d['desc'],'permissoes':{k:True for k in d['permissoes']},'pessoas':3,'protegido':False})
     data['revisao']+=1

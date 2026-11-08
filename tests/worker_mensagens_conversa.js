@@ -1115,11 +1115,11 @@ function d1() {
       return fAg(u, init);
     };
     try {
-      await wh('/wh/wafly/1/' + seg, msg('AG-1', '5588977770001', 'A peça chega quando?', { momment: Date.now() - 60000 }));
+      await wh('/wh/wafly/1/' + seg, msg('AG-1', '5588977770001', 'O produto chega quando?', { momment: Date.now() - 60000 }));
       const cA = await DB.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp1' AND contato='5588977770001'").first();
       const daqui = (min) => new Date(Date.now() + min * 60000).toISOString();
-      const v1 = await A('POST', '/msg/agendar', { conversa: cA.id, texto: '  Oi! Sua peça chegou.  ', quando: daqui(120) });
-      chk('agendar: válido grava pendente com autor, whats e texto limpo', v1.r.status === 200 && v1.j.ok && v1.j.agendada.status === 'pendente' && v1.j.agendada.texto === 'Oi! Sua peça chegou.' && v1.j.agendada.autor && v1.j.pendentes.length === 1, v1.j);
+      const v1 = await A('POST', '/msg/agendar', { conversa: cA.id, texto: '  Oi! Seu produto chegou.  ', quando: daqui(120) });
+      chk('agendar: válido grava pendente com autor, whats e texto limpo', v1.r.status === 200 && v1.j.ok && v1.j.agendada.status === 'pendente' && v1.j.agendada.texto === 'Oi! Seu produto chegou.' && v1.j.agendada.autor && v1.j.pendentes.length === 1, v1.j);
       const lin = await DB.prepare('SELECT whats, autor FROM msg_agenda WHERE id=?').bind(v1.j.agendada.id).first();
       chk('agendar: guarda o WhatsApp de quem agendou (X-TK-Whats)', lin.whats === '88999990000' && lin.autor.length > 0, lin);
       const pas = await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'oi', quando: daqui(-5) });

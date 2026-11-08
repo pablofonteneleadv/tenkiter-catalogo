@@ -17,7 +17,7 @@ with sync_playwright() as p:
   antes=list(s['calls']);unread=c['nao_lidas']
   falha=[w==390]
   def falhar_uma_vez(r):
-   if r.request.method=='POST' and falha[0]:falha[0]=False;r.fulfill(status=500,json={'ok':False,'erro':'Falha simulada. Tente novamente.'})
+   if r.request.method=='POST' and falha[0]:falha[0]=False;r.fulfill(status=500,json={'ok':False,'erro':'Falha simulada. Tente de novo.'})
    else:r.fallback()
   ctx.route('**/msg/notas',falhar_uma_vez)
   pg.locator('.ms-espiando [data-ms=notas-abrir]').click();pg.wait_for_selector('#ms-nota-interna')
