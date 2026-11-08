@@ -140,10 +140,10 @@
       '.tk-nav a .tk-i{font-size:1.15rem;line-height:1}' +
       '.tk-nav a .tk-i .tk-ico{display:block;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}' +
       '.tk-nav a .tk-r{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '.tk-nav a.tk-ativo{color:#ff7a1a}' +
-      '.tk-nav a.tk-ativo::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;border-radius:0 0 3px 3px;background:#ff7a1a}' +
+      '.tk-nav a.tk-ativo{color:var(--laranja,#E67E22)}' +
+      '.tk-nav a.tk-ativo::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;border-radius:0 0 3px 3px;background:var(--laranja,#E67E22)}' +
       '.tk-nav a:active{background:rgba(255,255,255,.06)}' +
-      '.tk-nav a:focus-visible{outline:2px solid #ff7a1a;outline-offset:-3px}' +
+      '.tk-nav a:focus-visible{outline:2px solid var(--laranja,#E67E22);outline-offset:-3px}' +
       'body.tk-tem-nav{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}' +
       '.tk-app-views{position:fixed;inset:0 0 calc(70px + env(safe-area-inset-bottom,0px)) 0;z-index:80;background:#fff}' +
       '.tk-app-frame{display:block;width:100%;height:100%;border:0;background:#fff}' +
@@ -360,7 +360,7 @@
   const sessao = () => { try { const s = JSON.parse(localStorage.getItem('tm_session') || 'null'); return s && s.sessao && /^tk/.test(s.sessao) ? s : null; } catch (e) { return null; } };
   const hist = (t, r) => { try { const l = JSON.parse(localStorage.getItem(HIST) || '[]'); l.unshift({ t: String(t || 'Peça').slice(0, 60), q: Date.now(), r, m: '' }); localStorage.setItem(HIST, JSON.stringify(l.slice(0, 40))); } catch (e) {} };
   let chip = null, toast = null, rodando = false, tentativas = 0;
-  const css = () => { if (document.getElementById('tk-env-css')) return; const c = document.createElement('style'); c.id = 'tk-env-css'; c.textContent = '#tk-env-chip,#tk-env-toast{position:fixed;left:12px;right:12px;margin:0 auto;max-width:520px;z-index:85;border-radius:14px;padding:10px 14px;font:600 .86rem/1.3 system-ui,sans-serif;display:flex;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.35)}#tk-env-chip{bottom:calc(84px + env(safe-area-inset-bottom));background:#222;color:#fff;border:2px solid #E67E22;text-decoration:none}#tk-env-chip.erro{border-color:#f5c542}#tk-env-toast{bottom:calc(140px + env(safe-area-inset-bottom));background:#0f3d1d;color:#fff;border:2px solid #4caf50}#tk-env-toast button{margin-left:auto;width:auto;min-width:44px;min-height:44px;border:0;border-radius:10px;background:#ffffff22;color:#fff;font-size:1.1rem;cursor:pointer}'; document.head.appendChild(c); };
+  const css = () => { if (document.getElementById('tk-env-css')) return; const c = document.createElement('style'); c.id = 'tk-env-css'; c.textContent = '#tk-env-chip,#tk-env-toast{position:fixed;left:12px;right:12px;margin:0 auto;max-width:520px;z-index:85;border-radius:14px;padding:10px 14px;font:600 .86rem/1.3 system-ui,sans-serif;display:flex;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.35)}#tk-env-chip{bottom:calc(84px + env(safe-area-inset-bottom));background:#222;color:#fff;border:2px solid var(--laranja,#E67E22);text-decoration:none}#tk-env-chip.erro{border-color:#f5c542}#tk-env-toast{bottom:calc(140px + env(safe-area-inset-bottom));background:#0f3d1d;color:#fff;border:2px solid #4caf50}#tk-env-toast button{margin-left:auto;width:auto;min-width:44px;min-height:44px;border:0;border-radius:10px;background:#ffffff22;color:#fff;font-size:1.1rem;cursor:pointer}'; document.head.appendChild(c); };
   const chipOff = () => { if (chip) { chip.remove(); chip = null; } };
   const chipOn = (txt, erro) => { css(); if (!chip) { chip = document.createElement('a'); chip.id = 'tk-env-chip'; chip.href = 'admin.html'; chip.setAttribute('role', 'status'); document.body.appendChild(chip); } chip.className = erro ? 'erro' : ''; chip.textContent = txt; };
   const avisoOk = (txt) => { css(); if (!toast) { toast = document.createElement('div'); toast.id = 'tk-env-toast'; toast.setAttribute('role', 'status'); document.body.appendChild(toast); }

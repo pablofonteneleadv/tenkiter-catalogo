@@ -156,6 +156,35 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
 
+/* v7.57.0 (padrão de aparência, regra R6): chip marcado só com a classe `.selecionado` não era anunciado pelo leitor de tela.
+   Aqui o `aria-pressed` passa a espelhar a classe em TODOS os chips de filtro (Lista, Push, Métricas, Cadastro, vitrine), sem
+   cada tela precisar lembrar. Só vale para grupos de chips (um grupo que já tem um marcado ou que já usa aria-pressed). */
+(() => {
+  'use strict';
+  const CHIP = 'button.chip, button.pill-cat, button.pill-gen';
+  const ehGrupo = (pai) => !!pai && !!pai.querySelector('.selecionado, [aria-pressed]');
+  const espelhar = (pai) => {
+    if (!pai || !ehGrupo(pai)) return;
+    for (const b of pai.querySelectorAll(':scope > ' + CHIP.split(', ').join(', :scope > '))) {
+      const r = b.getAttribute('role'); if (r && r !== 'button') continue;
+      const v = b.classList.contains('selecionado') || b.classList.contains('on') ? 'true' : 'false';
+      if (b.getAttribute('aria-pressed') !== v) b.setAttribute('aria-pressed', v);
+    }
+  };
+  const varrer = (raiz) => { const pais = new Set(); for (const b of (raiz || document).querySelectorAll(CHIP)) pais.add(b.parentElement); pais.forEach(espelhar); };
+  const iniciar = () => {
+    varrer(document);
+    let agendado = false; const pais = new Set();
+    const marca = (n) => { if (n && n.nodeType === 1) { if (n.matches && n.matches(CHIP)) pais.add(n.parentElement); else if (n.querySelectorAll) for (const b of n.querySelectorAll(CHIP)) pais.add(b.parentElement); } };
+    new MutationObserver((recs) => {
+      for (const r of recs) { if (r.type === 'attributes') marca(r.target); else for (const n of r.addedNodes) marca(n); }
+      if (!pais.size || agendado) return; agendado = true;
+      (window.requestAnimationFrame || setTimeout)(() => { agendado = false; const l = [...pais]; pais.clear(); l.forEach(espelhar); });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+
 /* v7.1 NAV-1/A11Y-2/VIT-4 (so no catalogo). NAV-1: o nav.js reescreve o
    innerHTML do MESMO <nav> de forma assincrona (permissoes/tk:sessao) e
    apagava os itens de compra. Sem Favoritos e sem Categorias, por pedido. */

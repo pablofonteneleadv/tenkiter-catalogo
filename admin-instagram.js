@@ -46,7 +46,7 @@
       .ig-abas button[aria-selected="true"] { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
       .ig-card { border: 1px solid #e3e3e3; border-radius: 12px; background: #fff; padding: 10px; margin: 0 0 10px; }
       .ig-fotos { display: flex; gap: 4px; margin-bottom: 8px; }
-      .ig-fotos .ig-th { position: relative; flex: 1 1 0; max-width: 33%; aspect-ratio: 3/4; border-radius: 8px; overflow: hidden; background: #eee; }
+      .ig-fotos .ig-th { position: relative; flex: 1 1 0; max-width: 33%; aspect-ratio: var(--tk-foto, 4/5); border-radius: 8px; overflow: hidden; background: #eee; }
       .ig-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .ig-th .ig-mais, .ig-th .ig-play { position: absolute; right: 4px; bottom: 4px; background: rgba(0,0,0,.72); color: #fff; font-size: 0.75rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
       .ig-meta { font-size: 0.78rem; color: #555; margin-bottom: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -63,7 +63,7 @@
       .ig-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
       .ig-tile { border: 2px solid #e3e3e3; border-radius: 10px; padding: 6px; background: #fff; }
       .ig-tile.capa { border-color: var(--laranja); }
-      .ig-tile .ig-th { aspect-ratio: 3/4; max-width: none; border-radius: 8px; overflow: hidden; background: #eee; position: relative; }
+      .ig-tile .ig-th { aspect-ratio: var(--tk-foto, 4/5); max-width: none; border-radius: 8px; overflow: hidden; background: #eee; position: relative; }
       .ig-tile .ig-th img, .ig-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
       .ig-tile .ig-linha { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
       .ig-tile button { width: auto; padding: 8px 10px; min-height: 40px; border-radius: 8px; border: 0; background: #eee; color: #222; font-size: 0.8rem; font-weight: 700; cursor: pointer; }

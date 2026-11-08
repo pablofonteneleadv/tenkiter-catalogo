@@ -20,9 +20,9 @@
 :root{
   --bg:#F5F1E8; --surface:#FFFFFF; --surface-2:#F1EEE7; --border:#E3DFD4;
   --text:#1C1B18; --muted:#6B675E;
-  --accent:#0d0d0d; --accent-2:#E67E22; --accent-3:#F39C12; --accent-soft:#FFF0E4; --accent-txt:#A85200; --on-accent:#fff;
+  --accent:#0d0d0d; --accent-2:var(--laranja); --accent-3:#F39C12; --accent-soft:#FFF0E4; --accent-txt:var(--laranja-txt); --on-accent:#fff;
   --warn-bg:#FFF3CD; --warn-border:#E0A800; --warn-text:#5C4600;
-  --tip-bg:#FFF0E4; --tip-border:#ff7a1a; --tip-text:#8a3d00;
+  --tip-bg:#FFF0E4; --tip-border:var(--accent-2); --tip-text:#8a3d00;
   --good-bg:#E6F4EA; --good-border:#2F9E52; --good-text:#1E5631;
   --danger:#B3261E; --danger-bg:#FBEAE9;
   color-scheme: light;
@@ -31,7 +31,7 @@
   :root:not([data-theme="light"]){
     --bg:#14161C; --surface:#1C1F27; --surface-2:#242833; --border:#333846;
     --text:#ECEBE7; --muted:#9C998F;
-    --accent:#E67E22; --accent-2:#F39C12; --accent-soft:#2E2419; --accent-txt:#F39C12; --on-accent:#0d0d0d;
+    --accent:var(--laranja); --accent-2:#F39C12; --accent-soft:#2E2419; --accent-txt:#F39C12; --on-accent:#0d0d0d;
     --warn-bg:#3A3013; --warn-border:#C99A2E; --warn-text:#F2D888;
     --good-bg:#17301F; --good-border:#3FAE66; --good-text:#A9E0BB;
     --tip-bg:#2E2419; --tip-border:#ff9c4d; --tip-text:#FFCB94;
@@ -42,7 +42,7 @@
 :root[data-theme="dark"]{
   --bg:#14161C; --surface:#1C1F27; --surface-2:#242833; --border:#333846;
   --text:#ECEBE7; --muted:#9C998F;
-  --accent:#E67E22; --accent-2:#F39C12; --accent-soft:#2E2419; --accent-txt:#F39C12; --on-accent:#0d0d0d;
+  --accent:var(--laranja); --accent-2:#F39C12; --accent-soft:#2E2419; --accent-txt:#F39C12; --on-accent:#0d0d0d;
   --warn-bg:#3A3013; --warn-border:#C99A2E; --warn-text:#F2D888;
   --good-bg:#17301F; --good-border:#3FAE66; --good-text:#A9E0BB;
   --tip-bg:#2E2419; --tip-border:#ff9c4d; --tip-text:#FFCB94;
@@ -57,17 +57,17 @@ button{font-family:inherit;}
 #app{min-height:calc(100vh - 76px); min-height:calc(100dvh - 76px); display:flex; flex-direction:column;}
 
 /* ---------- v3.1: cabeçalho igual ao do catálogo e da gestão (preto com filete laranja) ---------- */
-.topbar{background:#0d0d0d linear-gradient(180deg,#0d0d0d 0%,#14140f 100%) !important; border-bottom:2px solid #E67E22 !important; padding:12px 16px !important;}
-.topbar .brand{color:#E67E22;}
+.topbar{background:#0d0d0d linear-gradient(180deg,#0d0d0d 0%,#14140f 100%) !important; border-bottom:2px solid var(--laranja) !important; padding:12px 16px !important;}
+.topbar .brand{color:var(--laranja);}
 .topbar .brand .mark{background:transparent;}
 .topbar .topbar-right{color:#ccc;}
-.topbar .btn{background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.16); color:#E67E22; padding:7px 12px; font-size:.82rem;}
-.topbar .btn:hover{border-color:#E67E22;}
+.topbar .btn{background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.16); color:var(--laranja); padding:7px 12px; font-size:.82rem;}
+.topbar .btn:hover{border-color:var(--laranja);}
 .ajuda-rh{margin:0 0 12px; border:1px dashed var(--border); border-radius:10px; padding:8px 12px;}
 .ajuda-rh summary{cursor:pointer; font-weight:700; font-size:.85rem; color:var(--muted);}
 .ajuda-rh .sub{margin:8px 0 0;}
 .boot-skel{padding:0 0 24px;}
-.boot-skel .sk-top{height:62px; background:#0d0d0d; border-bottom:2px solid #E67E22;}
+.boot-skel .sk-top{height:62px; background:#0d0d0d; border-bottom:2px solid var(--laranja);}
 .boot-skel .sk-wrap{max-width:760px; margin:0 auto; padding:20px 16px;}
 .boot-skel .sk{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface) 50%,var(--surface-2) 75%); background-size:200% 100%; animation:bootbrilho 1.2s linear infinite; border-radius:12px;}
 @keyframes bootbrilho{to{background-position:-200% 0;}}
@@ -512,6 +512,7 @@ details.manual-card[open]>summary::after{content:'▴';}
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
 <link rel="stylesheet" href="rh-permissoes.css?v=7.55.1">
 <script src="rh-permissoes.js?v=7.55.1"></script>
+<link rel="stylesheet" href="tk-padrao.css?v=7.57.0">
 </head>
 <body class="pg-treinamentos">
 
@@ -2471,7 +2472,7 @@ function renderTabDesempenho(){
       '<button type="button" class="btn" id="btn-export-csv">⬇️ Exportar relatório em CSV</button>' +
     '</div>' +
     '<div class="ds-filtros">' +
-      '<input type="search" id="ds-busca" class="ac-busca" aria-label="Buscar por nome ou WhatsApp" placeholder="Buscar por nome ou WhatsApp" value="' + esc(e.busca) + '">' +
+      '<input type="search" id="ds-busca" class="ac-busca tk-busca" aria-label="Buscar por nome ou WhatsApp" placeholder="Buscar por nome ou WhatsApp" value="' + esc(e.busca) + '">' +
       '<select id="ds-ordem" class="admin-sel" aria-label="Ordenar">' +
         '<option value="nome"' + (e.ordem === 'nome' ? ' selected' : '') + '>Ordem: nome (A–Z)</option>' +
         '<option value="recente"' + (e.ordem === 'recente' ? ' selected' : '') + '>Ordem: mais recentes</option>' +
@@ -3183,7 +3184,7 @@ function renderTabAcessos(){
   return '<div class="admin-panel">' +
     '<details class="ajuda-rh"><summary>Como funciona? (toque para ver)</summary><p class="sub">Atribua os acessos de cada pessoa abaixo. Configure o que cada acesso permite na aba <strong>Permissões</strong>. Use <em>Ajustes individuais</em> somente para exceções desta pessoa (✱ = diferente do acesso).</p></details>' + dicas +
     '<div class="admin-toolbar">' +
-      '<input type="search" id="ac-busca" aria-label="Buscar por nome ou WhatsApp" placeholder="Buscar por nome ou WhatsApp" value="' + esc(a.busca) + '" class="ac-busca">' +
+      '<input type="search" id="ac-busca" aria-label="Buscar por nome ou WhatsApp" placeholder="Buscar por nome ou WhatsApp" value="' + esc(a.busca) + '" class="ac-busca tk-busca">' +
       '<span><button type="button" class="admin-mini-btn" id="ac-nova">+ Nova pessoa</button><button type="button" class="admin-mini-btn" id="ac-log">Histórico</button><button type="button" class="admin-mini-btn" id="ac-recarregar">↻ Atualizar</button></span>' +
     '</div>' +
     '<details class="ac-ferramentas"><summary>Filtrar e ordenar pessoas</summary><div class="ac-filtro" id="ac-filtro">' + filtroAcessosHtml() + '</div>' +
@@ -3397,7 +3398,7 @@ function telaSemConexao_(){
   var app0 = document.getElementById('app'); if (!app0) return; app0.removeAttribute('aria-busy');
   app0.innerHTML = '<div style="max-width:420px;margin:64px auto;padding:0 20px;text-align:center"><h2 style="margin:0 0 8px">O servidor está demorando</h2>'
     + '<p style="color:#555">Sua sessão continua guardada, você <b>não saiu da conta</b>. Pode ser a internet ou o servidor ocupado.</p>'
-    + '<button id="tm-retentar" style="margin-top:12px;padding:14px 20px;border-radius:12px;border:0;background:#E67E22;color:#0d0d0d;font-weight:800;font-size:1rem;width:100%">Tentar de novo</button>'
+    + '<button id="tm-retentar" style="margin-top:12px;padding:14px 20px;border-radius:12px;border:0;background:var(--laranja);color:#0d0d0d;font-weight:800;font-size:1rem;width:100%">Tentar de novo</button>'
     + '<button id="tm-outra" style="margin-top:10px;padding:12px;border-radius:12px;border:1px solid #bbb;background:#fff;width:100%">Entrar com outra conta</button></div>';
   document.getElementById('tm-retentar').onclick = async function(){
     this.disabled = true; this.textContent = 'Tentando…';

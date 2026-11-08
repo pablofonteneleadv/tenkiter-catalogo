@@ -24,7 +24,7 @@
 .fi-aviso,.fi-retorno:not(:empty){padding:12px;border-radius:8px;background:#fdf0dc;border:1px solid #ead1a8;color:#744100;overflow-wrap:anywhere;font-size:.9rem}
 .fi-retorno:empty{display:none}.fi-aviso.erro,.fi-retorno.erro{background:#fff0ef;border-color:#d9a6a1;color:#9b2525}.fi-aviso.ok,.fi-retorno.ok{background:#edf6ee;border-color:#afcdb3;color:#245b32}
 .fi-layout{display:grid;gap:20px;align-items:start}.fi-editor{min-width:0}.fi-edicao-topo{margin-bottom:16px}.fi-plano-lista{display:grid;gap:0}.fi-plano-item{padding:16px 0;border-top:1px solid var(--fi-linha)}.fi-plano-item:first-child{border-top:0;padding-top:0}.fi-plano-item p{font-size:.85rem;overflow-wrap:anywhere;color:var(--fi-suave)}
-.fi-miniaturas{display:flex;gap:6px;overflow:auto;margin:8px 0}.fi-miniaturas img{width:48px;height:64px;object-fit:cover;border-radius:5px;background:#e8e5dd;flex:none}
+.fi-miniaturas{display:flex;gap:6px;overflow:auto;margin:8px 0}.fi-miniaturas img{width:48px;height:60px;object-fit:cover;border-radius:5px;background:#e8e5dd;flex:none}
 .fi-plano-acoes{border-top:1px solid var(--fi-linha);padding-top:16px;margin-top:4px;display:grid;gap:8px}.fi-plano-acoes .fi-btn{width:100%}
 .fi-pessoa{border-top:1px solid var(--fi-linha);padding:16px 0;min-width:0}.fi-pessoa:first-child{border-top:0}.fi-pessoa-topo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}.fi-pessoa-topo h3{flex:1;min-width:130px}.fi-posicao{font-weight:400;color:var(--fi-suave);font-size:.82rem}.fi-pessoa-topo .fi-btn{min-width:44px;padding:8px}
 .fi-modo{margin:8px 0 12px;display:flex;gap:8px;flex-wrap:wrap}.fi-roupas{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}

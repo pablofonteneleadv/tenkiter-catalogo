@@ -21,6 +21,6 @@
 .pf-ajuda { margin: 0; color: #57534d; font-size: .875rem; }
 .pf-pe { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid #dedbd5; flex-shrink: 0; }
 .pf-folha .pf-enviar { width: 100%; border-color: #171612; background: #171612; color: #fff; }
-.pf-folha :focus-visible { outline: 3px solid #0a62a8; outline-offset: 3px; }
+.pf-folha :focus-visible { outline: 3px solid var(--tk-foco-cor,#A85200); outline-offset: 3px; }
 .pf-folha button:disabled { cursor: default; opacity: .65; }
 @media (max-width: 600px) { .pf-overlay { align-items: flex-end; padding: 0; } .pf-folha { width: 100%; max-height: var(--pf-altura, 100dvh); border-radius: 16px 16px 0 0; } }

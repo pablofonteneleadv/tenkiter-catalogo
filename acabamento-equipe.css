@@ -5,10 +5,7 @@
  * toques de 44 px, escolha marcada em preto. Só aparência: nenhuma função muda.
  * Carrega depois do <style> de cada página; seletores com `body.pg-...` vencem os antigos.
  * ==================================================================== */
-:root {
-  --tk-texto: #141414; --tk-texto-2: #625c53; --tk-borda: #e3ddd3; --tk-fundo: #f6f3ee; --tk-superficie: #fff;
-  --tk-raio: 8px; --tk-raio-p: 6px;
-}
+/* cores, raio e alturas: ver tk-padrao.css (fonte única, carrega depois) */
 .tk-ico { width: 1.2em; height: 1.2em; flex: none; display: inline-block; vertical-align: -0.22em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ---------- Currículos (curriculos.html) ---------- */

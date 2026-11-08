@@ -61,7 +61,7 @@
   transition: transform .15s ease;
 }
 .faixas-details[open] > .faixas-sum::after { transform: rotate(180deg); }
-.faixas-sum:focus-visible { outline: 3px solid #E67E22; outline-offset: -3px; }
+.faixas-sum:focus-visible { outline: 3px solid var(--laranja,#E67E22); outline-offset: -3px; }
 .faixas-sum .faixas-sum-n { font-weight: 700; font-size: .74rem; color: #8a8272; }
 
 /* ---------- item 1: vantagens em 1 linha no celular ---------- */
@@ -87,7 +87,7 @@
 /* A grade nasce vazia e so cresce quando os dados chegam: sem altura
    reservada, o rodape e a caixa de ajuda sobem e descem (o maior salto
    medido). Reservar ~1 tela evita o pulo sem travar o crescimento. */
-#grid { min-height: 50vh; }
+#grid { min-height: 100vh; }
 .card .img-wrap img { height: 100%; }
 
 /* ---------- item 4: acoes do cartao em linha ---------- */
@@ -123,7 +123,7 @@ body .tk-nav a .tk-r { font-size: 12px; }
   font-size: .74rem; font-weight: 800; cursor: pointer; white-space: nowrap;
 }
 .btn-limpar-topo[hidden] { display: none; }
-.btn-limpar-topo:focus-visible { outline: 3px solid #E67E22; outline-offset: 2px; }
+.btn-limpar-topo:focus-visible { outline: 3px solid var(--laranja,#E67E22); outline-offset: 2px; }
 
 /* ---------- desktop: o <details> fica aberto e o resumo some ---------- */
 @media (min-width: 1024px) {
