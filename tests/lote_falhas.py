@@ -24,7 +24,7 @@ with sync_playwright() as p:
     st["lote_faltar"] = [ids[0]]
     pg.click("#btn-bulk-arquivar"); pg.wait_for_timeout(1500)
     msgs = [m for t, m in D if t == "alert"]
-    chk("aviso diz 1 de 2 e que NÃO foi alterada", any("1 de 2" in m and "NÃO foram alteradas" in m for m in msgs), msgs)
+    chk("aviso diz 1 de 2 e que NÃO foi alterada", any("1 de 2" in m and "NÃO foram alterados" in m for m in msgs), msgs)
     rest = pg.evaluate("Array.from(selecionadosBulk).map(String)")
     chk("só a que falhou continua marcada", rest == [ids[0]], rest)
     print(f"OK={len(OK)} FALHAS={len(BAD)}"); sys.exit(1 if BAD else 0)

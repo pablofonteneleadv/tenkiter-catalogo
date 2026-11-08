@@ -52,7 +52,7 @@ def classificar(arquivo: str) -> set[str]:
         return set(MODULOS)
     if p.startswith((".github/", ".agents/", ".claude/", ".codex/", "scripts/ci/", "scripts/deploy/", "scripts/graphify/")):
         return set(MODULOS)
-    if nome in ("common.js", "nav.js", "package.json", "package-lock.json", "requirements.txt", "sw.js", "service-worker.js", "wrangler.toml"):
+    if nome in ("common.js", "nav.js", "avisos.js", "package.json", "package-lock.json", "requirements.txt", "sw.js", "service-worker.js", "wrangler.toml"):
         return set(MODULOS)
     if p.startswith(DIRETORIOS_IGNORADOS) and p.endswith(".md"):
         return set()

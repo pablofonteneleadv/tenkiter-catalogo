@@ -127,7 +127,7 @@ with sync_playwright() as p:
     print("== Apagar a chave ==")
     DIALOGOS.clear()
     pg.click("[data-cx=apagar][data-nome=render]"); pg.wait_for_timeout(1500)
-    chk("apagar pede confirmação e remove do servidor", any(t == "confirm" and "Apagar a chave" in m for t, m in DIALOGOS) and st.get("apagou") == "render" and not st["conex"]["render"]["temChave"], DIALOGOS)
+    chk("apagar pede confirmação e remove do servidor", any(t == "confirm" and "Excluir a chave" in m for t, m in DIALOGOS) and st.get("apagou") == "render" and not st["conex"]["render"]["temChave"], DIALOGOS)
     chk("a tela volta a 'Sem chave guardada.' e o botão de apagar some", "Sem chave guardada." in pg.inner_text("#cx-estado-render") and pg.locator("[data-cx=apagar][data-nome=render]").count() == 0)
     pg.fill("#cx-chave-render", CHAVE_R); pg.click("[data-cx=guardar][data-nome=render]"); pg.wait_for_timeout(1200)
     DIALOGOS.clear()

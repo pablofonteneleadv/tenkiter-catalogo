@@ -566,9 +566,9 @@
 
   function desenharPrevia_(res) {
     const a = res.atualizados, c = res.criados, ig = res.ignorados.filter((x) => !x.semMudanca), sem = res.ignorados.length - ig.length;
-    let h = '<div class="mt-cards"><div class="mt-card ok"><span>Vão ser atualizadas</span><strong>' + a.length + '</strong></div>' +
+    let h = '<div class="mt-cards"><div class="mt-card ok"><span>Vão ser atualizados</span><strong>' + a.length + '</strong></div>' +
       '<div class="mt-card ok"><span>Produtos novos</span><strong>' + c.length + '</strong></div>' +
-      '<div class="mt-card ' + (ig.length ? 'atencao' : '') + '"><span>Ignoradas (com problema)</span><strong>' + ig.length + '</strong></div>' +
+      '<div class="mt-card ' + (ig.length ? 'atencao' : '') + '"><span>Ignorados (com problema)</span><strong>' + ig.length + '</strong></div>' +
       '<div class="mt-card"><span>Sem mudança</span><strong>' + sem + '</strong></div></div>';
     if (a.length) h += '<details class="g-det" open><summary>Produtos que vão mudar (' + a.length + ')</summary>' + a.map((x) => '<div class="imp-item"><b>' + esc(x.codigo) + '</b> ' + esc(x.nome) + '<ul>' + x.campos.map((k) => '<li>' + esc(k) + '</li>').join('') + '</ul></div>').join('') + '</details>';
     if (c.length) h += '<details class="g-det" open><summary>Produtos novos (' + c.length + ')</summary>' + c.map((x) => '<div class="imp-item"><b>Linha ' + x.linha + ':</b> ' + esc(x.nome) + ' <span class="ped-cod">vai ganhar código automático</span></div>').join('') + '<p class="g-nota">Confira: se uma destas deveria ser um produto que já existe, o código da linha está errado ou vazio.</p></details>';

@@ -103,10 +103,10 @@ try:
             # Falha parcial: repete apenas a peça sem confirmação, com o mesmo identificador.
             ctx, pg, state, calls, errors, ids = setup(browser, 390, 844, 'admin.html', mode='partial')
             open_dialog(pg, 'admin.html'); pg.locator('[data-opcao="manequim"]').click(); pg.locator('.pf-enviar').click()
-            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("restantes")')
+            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("falta")')
             chk('falha parcial informa 1 de 2', '1 de 2' in pg.locator('.pf-status').inner_text())
             pg.locator('.pf-fechar').click(); open_dialog(pg, 'admin.html')
-            chk('fechar/reabrir preserva falha e formulario', pg.locator('[data-opcao="manequim"]').get_attribute('aria-pressed') == 'true' and 'restantes' in pg.locator('.pf-enviar').inner_text())
+            chk('fechar/reabrir preserva falha e formulario', pg.locator('[data-opcao="manequim"]').get_attribute('aria-pressed') == 'true' and 'falta' in pg.locator('.pf-enviar').inner_text())
             pg.locator('.pf-enviar').click(); pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent === "Concluído"')
             chk('retry nao repete confirmado', len(calls) == 3 and calls[1]['produto'] == calls[2]['produto'] and calls[0]['produto'] != calls[2]['produto'])
             chk('retry conserva op', calls[1]['op'] == calls[2]['op'])
@@ -114,7 +114,7 @@ try:
             # Nenhum pedido real: recusa do servidor precisa ser exibida e não virar sucesso.
             ctx, pg, state, calls, errors, ids = setup(browser, 390, 844, 'admin.html', mode='deny')
             open_dialog(pg, 'admin.html'); pg.locator('[data-opcao="cores"]').click(); pg.locator('.pf-enviar').click()
-            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("restantes")')
+            pg.wait_for_function('() => document.querySelector(".pf-enviar").textContent.includes("falta")')
             chk('permissao negada sem falso sucesso', '0 de 2' in pg.locator('.pf-status').inner_text() and 'equipe da Esteira' in pg.locator('.pf-falhas').inner_text())
             pg.locator('.pf-fechar').click(); open_dialog(pg, 'admin.html')
             pg.locator('.pf-fechar').focus(); pg.keyboard.press('Shift+Tab')

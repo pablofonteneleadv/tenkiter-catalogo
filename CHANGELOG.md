@@ -19,6 +19,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.57.0] - 2026-11-08
+
+- Avisos que não travam a tela: novo `avisos.js` (região única empilhada, sucesso some em 6 s, erro fica até fechar, "Desfazer" quando reversível). Substitui os `alert()` de sucesso/informação da Gestão, Instagram, Conexões, Mensageiro, Postagens, Avisos e Pedir fotos; o aviso não cobre mais a faixa de juntar/separar.
+- Confirmações: "toque de novo" da Esteira e das Famílias viram `confirm()` com a consequência; exclusões dizem "Não dá para desfazer"; nova senha em campo de senha numa janela (Treinamentos).
+- Arquivar/reativar produto: botão travado, aviso de sucesso com Desfazer e motivo do erro. Treinamentos: aviso anunciado por leitor de tela e foto de perfil só aparece após o servidor confirmar.
+- Vocabulário único: produto, seleção, Gestão, Pedir fotos, Público, Tentar de novo, "…", MB, você; plurais corretos. Telas vazias dizem o que fazer.
+- Testes `padrao_vocabulario.py` e `avisos_padrao.py`.
+
 ## [7.56.2] - 2026-11-07
 
 - Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.

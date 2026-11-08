@@ -65,7 +65,7 @@ with sync_playwright() as p:
     log.clear()
     pg.click("#btn-gerar-codigos"); pg.wait_for_timeout(1500)
     chk("gerou os códigos no servidor", any(x.get("action") == "gerarCodigosFaltantes" for x in log))
-    chk("janela mostra os 3 códigos gerados", pg.locator("#overlay-gestao.aberto").count() == 1 and "3 produto(s) ganharam código" in folha_texto(pg), folha_texto(pg)[:120])
+    chk("janela mostra os 3 códigos gerados", pg.locator("#overlay-gestao.aberto").count() == 1 and "3 produtos ganharam código" in folha_texto(pg), folha_texto(pg)[:120])
     pg.click("#gestao-fechar"); pg.wait_for_timeout(300)
     chk("aviso some depois de gerar", pg.locator("#aviso-codigos").is_hidden())
 
@@ -127,7 +127,7 @@ with sync_playwright() as p:
     pg.click("#btn-importar-csv"); pg.wait_for_timeout(300)
     pg.set_input_files("#imp-arquivo", os.path.join(AQUI, "saida", "import.csv")); pg.wait_for_timeout(1200)
     prev = pg.inner_text("#imp-previa")
-    chk("prévia: 1 atualizada, 1 nova, 1 ignorada", "Vão ser atualizadas" in prev and re.search(r"atualizadas\s*1", prev.replace("\n", " ")) is not None and re.search(r"novas\s*1", prev.replace("\n", " ")) is not None and re.search(r"problema\)\s*1", prev.replace("\n", " ")) is not None, prev[:300])
+    chk("prévia: 1 atualizada, 1 nova, 1 ignorada", "Vão ser atualizados" in prev and re.search(r"atualizados\s*1", prev.replace("\n", " ")) is not None and re.search(r"novos\s*1", prev.replace("\n", " ")) is not None and re.search(r"problema\)\s*1", prev.replace("\n", " ")) is not None, prev[:300])
     chk("prévia mostra o motivo da linha ignorada", "Preço inválido" in prev)
     chk("prévia mostra o campo que vai mudar (preço)", "preço" in prev)
     imp = [x for x in log if x.get("action") == "importarProdutos"]
@@ -149,7 +149,7 @@ with sync_playwright() as p:
     chk("botões novos na barra (estoque, categoria, lista)", all(pg.locator(i).count() == 1 for i in ("#btn-bulk-estoque", "#btn-bulk-categoria", "#btn-bulk-lista")))
     log.clear(); RESP["prompt"] = "-3"
     pg.click("#btn-bulk-estoque"); pg.wait_for_timeout(500)
-    chk("estoque negativo é recusado sem chamar o servidor", not [x for x in log if x.get("action") == "bulkUpdate"] and any("0 ou mais" in m for _, m, _ in DIALOGOS))
+    chk("estoque negativo é recusado sem chamar o servidor", not [x for x in log if x.get("action") == "bulkUpdate"] and "0 ou mais" in pg.inner_text("#tk-avisos"))
     RESP["prompt"] = "5"
     pg.click("#btn-bulk-estoque"); pg.wait_for_timeout(1500)
     bu = [x for x in log if x.get("action") == "bulkUpdate"]

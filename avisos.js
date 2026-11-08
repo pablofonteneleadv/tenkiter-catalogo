@@ -89,7 +89,7 @@
       d.addEventListener('click', function () { fechar(el); try { opts.desfazer.fn(); } catch (e) { /* o desfazer cuida do próprio erro */ } });
       el.appendChild(d);
     }
-    var persiste = tipo === 'erro' || tipo === 'aviso';
+    var persiste = tipo === 'erro';   // só o erro fica até a pessoa fechar; 'aviso' (atenção) some em 8 s
     if (persiste) {
       var x = document.createElement('button'); x.type = 'button'; x.setAttribute('aria-label', 'Fechar aviso'); x.textContent = 'Fechar';
       x.addEventListener('click', function () { fechar(el); }); el.appendChild(x);
@@ -97,7 +97,7 @@
     reg.appendChild(el);
     posicionar();
     if (!persiste) {
-      var ms = opts.ms || (opts.desfazer ? TEMPO_DESFAZER : TEMPO_OK);
+      var ms = opts.ms || (opts.desfazer ? TEMPO_DESFAZER : tipo === 'aviso' ? 8000 : TEMPO_OK);
       setTimeout(function () { fechar(el); }, ms);
     }
     return el;
