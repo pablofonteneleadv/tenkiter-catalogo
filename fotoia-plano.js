@@ -26,17 +26,17 @@
     const erros=[];
     if(!f.pessoas.length||f.pessoas.length>6)erros.push('Escolha de uma a seis pessoas nesta foto.');
     f.pessoas.forEach((p,i)=>{
-      papeis(p).forEach(k=>{if(!p.roupa[k])erros.push('Pessoa '+(i+1)+': falta escolher '+({look:'o look completo',cima:'o produto de cima',baixo:'o produto de baixo'})[k]+'.')});
+      papeis(p).forEach(k=>{if(!p.roupa[k])erros.push('Pessoa '+(i+1)+': falta escolher '+({look:'o look completo',cima:'a peça de cima',baixo:'a peça de baixo'})[k]+'.')});
       if(papeis(p).every(k=>p.roupa[k])&&!papeis(p).some(k=>p.roupa[k].produto)&&p.publico==='cadastro')erros.push('Pessoa '+(i+1)+': informe o público para as fotos do aparelho.');
-      if(p.modo==='par')for(const k of ['cima','baixo'])if(p.roupa[k]&&['cima','baixo'].includes(p.roupa[k].tipo)&&p.roupa[k].tipo!==k)erros.push('Pessoa '+(i+1)+': confira a posição do produto '+p.roupa[k].nome+'.');
-      if(p.modo==='look' && p.roupa.look && ['cima','baixo'].includes(p.roupa.look.tipo))erros.push('Pessoa '+(i+1)+': este é um produto '+(p.roupa.look.tipo==='cima'?'de cima':'de baixo')+'. Use Cima e baixo para completar a roupa sem inventar produtos.');
+      if(p.modo==='par')for(const k of ['cima','baixo'])if(p.roupa[k]&&['cima','baixo'].includes(p.roupa[k].tipo)&&p.roupa[k].tipo!==k)erros.push('Pessoa '+(i+1)+': confira a posição da peça '+p.roupa[k].nome+'.');
+      if(p.modo==='look' && p.roupa.look && ['cima','baixo'].includes(p.roupa.look.tipo))erros.push('Pessoa '+(i+1)+': esta é uma peça '+(p.roupa.look.tipo==='cima'?'de cima':'de baixo')+'. Use Cima e baixo para completar a roupa sem inventar peças.');
     });
     const {refs}=referencias(f);
     if(refs.length>6)erros.push('Esta foto usa '+refs.length+' referências. O máximo é seis; distribua as combinações em mais fotos.');
     if(refs.length>4&&f.motor!=='auto')erros.push('Os motores Cloudflare aceitam quatro referências. Para '+refs.length+', escolha o padrão da gestão com Gemini habilitado ou distribua as pessoas em mais fotos.');
     if(info){
       const provedores=info.config.provedores||[];
-      if(f.motor!=='auto'&&(!info.cloudflare?.disponivel||!provedores.includes('cloudflare')))erros.push('O Cloudflare está desabilitado. Produto ao Admin total para habilitar ou escolha o padrão da gestão.');
+      if(f.motor!=='auto'&&(!info.cloudflare?.disponivel||!provedores.includes('cloudflare')))erros.push('O Cloudflare está desabilitado. Peça ao gestor para habilitar ou escolha o padrão da gestão.');
       if(refs.length>4&&(!info.temChave||!provedores.includes('gemini')))erros.push('Esta foto exige Gemini com geração de imagens habilitada. Ele não está configurado; reduza as referências para até quatro.');
       if(!info.config.ligado)erros.push('A criação de fotos está pausada pelo gestor. O planejamento pode ser salvo.');
     }

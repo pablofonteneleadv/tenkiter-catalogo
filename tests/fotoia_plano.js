@@ -1,5 +1,5 @@
 const a=require('node:assert/strict'),P=require('../fotoia-plano.js');
-const ref=(n,t='look')=>({id:P.id(),produto:String(n),codigo:'TK-'+n,nome:'Produto '+n,url:'https://p.test/'+n+'.jpg',tipo:t});
+const ref=(n,t='look')=>({id:P.id(),produto:String(n),codigo:'TK-'+n,nome:'Peça '+n,url:'https://p.test/'+n+'.jpg',tipo:t});
 const f=P.novaFoto();a(P.validar(f).some(x=>x.includes('falta')));f.pessoas[0].roupa.look=ref(1);a.deepEqual(P.validar(f),[]);
 f.pessoas.push(P.novaPessoa());f.pessoas[1].roupa.look=f.pessoas[0].roupa.look;f.pessoas[1].pose='perfil';
 a.equal(P.referencias(f).refs.length,1);a.deepEqual(P.pacote(f).looks,[[0],[0]]);a.equal(P.pacote(f).pessoas[1].pose,'perfil');

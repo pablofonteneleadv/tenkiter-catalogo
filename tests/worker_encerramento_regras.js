@@ -42,7 +42,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
     const atend=await chamar('/msg/conversas?canal=todos&fila=em_atendimento');assert(atend.j.conversas.some(x=>x.id===c.id),'Retorno volta ao atendimento anterior');
   }
   const lead=closed(1,'sem_resposta'),resposta=await receber(lead,'ok');assert.equal(resposta.c.encerrada_em,'','Resposta a encerrado por falta de resposta não é ignorada por padrão');
-  const antigo=closed(48),ret=await receber(antigo,'Preciso de outro produto');assert.equal(ret.c.atendido_em,'');assert.equal(ret.c.dono,'');assert.equal(ret.c.retorno_em,'','Fora da janela vira atendimento novo');
+  const antigo=closed(48),ret=await receber(antigo,'Preciso de outra peça');assert.equal(ret.c.atendido_em,'');assert.equal(ret.c.dono,'');assert.equal(ret.c.retorno_em,'','Fora da janela vira atendimento novo');
   const legado=closed(1,'concluido','');sqlite.prepare("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,enviada_em,status,por) VALUES(?,'whatsapp1','humano-legado','saida','texto','Resposta',?,'enviada','1234')").run(legado.id,inicio);assert.equal((await receber(legado,'Posso trocar?')).c.atendido_em,inicio,'Retoma atendimento humano anterior mesmo sem o antigo marcador Atender');
   // A atendente corrige uma cortesia sem apagar conteúdo nem enviar mensagem.
   const revisar=closed();await receber(revisar,'ok');const cm=sqlite.prepare('SELECT id FROM msg_mensagem WHERE conversa_id=?').get(revisar.id).id;
