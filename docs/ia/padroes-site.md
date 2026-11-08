@@ -10,7 +10,7 @@ Atualização: 08/11/2026. Vale para toda pessoa e toda IA que mexe em interface
 |---|---|---|
 | `scripts/ci/check_padroes.py` | regras estáticas por texto (Python puro, ~2 s) com **catraca**: dívida antiga está em `scripts/ci/padroes-baseline.json`; o check só falha se a contagem **sobe**, ou **desce** sem o baseline descer | toda PR (job estático) |
 | `tests/padroes_check_teste.py` | testa o próprio check (casos que falham e que passam) | toda PR (job estático) |
-| módulo `padroes` do seletor | PR que muda **html, css ou js de interface** roda também `padrao_aparencia_ui`, `janelas_padrao`, `padrao_vocabulario`, `avisos_padrao`, `padrao_regras_dados` (Chromium, serviços simulados) | PR com arquivo de interface |
+| módulo `padroes` do seletor | PR que muda **html, css ou js de interface** roda também `janelas_padrao`, `padrao_vocabulario`, `avisos_padrao`, `padrao_regras_dados` (Chromium, serviços simulados, ~3,5 min somados); `padrao_aparencia_ui` (~4,5 min) segue nos módulos de área (catálogo, mensagens, postagens, Esteira, Fotos IA, treinamentos) e em CSS compartilhado (`tk-padrao.css`/`janelas.css` rodam tudo) | PR com arquivo de interface |
 | `check_ux_skill.py` + skill `tenkiter-estetica-humana` | revisão humana/IA em 390 e 1440 px com evidência | toda mudança visual |
 
 **Dívida conhecida e catraca.** `python3 scripts/ci/check_padroes.py --listar` mostra cada ocorrência. Ao corrigir uma, rode `python3 scripts/ci/check_padroes.py --atualizar` (o baseline só aceita descer). Subir exige `--aceitar-aumento` e justificativa na PR: é exceção, siga a seção 7. Nunca apague regra nem teste para a PR passar.

@@ -114,11 +114,13 @@ for indice,total in ((-1,4),(4,4),(0,0)):
 print("SELETOR CI: regressões de segurança e cobertura aprovadas.")
 
 # ---- Padrões obrigatórios do site (docs/ia/padroes-site.md): módulo "padroes" para QUALQUER arquivo de interface ----
-TESTES_PADROES = {"tests/padrao_aparencia_ui.py", "tests/janelas_padrao.py", "tests/padrao_vocabulario.py",
+# Medido: avisos 33 s + vocabulário 28 s + regras/dados 35 s + janelas 108 s = ~3,4 min. padrao_aparencia_ui.py (267 s, só ele
+# passaria dos 6 min) segue nos módulos de área (catalogo, mensagens, postagens, esteira, fotoia, treinamentos).
+TESTES_PADROES = {"tests/janelas_padrao.py", "tests/padrao_vocabulario.py",
                   "tests/avisos_padrao.py", "tests/padrao_regras_dados.py"}
 check("padroes" in m, "módulo padroes existe no manifesto")
-check({t for t, tags in I.M["tests"].items() if "padroes" in tags} == TESTES_PADROES, "módulo padroes mapeia exatamente os 5 testes de padrão em navegador")
-check(all((BASE / t).is_file() for t in TESTES_PADROES), "os 5 testes de padrão existem")
+check({t for t, tags in I.M["tests"].items() if "padroes" in tags} == TESTES_PADROES, "módulo padroes mapeia exatamente os 4 testes de estrutura (sem o de aparência, 267 s)")
+check(all((BASE / t).is_file() for t in TESTES_PADROES), "os testes do módulo padroes existem")
 p = select(["treinamentos.html"])
 check(set(p["modulos"]) == {"treinamentos", "padroes"}, "treinamentos.html roda treinamentos + padroes")
 p = select(["mensagens-ficha.js"])
@@ -136,10 +138,10 @@ check(p["modulos"] == ["ci"], "só VERSION/CHANGELOG/manifesto: módulo ci, sem 
 p = select(["docs/ia/padroes-site.md", "README.md"])
 check(p["so_docs"] and not p["modulos"], "só documentação NÃO roda padroes nem navegador")
 p = select(["tests/janelas_padrao.py"])
-check("padroes" in p["modulos"], "mudar um dos 5 testes de padrão roda o módulo padroes")
+check("padroes" in p["modulos"], "mudar um dos testes do módulo padroes roda o módulo padroes")
 p = select(["OneSignalSDKWorker.js"])
 check("padroes" not in p["modulos"], "número do service worker NÃO é interface")
-# Plano executável: o módulo padroes escolhe exatamente os 5 testes (sem rodar a plataforma inteira)
+# Plano executável: o módulo padroes escolhe exatamente os 4 testes de estrutura (sem rodar a plataforma inteira)
 escolhidos = {t for t, tags in I.M["tests"].items() if "padroes" in tags}
 check(escolhidos == TESTES_PADROES and I.numero_shards(I.plano(["treinamentos.html"], "pull_request", "rapido", [])) >= 1, "plano de uma página de interface é finito")
 # A trava estática dos padrões é coberta pelo módulo ci e pela lista do CI isolado (não dispara a plataforma)
