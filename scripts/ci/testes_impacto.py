@@ -80,8 +80,15 @@ def diff_arquivos(base: str, head: str) -> list[str]:
                             capture_output=True, text=True, check=True)
     return [x.strip() for x in result.stdout.splitlines() if x.strip()]
 
-def plano(arquivos: list[str], evento: str, suite: str, rotulos: list[str]) -> dict:
-    completo = evento == "schedule" or suite == "completo" or "ci:todos" in rotulos
+def plano(arquivos: list[str], evento: str, suite: str, rotulos: list[str], descricao: str = "") -> dict:
+    # A IA pode adicionar no corpo do PR "CI-EXTRA: mensagens,postagens"
+    # sem depender de rótulos pré-cadastrados. Apenas AMPLIA, nunca restringe.
+    extra = []
+    for linha in (descricao or "").splitlines():
+        achou = re.match(r"^\s*CI-EXTRA\s*:\s*(.*?)\s*$", linha, re.I)
+        if achou:
+            extra += [x.strip().lower() for x in achou.group(1).split(",") if x.strip()]
+    completo = evento == "schedule" or suite == "completo" or "ci:todos" in rotulos or "todos" in extra or any(x not in MODULOS for x in extra)
     so_docs = bool(arquivos) and not completo and all(a.lower().endswith(".md") for a in arquivos)
     motivos = {}
     modulos: set[str] = set()
@@ -89,6 +96,10 @@ def plano(arquivos: list[str], evento: str, suite: str, rotulos: list[str]) -> d
         encontrados = classificar(a)
         motivos[a] = sorted(encontrados)
         modulos.update(encontrados)
+    for extra_modulo in extra:
+        if extra_modulo in MODULOS:
+            modulos.add(extra_modulo)
+            motivos["descrição CI-EXTRA"] = sorted(set(extra))
     for rotulo in rotulos:
         if rotulo.startswith("ci:") and rotulo[3:] in MODULOS:
             modulos.add(rotulo[3:])
@@ -218,6 +229,7 @@ def main() -> int:
     a.add_argument("--head", default="")
     a.add_argument("--suite", default="rapido")
     a.add_argument("--rotulos", default="[]", help="JSON de rótulos (ci:todos, ci:mensagens, ...)")
+    a.add_argument("--descricao", default="", help="Corpo do PR (CI-EXTRA: mensagens,postagens)")
     a.add_argument("--saida", default="")
     a.add_argument("--resumo", default="")
     b = sub.add_parser("executar")
@@ -243,7 +255,7 @@ def main() -> int:
             except (subprocess.CalledProcessError, ValueError) as e:
                 print("::warning::Não foi possível calcular o diff. Cobertura completa por precaução: "+str(e))
                 arquivos = []
-        pl = plano(arquivos, args.evento, args.suite, [str(i) for i in rotulos])
+        pl = plano(arquivos, args.evento, args.suite, [str(i) for i in rotulos], args.descricao)
         escrever_saida(pl, args.saida, args.resumo)
     else:
         mods = ORDEM if args.modulos == "todos" else [x.strip() for x in args.modulos.split(",") if x.strip()]
