@@ -81,8 +81,8 @@ def diff_arquivos(base: str, head: str) -> list[str]:
     return [x.strip() for x in result.stdout.splitlines() if x.strip()]
 
 def plano(arquivos: list[str], evento: str, suite: str, rotulos: list[str]) -> dict:
-    so_docs = bool(arquivos) and all(a.lower().endswith(".md") for a in arquivos)
     completo = evento == "schedule" or suite == "completo" or "ci:todos" in rotulos
+    so_docs = bool(arquivos) and not completo and all(a.lower().endswith(".md") for a in arquivos)
     motivos = {}
     modulos: set[str] = set()
     for a in arquivos:
@@ -226,6 +226,7 @@ def main() -> int:
     if args.acao == "planejar":
         try: rotulos = json.loads(args.rotulos or "[]")
         except json.JSONDecodeError: rotulos = ["ci:todos"]
+        if rotulos is None: rotulos = []
         if not isinstance(rotulos, list): rotulos = ["ci:todos"]
         if args.arquivos is not None:
             arquivos = args.arquivos
