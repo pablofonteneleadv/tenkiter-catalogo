@@ -42,7 +42,7 @@ ARQUIVOS_CI_ISOLADO = frozenset({
 })
 
 def somente_ci_isolado(arquivos: list[str]) -> bool:
-    return bool(arquivos) and all(a.replace("\\\\", "/").removeprefix("./").lower() in ARQUIVOS_CI_ISOLADO for a in arquivos)
+    return bool(arquivos) and all(a.replace("\\", "/").removeprefix("./").lower() in ARQUIVOS_CI_ISOLADO for a in arquivos)
 
 def classificar(arquivo: str) -> set[str]:
     """Caminhos compartilhados/novos retornam TODOS; primeiro a segurança."""
