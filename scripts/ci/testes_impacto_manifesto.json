@@ -263,6 +263,9 @@
     "tests/worker_citar_mensagem.js": [
       "mensagens"
     ],
+    "tests/worker_mensagens_rapido.js": [
+      "mensagens"
+    ],
     "tests/worker_contatos_r2.js": [
       "mensagens"
     ],
