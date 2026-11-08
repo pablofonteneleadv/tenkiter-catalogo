@@ -133,7 +133,7 @@
     s.id = 'tk-nav-css';
     s.textContent =
       '@view-transition{navigation:auto}' +
-      '.tk-nav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;background:#0d0d0d;border-top:1px solid rgba(255,255,255,.08);' +
+      '.tk-nav{position:fixed;left:0;right:0;bottom:0;z-index:var(--z-barra,90);display:flex;background:#0d0d0d;border-top:1px solid rgba(255,255,255,.08);' +
         'box-shadow:0 -2px 10px rgba(0,0,0,.35);padding-bottom:env(safe-area-inset-bottom,0);view-transition-name:tk-nav;touch-action:manipulation}' +
       '.tk-nav a{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 2px 7px;' +
         'color:#9a9a9a;text-decoration:none;font:700 .64rem/1.1 "Inter",-apple-system,Roboto,Arial,sans-serif;text-align:center;position:relative;-webkit-tap-highlight-color:transparent}' +
@@ -145,7 +145,7 @@
       '.tk-nav a:active{background:rgba(255,255,255,.06)}' +
       '.tk-nav a:focus-visible{outline:2px solid var(--laranja,#E67E22);outline-offset:-3px}' +
       'body.tk-tem-nav{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}' +
-      '.tk-app-views{position:fixed;inset:0 0 calc(70px + env(safe-area-inset-bottom,0px)) 0;z-index:80;background:#fff}' +
+      '.tk-app-views{position:fixed;inset:0 0 calc(70px + env(safe-area-inset-bottom,0px)) 0;z-index:var(--z-menu,80);background:#fff}' +
       '.tk-app-frame{display:block;width:100%;height:100%;border:0;background:#fff}' +
       '.tk-app-frame[hidden],.tk-app-views[hidden]{display:none!important}' +
       'body.tk-tutorial-teste .tk-nav{display:none!important}body.tk-tutorial-teste .tk-app-views{bottom:0}' +
@@ -421,7 +421,7 @@
   const faixa = () => {
     if (aberta || document.getElementById('tk-versao-nova')) return; aberta = true;
     const d = document.createElement('div'); d.id = 'tk-versao-nova'; d.setAttribute('role', 'status');
-    d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:2147483000;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;background:#141414;color:#fff;border-radius:8px;font:600 .9rem/1.3 Inter,-apple-system,Roboto,Arial,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25)';
+    d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:var(--z-aviso,4000);max-width:520px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;background:#141414;color:#fff;border-radius:8px;font:600 .9rem/1.3 Inter,-apple-system,Roboto,Arial,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25)';
     const t = document.createElement('span'); t.style.flex = '1'; t.textContent = 'Saiu uma versão nova do site.';
     const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Atualizar';
     b.style.cssText = 'min-height:44px;padding:0 16px;border:0;border-radius:6px;background:#fff;color:#141414;font:700 .9rem Inter,-apple-system,Roboto,Arial,sans-serif;cursor:pointer';

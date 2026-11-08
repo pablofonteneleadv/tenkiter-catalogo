@@ -26,7 +26,7 @@ with sync_playwright() as pw:
      if calls['falhar']:return route.fulfill(status=409,json={'ok':False,'erro':'O registro mudou. Abra novamente para conferir.'})
      r=records[d['tipo']];r['campos']={k:d.get(k,v) for k,v in r['campos'].items()};r['versao']='versao-2';return route.fulfill(json={'ok':True,'registro':r})
     return route.fallback()
-   c.route('**/esteira/**',rotas);pg=c.new_page();pg.set_default_timeout(10000);errors=[];pg.on('pageerror',lambda e:errors.append(str(e)))
+   c.route('**/esteira/**',rotas);pg=c.new_page();pg.set_default_timeout(10000);errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.on('dialog',lambda d:d.accept())   # v7.57.0: Esc/toque fora numa folha de edição com alteração pergunta antes de descartar
    pg.clock.install();ns['entrar'](pg);pg.click('[data-aba=fotos]');pg.wait_for_selector('[data-caixa="104"]')
    first=calls['fotos'];pg.locator('[data-caixa="104"]').evaluate("e=>e.dataset.preservar='sim'")
    pg.clock.fast_forward(62000);pg.evaluate("()=>{dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'));}")

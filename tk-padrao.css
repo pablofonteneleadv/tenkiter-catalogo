@@ -7,7 +7,7 @@
  *
  * Regras (conferidas por tests/padrao_aparencia_ui.py):
  *  R1 nenhum controle com menos de 44 px;    R2 campo 44 px / fonte 16 px / raio 8;
- *  R3 foco: contorno laranja de 3 px;         R4 tokens daqui, sem tons de laranja soltos;
+ *  R3 foco: dono é janelas.css (token aqui); R4 tokens daqui, sem tons de laranja soltos;
  *  R5 foto de produto 4:5;                    R6 chip marcado também em aria-pressed;
  *  R7 botão por papel (.tk-btn-prim / -sec / -perigo / -texto): raio e altura únicos.
  * Para uma tela nova: use as classes .tk-btn-*, .tk-chip, .tk-campo, .tk-selo, .tk-selo-foto
@@ -50,17 +50,17 @@
   --tk-campo-fonte: 16px;    /* 16 px: o iOS não dá zoom */
   --tk-chip-h: 44px;
 
-  /* foco: laranja, 3 px, afastado 2 px (em fundo escuro troca para --laranja) */
+  /* foco: mesmo valor de janelas.css (dona da regra): laranja, 3 px, afastado 2 px */
   --tk-foco-w: 3px;
   --tk-foco-off: 2px;
-  --tk-foco-cor: var(--laranja-txt);
+  --tk-foco-cor: var(--laranja);
 
   /* foto de produto */
   --tk-foto: 4/5;
 }
 
 /* ---------- R1 alvo mínimo de toque ---------- */
-html body :is(button, [role="button"], [role="tab"], summary, select, a.pular-conteudo,
+html body :is(button, [role="button"], [role="tab"], summary, select,
   input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"])) {
   min-height: var(--tk-alvo) !important;
 }
@@ -96,12 +96,8 @@ html body textarea { font-size: var(--tk-campo-fonte) !important; }
 .tk-campo { min-height: var(--tk-campo-h); font-size: var(--tk-campo-fonte); border: 1px solid var(--tk-borda); border-radius: var(--tk-campo-raio); background: var(--tk-superficie); color: var(--tk-texto); padding: 8px 12px; box-sizing: border-box; }
 
 /* ---------- R3 foco ---------- */
-html body :is(a, button, input, select, textarea, summary, label, [tabindex], [role="button"], [role="tab"]):focus-visible {
-  outline: var(--tk-foco-w) solid var(--tk-foco-cor) !important;
-  outline-offset: var(--tk-foco-off) !important;
-}
-/* em fundo escuro, o laranja de preenchimento é o que aparece */
-html body :is(header, .cabecalho, .tk-escuro, .bulk-bar, .rodape, footer, .tk-nav, .tk-fila-lote, [data-tema="escuro"]) { --tk-foco-cor: var(--laranja); }
+/* A regra do anel (3 px laranja, afastado 2 px) e o "Ir para o conteúdo" são de janelas.css (dona). Aqui só o token,
+   para os módulos que desenham foco próprio usarem o MESMO valor: var(--tk-foco-cor). */
 
 /* ---------- R7 botão por papel ---------- */
 .tk-btn-prim, .tk-btn-sec, .tk-btn-perigo, .tk-btn-texto {

@@ -35,9 +35,7 @@
     const s = document.createElement('style'); s.id = 'av-css';
     s.textContent = `
       .sheet-avisos { max-width: 760px; height: 92vh; max-height: 92vh; }
-      .av-abas { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 8px; padding-bottom: 4px; }
-      .av-abas button { flex: none; width: auto; padding: 9px 14px; border-radius: 999px; border: 1px solid #ddd; background: #fff; color: #222; font-size: 0.84rem; font-weight: 700; cursor: pointer; min-height: 40px; }
-      .av-abas button[aria-selected="true"] { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
+      .av-abas { margin: 0 0 8px; padding-bottom: 4px; }
       .av-bloco { border: 1px solid #e3e3e3; border-radius: 12px; padding: 10px 12px; margin: 10px 0; background: #fff; }
       .av-bloco > h3 { margin: 0 0 4px; font-size: 0.9rem; font-family: "Poppins", sans-serif; }
       .av-cont { font-size: 0.72rem; color: #666; text-align: right; margin-top: 2px; }
@@ -85,7 +83,7 @@
     o.innerHTML =
       '<div class="sheet sheet-avisos" role="dialog" aria-modal="true" aria-labelledby="av-titulo">' +
         '<div class="sheet-topo"><h2 class="gestao-titulo" id="av-titulo">📢 Central de avisos</h2><button type="button" class="sheet-x" id="av-fechar" aria-label="Fechar">✕</button></div>' +
-        '<div class="av-abas" role="tablist" aria-label="Seções">' +
+        '<div class="av-abas tk-abas" role="tablist" aria-label="Seções">' +
           [['enviar', 'Enviar'], ['historico', 'Histórico'], ['modelos', 'Modelos'], ['preparar', 'Preparar']].map((a) => '<button type="button" role="tab" id="av-aba-' + a[0] + '" data-aba="' + a[0] + '" aria-selected="false">' + a[1] + '</button>').join('') +
         '</div>' +
         '<div class="gestao-corpo" id="av-corpo" role="tabpanel" aria-live="polite"></div>' +

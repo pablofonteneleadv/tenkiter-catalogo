@@ -41,9 +41,7 @@
       .ig-badge { flex: none; min-width: 34px; height: 34px; padding: 0 9px; border-radius: 999px; background: var(--laranja); color: #0d0d0d; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
       .ig-badge.zero { background: #e6e6e6; color: #444; }
       .sheet-ig { max-width: 760px; height: 94vh; max-height: 94vh; }
-      .ig-abas { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 8px; padding-bottom: 4px; }
-      .ig-abas button { flex: none; width: auto; padding: 9px 13px; border-radius: 999px; border: 1px solid #ddd; background: #fff; color: #222; font-size: 0.82rem; font-weight: 700; cursor: pointer; min-height: 40px; }
-      .ig-abas button[aria-selected="true"] { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
+      .ig-abas { margin: 0 0 8px; padding-bottom: 4px; }
       .ig-card { border: 1px solid #e3e3e3; border-radius: 12px; background: #fff; padding: 10px; margin: 0 0 10px; }
       .ig-fotos { display: flex; gap: 4px; margin-bottom: 8px; }
       .ig-fotos .ig-th { position: relative; flex: 1 1 0; max-width: 33%; aspect-ratio: var(--tk-foto, 4/5); border-radius: 8px; overflow: hidden; background: #eee; }
@@ -159,7 +157,7 @@
     rodarIA();
   }
   const ORIGEM = { feed: '📷 Feed', carrossel: '🖼️ Carrossel', reel: '🎬 Reel', story: '⏱️ Story', avulsa: '📎 Avulsa' };
-  function dataBr(iso) { try { const d = new Date(iso); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+  function dataBr(iso) { try { return TKPadrao.dataHora(iso, 'curta'); } catch (e) { return ''; } }   // v7.57.0: relógio de Fortaleza
   function miniaturas(r, max) {
     const ms = r.midias || [];
     return '<div class="ig-fotos">' + ms.slice(0, max || 3).map((m, i) => '<div class="ig-th"><img loading="lazy" decoding="async" alt="" ' + atribSrc(m.mini || m.url) + '>' + (m.tipo === 'video' ? '<span class="ig-play">▶ vídeo</span>' : '') + (i === (max || 3) - 1 && ms.length > (max || 3) ? '<span class="ig-mais">+' + (ms.length - (max || 3)) + '</span>' : '') + '</div>').join('') + '</div>';
@@ -181,7 +179,7 @@
   }
   function desenharLista() {
     tela = 'lista';
-    const abas = '<div class="ig-abas" role="tablist">' + GRUPOS.map((g) => { const n = g[0] === 'pendente' ? (cont.pendente || 0) + (cont.sem_id || 0) : cont[g[0]]; return '<button type="button" role="tab" aria-selected="' + (g[0] === grupo) + '" data-ig="aba" data-g="' + g[0] + '">' + g[1] + (n ? ' (' + n + ')' : '') + '</button>'; }).join('') + '</div>';
+    const abas = '<div class="ig-abas tk-abas" role="tablist">' + GRUPOS.map((g) => { const n = g[0] === 'pendente' ? (cont.pendente || 0) + (cont.sem_id || 0) : cont[g[0]]; return '<button type="button" role="tab" aria-selected="' + (g[0] === grupo) + '" data-ig="aba" data-g="' + g[0] + '">' + g[1] + (n ? ' (' + n + ')' : '') + '</button>'; }).join('') + '</div>';
     const avisos = (st && st.alertas || []).map((a) => '<div class="ig-aviso">⚠️ ' + esc(a) + '</div>').join('');
     const vazio = '<p class="ig-vazio">' + (grupo === 'pendente' ? 'Nada esperando agora. 🎉 O que você postar no Instagram aparece aqui sozinho (a cada 30 minutos) ou toque em "Buscar agora".' : 'Nada por aqui.') + '</p>';
     const ids = lista.map((x) => x.id); marcados.forEach((id) => { if (ids.indexOf(id) === -1) marcados.delete(id); });

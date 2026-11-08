@@ -287,14 +287,14 @@
     if (document.getElementById('tkp-css')) return;
     var s = document.createElement('style'); s.id = 'tkp-css';
     s.textContent =
-      '#tkp-janela{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center}' +
+      '#tkp-janela{position:fixed;inset:0;z-index:var(--z-folha,100);background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center}' +
       '#tkp-janela.aberto{display:flex}' +
-      '#tkp-janela .tkp-fo{background:#fff;color:#1a1a1a;width:100%;max-width:480px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px 24px;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 -8px 30px rgba(0,0,0,.4);box-sizing:border-box}' +
+      '#tkp-janela .tkp-fo{background:#fff;color:#1a1a1a;width:100%;max-width:480px;max-height:92vh;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px 24px;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 -8px 30px rgba(0,0,0,.4);box-sizing:border-box}' +
       '@media(min-width:600px){#tkp-janela{align-items:center}#tkp-janela .tkp-fo{border-radius:18px}}' +
       '#tkp-janela h2{margin:0 36px 6px 0;font-size:1.18rem;line-height:1.25;color:#111}' +
       '#tkp-janela h3{margin:16px 0 4px;font-size:.98rem;color:#111}' +
       '#tkp-janela p{margin:8px 0;color:#333}' +
-      '#tkp-janela .tkp-x{position:absolute;right:10px;top:10px;width:44px;height:44px;border:0;border-radius:22px;background:#eee;color:#111;font-size:1.1rem;cursor:pointer}' +
+      '#tkp-janela .tkp-x{position:absolute;right:10px;top:10px}' +
       '#tkp-janela .tkp-topo{position:relative}' +
       '#tkp-janela .tkp-btn{display:block;width:100%;min-height:50px;border:2px solid var(--laranja,#E67E22);border-radius:12px;background:var(--laranja,#E67E22);color:#0d0d0d;font:800 1rem system-ui,sans-serif;cursor:pointer;margin:12px 0 0;padding:10px 14px;box-sizing:border-box}' +
       '#tkp-janela .tkp-btn.sec{background:#fff;border-color:var(--laranja-txt,#A85200);color:var(--laranja-txt,#A85200)}' +
@@ -310,7 +310,7 @@
       '#tkp-janela .tkp-estado.ok{background:#d8f3dc;color:#14532d}#tkp-janela .tkp-estado.ruim{background:#fde2e2;color:#7f1d1d}' +
       '#tkp-janela details{margin:12px 0;border:1px solid #ddd;border-radius:10px;padding:8px 12px}#tkp-janela summary{cursor:pointer;font-weight:700;min-height:32px}' +
       '#tkp-janela .tkp-peq{font-size:.85rem;color:#555}' +
-      '#tkp-aviso{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:101;background:#111;color:#fff;padding:12px 18px;border-radius:12px;font:600 .95rem system-ui,sans-serif;max-width:90vw;box-shadow:0 4px 18px rgba(0,0,0,.4)}' +
+      '#tkp-aviso{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:calc(var(--z-folha,100) + 1);background:#111;color:#fff;padding:12px 18px;border-radius:12px;font:600 .95rem system-ui,sans-serif;max-width:90vw;box-shadow:0 4px 18px rgba(0,0,0,.4)}' +
       '.tkp-pedido{margin:12px 16px;padding:12px;border:2px dashed var(--laranja-txt,#A85200);border-radius:12px;background:#fff8f0;color:#1a1a1a;font:15px/1.4 system-ui,sans-serif}' +
       '.tkp-pedido b{color:#111}.tkp-pedido button{display:block;width:100%;min-height:48px;margin-top:8px;border:0;border-radius:10px;background:var(--laranja,#E67E22);color:#0d0d0d;font:800 .98rem system-ui,sans-serif;cursor:pointer}';
     document.head.appendChild(s);
@@ -330,7 +330,7 @@
   function abrir(titulo, filhos) {
     garantirJanela();
     folha.textContent = '';
-    var topo = el('div', { class: 'tkp-topo' }, [el('h2', { id: 'tkp-titulo', text: titulo }), el('button', { type: 'button', class: 'tkp-x', 'aria-label': 'Fechar', text: '✕', onclick: fechar })]);
+    var topo = el('div', { class: 'tkp-topo' }, [el('h2', { id: 'tkp-titulo', text: titulo }), el('button', { type: 'button', class: 'tkp-x tk-fechar', 'aria-label': 'Fechar', text: '✕', onclick: fechar })]);
     folha.appendChild(topo);
     filhos.forEach(function (f) { if (f) folha.appendChild(f); });
     if (!janela.classList.contains('aberto')) { janela.classList.add('aberto'); if (window.TKCamadas) TKCamadas.empilhar('tkp-janela', sumir); }
@@ -385,8 +385,8 @@
       titulo = 'Abra no navegador do celular';
       conteudo.push(el('p', { text: 'Você está dentro do navegador do Instagram, WhatsApp ou outro aplicativo, e ele não permite avisos. Toque nos três pontinhos (⋯ ou ⋮) e escolha “Abrir no navegador” (Chrome no Android, Safari no iPhone). Depois é só ativar.' }));
       conteudo.push(btn('Copiar o endereço do site', function () {
-        var fim = function (ok) { aviso(ok ? 'Endereço copiado. Cole no navegador.' : 'Endereço: ' + location.origin + '/'); };
-        try { navigator.clipboard.writeText(location.origin + '/').then(function () { fim(true); }, function () { fim(false); }); } catch (e) { fim(false); }
+        var fim = function (ok) { aviso(ok ? 'Endereço copiado. Cole no navegador.' : 'Endereço: ' + (typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/')); };
+        try { navigator.clipboard.writeText((typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/')).then(function () { fim(true); }, function () { fim(false); }); } catch (e) { fim(false); }
       }, 'sec'));
     } else if (motivo === 'bloqueado') {
       titulo = 'Os avisos foram bloqueados';

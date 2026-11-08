@@ -232,7 +232,6 @@ body input[type=text], body input[type=number], body select, body textarea {
 }
 body input[type=search], body input[type=date], body input[type=tel], body input[type=email], body input[type=password], body input[type=url],
 body input[type=text], body input[type=number], body select { min-height: 44px; padding: 8px 12px; font-size: 1rem; }
-body input:focus-visible, body select:focus-visible, body textarea:focus-visible { outline: 2px solid var(--tk-texto); outline-offset: 1px; border-color: var(--tk-texto); }
 
 /* ---------- painel "Ferramentas do gestor" ---------- */
 body details.ferramentas[open] > summary { border-bottom: 1px solid var(--tk-borda); margin-bottom: 12px; }
@@ -289,17 +288,7 @@ body .gestao-titulo, body .sheet-topo h2, body .sheet-topo h3, body .aud-tit {
 }
 body .tit-ic { display: inline-flex; flex: none; }
 body .tit-ic .tk-ico { width: 20px; height: 20px; }
-body .sheet-x, body .overlay-sheet .btn-fechar, body #po-fechar, body #cp-fechar {
-  flex: none; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: var(--tk-raio);
-  background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 1rem;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-body .sheet-x:hover, body .overlay-sheet .btn-fechar:hover { background: #f3efe8; }
-body .overlay-sheet [role=tablist] button {
-  border-radius: var(--tk-raio-p); border: 1px solid var(--tk-borda); background: var(--tk-superficie); color: var(--tk-texto);
-  font-weight: 600; min-height: var(--tk-chip-h);
-}
-body .overlay-sheet [role=tablist] button[aria-selected="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+/* botão de fechar e abas das janelas: regra única em janelas.css (.tk-fechar / .tk-abas) */
 
 /* Auditoria */
 body .aud-tit { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--tk-borda); }

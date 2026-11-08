@@ -402,6 +402,34 @@
     "tests/worker_zap_proativo.js": [
       "mensagens",
       "postagens"
+    ],
+    "tests/manual_fidelidade.js": [
+      "treinamentos",
+      "ci"
+    ],
+    "tests/padrao_regras_dados.py": [
+      "catalogo",
+      "esteira",
+      "postagens",
+      "treinamentos",
+      "push"
+    ],
+    "tests/postagens_chave_ui.py": [
+      "postagens"
+    ],
+    "tests/worker_post_chave.js": [
+      "postagens"
+    ],
+    "tests/worker_mensagens_rapido.js": [
+      "mensagens"
+    ],
+    "tests/janelas_padrao.py": [
+      "catalogo",
+      "mensagens",
+      "esteira",
+      "treinamentos",
+      "push",
+      "infra"
     ]
   },
   "evidencias": {

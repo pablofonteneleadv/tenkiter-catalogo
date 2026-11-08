@@ -10,25 +10,28 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="catalogo.css?v=7.57.0">
-  <link rel="stylesheet" href="fotos-ia.css?v=7.57.0">
-<link rel="stylesheet" href="tk-padrao.css?v=7.57.0">
+  <link rel="stylesheet" href="catalogo.css?v=7.61.0">
+  <link rel="stylesheet" href="fotos-ia.css?v=7.61.0">
+<link rel="stylesheet" href="janelas.css?v=7.57.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.61.0">
 </head>
 <body class="fotos-ia">
-  <a class="fi-pular" href="#fi-conteudo">Ir para o conteúdo</a>
+  <a class="tk-pular" href="#fi-conteudo">Ir para o conteúdo</a>
   <header class="fi-header">
     <div class="fi-marca"><a href="admin.html" id="fi-voltar">‹ Gestão</a><span>TENKiTER MODAS</span><a href="esteira.html">Esteira</a></div>
     <div class="fi-titulo"><h1>Fotos com IA</h1><span id="fi-conta"></span></div>
-    <nav class="fi-abas" aria-label="Áreas de Fotos com IA" role="tablist" hidden>
+    <div class="fi-faixa-abas" id="fi-faixa-abas">
+    <nav class="fi-abas tk-abas" aria-label="Áreas de Fotos com IA" role="tablist" hidden>
       <button type="button" id="fi-tab-lote" role="tab" data-aba="lote" aria-selected="true" aria-controls="fi-conteudo">Lote</button>
       <button type="button" id="fi-tab-resultados" role="tab" data-aba="resultados" aria-selected="false" aria-controls="fi-conteudo">Resultados <span id="fi-num-fila"></span></button>
       <button type="button" id="fi-tab-ajustes" role="tab" data-aba="ajustes" aria-selected="false" aria-controls="fi-conteudo" hidden>Ajustes</button>
     </nav>
+    </div>
   </header>
   <main id="fi-conteudo" tabindex="-1"><p class="fi-vazio">Carregando seu espaço de fotos…</p></main>
   <div class="fi-dialogo" id="fi-picker" hidden>
     <section role="dialog" aria-modal="true" aria-labelledby="fi-picker-titulo" class="fi-folha">
-      <div class="fi-folha-topo"><h2 id="fi-picker-titulo">Escolher peça</h2><button type="button" class="fi-fechar" id="fi-picker-fechar" aria-label="Fechar escolha de peça">×</button></div>
+      <div class="fi-folha-topo"><h2 id="fi-picker-titulo">Escolher peça</h2><button type="button" class="fi-fechar tk-fechar" id="fi-picker-fechar" aria-label="Fechar escolha de peça">✕</button></div>
       <div class="fi-picker-busca"><label for="fi-busca">Nome ou código da peça</label><input type="search" id="fi-busca" class="tk-busca" placeholder="Ex.: TK-0827 ou conjunto" autocomplete="off"><div class="fi-linha"><button type="button" id="fi-picker-todas" class="fi-btn" aria-pressed="false">Mostrar todas as peças</button><button type="button" id="fi-arquivo-btn" class="fi-btn">Foto do aparelho</button></div></div>
       <div id="fi-picker-lista" class="fi-picker-lista"></div>
       <p id="fi-picker-erro" role="status" class="fi-retorno"></p>
@@ -36,6 +39,7 @@
   </div>
   <input id="fi-arquivo" type="file" accept="image/jpeg,image/png,image/webp" hidden>
   <script src="common.js?v=7.48.0"></script>
+  <script src="padrao-dados.js?v=7.57.0"></script>
   <script src="sessao-rapida.js?v=7.50.0"></script>
   <script src="conta.js"></script>
   <script src="fotoia-plano.js?v=7.54.0"></script>
@@ -43,6 +47,6 @@
   <script src="fotoia-resultados.js?v=7.53.0"></script>
   <script src="fotos-novas.js"></script>
   <script src="produtos-busca.js?v=7.54.0"></script>
-  <script src="fotos-ia.js?v=7.54.0"></script>
+  <script src="fotos-ia.js?v=7.57.0"></script>
 </body>
 </html>
