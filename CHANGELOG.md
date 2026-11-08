@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.56.3] - 2026-11-07
+
+- Prova do manual: o estagiário (e qualquer pessoa) sempre consegue finalizar. Pergunta impossível de responder (sem alternativas) deixa de travar o botão Corrigir; se algo falhar na correção, o botão é liberado com explicação.
+- Nota da avaliação fica guardada no aparelho até o servidor confirmar. Se o servidor recusar ou a internet cair, a tela diz o motivo em português (sessão, permissão, limite, conexão) e oferece "Enviar de novo"; ao entrar de novo, notas pendentes são reenviadas sozinhas (o servidor ignora repetição).
+
 ## [7.56.2] - 2026-11-07
 
 - Pedido do cliente deixa de esperar indefinidamente: confirmações têm prazo e podem continuar com a mesma solicitação e as mesmas fotos.
