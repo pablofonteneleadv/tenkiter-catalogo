@@ -31,7 +31,8 @@
       "mensagens"
     ],
     "tests/cadastro_vinculos.js": [
-      "catalogo"
+      "catalogo",
+      "ci"
     ],
     "tests/catalogo_tecido.js": [
       "catalogo",
@@ -328,8 +329,7 @@
       "midia"
     ],
     "tests/worker_mobile_push.js": [
-      "push",
-      "ci"
+      "push"
     ],
     "tests/worker_og_resiliencia.js": [
       "catalogo"
