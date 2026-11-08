@@ -6,6 +6,8 @@ O estado atual e as instruções por setor ficam no Cofre privado:
 
 [Fonte operacional](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/INDEX.md) · [Regras](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/REGRAS.md)
 
+**Política obrigatória de testes:** [`docs/ia/testes-por-impacto.md`](docs/ia/testes-por-impacto.md). Toda IA deve avaliar o impacto e ampliar módulos quando necessário; o seletor é o mínimo, não o máximo. Nunca execute a bateria monolítica inteira por hábito nem remova cobertura para conseguir merge. Use `CI-EXTRA: todos` na descrição da PR nas dúvidas de alto risco.
+
 1. Leia o setor no índice privado antes de editar. Histórico não é lista de pendências.
 2. A instrução atual do proprietário prevalece sobre documentos históricos.
 3. Trabalhe em branch `ia/<assunto>-<AAAAMMDD>` e use PR revisável.

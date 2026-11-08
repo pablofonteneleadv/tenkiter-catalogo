@@ -85,12 +85,15 @@
       if (r.c && HEX.test(r.c)){ var c = TMV.coresDoTema(r.c); cls.push('rc'); sty += '--c-l:' + c.l + ';--c-d:' + c.d + ';'; }
       var marca = r.h && HEX.test(r.h);
       if (marca){ cls.push('rh'); sty += 'background:' + r.h + ';'; }
+      // Fonte maior no Google Docs (ex.: subtítulo dentro de texto normal).
+      var tamanho = Number(r.z);
+      if (Number.isFinite(tamanho) && tamanho >= 14 && tamanho <= 36) sty += 'font-size:' + Math.round(tamanho * 4 / 3 * 10) / 10 + 'px;';
       if (r.b) h = '<strong>' + h + '</strong>';
       if (r.i) h = '<em>' + h + '</em>';
       if (r.u) h = '<u>' + h + '</u>';
       if (r.s) h = '<s>' + h + '</s>';
       if (marca) h = '<mark class="' + cls.join(' ') + '" style="' + sty + '">' + h + '</mark>';
-      else if (cls.length) h = '<span class="' + cls.join(' ') + '" style="' + sty + '">' + h + '</span>';
+      else if (cls.length || sty) h = '<span' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + ' style="' + sty + '">' + h + '</span>';
       if (r.a && /^https?:\/\//i.test(r.a)) h = '<a href="' + E(r.a) + '" target="_blank" rel="noopener noreferrer">' + h + '</a>';
       return h;
     }).join('');
