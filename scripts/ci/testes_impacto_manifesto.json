@@ -1,0 +1,426 @@
+{
+  "schema": 1,
+  "descricao": "Manifesto explícito de testes originalmente presentes no CI e extras; cada arquivo possui módulos de impacto. Não remova testes sem substituição.",
+  "modules": [
+    "catalogo",
+    "mensagens",
+    "postagens",
+    "esteira",
+    "fotoia",
+    "midia",
+    "treinamentos",
+    "push",
+    "infra",
+    "ci"
+  ],
+  "tests": {
+    "tests/acessos_perfis.py": [
+      "treinamentos"
+    ],
+    "tests/agendamentos_painel_ui.py": [
+      "mensagens"
+    ],
+    "tests/agendar_acompanhar_ui.py": [
+      "mensagens"
+    ],
+    "tests/android_manifest_release.py": [
+      "push"
+    ],
+    "tests/aparencia_aprovada_ui.py": [
+      "catalogo",
+      "mensagens"
+    ],
+    "tests/cadastro_vinculos.js": [
+      "catalogo",
+      "ci"
+    ],
+    "tests/catalogo_tecido.js": [
+      "catalogo",
+      "ci"
+    ],
+    "tests/disponibilidade_rapida.py": [
+      "mensagens"
+    ],
+    "tests/equipe_catalogo1.py": [
+      "catalogo",
+      "mensagens"
+    ],
+    "tests/esteira_continuidade_edicao_ui.py": [
+      "esteira"
+    ],
+    "tests/esteira_envios_fundo_ui.py": [
+      "esteira"
+    ],
+    "tests/esteira_fluidez_ui.py": [
+      "esteira"
+    ],
+    "tests/esteira_fotos_ui.py": [
+      "esteira"
+    ],
+    "tests/esteira_lote_arquivo_ui.py": [
+      "esteira"
+    ],
+    "tests/esteira_processos_ui.py": [
+      "esteira"
+    ],
+    "tests/expediente_acompanhamento.js": [
+      "mensagens"
+    ],
+    "tests/expediente_config_ui.py": [
+      "mensagens"
+    ],
+    "tests/filas_atendimento_ui.py": [
+      "mensagens"
+    ],
+    "tests/filtros_tecido.py": [
+      "catalogo"
+    ],
+    "tests/foto_ia.py": [
+      "fotoia"
+    ],
+    "tests/foto_ia_catalogo.py": [
+      "catalogo",
+      "fotoia"
+    ],
+    "tests/foto_ia_lotes.py": [
+      "fotoia"
+    ],
+    "tests/fotoia_plano.js": [
+      "fotoia"
+    ],
+    "tests/fotos_mini_script.py": [
+      "midia"
+    ],
+    "tests/fotos_postadas_ui.py": [
+      "esteira",
+      "postagens"
+    ],
+    "tests/gestao_unioes.py": [
+      "esteira"
+    ],
+    "tests/jornada_pedido.py": [
+      "catalogo"
+    ],
+    "tests/juntar_admin.py": [
+      "catalogo"
+    ],
+    "tests/manual_fidelidade.js": [
+      "treinamentos",
+      "ci"
+    ],
+    "tests/manual_fidelidade_ui.py": [
+      "treinamentos"
+    ],
+    "tests/manual_rico.py": [
+      "treinamentos"
+    ],
+    "tests/mensagens_acesso_equipe.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_acessos_rh.py": [
+      "mensagens",
+      "treinamentos"
+    ],
+    "tests/mensagens_camera_menu.py": [
+      "mensagens",
+      "midia"
+    ],
+    "tests/mensagens_canais_selecao.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_citacao_ui.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_clareza.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_edicao_rapida.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_equipe_inicio_ui.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_eventos_cliente.js": [
+      "mensagens"
+    ],
+    "tests/mensagens_eventos_ui.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_ficha_ui.js": [
+      "mensagens"
+    ],
+    "tests/mensagens_gavetas_proposta.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_gestor_ui.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_grupos_busca_ui.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_layout_compacto.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_lista_secoes_ui.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_pendentes_espiar.js": [
+      "mensagens",
+      "ci"
+    ],
+    "tests/mensagens_relacionamento_ui.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_saude_entrada.py": [
+      "mensagens"
+    ],
+    "tests/mensagens_solicitacoes_retomada_ui.py": [
+      "esteira",
+      "mensagens"
+    ],
+    "tests/mensagens_solicitacoes_ui.py": [
+      "esteira",
+      "mensagens"
+    ],
+    "tests/mensagens_tamanhos.js": [
+      "mensagens"
+    ],
+    "tests/mensagens_tamanhos_resumo.js": [
+      "mensagens"
+    ],
+    "tests/menu_selecao_ia.py": [
+      "fotoia"
+    ],
+    "tests/midia_r2.py": [
+      "midia",
+      "catalogo"
+    ],
+    "tests/painel_leve.py": [
+      "catalogo",
+      "midia"
+    ],
+    "tests/pedir_fotos_lote.py": [
+      "esteira"
+    ],
+    "tests/postagens_agora_selecao_ui.py": [
+      "postagens"
+    ],
+    "tests/postagens_fila.py": [
+      "postagens"
+    ],
+    "tests/postagens_fila_midia.py": [
+      "midia",
+      "postagens"
+    ],
+    "tests/postagens_prova_falhas_ui.py": [
+      "postagens"
+    ],
+    "tests/postagens_retomar_limites.py": [
+      "postagens"
+    ],
+    "tests/postagens_video_status.py": [
+      "midia",
+      "postagens"
+    ],
+    "tests/produtos_busca_esteira_ia.py": [
+      "esteira"
+    ],
+    "tests/reparos_integrados_ui.py": [
+      "esteira",
+      "mensagens",
+      "postagens"
+    ],
+    "tests/rh_modelos.py": [
+      "treinamentos"
+    ],
+    "tests/selecao_botoes.py": [
+      "catalogo",
+      "mensagens"
+    ],
+    "tests/tecidos_gestao.py": [
+      "catalogo"
+    ],
+    "tests/tempo_presenca_ui.py": [
+      "mensagens"
+    ],
+    "tests/transcode_profiles.py": [
+      "midia"
+    ],
+    "tests/video_camera_90s.py": [
+      "midia"
+    ],
+    "tests/video_lote_limites.py": [
+      "midia"
+    ],
+    "tests/video_partes_encoder.py": [
+      "midia"
+    ],
+    "tests/video_processor_http.py": [
+      "midia"
+    ],
+    "tests/video_upload_feedback.py": [
+      "midia"
+    ],
+    "tests/video_validacao.py": [
+      "midia"
+    ],
+    "tests/worker_acessos_modelos.js": [
+      "mensagens",
+      "treinamentos"
+    ],
+    "tests/worker_acompanhamento.js": [
+      "mensagens"
+    ],
+    "tests/worker_canal.js": [
+      "mensagens",
+      "postagens"
+    ],
+    "tests/worker_citar_mensagem.js": [
+      "mensagens"
+    ],
+    "tests/worker_contatos_r2.js": [
+      "mensagens"
+    ],
+    "tests/worker_encerramento_regras.js": [
+      "mensagens"
+    ],
+    "tests/worker_entrada_duravel.js": [
+      "mensagens"
+    ],
+    "tests/worker_equipe_inicio.js": [
+      "mensagens"
+    ],
+    "tests/worker_esteira.js": [
+      "esteira"
+    ],
+    "tests/worker_esteira_fotos.js": [
+      "esteira"
+    ],
+    "tests/worker_eventos_runtime.cjs": [
+      "infra",
+      "mensagens",
+      "postagens"
+    ],
+    "tests/worker_familias.js": [
+      "catalogo"
+    ],
+    "tests/worker_fila_originais.js": [
+      "midia",
+      "postagens"
+    ],
+    "tests/worker_fotoia_catalogo.js": [
+      "catalogo",
+      "fotoia"
+    ],
+    "tests/worker_fotoia_migracao.js": [
+      "fotoia"
+    ],
+    "tests/worker_fotos_postadas.js": [
+      "esteira",
+      "postagens"
+    ],
+    "tests/worker_gestor.js": [
+      "esteira",
+      "mensagens"
+    ],
+    "tests/worker_grupo.js": [
+      "mensagens",
+      "postagens"
+    ],
+    "tests/worker_grupos_busca.js": [
+      "mensagens"
+    ],
+    "tests/worker_ig.js": [
+      "mensagens",
+      "postagens"
+    ],
+    "tests/worker_mensagens.js": [
+      "mensagens"
+    ],
+    "tests/worker_mensagens_conversa.js": [
+      "mensagens"
+    ],
+    "tests/worker_midia.js": [
+      "midia"
+    ],
+    "tests/worker_midia_mini.js": [
+      "midia",
+      "catalogo"
+    ],
+    "tests/worker_mobile_push.js": [
+      "push"
+    ],
+    "tests/worker_og.js": [
+      "catalogo"
+    ],
+    "tests/worker_og_resiliencia.js": [
+      "catalogo"
+    ],
+    "tests/worker_og_runtime.cjs": [
+      "catalogo",
+      "infra"
+    ],
+    "tests/worker_postagens_coordenacao.js": [
+      "postagens"
+    ],
+    "tests/worker_postagens_limites.js": [
+      "postagens"
+    ],
+    "tests/worker_postagens_prova_falhas.js": [
+      "postagens"
+    ],
+    "tests/worker_postagens_runtime.cjs": [
+      "infra",
+      "midia",
+      "postagens"
+    ],
+    "tests/worker_prioridade_clientes.js": [
+      "mensagens"
+    ],
+    "tests/worker_relacionamento_atendente.js": [
+      "mensagens"
+    ],
+    "tests/worker_solicitacoes.js": [
+      "esteira",
+      "mensagens"
+    ],
+    "tests/worker_tempo_atendimento.js": [
+      "mensagens"
+    ],
+    "tests/worker_video_disparo.js": [
+      "midia"
+    ],
+    "tests/worker_video_partes.js": [
+      "midia"
+    ],
+    "tests/worker_video_preparo.js": [
+      "midia"
+    ],
+    "tests/worker_wafly.js": [
+      "mensagens",
+      "postagens"
+    ],
+    "tests/worker_wame.js": [
+      "mensagens"
+    ],
+    "tests/worker_zap_proativo.js": [
+      "mensagens",
+      "postagens"
+    ]
+  },
+  "evidencias": {
+    "tests/mensagens_citacao_ui.py": "tests/saida/reparos/citacao",
+    "tests/mensagens_equipe_inicio_ui.py": "tests/saida/reparos/equipe",
+    "tests/postagens_retomar_limites.py": "tests/saida/postagens-retomar",
+    "tests/fotos_postadas_ui.py": "tests/saida/fotos-postadas",
+    "tests/esteira_fotos_ui.py": "tests/saida/esteira-fotos",
+    "tests/esteira_continuidade_edicao_ui.py": "tests/saida/esteira-fotos/continuidade",
+    "tests/pedir_fotos_lote.py": "tests/saida/pedir-fotos-lote"
+  },
+  "sql_fixture": [
+    "tests/mensagens_solicitacoes_ui.py",
+    "tests/mensagens_solicitacoes_retomada_ui.py",
+    "tests/postagens_agora_selecao_ui.py",
+    "tests/esteira_lote_arquivo_ui.py"
+  ]
+}
