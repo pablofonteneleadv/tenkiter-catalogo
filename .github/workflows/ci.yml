@@ -96,6 +96,7 @@ jobs:
         run: python3 scripts/ci/check_workers.py
       - name: Regressões internas de distribuição e contratos
         run: |
+          python3 tests/testes_impacto_seletor.py
           python3 tests/auditoria_interna.py
           python3 tests/worker_credenciais.py
           node tests/estoque_opcional.js
