@@ -56,7 +56,7 @@ html body .tk-abas { display: flex; overflow-x: auto; scrollbar-width: none; }
 /* medidas e fonte com especificidade zero: o módulo pode ajustar (ex.: rótulo longo em 320 px); cor, fundo e borda não mudam */
 :where(.tk-abas) > :where([role=tab], button) { min-height: 44px; padding: 0 14px; font: 600 .95rem "Inter", -apple-system, Roboto, Arial, sans-serif; }
 html body .tk-abas > [role=tab], html body .tk-abas > button {
-  flex: none; box-sizing: border-box; border-radius: 8px !important; border: 1px solid var(--tkj-borda) !important;
+  flex: none; width: auto; max-width: none; box-sizing: border-box; border-radius: 8px !important; border: 1px solid var(--tkj-borda) !important;
   background: #fff !important; color: var(--tkj-texto) !important; cursor: pointer;
   box-shadow: none !important; white-space: nowrap;
 }

@@ -439,6 +439,11 @@
       "infra",
       "padroes"
     ],
+    "tests/abas_visiveis.py": [
+      "postagens",
+      "push",
+      "catalogo"
+    ],
     "tests/fotos_mini_script.py": [
       "midia"
     ],
