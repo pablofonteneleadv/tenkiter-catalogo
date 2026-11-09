@@ -6399,7 +6399,8 @@ export default {
           return J({ok:true,regras:await msgRegras_(env),ferramentas:MSG_FERRAMENTAS_,alvo:alvoConsulta?(tipoAlvo==='perfil'?msgPerfil_(alvoConsulta):msgTelefone_(alvoConsulta)):undefined});
         }
         direitos = calculados;
-        if (!direitos.acessar || !direitos[msgRecurso_(p,req,url)]) return J({ok:false,erro:'Seu acesso não permite usar esta ferramenta de Mensagens.'},403);
+        if (!direitos.acessar) return J({ok:false,erro:'Sua conta não tem acesso ao módulo Mensagens. A gestão libera em Acessos: "'+MSG_FERRAMENTAS_.acessar+'".',ferramenta:'acessar'},403);
+        { const recursoNeg_=msgRecurso_(p,req,url); if (!direitos[recursoNeg_]) return J({ok:false,erro:'Seu acesso não permite esta ação. Falta a permissão "'+(MSG_FERRAMENTAS_[recursoNeg_]||recursoNeg_)+'" (Acessos → Ferramentas de Mensagens). Fale com a gestão.',ferramenta:recursoNeg_},403); }
         if (p === '/msg/conversas' && url.searchParams.get('filtro') === 'com_notas' && !direitos.notas) return J({ok:false,erro:'Seu acesso não permite consultar notas.'},403);
         if (p === '/msg/notas/log' && !direitos.notas) return J({ok:false,erro:'Seu acesso não permite consultar notas.'},403);
         if (p === '/msg/config' && req.method === 'POST') {

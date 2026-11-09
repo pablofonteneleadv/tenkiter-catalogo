@@ -55,7 +55,7 @@ const ADMIN = '5588999999999', ATENDENTE = '5588977770001', EQUIPE1 = '558897777
     assert.equal(acesso.j.direitos.acessar, true); assert.equal(acesso.j.direitos.excluir_solicitacao, false, 'Sem permissão por padrão');
     for (const rota of ['excluir', 'restaurar']) {
       const r = await chamar(w, '/msg/solicitacoes/' + rota, 'POST', { id: A });
-      assert.equal(r.status, 403); assert.match(r.j.erro, /Seu acesso não permite/, 'Recusa em português'); assert.ok(!/[{\[]/.test(r.j.erro));
+      assert.equal(r.status, 403); assert.match(r.j.erro, /Seu acesso não permite esta ação/, 'Recusa em português'); assert.match(r.j.erro, /Excluir solicitações de clientes/, 'A mensagem diz qual permissão falta'); assert.equal(r.j.ferramenta, 'excluir_solicitacao'); assert.ok(!/[{\[]/.test(r.j.erro));
     }
   }
   assert.equal(sqlite.prepare("SELECT excluida_em FROM msg_solicitacao WHERE id=?").get(A).excluida_em, '', 'Recusa não altera nada');
