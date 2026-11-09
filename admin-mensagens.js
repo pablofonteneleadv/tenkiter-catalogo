@@ -47,16 +47,21 @@
   const APP_RECENTES = new URLSearchParams(location.search).get('app') === 'mensagens';
   const CACHE_RECENTES = 'tk_msg_recentes_v1';
   let cacheConversa = false, cacheBloqueado = false;
-  function limparRecentes_() { try { localStorage.removeItem(CACHE_RECENTES); } catch (_) {} }
+  function limparRecentes_() { try { localStorage.removeItem(CACHE_RECENTES); } catch (_) {} if (typeof limparRecentesWeb_ === 'function') limparRecentesWeb_(); }
   window.addEventListener('tk:mensagens-sair', limparRecentes_);
+  let donoMemo_ = {};
   async function donoRecentes_() {
     const s = typeof getSessao === 'function' && getSessao();
-    if (!APP_RECENTES || cacheBloqueado || !s || !podeGerir()) return '';
-    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s.whatsapp + ':' + s.sessao));
-    return Array.from(new Uint8Array(h), x=>x.toString(16).padStart(2,'0')).join('');
+    if (cacheBloqueado || !s || !podeGerir()) return '';
+    const entrada = s.whatsapp + ':' + s.sessao;
+    if (donoMemo_.entrada === entrada) return donoMemo_.hash;
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(entrada));
+    const hash = Array.from(new Uint8Array(h), x=>x.toString(16).padStart(2,'0')).join('');
+    donoMemo_ = { entrada, hash }; return hash;
   }
   async function recentes_(path, valor) {
     if (!/^\/msg\/(conversas\?|mensagens\?)/.test(path)) return null;
+    if (!APP_RECENTES) return recentesWeb_(path, valor);
     let dono;try{dono=await donoRecentes_();}catch(_){return null;}if(!dono)return null;
     try {
       let c = JSON.parse(localStorage.getItem(CACHE_RECENTES) || 'null');
@@ -75,6 +80,35 @@
       let json=JSON.stringify(c);
       while(json.length>500000&&keys.length>1){delete c.itens[keys.pop()];json=JSON.stringify(c);}
       if(json.length<=500000 && dono===await donoRecentes_()) localStorage.setItem(CACHE_RECENTES,json);
+    } catch (_) { /* armazenamento cheio ou indisponível não impede atendimento */ }
+    return null;
+  }
+  /* v7.65: abrir na hora (stale-while-revalidate). Fora do app, as telas recentes ficam na memória e no IndexedDB do aparelho, por conta + sessão,
+   * sem tokens, links nem mídia. A rede confirma sempre em seguida e o que chegar de lá substitui o guardado. Sair da conta apaga tudo. */
+  const recentesMem_ = new Map(); let recentesIdb_ = null, recentesPodado_ = false;
+  function idbRecentes_() { return recentesIdb_ || (recentesIdb_ = new Promise((ok, no) => { try { const r = indexedDB.open('tk_msg_recentes_web_v1', 1); r.onupgradeneeded = () => r.result.createObjectStore('itens'); r.onsuccess = () => ok(r.result); r.onerror = r.onblocked = () => { recentesIdb_ = null; no(r.error); }; } catch (e) { recentesIdb_ = null; no(e); } })); }
+  async function idbLerRecente_(k) { const b = await idbRecentes_(); return new Promise((ok) => { const r = b.transaction('itens').objectStore('itens').get(k); r.onsuccess = () => ok(r.result || null); r.onerror = () => ok(null); }); }
+  async function idbGravarRecente_(k, item, dono) {
+    const b = await idbRecentes_(); const t = b.transaction('itens', 'readwrite'), st = t.objectStore('itens'); st.put(item, k);
+    if (!recentesPodado_) { recentesPodado_ = true; const cur = st.openCursor(); cur.onsuccess = () => { const c = cur.result; if (!c) return; if (!String(c.key).startsWith(dono + '|') || Date.now() - (c.value && c.value.em || 0) > 86400000) c.delete(); c.continue(); }; }
+  }
+  function limparRecentesWeb_() { recentesMem_.clear(); recentesPodado_ = false; try { idbRecentes_().then((b) => { b.transaction('itens', 'readwrite').objectStore('itens').clear(); }, () => {}); } catch (_) { /* sem IndexedDB */ } }
+  async function recentesWeb_(path, valor) {
+    let dono; try { dono = await donoRecentes_(); } catch (_) { return null; } if (!dono) return null;
+    const k = dono + '|' + path;
+    if (!valor) {
+      let item = recentesMem_.get(k); if (!item) { try { item = await idbLerRecente_(k); } catch (_) { item = null; } }
+      const d = item && item.dados, valido = d && d.ok && (Array.isArray(d.conversas) || (d.conversa && Array.isArray(d.mensagens)));
+      if (!valido || Date.now() - item.em > 86400000) return null;
+      return dono === await donoRecentes_() ? structuredClone(d) : null;
+    }
+    try {
+      const dados = JSON.parse(JSON.stringify(valor, (kk, v) => /(?:url|chave|token|sessao)$/i.test(kk) ? undefined : v));
+      if (dados.mensagens) dados.mensagens = dados.mensagens.slice(-80);
+      if (dados.conversas) dados.conversas = dados.conversas.slice(0, 60);
+      const item = { em: Date.now(), dados }; recentesMem_.set(k, item);
+      if (recentesMem_.size > 24) recentesMem_.delete(recentesMem_.keys().next().value);
+      setTimeout(() => { idbGravarRecente_(k, item, dono).catch(() => {}); }, 0);
     } catch (_) { /* armazenamento cheio ou indisponível não impede atendimento */ }
     return null;
   }
@@ -99,8 +133,8 @@
   window.addEventListener('tk:sessao',conferirContaAtual_);
   window.addEventListener('storage',e=>{if(e.key==='tm_session')conferirContaAtual_();});
   window.addEventListener('tk:mensagens-sair',()=>{epocaConta_++;contaAtual_='';});
-  async function worker_(caminho, metodo, corpo, repetiu, sinal) {
-    if(cacheConversa && metodo && metodo!=='GET') return {ok:false,erro:'Aguarde atualizar a conversa para continuar.'};
+  async function worker_(caminho, metodo, corpo, repetiu, sinal, daFila) {
+    if(cacheConversa && !daFila && metodo && metodo!=='GET') return {ok:false,erro:'Aguarde atualizar a conversa para continuar.'};
     const s = (typeof getSessao === 'function' && getSessao()) || null;
     if (!s || typeof INSTAGRAM_URL === 'undefined') return { ok: false, erro: 'Entre com o seu login (não vale só o PIN) para ver as mensagens.' };
     conferirContaAtual_(); const epoca = epocaConta_, conta = contaSessao_(s);
@@ -119,6 +153,7 @@
         cacheBloqueado=true;limparRecentes_(); lista=[];msgs=[];aberta=null;cacheConversa=false;
         if($('ms-lista')) pintarLista(); if($('ms-conversa')) $('ms-conversa').textContent='';
       }
+      if (!APP_RECENTES && (r.status===401 || (r.status===403 && /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) limparRecentes_();
       if (dados.ok && (!metodo || metodo==='GET')) await recentes_(caminho,dados);
       if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
       return dados;
@@ -222,7 +257,7 @@
   function iniciais(c) { const t = rotuloContato(c).replace(/[^\p{L}\p{N} ]/gu, '').trim(); return t ? (t.split(/\s+/).slice(0, 2).map((x) => x[0]).join('')).toUpperCase() : '?'; }
   function corAvatar(c) { let h = 0; const s = String(c.contato || c.id); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return ['#7a4a1e', '#2f5d62', '#5b3a6b', '#6b5a1e', '#3d5a3d', '#7a2f3d'][h % 6]; }
   const TIPO_ROTULO = { 'imagem': '📷 Foto', 'vídeo': '🎬 Vídeo', 'áudio': '🎤 Áudio', 'documento': '📄 Documento', 'figurinha': 'Figurinha', 'contato': '👤 Contato', 'localização': '📍 Localização', 'reação': 'Reação', 'resposta': 'Resposta', 'compartilhamento': 'Compartilhamento', 'menção em story': 'Menção em story', 'reel': 'Reel' };
-  const STATUS = { pendente: ['🕓', 'Enviando', ''], enviada: ['✓', 'Enviada', ''], entregue: ['✓✓', 'Entregue', ''], lida: ['✓✓', 'Lida', 'lida'], incerta: ['⚠', 'Sem confirmação', 'incerta'], falhou: ['⚠', 'Não enviada', 'incerta'] };
+  const STATUS = { pendente: ['🕓', 'Enviando', ''], fila: ['⏳', 'Na fila', ''], espera: ['⏳', 'Aguardando a anterior', ''], enviada: ['✓', 'Enviada', ''], entregue: ['✓✓', 'Entregue', ''], lida: ['✓✓', 'Lida', 'lida'], incerta: ['⚠', 'Sem confirmação', 'incerta'], falhou: ['⚠', 'Não enviada', 'incerta'] };
   function selo(status) { const s = STATUS[status] || STATUS.enviada, e = el('span', 'ms-tique ' + s[2], s[0]); e.title = s[1]; e.setAttribute('role', 'img'); e.setAttribute('aria-label', s[1]); return e; }
   /** v7.24: *negrito*, _itálico_ e ~riscado~ do WhatsApp nas bolhas (sem HTML: cada trecho vira um elemento) */
   function formatarWa_(pai, texto) {
@@ -876,6 +911,9 @@
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => ul.addEventListener(t, () => clearTimeout(timerToque)));
     ul.addEventListener('scroll', () => clearTimeout(timerToque), { passive: true });
     ul.addEventListener('contextmenu', (ev) => { if (ev.target.closest('.ms-conv')) ev.preventDefault(); });
+    { let esperaMouse_ = 0; const alvoConversa_ = (ev) => { const b = ev.target.closest && ev.target.closest('[data-ms=abrir]'); return b && !selecao ? b.dataset.id : ''; };
+      ul.addEventListener('pointerdown', (ev) => { const id = alvoConversa_(ev); if (id) adiantarConversa_(id); }, { passive: true });
+      ul.addEventListener('pointerover', (ev) => { if (ev.pointerType !== 'mouse') return; clearTimeout(esperaMouse_); const id = alvoConversa_(ev); if (id) esperaMouse_ = setTimeout(() => adiantarConversa_(id), 120); }, { passive: true }); }
     const conv = el('section', 'ms-conversa'); conv.id = 'ms-conversa'; conv.setAttribute('aria-label', 'Conversa');
     conv.appendChild(vazioConversa_());
     app.append(lat, conv); sheet.appendChild(app); sheet.appendChild(av); o.appendChild(sheet); document.body.appendChild(o);
@@ -1967,7 +2005,7 @@
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_(), a0 = abaAtiva_, s0 = soNaoRespondidos_;
     const path = pathLista_();
-    const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
+    const salvo = reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
     if (mine !== seqLista || c0 !== canal || f0 !== filtro || b0 !== busca.trim() || t0 !== tipoParam_() || a0 !== abaAtiva_ || s0 !== soNaoRespondidos_) return;       // resposta velha de outra aba/filtro/busca: ignora
@@ -2161,7 +2199,7 @@
       return b;
     }
     const falhou = m.status === 'falhou';
-    b.className = 'ms-bolha ' + (m.direcao === 'saida' ? 'saida' : 'entrada') + (m.status === 'pendente' ? ' pendente' : '') + (falhou ? ' falhou' : '');
+    b.className = 'ms-bolha ' + (m.direcao === 'saida' ? 'saida' : 'entrada') + (['pendente', 'fila', 'espera'].includes(m.status) ? ' pendente' : '') + (falhou ? ' falhou' : '');
     if(m.cortesia){b.appendChild(el('small','ms-cortesia-info','Cortesia · atendimento mantido encerrado'));if(podeFerramenta_('responder'))b.appendChild(botao('ms-btn','Tratar como solicitação','cortesia-rever',{id:String(m.id)}));}else if(m.retorno)b.appendChild(el('small','ms-cortesia-info','Retorno ao atendimento anterior'));
     const autor = autorEl_(m); if (autor) b.appendChild(autor);
     if (m.ctx_tipo === 'story') b.appendChild(blocoStory_(m)); else if (m.ctx_tipo === 'resposta' && (m.ctx_texto || m.ctx_qtipo)) b.appendChild(blocoCitacao_(m));
@@ -2192,6 +2230,8 @@
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
     if (m.etapa && m.status === 'pendente') b.appendChild(el('span', 'ms-etapa', m.etapa));
+    if (m.status === 'fila') b.appendChild(el('span', 'ms-etapa', 'Na fila.'));
+    if (m.status === 'espera') b.appendChild(el('span', 'ms-etapa', 'Aguardando a mensagem anterior, que não foi enviada. Resolva a anterior para esta seguir.'));
     if (m.status === 'incerta') b.appendChild(el('span', 'ms-erro', 'Sem confirmação. Confira no ' + (canalDaConversa() === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.'));
     if (falhou) { const e = el('span', 'ms-erro', (m.erro || 'Não enviada.') + ' '); e.appendChild(botao('', 'Tentar de novo', 'reenviar', { tmp: String(m.id) })); e.appendChild(botao('', 'Descartar', 'descartar', { tmp: String(m.id) })); b.appendChild(e); }
     return b;
@@ -2202,7 +2242,8 @@
     const fim = forcarFim || perto_(fio, 90);
     let ancora = null, ancoraY = 0;                       // quem lê o meio/começo: prende a primeira bolha visível, para nada pular
     if (!fim) for (const f of fio.children) { if (f.offsetTop + f.offsetHeight > fio.scrollTop) { ancora = f; ancoraY = f.offsetTop - fio.scrollTop; break; } }
-    const ordenadas = msgs.slice().sort((a, b) => (a.enviada_em || '').localeCompare(b.enviada_em || '') || (typeof a.id === 'number' && typeof b.id === 'number' ? a.id - b.id : 0));
+    const naFila = (m) => typeof m.id === 'string' && m.id.indexOf('tmp-') === 0;   // v7.70.0: o que ainda não saiu fica sempre depois do que o servidor já confirmou
+    const ordenadas = msgs.slice().sort((a, b) => (naFila(a) - naFila(b)) || (a.enviada_em || '').localeCompare(b.enviada_em || '') || (typeof a.id === 'number' && typeof b.id === 'number' ? a.id - b.id : 0));
     const vivos = new Set(ordenadas.map((m) => m.id));
     elMsgs.forEach((b, id) => { if (!vivos.has(id)) { b.remove(); elMsgs.delete(id); } });
     fio.querySelectorAll('.ms-dia').forEach((d) => d.remove());
@@ -3055,6 +3096,16 @@
     gravacao = g; rec.start(); atualizarMic_();
     g.timer = setInterval(() => { atualizarMic_(); if (Date.now() - g.t0 > 300000) rec.stop(); }, 500);
   }
+  /* v7.65: ao encostar o dedo (ou parar o mouse) numa conversa, a leitura dela já sai; ao abrir, a resposta quase sempre está pronta. */
+  const adiantadas_ = new Map();
+  function adiantarConversa_(id) {
+    id = Number(id); if (!id || (aberta && aberta.id === id) || cacheConversa) return;
+    const path = '/msg/mensagens?conversa=' + encodeURIComponent(id), x = adiantadas_.get(path);
+    if (x && Date.now() - x.em < 8000) return;
+    adiantadas_.set(path, { em: Date.now(), p: worker_(path, 'GET') });
+    if (adiantadas_.size > 4) adiantadas_.delete(adiantadas_.keys().next().value);
+  }
+  function pegarAdiantada_(path) { const x = adiantadas_.get(path); adiantadas_.delete(path); return x && Date.now() - x.em < 8000 ? x.p : null; }
   async function abrirConversa(id, espiar) {
     citacaoPend_ = null;   // a citacao nunca atravessa para outra conversa
     const w = ++abrindo;
@@ -3062,10 +3113,21 @@
     const jaNaTela = aberta && aberta.id === id;
     if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); agendadas_ = []; acompanhamento_=null; }
     const path='/msg/mensagens?conversa=' + encodeURIComponent(id);
-    const salvo=APP_RECENTES ? await recentes_(path) : null;
+    const redeP=pegarAdiantada_(path)||worker_(path,'GET');   // v7.65: a rede sai já (ou já saiu ao encostar o dedo); o guardado aparece enquanto ela responde
+    const salvo=await recentes_(path);
     if(w!==abrindo)return;
-    cacheConversa=!!salvo;
-    if(salvo){
+    const rapido=!APP_RECENTES&&!!salvo&&!jaNaTela;   // fora do app: mostra o guardado SEM travar o envio
+    cacheConversa=!!salvo&&!rapido;
+    let guardadoJson='';
+    if(rapido){
+      aberta=salvo.conversa;guardadoJson=JSON.stringify(aberta);
+      ultIdSrv=salvo.mensagens.reduce((m,x)=>(x.id>m?x.id:m),0);
+      msgs=salvo.mensagens.concat(Array.from(pendentes.values()).filter((p)=>p.conversa===id).map((p)=>p.msg));
+      montarConversa(aberta);pintarFio(true);
+      vista='conversa';$('ms-app').dataset.vista='conversa';
+      if(!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa'))TKCamadas.empilhar('ms-conversa',mostrarLista_);
+    }
+    if(salvo&&!rapido){
       aberta=salvo.conversa;msgs=salvo.mensagens;montarConversa(aberta);pintarFio(true);
       vista='conversa';$('ms-app').dataset.vista='conversa';
       if(!APP_RECENTES&&!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa',mostrarLista_);
@@ -3075,9 +3137,10 @@
       info.style.cssText='flex:0 0 auto;margin:0;padding:6px 12px;background:#fff4d9;color:#664200;font-size:12px;line-height:1.4';
       const pai=$('ms-conversa');pai.insertBefore(info,pai.children[1]||null);aviso_('');
     }
-    const r = await worker_(path, 'GET');
+    const r = await redeP;
     if (w !== abrindo) return;
     if (!r.ok) {
+      if(rapido){if(r.semRede)aviso_('Sem conexão. Mostrando a conversa guardada neste aparelho.');else{aviso_(r.erro||'Não foi possível atualizar a conversa agora.');}return;}
       const info=$('ms-cache-status');
       if(info){info.textContent=r.semRede?'Salva no aparelho · sem conexão para responder.':'Salva no aparelho · aguarde atualizar para responder.';aviso_('');}
       else aviso_(r.erro || 'Não foi possível abrir a conversa agora.');
@@ -3088,7 +3151,8 @@
     const c = r.conversa; aberta = c; if (Array.isArray(r.agendadas)) agendadas_ = r.agendadas;if(Object.hasOwn(r,'acompanhamento'))acompanhamento_=r.acompanhamento;
     ultIdSrv = r.mensagens.reduce((m, x) => (x.id > m ? x.id : m), 0);
     msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
-    montarConversa(c); pintarFio(true);
+    if(!rapido||JSON.stringify(c)!==guardadoJson){const tinhaFoco=rapido&&document.activeElement&&document.activeElement.id==='ms-texto';montarConversa(c);if(tinhaFoco)$('ms-texto')?.focus();}   // v7.65: igual ao que já está na tela? não refaz o cabeçalho nem o campo de texto
+    pintarFio(true);
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
     if (!APP_RECENTES && !larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', mostrarLista_);
     pintarLista(); marcarLida();
@@ -3212,78 +3276,111 @@
     if (aberta && aberta.id === c.id) { sincronizarNotas_(r.notas || []); pintarFio(false); }
     desenhar(r.notas || []);
   }
-  let envioMultimidiaEmCurso_ = false;
-  async function enviar(reenvio, daFila) {
-    if (!reenvio && !daFila && envioMultimidiaEmCurso_) return;
-    const donoDaFila = !reenvio && !daFila;
-    if (donoDaFila) envioMultimidiaEmCurso_ = true;
-    let fimOcupado_ = function () {};   // v7.57.0: TKOcupado — fechar a tela no meio do envio avisa antes de perder
+  /* v7.70.0: fila de envio (mensagens-fila.js). Escrever e enviar nunca espera a anterior: a bolha aparece na hora com ⏳ e sai na ordem;
+   * texto fica guardado no aparelho (sobrevive a recarregar), arquivo fica na ordem mas só na memória. */
+  const fila = window.TKFilaEnvio ? window.TKFilaEnvio({ dono: () => contaSessao_(getSessao()), executar: executarFila_, mudou: aoMudarFila_, concluiu: aoConcluirFila_, falhou: aoFalharFila_, restaurou: aoRestaurarFila_, textoErro: textoErroFila_ }) : null;
+  function textoErroFila_(it, r) {
+    let e = TKAviso.textoErro(r, 'Não foi possível enviar agora.');
+    if (r.semRede && !r.semEnvio) e = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
+    return e;
+  }
+  async function executarFila_(it) {
+    const tmp = pendentes.get('tmp-' + it.id), dados = it.dados || {}, an = it.local && it.local.anexo, fim = an && window.TKOcupado ? TKOcupado.inicio() : null;
     try {
-    if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
-    if (!aberta) return;
-    const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
-    if (modoNota && !reenvio) { await salvarNota_(c, ta); return; }
-    if(!reenvio&&assinaturaLigada_()&&!nomeAtendente_()){aviso_('Atualizando seu nome do cadastro. Tente enviar de novo em instantes.');carregarCfgLeitura_();return;}
-    let tmp, texto, idLocal;
-    if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; /* A citação do retry pertence somente ao envio pendente. */ }
-    else {
-      texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
-      if (!texto && !an) return;
-      if (an && c.canal === 'instagram' && texto) { aviso_('O Instagram não aceita texto junto com foto, vídeo ou áudio. Envie o anexo e depois o texto.'); return; }
-      if (RE_LACUNA_.test(texto)) { marcarLacuna_(0); return; }   // v7.40.9: [valor no Pix], [chave Pix]… ainda sem completar
-      texto = assinar_(c, texto);
-      if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
-      idLocal = idLocal_();
-      const idTmp = 'tmp-' + idLocal;
-      const pc = $('ms-previa-chk'), comPrevia = !an && c.canal !== 'instagram' && !!pc && pc.checked && LINK_RE_.test(texto);
-      const cit = citacaoPend_;   // o Worker monta a citacao: messageId no WhatsApp, "> trecho" no Instagram
-      tmp = { idLocal: idLocal, conversa: c.id, previa: comPrevia ? cartaoDoLink_(texto) : null, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, citacao: cit, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
-      if (cit) { tmp.msg.ctx_tipo = 'resposta'; tmp.msg.ctx_qdir = cit.direcao; tmp.msg.ctx_qtipo = cit.tipo; tmp.msg.ctx_texto = cit.trecho; tmp.msg.ctx_autor = cit.autor; }
-      if(tmp.previa&&tmp.previa.imagem)tmp.msg.link_previa=JSON.stringify(tmp.previa);
-      pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
-      ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; citacaoPend_ = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
-    }
-    fimOcupado_ = window.TKOcupado ? TKOcupado.inicio() : fimOcupado_;
-    { const bEnv = $('ms-enviar'); if (bEnv) bEnv.textContent = 'Enviando…'; }
-    if (tmp.anexo && !tmp.anexo.chave) tmp.msg.etapa = 'Enviando o anexo… pode demorar. Não feche esta tela.';
-    pintarFio(true);
-    const idTmp = tmp.msg.id;
-    let r;
-    if (tmp.anexo && !tmp.anexo.chave) {
-      const up = await subirAnexo_(tmp.anexo);
-      tmp.msg.etapa = '';
-      if (!up.ok) r = { ok: false, erro: up.erro || 'Não foi possível enviar o arquivo.', semRede: up.semRede, semEnvio: true };
-      else tmp.anexo.chave = up.anexo;
-    }
-    if (!r) r = await worker_('/msg/enviar', 'POST', Object.assign({ conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined, citada: tmp.citacao ? tmp.citacao.id : undefined },
-      tmp.previa ? { previa: true, previaTitulo: tmp.previa.titulo || '', previaDescricao: tmp.previa.descricao || '', previaImagem:tmp.previa.imagem||'' } : {}));
-    if (r.ok || (r.incerto && r.mensagem)) {
-      pendentes.delete(idTmp);
-      if (aberta && aberta.id === c.id) {
-        msgs = msgs.filter((m) => m.id !== idTmp);
-        const real = r.mensagem; if (real) {
-          if (tmp.msg.localUrl) blobs.set(String(real.id), Promise.resolve(tmp.msg.localUrl));      // a prévia local vira a mídia da mensagem: nada para baixar de novo
-          msgs = msgs.filter((m) => m.id !== real.id); msgs.push(real); if (r.incerto) real.status = 'incerta';
-        }
-        aberta.ult_dir = 'saida'; aberta.nao_lidas = 0;
+      let r;
+      if (an && !an.chave) {
+        if (tmp) { tmp.msg.etapa = 'Enviando o anexo… pode demorar. Não feche esta tela.'; if (aberta && aberta.id === it.conversa) pintarFio(false); }
+        const up = await subirAnexo_(an);
+        if (tmp) tmp.msg.etapa = '';
+        if (!up.ok) r = { ok: false, erro: up.erro || 'Não foi possível enviar o arquivo.', semRede: up.semRede, semEnvio: true };
+        else an.chave = up.anexo;
       }
-      if (r.incerto) aviso_(r.erro || 'Sem confirmação do envio.'); else aviso_('');
-      carregarLista(false);
-    } else {
-      tmp.msg.status = 'falhou'; tmp.msg.erro = TKAviso.textoErro(r, 'Não foi possível enviar agora.');
-      if (r.semRede && !r.semEnvio) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
+      if (!r) r = await worker_('/msg/enviar', 'POST', Object.assign({ conversa: it.conversa, texto: dados.texto, idLocal: it.id, anexo: an ? an.chave : undefined, seg: an ? an.seg : undefined, citada: dados.citada || undefined },
+        dados.previa ? { previa: true, previaTitulo: dados.previaTitulo || '', previaDescricao: dados.previaDescricao || '', previaImagem: dados.previaImagem || '' } : {}), false, undefined, true);
+      return r;
+    } finally { if (fim) fim(); }
+  }
+  function rotuloItemFila_(it, lista) {
+    if (it.estado === 'erro') return 'falhou';
+    if (it.estado === 'enviando') return 'pendente';
+    const antes = lista.filter((x) => x.seq < it.seq);
+    return antes.some((x) => x.estado === 'erro') ? 'espera' : (antes.length ? 'fila' : 'pendente');
+  }
+  function aoMudarFila_(it, lista) {
+    const todos = lista && lista.length ? lista : [it];
+    todos.forEach((x) => { const p = pendentes.get('tmp-' + x.id); if (!p) return; p.msg.status = rotuloItemFila_(x, todos); p.msg.erro = x.estado === 'erro' ? x.erro : ''; });
+    if (aberta && aberta.id === it.conversa) pintarFio(false);
+  }
+  let listaPendente_ = 0;
+  function atualizarListaDepois_() { clearTimeout(listaPendente_); listaPendente_ = setTimeout(() => { if ($('overlay-mensagens')?.classList.contains('aberto')) carregarLista(false); }, 400); }
+  async function aoConcluirFila_(it, r) {
+    const idTmp = 'tmp-' + it.id, tmp = pendentes.get(idTmp);
+    pendentes.delete(idTmp);
+    if (aberta && aberta.id === it.conversa) {
+      msgs = msgs.filter((m) => m.id !== idTmp);
+      const real = r.mensagem; if (real) {
+        if (tmp && tmp.msg.localUrl) blobs.set(String(real.id), Promise.resolve(tmp.msg.localUrl));      // a prévia local vira a mídia da mensagem: nada para baixar de novo
+        msgs = msgs.filter((m) => m.id !== real.id); msgs.push(real); if (r.incerto) real.status = 'incerta';
+      }
+      aberta.ult_dir = 'saida'; aberta.nao_lidas = 0; pintarFio(false);
     }
-    if (aberta && aberta.id === c.id) pintarFio(true);
-    if (!reenvio && r.ok && anexosFila_.length && aberta && aberta.id === c.id && !cacheConversa) {
-      let aceito=false;
-      while(anexosFila_.length&&!aceito&&aberta?.id===c.id)aceito=!!(await escolherArquivo_(anexosFila_.shift()));
-      if (aceito && anexoPend && aberta && aberta.id === c.id) await enviar(null, true);
+    if (r.incerto) aviso_(r.erro || 'Sem confirmação do envio.');
+    atualizarListaDepois_();
+    if (it.local && it.local.anexo && r.ok && anexosFila_.length && aberta && aberta.id === it.conversa && !cacheConversa) {
+      let aceito = false;
+      while (anexosFila_.length && !aceito && aberta?.id === it.conversa) aceito = !!(await escolherArquivo_(anexosFila_.shift()));
+      if (aceito && anexoPend && aberta && aberta.id === it.conversa) await enviar();
     }
-    } finally {
-      fimOcupado_();
-      { const bEnv = $('ms-enviar'); if (bEnv && bEnv.textContent === 'Enviando…') bEnv.textContent = 'Enviar'; }
-      if (donoDaFila) envioMultimidiaEmCurso_ = false;
+  }
+  function aoFalharFila_(it) {
+    if (aberta && aberta.id === it.conversa) return;      // na conversa aberta a bolha já mostra o erro e o "Tentar de novo"
+    const c = lista.find((x) => x.id === it.conversa);
+    aviso_('Uma mensagem' + (c ? ' para ' + rotuloContato(c) : '') + ' não foi enviada. Abra a conversa e toque em Tentar de novo.');
+  }
+  function aoRestaurarFila_(novos) {
+    novos.forEach((it) => {
+      const d = it.dados || {}, cit = d.citacao;
+      const msg = { id: 'tmp-' + it.id, direcao: 'saida', tipo: 'texto', texto: d.texto, enviada_em: new Date(it.criado).toISOString(), status: it.estado === 'erro' ? 'falhou' : 'fila', erro: it.estado === 'erro' ? it.erro : '', midia: 0, localUrl: '' };
+      if (cit) { msg.ctx_tipo = 'resposta'; msg.ctx_qdir = cit.direcao; msg.ctx_qtipo = cit.tipo; msg.ctx_texto = cit.trecho; msg.ctx_autor = cit.autor; }
+      pendentes.set(msg.id, { idLocal: it.id, conversa: it.conversa, previa: null, anexo: null, citacao: cit || null, msg });
+      if (aberta && aberta.id === it.conversa && !msgs.some((m) => m.id === msg.id)) msgs.push(msg);
+    });
+    if (aberta && novos.some((it) => it.conversa === aberta.id)) pintarFio(false);
+    const falhas = novos.filter((it) => it.estado === 'erro').length;
+    if (falhas) aviso_(falhas === 1 ? 'Uma mensagem guardada neste aparelho não foi enviada. Abra a conversa e toque em Tentar de novo.' : falhas + ' mensagens guardadas neste aparelho não foram enviadas. Abra as conversas e toque em Tentar de novo.');
+  }
+  async function enviar(reenvio) {
+    if (!fila) { aviso_('Atualize a página para enviar.'); return; }
+    if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
+    if (reenvio) {       // "Tentar de novo": a mesma chave, o servidor não duplica
+      const id = String(reenvio).replace(/^tmp-/, ''); if (fila && fila.itensDaConversa) { if (await fila.tentar(id)) return; }
+      return;
     }
+    if (!aberta) return;
+    const c = aberta, ta = $('ms-texto'); if (!ta) return;
+    if (modoNota) { await salvarNota_(c, ta); return; }
+    if(assinaturaLigada_()&&!nomeAtendente_()){aviso_('Atualizando seu nome do cadastro. Tente enviar de novo em instantes.');carregarCfgLeitura_();return;}
+    let texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
+    if (!texto && !an) return;
+    if (an && c.canal === 'instagram' && texto) { aviso_('O Instagram não aceita texto junto com foto, vídeo ou áudio. Envie o anexo e depois o texto.'); return; }
+    if (RE_LACUNA_.test(texto)) { marcarLacuna_(0); return; }   // v7.40.9: [valor no Pix], [chave Pix]… ainda sem completar
+    texto = assinar_(c, texto);
+    if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
+    const idLocal = idLocal_(), idTmp = 'tmp-' + idLocal;
+    const pc = $('ms-previa-chk'), comPrevia = !an && c.canal !== 'instagram' && !!pc && pc.checked && LINK_RE_.test(texto);
+    const cit = citacaoPend_;   // o Worker monta a citacao: messageId no WhatsApp, "> trecho" no Instagram
+    const cartao = comPrevia ? cartaoDoLink_(texto) : null;
+    const tmp = { idLocal: idLocal, conversa: c.id, previa: cartao, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, citacao: cit, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
+    if (cit) { tmp.msg.ctx_tipo = 'resposta'; tmp.msg.ctx_qdir = cit.direcao; tmp.msg.ctx_qtipo = cit.tipo; tmp.msg.ctx_texto = cit.trecho; tmp.msg.ctx_autor = cit.autor; }
+    if(tmp.previa&&tmp.previa.imagem)tmp.msg.link_previa=JSON.stringify(tmp.previa);
+    pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
+    const dados = { texto, citada: cit ? cit.id : undefined, citacao: cit ? { id: cit.id, direcao: cit.direcao, tipo: cit.tipo, trecho: cit.trecho, autor: cit.autor } : undefined };
+    if (cartao) Object.assign(dados, { previa: true, previaTitulo: cartao.titulo || '', previaDescricao: cartao.descricao || '', previaImagem: cartao.imagem || '' });
+    ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; citacaoPend_ = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
+    const depois = fila.itensDaConversa(c.id).filter((x) => x.estado !== 'erro').length;
+    tmp.msg.status = fila.itensDaConversa(c.id).some((x) => x.estado === 'erro') ? 'espera' : (depois ? 'fila' : 'pendente');
+    pintarFio(true);
+    await fila.adicionar({ id: idLocal, conversa: c.id, dados, memoria: !!an, local: an ? { anexo: tmp.anexo } : undefined });
   }
 
   /* ---------- ao vivo ---------- */
@@ -3523,7 +3620,8 @@
     if (r.saude) pintarSaude_(r.saude);
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
     if(busca.trim())for(const c of r.conversas){const atual=lista.find(x=>x.id===c.id);if(atual)Object.assign(atual,c);}
-    if (busca.trim()||r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
+    /* v7.71.0: a mensagem nova aparece na conversa aberta sem esperar a lista inteira recarregar (a lista atualiza em paralelo). */
+    const listaAtualizando_ = (busca.trim()||r.conversas.some((c) => canal === 'todos' || c.canal === canal)) ? carregarLista(false) : null;
     if(aberturaDaSonda!==abrindo){agendar();return;}
     if (aberta) {
       if(Array.isArray(r.agendadas)){agendadas_=r.agendadas;desenharFaixaAgenda_();}
@@ -3546,12 +3644,13 @@
         msgs = msgs.concat(novas);
         if (!noFim && entradas) novasAbaixo += entradas;
         pintarFio(noFim);
-        if(APP_RECENTES&&!cacheConversa) await recentes_('/msg/mensagens?conversa='+aberta.id,{ok:true,conversa:aberta,mensagens:msgs.filter(m=>typeof m.id==='number')});
+        if(!cacheConversa) await recentes_('/msg/mensagens?conversa='+aberta.id,{ok:true,conversa:aberta,mensagens:msgs.filter(m=>typeof m.id==='number')});
         if(aberturaDaSonda!==abrindo){agendar();return;}
         if (noFim && entradas && !document.hidden) { aberta.nao_lidas = 1; marcarLida(); }
         else if (entradas && aberta) aberta.nao_lidas = (aberta.nao_lidas || 0) + entradas;
       }
     }
+    if (listaAtualizando_) await listaAtualizando_;
     agendar();
   }
   /* selo no botão "Mensagens" do painel: consulta leve, só com a página visível e a cada ~1 min */
@@ -3994,7 +4093,7 @@
     else if (a === 'story-ver') { const mid = Number(b.dataset.id); try { abrirLuz_(b.dataset.video ? 'video' : 'imagem', await midiaBlob_(mid, true)); } catch (e) { aviso_('Não consegui abrir o story agora.'); } }
     else if (a === 'stories-no-ar') { const mm = msgs.find((x) => String(x.id) === b.dataset.id); if (mm) abrirStories_(mm); }
     else if (a === 'reenviar') enviar(b.dataset.tmp);
-    else if (a === 'descartar') { pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
+    else if (a === 'descartar') { if (fila) await fila.descartar(String(b.dataset.tmp).replace(/^tmp-/, '')); pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }
     else if (a === 'conexao') { painel = painel === 'conexao' ? '' : 'conexao'; desenharEstado(); }
     else if (a === 'trocar-usuario') abrirTrocaUsuario_();
@@ -4043,7 +4142,7 @@
 
   /* ---------- abrir / fechar ---------- */
   async function recarregar() {
-    const listaEmCurso=APP_RECENTES ? carregarLista(true) : null;
+    const listaEmCurso=carregarLista(true);   // v7.65: a lista não espera o resumo (antes eram em fila)
     carregarCfgLeitura_();
     resumo = await worker_('/msg/resumo', 'GET');
     if (!resumo.ok) { const ex = $('ms-extra'); ex.textContent = ''; ex.appendChild(el('p', 'ms-vazio', resumo.erro || 'Não foi possível carregar agora.')); return; }
@@ -4060,7 +4159,7 @@
     const f = $('ms-fechar'); if (f && larga()) f.focus();
   }
   let atualizacaoImediata_ = false;
-  async function atualizarAgora_(){if(atualizacaoImediata_||!podeGerir()||!$('overlay-mensagens')?.classList.contains('aberto'))return;atualizacaoImediata_=true;clearTimeout(timerLive);try{await carregarLista(false);await sondar();}finally{atualizacaoImediata_=false;}}
+  async function atualizarAgora_(){if(atualizacaoImediata_||!podeGerir()||!$('overlay-mensagens')?.classList.contains('aberto'))return;atualizacaoImediata_=true;clearTimeout(timerLive);try{await Promise.all([carregarLista(false),sondar()]);}finally{atualizacaoImediata_=false;}   /* v7.71.0: mensagem nova não espera a lista recarregar */}
   window.addEventListener('focus',atualizarAgora_);document.addEventListener('visibilitychange',()=>{if(!document.hidden)atualizarAgora_();});
   if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={atualizar:atualizarAgora_,voltar:voltarApp_,abrirConversa:function(id,espiar){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id,espiar===true);}};
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { const o = $('overlay-mensagens'); if (o && o.classList.contains('aberto')) { espera = ESPERA_MS; agendar(300); } else sondarSelo(); } });

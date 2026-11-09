@@ -19,12 +19,33 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## 7.68.0 — encerrar cliente fecha todos os canais; pontuação pela média dos canais
+## 7.73.0 — encerrar cliente fecha todos os canais; pontuação pela média dos canais
 
 - Mensageiro: encerrar uma conversa (pela seleção, pelo menu da conversa, em lote ou automaticamente por falta de resposta no Acompanhar) encerra todos os canais abertos do mesmo cliente, na mesma operação. A pergunta "Incluir os outros canais deste cliente?" saiu; o aviso diz quais canais também serão encerrados.
 - O Worker garante a regra (transação D1, idempotente, sem apagar dados) e reabrir continua individual.
 - Ficha do cliente: uma venda encerrada em vários canais conta como uma compra só.
 - Pontuação (Hist.): cliente com vários canais conta uma vez, pela média dos canais. Histórico antigo não é reescrito; o cálculo agrupa por rodada de encerramento. Regras e exemplos em docs/ia/mensageiro-pontuacao.md.
+
+## 7.72.0 — painel abre mais leve no celular
+
+- A lista de produtos do painel (e a vitrine) reconhece o tecido de cada produto por um índice lembrado, em vez de refazer a normalização de todos os apelidos para cada produto. No teste, desenhar 700 produtos caiu de ~57 ms para menos de 1 ms (mesmos resultados). No celular emulado esse trabalho ocupava ~1,4 s do processador logo ao abrir o painel, atrasando também o Mensageiro.
+
+## 7.71.0 — Mensageiro: mensagem nova aparece sem esperar a lista
+
+- Quando chega uma mensagem do cliente (ou ao voltar para a tela), ela aparece na conversa aberta na hora; a lista de conversas atualiza ao lado, sem segurar a mensagem (antes a conversa esperava a lista inteira recarregar).
+
+## 7.70.0 — Mensageiro: fila de envio
+
+- Dá para escrever e enviar outras mensagens enquanto uma ainda está saindo, na mesma conversa e em outras. Cada uma aparece na hora na conversa com ⏳ e vira ✓ quando o servidor confirma.
+- Na mesma conversa a ordem é sempre a que você escreveu; conversas diferentes saem ao mesmo tempo.
+- Se uma mensagem falha, as seguintes DA MESMA conversa esperam ("Aguardando a anterior") e as outras conversas seguem. "Tentar de novo" reenvia com a mesma chave (não duplica); "Descartar" libera as seguintes.
+- O texto fica guardado no aparelho antes de sair e volta ao recarregar a página. Mensagem guardada há mais de 30 minutos não sai sozinha: pede para você conferir. Foto, vídeo e áudio entram na mesma ordem, mas ficam só na memória.
+
+## 7.69.0 — Mensageiro mais rápido: abre na hora e conversa sem espera
+
+- A lista de conversas, a conversa aberta e a troca de aba aparecem do que está guardado no aparelho (por conta, sem senhas, links ou fotos) enquanto a rede confirma em segundo plano; o campo de resposta não trava e o que você digitou não some quando a atualização chega.
+- A lista não espera mais o resumo para carregar; ao encostar o dedo (ou parar o mouse) numa conversa, a leitura dela já começa.
+- Servidor: resumo, lista e conversa fazem as consultas independentes ao mesmo tempo (antes em fila). Nenhum dado é migrado ou apagado.
 
 ## 7.67.0 — excluir solicitação de cliente, com permissão
 
