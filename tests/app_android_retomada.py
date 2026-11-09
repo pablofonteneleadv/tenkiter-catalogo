@@ -5,6 +5,7 @@ from mock import install,SESSION,PERMS_ALL,PNG
 from mock_msg import novo_estado
 from playwright.sync_api import sync_playwright
 BASE=os.environ.get('TK_BASE','http://localhost:8765/');OLD=os.environ.get('TK_BASELINE')=='1'
+import tempfile;_t=os.path.join(tempfile.mkdtemp(),'voz.m4a');subprocess.run(['ffmpeg','-v','error','-y','-f','lavfi','-i','sine=frequency=440:duration=2:sample_rate=44100','-ac','1','-c:a','aac',_t],check=True);M4A_REAL=open(_t,'rb').read()
 OUT=Path(os.environ.get('TK_EVIDENCE_DIR',str(Path(__file__).parent/'saida')))/'android-retomada';OUT.mkdir(parents=True,exist_ok=True)
 with sync_playwright() as p:
  browser=p.chromium.launch(args=['--no-sandbox'])
@@ -34,8 +35,8 @@ with sync_playwright() as p:
    else:pg.locator('#ms-mic').click()
   capture=fc.value;assert capture.element.get_attribute('accept')=='audio/mp4';assert capture.element.get_attribute('capture')=='user'
   assert not st['ig']['msg']['envios']
-  capture.set_files({'name':'gravacao.m4a','mimeType':'audio/mp4','buffer':b'\x00\x00\x00\x18ftypM4A fake'})
-  pg.wait_for_selector('#ms-stage audio');assert not st['ig']['msg']['envios'];assert pg.locator('#ms-enviar').is_enabled()
+  capture.set_files({'name':'gravacao.m4a','mimeType':'audio/mp4','buffer':M4A_REAL})
+  pg.wait_for_selector('#ms-stage audio');assert pg.evaluate("fetch(document.querySelector('#ms-stage audio').src).then(r=>r.blob()).then(b=>b.type)")=='audio/ogg','áudio da conversa de WhatsApp precisa virar OGG/Opus';assert not st['ig']['msg']['envios'];assert pg.locator('#ms-enviar').is_enabled()
   pg.evaluate('document.documentElement.style.fontSize="130%"')
   if w<600:pg.set_viewport_size({'width':w,'height':470})
   pg.screenshot(path=str(OUT/f'audio-previa-{w}.png'));assert pg.locator('body').evaluate('(b)=>b.scrollWidth<=innerWidth+1')
