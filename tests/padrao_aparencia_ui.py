@@ -58,7 +58,7 @@ MEDIR = r"""(raiz) => {
 }"""
 FOCO = """() => { const a = document.activeElement; if (!a || a === document.body || !a.matches(':focus-visible')) return null; const s = getComputedStyle(a);
  return {el: a.tagName.toLowerCase() + (a.id ? '#' + a.id : '') + (typeof a.className === 'string' && a.className ? '.' + a.className.trim().split(/\\s+/)[0] : ''), st: s.outlineStyle, w: parseFloat(s.outlineWidth), c: s.outlineColor, sh: s.boxShadow !== 'none'}; }"""
-FOCO_OK = {'rgb(230, 126, 34)', 'rgb(168, 82, 0)'}
+FOCO_OK = {'rgb(230, 126, 34)', 'rgb(168, 82, 0)', 'rgb(211, 84, 0)'}   # rgb(211, 84, 0) = #D35400, --tk-foco-cor (v7.65)
 
 def carrega(nome):
     src = (ROOT / 'tests' / nome).read_text(encoding='utf-8').split('\nwith sync_playwright() as p:')[0]

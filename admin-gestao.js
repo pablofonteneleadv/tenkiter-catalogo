@@ -1,7 +1,7 @@
 /* ====================================================================
  * TENKiTER — admin-gestao.js (v3.1) — extras do painel do lojista
  *   • Pedidos (etapas, mensagem pronta de WhatsApp por etapa, nota interna)
- *   • Números reais (visualizações, cliques no WhatsApp, conversão, mais vistas, por dia)
+ *   • Números reais (visualizações, cliques no WhatsApp, conversão, mais vistos, por dia)
  *   • Exportar / importar planilha CSV (com prévia antes de gravar)
  *   • Gerar códigos das peças antigas, lista de peças para o WhatsApp, lote de categoria e estoque
  *   • (Integrações passaram para Conexões → Meta, Google e busca)
@@ -190,7 +190,7 @@
     h += '<p class="g-nota">Toque no WhatsApp não é venda confirmada: é a pessoa que pediu para falar com a loja. Venda confirmada é o pedido marcado como “Concluído”' + (ped.concluidos ? ' (' + ped.concluidos + ' no período, ' + formatarReal(ped.valorConcluidos) + ')' : '') + '.</p>';
     h += '<h3>Visualizações por dia</h3><div class="mt-grafico" role="img" aria-label="Gráfico de visualizações por dia nos últimos ' + r.dias + ' dias' + (melhor && melhor.visualizacoes ? '. Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' com ' + melhor.visualizacoes + ' visualizações' : '') + '">' + r.porDia.map((d) => barraDia_(d, max)).join('') + '</div>' +
       '<div class="mt-eixo"><span>' + formatarDiaCurto_(r.porDia[0].dia) + '</span><span>' + (melhor && melhor.visualizacoes ? 'Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' (' + melhor.visualizacoes + ')' : '') + '</span><span>' + formatarDiaCurto_(r.porDia[r.porDia.length - 1].dia) + '</span></div>';
-    h += '<h3>Produtos mais vistas</h3>';
+    h += '<h3>Produtos mais vistos</h3>';
     h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Produto</th><th>Pessoas</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
       r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td>' + x.visualizacoes + '</td><td>' + x.whatsapp + '</td><td>' + (x.taxa === null ? '—' : String(x.taxa).replace('.', ',') + '%') + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste período. Escolha um período maior acima.</p>';
     h += '<h3>Por categoria</h3>';
@@ -388,7 +388,7 @@
     h += mtTabela_('Como usaram', r.porOrigem, { cab: 'Como', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'origem' });
     h += mtTabela_('Aparelho', r.porDispositivo, { cab: 'Aparelho', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'dispositivo' });
     h += mtTabela_('De onde vieram', r.porFonte, { cab: 'Origem', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'fonte' });
-    h += '<h3>Produtos mais vistas</h3>';
+    h += '<h3>Produtos mais vistos</h3>';
     h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Produto</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
       r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td><b>' + (x.pessoas === undefined ? '—' : mtNum_(x.pessoas)) + '</b></td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + mtPct_(x.taxa) + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste recorte. Troque o período ou o filtro acima.</p>';
     h += mtTabela_('Por categoria', r.categorias.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Categoria', pessoas: true, filtro: 'categoria' });
@@ -671,7 +671,7 @@
    * ==================================================================== */
   const MODELOS_PUSH = [
     { rotulo: 'Novidades', titulo: 'Chegou novidade! 🆕', msg: 'Produtos novos na TENKiTER Modas. Vem conferir no catálogo!' },
-    { rotulo: 'Últimos produtos', titulo: 'Últimos produtos! ⏳', msg: 'Alguns produtos estão acabando. Garanta a sua no catálogo.' },
+    { rotulo: 'Últimos produtos', titulo: 'Últimos produtos! ⏳', msg: 'Alguns produtos estão acabando. Garanta o seu no catálogo.' },
     { rotulo: 'Reposição', titulo: 'Voltou ao estoque ✨', msg: 'Os produtos que você pediu chegaram de novo. Confira no catálogo.' },
     { rotulo: 'Fantasias', titulo: 'Fantasias infantis 🎭', msg: 'Veja as fantasias disponíveis na TENKiTER Modas, em Crateús.' }
   ];

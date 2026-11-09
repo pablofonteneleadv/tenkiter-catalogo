@@ -26,6 +26,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Ficha do cliente: uma venda encerrada em vários canais conta como uma compra só.
 - Pontuação (Hist.): cliente com vários canais conta uma vez, pela média dos canais. Histórico antigo não é reescrito; o cálculo agrupa por rodada de encerramento. Regras e exemplos em docs/ia/mensageiro-pontuacao.md.
 
+## 7.65.0 — textos com concordância certa e acabamento visual
+
+- Textos de interface após a troca de "peça" por "produto": "Produtos mais vistos", "os próximos produtos colocados em preparação", "o próximo produto", "produtos parados", "vendidos separadamente", "os marcados", "arquivados" e afins, com o gênero certo.
+- Textos já gravados continuam reconhecidos: a dica da composição de Fotos IA vale para "peças" e "produtos vendidos separadamente"; o Histórico trata "Editou a peça" e "Editou o produto" como a mesma ação genérica. Nada foi apagado nem migrado.
+- Mensagens no computador: as abas do painel estreito não partem mais a palavra ("Solicitações", "Em atendimento"); alvo de 44 px mantido.
+- Currículos e "Minha conta": as abas voltam a dividir a linha (Entrar / Criar conta deixou de ficar com 75 px).
+- Foco por teclado: anel laranja escuro (#D35400, contraste de 4,2:1 sobre branco; antes 2,9:1) em um único token, `--tk-foco-cor`.
+- Lista da Gestão: caixa de seleção com borda branca, anel e sombra escuros; vazia e marcada ficam inequívocas sobre foto clara ou escura (alvo de 44 px igual).
+
 ## 7.64.0 — solicitações de clientes com fotos à vista e registro em segundo plano
 
 - Solicitações de clientes mostra até três miniaturas (4:5) lado a lado em cada pedido; o toque amplia e permite passar por todas as fotos, anexar à resposta e voltar à lista.
