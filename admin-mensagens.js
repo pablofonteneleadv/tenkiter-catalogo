@@ -3061,6 +3061,16 @@
     if (fotoApp) blob = f;
     else if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outro.'); return; } }
     else if (tipo!=='vídeo' && blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MB).'); return; }
+    if (tipo === 'áudio' && aberta && /^whatsapp/.test(aberta.canal || '') && !/^audio\/ogg/.test(blob.type || '')) {
+      /* v7.78: o WhatsApp só toca voz em OGG/Opus; M4A/WebM/3GP chegavam ao cliente como "0:00" sem som. Converte aqui, no aparelho. */
+      if (!window.TKAudioOgg) { aviso_('Preparação de áudio indisponível. Recarregue a página.'); return; }
+      const id = aberta.id, epoca = epocaConta_;
+      aviso_('Preparando o áudio…');
+      try { const r = await TKAudioOgg.converter(blob); blob = r.blob; if (!seg) seg = r.seg; }
+      catch (e) { aviso_(e.message || 'Não consegui preparar o áudio.'); return; }
+      aviso_('');
+      if (!aberta || aberta.id !== id || epoca !== epocaConta_) { aviso_('A conversa mudou. Grave o áudio de novo na conversa certa.'); return; }
+    }
     if (tipo === 'vídeo') {
       const sessao=getSessao(),id=aberta?.id,epoca=epocaConta_;
       if(!window.TKVideoPreparation){aviso_('Preparação de vídeo indisponível. Recarregue a página.');return;}

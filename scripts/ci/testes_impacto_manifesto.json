@@ -129,6 +129,9 @@
       "mensagens",
       "midia"
     ],
+    "tests/mensagens_audio_ogg.py": [
+      "mensagens"
+    ],
     "tests/mensagens_canais_selecao.py": [
       "mensagens"
     ],
