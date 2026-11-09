@@ -13,7 +13,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   global.caches = { default: { async match(r) { return cache.has(r.url) ? Response.json(cache.get(r.url)) : undefined; }, async put(r, v) { cache.set(r.url, await v.json()); } } };
   let envios = [];
   global.fetch = async (u, opt) => {
-    if (String(u) === 'https://backend.test') return Response.json({ ok: true, sessao: 'tk3.5588999999999.' + Math.floor(Date.now() / 1000 + 30 * 86400) + '.simulada', usuario: { nome: 'Ana Teste', permissoes: JSON.parse(opt.body||'{}').whatsapp==='88999999998'?['esteira','esteira_arquivar_fotos']:['gerir_acessos'] } });
+    if (String(u) === 'https://backend.test') return Response.json({ ok: true, sessao: 'tk3.5588999999999.' + Math.floor(Date.now() / 1000 + 30 * 86400) + '.simulada', usuario: Object.assign({ nome: 'Ana Teste', permissoes: JSON.parse(opt.body||'{}').whatsapp==='88999999998'?['esteira','esteira_arquivar_fotos']:['gerir_acessos'] },JSON.parse(opt.body||'{}').whatsapp==='88999999997'?{nome:'Bia Atendente',permissoes:['msg_acessar','msg_responder'],acessosConfiguraveis:true,perfis:['Atendimento']}:{}) });
     assert(/\/send-(text|image)$/.test(String(u)), 'Serviço não simulado');
     envios.push(JSON.parse(opt.body)); return Response.json({ messageId: 'simulado-' + envios.length });
   };

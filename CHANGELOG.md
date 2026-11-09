@@ -25,6 +25,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - A lista não espera mais o resumo para carregar; ao encostar o dedo (ou parar o mouse) numa conversa, a leitura dela já começa.
 - Servidor: resumo, lista e conversa fazem as consultas independentes ao mesmo tempo (antes em fila). Nenhum dado é migrado ou apagado.
 
+## 7.67.0 — excluir solicitação de cliente, com permissão
+
+- Mensageiro → Solicitações de clientes ganha "Excluir solicitação": confirmação nativa dizendo a consequência e aviso "Solicitação excluída · Desfazer". A solicitação some de todas as listas e filtros; fotos, conversa e registros continuam guardados (exclusão lógica, com quem excluiu e quando).
+- Nova permissão "Excluir solicitações de clientes": por padrão só o Admin total; ele libera outras pessoas em Acessos → Ferramentas de Mensagens. O servidor recusa quem não tem a permissão, mesmo por chamada direta. Funciona para sessões já abertas.
+- D1: duas colunas novas e opcionais (`excluida_em`, `excluida_por`) criadas de forma aditiva; nada é apagado.
+
 ## 7.66.0 — dívida de padrões: laranja, z-index e avisos (sem mudança visual)
 
 - Laranja solto: 8 usos do laranja da marca em avisos, Minha conta, convite do app e telas de gestão passam a `var(--laranja, #E67E22)` (mesmo valor, com fallback); o check reconhece o fallback do próprio token como correto.
