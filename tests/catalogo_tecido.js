@@ -54,3 +54,13 @@ TKTecido.aplicar({versao:1,itens:[{nome:'Crepe Dior',apelidos:['Dior','Crepe Di�
 assert.equal(TKTecido.ler({Descricao:'Tecido: Dior'}),'Crepe Dior');
 assert.equal(TKTecido.serializar('Produto','Dior'),'Produto\nTecido: Crepe Dior');
 assert.deepEqual(Array.from(TKTecido.opcoes([{Descricao:'Tecido: Dior'}])),['Crepe Dior']);
+
+// v7.72.0: índice de apelidos (lembrado entre desenhos da lista) — o primeiro tecido do cadastro com o apelido continua ganhando,
+// acento e caixa não importam, e trocar o cadastro refaz o índice.
+TKTecido.aplicar({versao:2,itens:[{nome:'Viscose',apelidos:['viscose lisa']},{nome:'Linho',apelidos:['Viscose Lisa','Linho cru']}]});
+assert.equal(TKTecido.resolver('VISCOSE LISA'),'Viscose');
+assert.equal(TKTecido.resolver('linho cru'),'Linho');
+assert.equal(TKTecido.resolver('Seda'),'Seda');
+TKTecido.aplicar({versao:3,itens:[{nome:'Linho',apelidos:['viscose lisa']}]});
+assert.equal(TKTecido.resolver('viscose lisa'),'Linho');
+console.log('catalogo_tecido: índice de apelidos aprovado');

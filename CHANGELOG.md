@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.72.0 — painel abre mais leve no celular
+
+- A lista de produtos do painel (e a vitrine) reconhece o tecido de cada produto por um índice lembrado, em vez de refazer a normalização de todos os apelidos para cada produto. No teste, desenhar 700 produtos caiu de ~57 ms para menos de 1 ms (mesmos resultados). No celular emulado esse trabalho ocupava ~1,4 s do processador logo ao abrir o painel, atrasando também o Mensageiro.
+
 ## 7.71.0 — Mensageiro: mensagem nova aparece sem esperar a lista
 
 - Quando chega uma mensagem do cliente (ou ao voltar para a tela), ela aparece na conversa aberta na hora; a lista de conversas atualiza ao lado, sem segurar a mensagem (antes a conversa esperava a lista inteira recarregar).
