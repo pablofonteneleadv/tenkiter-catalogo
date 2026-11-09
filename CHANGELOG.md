@@ -25,6 +25,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Novo atalho "Esteira" em Ferramentas (quem tem o acesso Esteira ou é Admin total).
 - Teste do servidor com o perfil completo sem Admin: Esteira, Postador, Fotos com IA e Mensageiro abrem; funil, métricas, exportar e configurações do Mensageiro continuam fechados.
 
+## 7.76.1 — Esteira: lista "Usadas" (e qualquer lista com mais de 100 fotos) volta a abrir
+
+- A lista de fotos recebidas dava erro no servidor quando tinha 100 ou mais fotos diferentes (ex.: "Usadas · 121"), porque a consulta de fotos repetidas passava de 100 parâmetros, o limite do banco. Agora a consulta é feita em blocos.
+
 
 ## 7.76.0 — Esteira: quem tem o acesso "Esteira" entra
 
