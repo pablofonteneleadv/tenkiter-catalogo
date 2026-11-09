@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
 RAIZ = Path(AQUI).parent
 OK, BAD = [], []
-LARANJA = "rgb(230, 126, 34)"
+LARANJA = "rgb(211, 84, 0)"   # #D35400 = --tk-foco-cor (v7.65: laranja escuro, contraste >= 3,5:1 no anel de foco)
 
 
 def chk(n, c, e=""):
@@ -88,7 +88,7 @@ with sync_playwright() as p:
         ctx, pg, st, er = novo(b, "index.html", w, h)
         pg.locator("#busca").focus(); pg.keyboard.press("Tab"); pg.wait_for_timeout(100)
         o = pg.evaluate("(()=>{const c=getComputedStyle(document.activeElement);return [c.outlineWidth,c.outlineColor,c.outlineStyle]})()")
-        chk(f"{w} catálogo: foco por teclado com 3 px laranja", o[0] == "3px" and o[2] == "solid" and o[1] in (LARANJA, "rgb(13, 13, 13)", "rgb(168, 82, 0)"), o)
+        chk(f"{w} catálogo: foco por teclado com 3 px laranja", o[0] == "3px" and o[2] == "solid" and o[1] in (LARANJA, "rgb(230, 126, 34)", "rgb(13, 13, 13)", "rgb(168, 82, 0)"), o)
         ctx.close()
 
     # ---------- 2. Admin: botão de fechar, camadas, capa do vídeo, abas, tamanho das folhas ----------

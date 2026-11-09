@@ -39,15 +39,16 @@ BANIDOS = [  # (nome, regex, explicação)
 ]
 # exceções documentadas: (arquivo, regra, trecho que pode ficar)
 PERMITIDO = [
-    ("*", "peça", r"Peça (ao|para|a ele)|peça a ele|vendidas separadamente"),   # "Peça" = verbo pedir; texto de DADOS já gravado
+    ("*", "peça", r"Peça (ao|para|a ele)|peça a ele|vendid(as|\[ao\]s) separadamente"),   # "Peça" = verbo pedir; texto de DADOS já gravado
     ("*", "Apagar (rótulo)", r"apagar o que guardamos|apague os dados"),
+    ("admin.html", "peça", r"peça\)\$/\.test\(a\.ultimaAcao"),   # v7.65: reconhece o texto antigo gravado pelo Apps Script ("Editou a peça"); dado, não rótulo
     ("privacidade.html", "*", r".*"), ("exclusao-dados.html", "*", r".*"),      # textos jurídicos: revisão própria
     ("fotoia-plano.js", "peça", r".*"),   # mensagens espelham as do Worker de Fotos IA (testes node comparam o texto); migrar junto com o Worker
     ("common.js", "*", r".*"), ("padrao-dados.js", "sem conexão fora do padrão", r".*"),   # módulo do lote de regras e dados: alinhar a frase com common.js no enforcement
    # sacola/peça/"Sem conexão com o servidor" aqui: ficam para o lote que pode tocar common.js (o APK embute o arquivo)
     ("*", "Apagar (rótulo)", r"Apague parte do texto"),
     ("treinamentos.html", "sem conexão fora do padrão", r"Sem conexão com o servidor\. Sua nota"),   # mensagem específica: avisa que a nota ficou guardada
-    ("*", "peça", r"Peça (ao|para|a ele)|peça a ele|vendidas separadamente"),
+    ("*", "peça", r"Peça (ao|para|a ele)|peça a ele|vendid(as|\[ao\]s) separadamente"),
     ("__", "peça", r"__"),            # mensagens de status do pedido: ficam para o lote que pode tocar common.js (APK embute o arquivo)
     ("admin-postagens.js", "sacola", r".*"), # "Sacola" é o NOME DO DESENHO (ícone de sacola) no editor visual, não a seleção da cliente
     ("treinamento-cadastro-simulacao.html", "Gênero (rótulo de gestão)", r".*"),

@@ -68,8 +68,8 @@ html body .tk-abas > [role=tab][aria-selected="true"], html body .tk-abas > butt
 .tk-pular { position: fixed; top: 0; left: 8px; z-index: var(--z-aviso); transform: translateY(-160%); background: #0d0d0d; color: #fff;
   font: 700 .95rem "Inter", -apple-system, Roboto, Arial, sans-serif; padding: 12px 18px; border-radius: 10px; text-decoration: none;
   min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; }
-.tk-pular:focus, .tk-pular:focus-visible { transform: translateY(8px); outline: 3px solid #E67E22; outline-offset: 2px; }
-html body :focus-visible { outline: 3px solid #E67E22; outline-offset: 2px; }
+.tk-pular:focus, .tk-pular:focus-visible { transform: translateY(8px); outline: 3px solid var(--tk-foco-cor, #000); outline-offset: 2px; }
+html body :focus-visible { outline: 3px solid var(--tk-foco-cor, #000); outline-offset: 2px; }
 html body main:focus, html body [tabindex="-1"]:focus { outline: none; }
 
 /* ---------- 5. fundo da página travado de UM jeito: classe tk-travado no <html> (janela de tela cheia) ----------
