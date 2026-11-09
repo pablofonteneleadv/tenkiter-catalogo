@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.71.0 — Mensageiro: mensagem nova aparece sem esperar a lista
+
+- Quando chega uma mensagem do cliente (ou ao voltar para a tela), ela aparece na conversa aberta na hora; a lista de conversas atualiza ao lado, sem segurar a mensagem (antes a conversa esperava a lista inteira recarregar).
+
 ## 7.70.0 — Mensageiro: fila de envio
 
 - Dá para escrever e enviar outras mensagens enquanto uma ainda está saindo, na mesma conversa e em outras. Cada uma aparece na hora na conversa com ⏳ e vira ✓ quando o servidor confirma.
