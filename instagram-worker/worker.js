@@ -255,6 +255,7 @@ async function cfgSet(env, k, v) { if (v === null || v === undefined) await env.
  * igual à leitura das conversas (a tela já consulta o tempo todo, então ele quase sempre está aquecido). Configurações e ações de acesso
  * (/msg/config, /msg/ligar, /msg/pausar, tudo fora do Mensageiro) continuam conferindo a sessão na hora. */
 const PERMS_MEMO_ = new WeakMap();
+const RH_TOKEN_ = 'tenkiter2026';   // token compartilhado já público no site (curriculos.html); só identifica o site no Apps Script do RH
 const MSG_ROTINA_POST_ = new Set(['/msg/enviar', '/msg/lida', '/msg/encerrar', '/msg/dono', '/msg/presenca', '/msg/iniciar', '/msg/rotular', '/msg/notas', '/msg/ficha', '/msg/pessoa', '/msg/contexto', '/msg/anexo', '/msg/agendar', '/msg/acompanhamento']);
 function permissoes(env, req) {
   let m = PERMS_MEMO_.get(req);
@@ -275,6 +276,15 @@ async function permissoesConferir_(env, req) {
     const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
     const j = await r.json();
     if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { lista = j.usuario.permissoes; configuraveis = j.usuario.acessosConfiguraveis === true; msgModelos=j.usuario.msgModelos||{}; nome = String(j.usuario.nome || j.usuario.name || '').trim().slice(0,120); perfis = Array.isArray(j.usuario.perfis) ? j.usuario.perfis : String(j.usuario.perfil || '').split(','); }
+    /* v7.77.1: o Apps Script do catálogo publicado pode ser mais antigo que o RH (sem Acessos configuráveis: não devolve Esteira, Postador, Fotos com IA nem Mensageiro).
+     * Nesse caso a sessão é conferida também no RH (mesma sessão compartilhada), que é a fonte oficial dos acessos. Falha do RH não derruba: fica o resultado do catálogo. */
+    if (lista && !configuraveis && env.RH_URL) {
+      try {
+        const r2 = await fetch(env.RH_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ token: RH_TOKEN_, action: 'sessao', whatsapp: whats, sessao: sessao }) });
+        const j2 = await r2.json(), u2 = j2 && j2.ok && j2.usuario;
+        if (u2 && Array.isArray(u2.permissoes) && u2.acessosConfiguraveis === true) { lista = u2.permissoes; configuraveis = true; msgModelos = u2.msgModelos || {}; nome = String(u2.nome || u2.name || nome || '').trim().slice(0,120); perfis = Array.isArray(u2.perfis) ? u2.perfis : String(u2.perfil || '').split(','); }
+      } catch (e) { /* mantém a resposta do catálogo */ }
+    }
   } catch (e) { return 'indisponivel'; }         // backend fora do ar != "faca login"
   if (lista) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis, nome, configuraveis, msgModelos }), { headers: { 'Cache-Control': 'max-age=120' } }));
   if (lista) { lista.msgPerfis = perfis; lista.msgNome = nome; lista.acessosConfiguraveis = configuraveis; lista.msgModelos=msgModelos; }
@@ -7274,7 +7284,7 @@ async function estEquipe_(env, req, perms) {
   if (!perms?.acessosConfiguraveis) return (await env.DB.prepare('SELECT * FROM est_equipe WHERE ativo=1 ORDER BY nome').all()).results || [];
   // Promise belongs to this request only; revocations are checked again next request.
   if (!perms.esteiraEquipe) perms.esteiraEquipe = (async () => {
-    const r = await fetch(env.API_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},signal:AbortSignal.timeout(25000),body:JSON.stringify({action:'esteira_equipe',whatsapp:req.headers.get('X-TK-Whats'),sessao:req.headers.get('X-TK-Sessao')})});
+    const r = await fetch(env.RH_URL||env.API_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},signal:AbortSignal.timeout(25000),body:JSON.stringify({...(env.RH_URL?{token:RH_TOKEN_}:{}),action:'esteira_equipe',whatsapp:req.headers.get('X-TK-Whats'),sessao:req.headers.get('X-TK-Sessao')})});
     const j = await r.json();
     if (!r.ok || !j.ok || j.fonte !== 'acessos' || !Array.isArray(j.equipe)) throw new Error('Não foi possível confirmar a equipe em Acessos. Tente novamente.');
     return j.equipe.filter(e => e.ativo && e.rodizio && /^\d{10,13}$/.test(String(e.whats))).map(e => ({...e,whats:estFone_(e.whats)}));
