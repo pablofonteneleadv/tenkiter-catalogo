@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.77.0 — perfil "tudo menos Admin": Esteira, Mensageiro, Fotos com IA e Postador funcionam juntos
+
+- Painel simplificado (perfil Equipe catálogo 1): continua escondendo pedidos, números, preços e configurações, mas agora mostra as ferramentas que a pessoa recebeu — Mensagens, Fotos com IA e Esteira. Antes escondia Fotos com IA mesmo com a permissão.
+- Novo atalho "Esteira" em Ferramentas (quem tem o acesso Esteira ou é Admin total).
+- Teste do servidor com o perfil completo sem Admin: Esteira, Postador, Fotos com IA e Mensageiro abrem; funil, métricas, exportar e configurações do Mensageiro continuam fechados.
+
 ## 7.76.2 — Esteira e demais acessos do RH funcionam mesmo com o Apps Script do catálogo desatualizado
 
 - Causa: o servidor lia as permissões no Apps Script do catálogo publicado (4.29), que não conhece os Acessos configuráveis; por isso "Esteira", Postador, Fotos com IA e Mensageiro marcados no RH não chegavam e a Esteira respondia "Seu acesso não permite entrar".

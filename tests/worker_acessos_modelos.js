@@ -31,6 +31,17 @@ const cenarios=String.raw`
   usuarios[CLARICE].permissoes=['esteira'];equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];cacheMem.clear();
   r=await A(CLARICE,'GET','/esteira/hoje');chk('quem tem o acesso Esteira entra mesmo que a lista de equipe do RH não o traga',r.r.status===200&&r.j.ok,r.j);
   usuarios[CLARICE].permissoes=[];cacheMem.clear();r=await A(CLARICE,'GET','/esteira/hoje');chk('sem o acesso Esteira continua barrado',r.r.status===403,r.j);
+  // Perfil "tudo menos Admin": Esteira + Mensageiro + Fotos com IA + Postador (+ entrar no admin e conta de cliente), sem gerir_acessos
+  usuarios[CLARICE].permissoes=['catalogo_admin','cliente','painel_simples','esteira','postador','fotoia','msg_acessar','msg_responder','msg_produtos','msg_respostas','msg_notas','msg_agenda'];
+  equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];cacheMem.clear();
+  r=await A(CLARICE,'GET','/esteira/hoje');chk('perfil completo sem Admin: Esteira abre',r.r.status===200&&r.j.ok,r.j);
+  r=await A(CLARICE,'GET','/posts');chk('perfil completo sem Admin: Postador abre',r.r.status===200,r.j);
+  r=await A(CLARICE,'GET','/fotoia/config');chk('perfil completo sem Admin: Fotos com IA abre',r.r.status===200&&r.j.ok,r.j);
+  const permsCompleto=usuarios[CLARICE].permissoes.slice();permsCompleto.acessosConfiguraveis=true;
+  const dirCompleto=W.msgDireitos_(permsCompleto,CLARICE,{perfis:{},pessoas:{}});
+  chk('perfil completo sem Admin: Mensageiro acessa, responde e usa produtos/respostas/notas/agenda',dirCompleto.acessar&&dirCompleto.responder&&dirCompleto.produtos&&dirCompleto.respostas&&dirCompleto.notas&&dirCompleto.agenda,dirCompleto);
+  chk('perfil completo sem Admin: não ganha funil, métricas, exportar nem configurações do Mensageiro',!dirCompleto.funil&&!dirCompleto.metricas&&!dirCompleto.exportar&&!dirCompleto.configuracoes,dirCompleto);
+  usuarios[CLARICE].permissoes=[];cacheMem.clear();
   usuarios[VISITA].permissoes=['esteira'];equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];cacheMem.clear();legado=true;
   r=await A(VISITA,'GET','/esteira/hoje');chk('catálogo publicado sem Acessos configuráveis: sem o RH, a Esteira fica barrada',r.r.status===403,r.j);
   env.RH_URL='https://rh.fake/';cacheMem.clear();r=await A(VISITA,'GET','/esteira/hoje');chk('catálogo antigo: a sessão é conferida no RH e o acesso Esteira funciona',r.r.status===200&&r.j.ok,r.j);
