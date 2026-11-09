@@ -3628,7 +3628,8 @@
     if (r.saude) pintarSaude_(r.saude);
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
     if(busca.trim())for(const c of r.conversas){const atual=lista.find(x=>x.id===c.id);if(atual)Object.assign(atual,c);}
-    if (busca.trim()||r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
+    /* v7.71.0: a mensagem nova aparece na conversa aberta sem esperar a lista inteira recarregar (a lista atualiza em paralelo). */
+    const listaAtualizando_ = (busca.trim()||r.conversas.some((c) => canal === 'todos' || c.canal === canal)) ? carregarLista(false) : null;
     if(aberturaDaSonda!==abrindo){agendar();return;}
     if (aberta) {
       if(Array.isArray(r.agendadas)){agendadas_=r.agendadas;desenharFaixaAgenda_();}
@@ -3657,6 +3658,7 @@
         else if (entradas && aberta) aberta.nao_lidas = (aberta.nao_lidas || 0) + entradas;
       }
     }
+    if (listaAtualizando_) await listaAtualizando_;
     agendar();
   }
   /* selo no botão "Mensagens" do painel: consulta leve, só com a página visível e a cada ~1 min */
@@ -4166,7 +4168,7 @@
     const f = $('ms-fechar'); if (f && larga()) f.focus();
   }
   let atualizacaoImediata_ = false;
-  async function atualizarAgora_(){if(atualizacaoImediata_||!podeGerir()||!$('overlay-mensagens')?.classList.contains('aberto'))return;atualizacaoImediata_=true;clearTimeout(timerLive);try{await carregarLista(false);await sondar();}finally{atualizacaoImediata_=false;}}
+  async function atualizarAgora_(){if(atualizacaoImediata_||!podeGerir()||!$('overlay-mensagens')?.classList.contains('aberto'))return;atualizacaoImediata_=true;clearTimeout(timerLive);try{await Promise.all([carregarLista(false),sondar()]);}finally{atualizacaoImediata_=false;}   /* v7.71.0: mensagem nova não espera a lista recarregar */}
   window.addEventListener('focus',atualizarAgora_);document.addEventListener('visibilitychange',()=>{if(!document.hidden)atualizarAgora_();});
   if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={atualizar:atualizarAgora_,voltar:voltarApp_,abrirConversa:function(id,espiar){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id,espiar===true);}};
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { const o = $('overlay-mensagens'); if (o && o.classList.contains('aberto')) { espera = ESPERA_MS; agendar(300); } else sondarSelo(); } });
