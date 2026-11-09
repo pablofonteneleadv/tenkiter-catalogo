@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.66.0 — dívida de padrões: laranja, z-index e avisos (sem mudança visual)
+
+- Laranja solto: 8 usos do laranja da marca em avisos, Minha conta, convite do app e telas de gestão passam a `var(--laranja, #E67E22)` (mesmo valor, com fallback); o check reconhece o fallback do próprio token como correto.
+- z-index: nenhum valor mudou; os 24 casos sem degrau equivalente estão listados em `docs/ia/padroes-site.md` (seção 1.1) para decisão do dono.
+- Currículo: o limite de escolhas usa o aviso padrão em vez de `alert()`.
+- Baseline de `check_padroes.py`: 351 para 232 ocorrências (laranja-solto 321 para 203; alert 5 para 4).
+
 ## 7.65.0 — textos com concordância certa e acabamento visual
 
 - Textos de interface após a troca de "peça" por "produto": "Produtos mais vistos", "os próximos produtos colocados em preparação", "o próximo produto", "produtos parados", "vendidos separadamente", "os marcados", "arquivados" e afins, com o gênero certo.
