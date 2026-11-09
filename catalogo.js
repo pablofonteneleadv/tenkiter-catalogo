@@ -1101,7 +1101,7 @@ try { tkSelExpirar_(); } catch (e) {}
           ${idVid ? (equipe_.pode ? `<span class="thumb-wrap"><div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div><button type="button" class="x-equipe mini" data-x-idx="${fotosGaleria.length}" aria-label="Tirar o vídeo do produto">✕</button></span>` : `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>`) : ''}
         </div>
       ` : ''}
-      ${composicoesFalharam_ && String(p.Descricao || '').startsWith('Composição com produtos vendidas separadamente.') ? '<p class="composicao-ia-dica" role="status">Não foi possível carregar os produtos deste look. Atualize a página para tentar de novo; o valor da composição continua a consultar.</p>' : ''}
+      ${composicoesFalharam_ && /^Composição com (produtos|pe\u00e7as) vendid[ao]s separadamente\./.test(String(p.Descricao || '')) ? '<p class="composicao-ia-dica" role="status">Não foi possível carregar os produtos deste look. Atualize a página para tentar de novo; o valor da composição continua a consultar.</p>' : ''}
       ${pecasIA.length ? '<p class="composicao-ia-dica">Composição · deslize para ver cada produto e seu preço. Use também as setas.</p>' : ''}
       <div class="modal-conteudo">
         <div class="codigo-tecido">${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
