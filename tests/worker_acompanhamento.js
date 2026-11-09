@@ -45,7 +45,8 @@ clock=Date.parse(plano.quando);await W.processarAgenda_(env,clock);assert.equal(
 assert.equal(sqlite.prepare('SELECT status FROM msg_acompanhamento WHERE id=?').get(plano.id).status,'concluida');
 assert.equal(sqlite.prepare('SELECT encerrada_motivo FROM msg_conversa WHERE id=?').get(conv).encerrada_motivo,'sem_resposta');
 assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_encerramento WHERE conversa_id=? AND motivo='sem_resposta'").get(conv).n,1);
-await W.processarAgenda_(env,clock);assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM msg_encerramento').get().n,1,'Histórico não duplica');
+await W.processarAgenda_(env,clock);assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_encerramento").get().n,2,"Histórico não duplica (2 = canal + canal irmão encerrado junto)");
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_conversa WHERE grupo=0 AND canal IN ('whatsapp1','whatsapp2') AND encerrada_em<>'' AND encerrada_motivo='sem_resposta'").get().n,2,'Encerramento automático fecha todos os canais do cliente');assert.equal(new Set(sqlite.prepare('SELECT em FROM msg_encerramento').all().map(x=>x.em)).size,1,'Mesma rodada, mesmo instante');
 // Cliente respondeu enquanto o provedor processava o lembrete: não arma encerramento.
 await wh('reabre-pelo-cliente');a=await ligar('acompanhar-race-1');clock=Date.parse(a.acompanhamento.quando);aoEnviar=()=>wh('responde-durante-envio');await W.processarAgenda_(env,clock);
 assert.equal(sqlite.prepare('SELECT status FROM msg_acompanhamento WHERE id=?').get(a.acompanhamento.id).status,'cancelada');assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_agenda WHERE acompanhamento=? AND tipo='encerrar'").get(a.acompanhamento.id).n,0);

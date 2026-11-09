@@ -1,4 +1,4 @@
-"""Seleção opcional dos canais vinculados; não junta contatos por nome."""
+"""Encerrar cliente com vários canais: aviso claro, sem escolher canais; não junta contatos por nome."""
 import os,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).parent))
@@ -15,14 +15,15 @@ with sync_playwright() as p:
   ig=next(x for x in S['convs'] if x['id']==5);ig.update(nome='Maria',pessoa=key)
   homonimo=next(x for x in S['convs'] if x['id']==4);homonimo['nome']='Maria'
   pg=c.new_page();pg.set_default_timeout(8000);errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));aceitar=[False];pg.on('dialog',lambda d:d.accept() if aceitar[0] else d.dismiss())
-  pg.goto(BASE+'admin.html?app=mensagens');pg.wait_for_selector('.ms-conv');pg.click('[data-ms=selecionar]');pg.click('.ms-conv[data-id="1"]');pg.wait_for_selector('[data-ms=sel-canais-pessoa]')
-  pg.click('[data-ms=sel-canais-pessoa]');pg.wait_for_timeout(150);assert '1 selecionada' in pg.inner_text('#ms-selbar');assert not S.get('encerrar')
-  aceitar[0]=True;pg.click('[data-ms=sel-canais-pessoa]');pg.wait_for_function('document.querySelector("#ms-selbar").textContent.includes("3 selecionadas")')
+  pg.goto(BASE+"admin.html?app=mensagens");pg.wait_for_selector('.ms-conv');pg.click('[data-ms=selecionar]');pg.click('.ms-conv[data-id="1"]');pg.wait_for_selector('[data-ms=sel-encerrar]')
+  assert pg.locator('[data-ms=sel-canais-pessoa]').count()==0,'Não pede mais para escolher os outros canais'
+  assert 'Incluir os outros canais' not in pg.inner_text('#ms-selbar')
+  pg.click('[data-ms=sel-encerrar]');pg.wait_for_function('document.querySelector(".ms-motivos-irmas") && !document.querySelector(".ms-motivos-irmas").hidden')
+  nota=pg.inner_text('.ms-motivos-irmas');assert 'também serão encerrados' in nota and 'WhatsApp 2' in nota and 'Instagram' in nota,nota
   assert pg.locator('.ms-conv[data-id="4"][aria-pressed=true]').count()==0
-  assert not S.get('encerrar'),'A confirmação amplia a seleção sem encerrar'
   pg.screenshot(path=str(OUT/f'canais-{w}.png'))
-  pg.click('[data-ms=sel-encerrar]');pg.click('[data-ms=motivo][data-m=sem_resposta]');pg.wait_for_timeout(300)
-  assert sorted(S['encerrar'][-1]['ids'])==[1,5,7]
+  pg.click('[data-ms=motivo][data-m=sem_resposta]');pg.wait_for_timeout(300)
+  assert S['encerrar'][-1]['ids']==[1],'A tela manda só a conversa escolhida; o servidor encerra os canais irmãos'
   assert not errors,errors;c.close()
  b.close()
-print('PASS 4telas: autorização recusada preserva seleção, aceita inclui 3canais vinculados, homônimo excluído, encerramento explícito.')
+print('PASS 4telas: sem pergunta de canais, aviso dos canais irmãos no encerramento, homônimo fora, servidor encerra os irmãos.')

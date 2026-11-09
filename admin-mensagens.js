@@ -1380,7 +1380,7 @@
     if (c.nome && !c.grupo && c.canal!=='instagram' && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
     if(busca.trim()||c.grupo)l3.appendChild(el('span','ms-situacao '+(c.grupo?'interno':c.encerrada_em?'encerrado':c.em_atendimento?'atendimento':'pendente'),c.grupo?'Grupo interno':c.encerrada_em?'Encerrado':c.em_atendimento?'Em atendimento':'Pendente'));
     if(c.dono){const dono=el('span','ms-dono-tag',c.dono);dono.setAttribute('aria-label','Responsável: '+c.dono);l3.appendChild(dono);}
-    if(!c.grupo&&c.relacionamento?.totalEventos>0){const h=el('span','ms-relacionamento-mini',rotuloRelacionamento_(c.relacionamento));h.title='Pontuação de relacionamento de 0 a 100. Veja os motivos dentro da conversa.';l3.appendChild(h);}
+    if(!c.grupo&&c.relacionamento?.totalEventos>0){const h=el('span','ms-relacionamento-mini',rotuloRelacionamento_(c.relacionamento));h.title='Pontuação de relacionamento de 0 a 100. Cliente com vários canais conta uma vez (média dos canais). Veja os motivos dentro da conversa.';l3.appendChild(h);}
     if (Number(c.agenda_pendente) > 0) {
       const quantidade = Number(c.agenda_pendente);
       const agenda = el('span', 'ms-agenda-indicador', '🕒' + (quantidade > 1 ? ' ' + quantidade : ''));
@@ -1850,24 +1850,8 @@
       const b = botao('ms-btn' + (i === 2 ? ' prim' : ''), txt, acao); b.disabled = !n||(acao==='sel-encerrar'&&(mista||lista.some(c=>c.grupo&&selecao.has(c.id))));if(acao==='sel-encerrar'&&b.disabled&&n)b.title=mista?'Selecione apenas abertas ou apenas encerradas.':'Grupos internos não são encerrados.'; acoes.appendChild(b);
     });
     bar.append(topo);
-    if(n===1){const c=lista.find(x=>selecao.has(x.id));if(c&&!c.grupo){const sugestao=el('div','ms-sel-acoes');sugestao.append(el('span','dica','Incluir os outros canais deste cliente?'),botao('ms-btn','Selecionar canais','sel-canais-pessoa'));bar.append(sugestao);}}
     if([...selecao].some(id=>!lista.some(c=>c.id===id)))bar.append(el('p','dica','A seleção inclui canais vinculados fora deste filtro.'));
     bar.append(acoes);
-  }
-  async function selecionarCanaisPessoa_(botaoAtual) {
-    if(!selecao||selecao.size!==1)return;
-    const id=[...selecao][0],c=lista.find(x=>x.id===id);if(!c||c.grupo)return;
-    const conta=contaSessao_(getSessao()),encerradas=!!c.encerrada_em;
-    botaoAtual.disabled=true;
-    const r=await worker_('/msg/pessoa?conversa='+id,'GET');
-    if(botaoAtual.isConnected)botaoAtual.disabled=false;
-    if(conta!==contaSessao_(getSessao())||!selecao||selecao.size!==1||!selecao.has(id))return;
-    if(!r.ok){aviso_(r.erro||'Não foi possível conferir os canais. A seleção foi mantida.');return;}
-    const outros=(r.canais||[]).filter(x=>!x.grupo&&!!x.encerrada_em===encerradas&&x.id!==id);
-    if(!outros.length){aviso_('Este cliente não tem outros canais '+(encerradas?'encerrados':'abertos')+' disponíveis.');return;}
-    const nomes=[c,...outros].map(x=>NOME_CANAL[x.canal]||x.canal).join(', ');
-    if(!confirm('Selecionar todos os '+(outros.length+1)+' canais vinculados de '+rotuloContato(c)+'?\n'+nomes+'\nO encerramento só acontece quando você tocar em Encerrar.'))return;
-    outros.forEach(x=>selecao.add(x.id));pintarLista();desenharSelbar_();
   }
   async function marcarLote_(ids, naoLida) {
     if (!ids.length) return;
@@ -1898,6 +1882,13 @@
     const box = el('div', 'ms-motivos-box'); box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'ms-motivos-tit');
     const t = el('h3', '', ids.length === 1 ? 'Encerrar conversa' : 'Encerrar ' + ids.length + ' conversas'); t.id = 'ms-motivos-tit'; box.appendChild(t);
     box.appendChild(el('p', 'ms-cfg-res', 'Por que está encerrando?'));
+    // v7.65: encerrar um canal encerra todos os canais do mesmo cliente (o servidor garante); aqui só se avisa.
+    const nota = el('p', 'ms-cfg-res ms-motivos-irmas'); nota.hidden = true; box.appendChild(nota);
+    if (ids.length > 1) { nota.textContent = 'Se algum cliente tiver mais de um canal, todos os canais dele serão encerrados.'; nota.hidden = false; }
+    else if (!(lista.find((c) => c.id === ids[0]) || aberta || {}).grupo) worker_('/msg/pessoa?conversa=' + ids[0], 'GET').then((r) => {
+      const outros = r && r.ok ? (r.canais || []).filter((x) => !x.grupo && !x.encerrada_em && x.id !== ids[0]) : [];
+      if (outros.length && nota.isConnected) { nota.textContent = 'Ao encerrar este atendimento, os outros canais do mesmo cliente também serão encerrados: ' + outros.map((x) => NOME_CANAL[x.canal] || x.canal).join(', ') + '.'; nota.hidden = false; }
+    });
     MOTIVOS_.forEach(([id, nome, desc], i) => { const b = botao('ms-motivo' + (i === 0 ? ' padrao' : ''), '', 'motivo', { m: id }); b.append(el('b', '', nome), el('span', '', desc)); box.appendChild(b); });
     box.appendChild(botao('ms-btn ms-motivo-cancelar', 'Cancelar', 'motivo-cancelar'));
     fundo.appendChild(box); sheet.appendChild(fundo);
@@ -1909,8 +1900,8 @@
     const r = await worker_('/msg/encerrar', 'POST', { conversas: ids, reabrir: !!reabrir, motivo: motivo || undefined });
     if (!r.ok) { aviso_(r.erro || 'Não foi possível agora. Tente de novo.'); return; }
     if (r.contagens) contagens = Object.assign({}, contagens || {}, r.contagens);
-    const n = ids.length;
-    aviso_(reabrir ? (n === 1 ? 'Conversa reaberta.' : n + ' conversas reabertas.') : (n === 1 ? 'Conversa encerrada' : n + ' conversas encerradas') + ' como “' + (NOME_MOTIVO_[motivo] || 'Concluído') + '”. ' + (n === 1 ? 'Ela volta sozinha' : 'Elas voltam sozinhas') + ' conforme as regras de retorno e cortesia da loja.');
+    const n = ids.length, irmas = Array.isArray(r.tambemEncerradas) ? r.tambemEncerradas : [];
+    aviso_(reabrir ? (n === 1 ? 'Conversa reaberta.' : n + ' conversas reabertas.') : (n === 1 ? 'Conversa encerrada' : n + ' conversas encerradas') + ' como “' + (NOME_MOTIVO_[motivo] || 'Concluído') + '”. ' + (irmas.length ? 'Também encerrado' + (irmas.length > 1 ? 's' : '') + ' (mesmo cliente): ' + irmas.map((x) => NOME_CANAL[x.canal] || x.canal).join(', ') + '. ' : '') + (n + irmas.length === 1 ? 'Ela volta sozinha' : 'Elas voltam sozinhas') + ' conforme as regras de retorno e cortesia da loja.');
     if (aberta && ids.indexOf(aberta.id) >= 0) { aberta.encerrada_em = reabrir ? '' : new Date().toISOString(); aberta.encerrada_motivo = reabrir ? '' : (motivo || 'concluido'); }
     selecao = null; desenharSelbar_(); desenharAbas(); desenharFiltros(); selarBotao();
     await carregarLista(true);
@@ -2744,12 +2735,12 @@
     const h=r.relacionamento;if(aberta?.id===id){aberta.relacionamento=h;const b=$('ms-conversa')?.querySelector('.ms-relacionamento-abrir');if(b)b.textContent=rotuloRelacionamento_(h);}const c=lista.find(x=>x.id===id);if(c){c.relacionamento=h;pintarLista();}corpo.appendChild(el('h3','',h.pontos+' de 100 · relacionamento'));
     corpo.appendChild(el('p','ms-relacionamento-ajuda','Informação para orientar seu atendimento. A ordem da fila permanece igual.'));
     if(!h.totalEventos)corpo.appendChild(el('p','','Nenhum encerramento registrado para este cliente. Isso não significa ausência de compras.'));
-    else for(const x of h.historico){const n=NOME_MOTIVO_[x.motivo]||x.motivo;corpo.appendChild(el('p','ms-relacionamento-evento',x.total+(x.total===1?' vez · ':' vezes · ')+n));}
+    else for(const x of h.historico){const n=NOME_MOTIVO_[x.motivo]||x.motivo;corpo.appendChild(el('p','ms-relacionamento-evento',String(x.total).replace('.',',')+(x.total===1?' vez · ':' vezes · ')+n));}
     const d=el('details');d.appendChild(el('summary','','Como a nota foi calculada'));d.appendChild(el('p','','Base: '+h.base+' pontos.'));
     for(const x of h.motivos)d.appendChild(el('p','',(NOME_MOTIVO_[x.motivo]||x.motivo)+': '+ tkPlural(x.ocorrencias, 'ocorrência', 'ocorrências') + ' nos últimos '+x.validadeDias+' dias; '+x.eventos+' conta(m), '+(x.pontos>=0?'+':'')+x.pontos+' pontos.'));
     if(!h.motivos.length)d.appendChild(el('p','','Sem eventos válidos nos prazos atuais. A nota fica na base.'));
     d.appendChild(el('p','','A nota é limitada de 0 a 100. As regras são definidas pelo gestor.'));corpo.appendChild(d);
-    corpo.appendChild(el('p','ms-relacionamento-ajuda','Motivos de encerramento registrados; não comprovam pagamento nem explicam por que o cliente deixou de responder. Canais vinculados contam o mesmo evento uma vez.'));
+    corpo.appendChild(el('p','ms-relacionamento-ajuda','Motivos de encerramento registrados; não comprovam pagamento nem explicam por que o cliente deixou de responder. Cliente com 3 canais conta uma vez: média dos canais.'));
     corpo.appendChild(el('p','ms-relacionamento-ajuda','Atualizado em '+hora(h.calculadoEm)+' · pode levar até 1 minuto para refletir mudanças.'));
   }
   function limiteTexto(c) { return c.canal === 'instagram' ? 1000 : 4000; }
@@ -3954,7 +3945,6 @@
     else if (a === 'nome-salvar') { const i = $('ms-meu-nome-rapido'); await salvarNome_(i ? i.value : ''); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'nome-salvar-cfg') { const i = $('ms-meu-nome'); await salvarNome_(i ? i.value : ''); }
     else if (a === 'sel-sair') sairSelecao_();
-    else if (a === 'sel-canais-pessoa') await selecionarCanaisPessoa_(b);
     else if (a === 'sel-todas' && selecao) { const todas = lista.length && lista.every((c) => selecao.has(c.id)); selecao = new Set(todas ? [] : lista.map((c) => c.id)); pintarLista(); desenharSelbar_(); }
     else if (a === 'sel-encerrar' && selecao) { if(selecaoEncerrada_())await encerrar_(Array.from(selecao),true); else escolherMotivo_(Array.from(selecao)); }
     else if (a === 'motivo' && idsMotivo_) {

@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.68.0 — encerrar cliente fecha todos os canais; pontuação pela média dos canais
+
+- Mensageiro: encerrar uma conversa (pela seleção, pelo menu da conversa, em lote ou automaticamente por falta de resposta no Acompanhar) encerra todos os canais abertos do mesmo cliente, na mesma operação. A pergunta "Incluir os outros canais deste cliente?" saiu; o aviso diz quais canais também serão encerrados.
+- O Worker garante a regra (transação D1, idempotente, sem apagar dados) e reabrir continua individual.
+- Pontuação (Hist.): cliente com vários canais conta uma vez, pela média dos canais. Histórico antigo não é reescrito; o cálculo agrupa por rodada de encerramento. Regras e exemplos em docs/ia/mensageiro-pontuacao.md.
+
 ## 7.64.0 — solicitações de clientes com fotos à vista e registro em segundo plano
 
 - Solicitações de clientes mostra até três miniaturas (4:5) lado a lado em cada pedido; o toque amplia e permite passar por todas as fotos, anexar à resposta e voltar à lista.

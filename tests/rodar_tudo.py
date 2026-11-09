@@ -175,6 +175,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_encerramento_regras.js", lambda o: "OK:" in o),
     ("worker_relacionamento_atendente.js", lambda o: "OK: relacionamento para atendente" in o),
     ("worker_prioridade_clientes.js", lambda o: "OK: prioridade explicável" in o),
+    ("worker_pontuacao_canais.js", lambda o: "OK: encerrar cliente fecha todos os canais" in o),
     ("worker_tempo_atendimento.js", lambda o: "OK: tempos por sinais" in o),
     ("worker_gestor.js", lambda o: "OK: gestor Admin total" in o),
     ("worker_fila_originais.js", lambda o: "OK: três originais" in o),

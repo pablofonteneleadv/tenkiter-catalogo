@@ -4376,6 +4376,13 @@ async function textoAssinadoEquipe_(env,req,canal,texto){
 const alvoDe_ = (c) => (c && c.pessoa ? String(c.pessoa) : 'c:' + (c && c.id));
 const MSG_IDENTIDADE_SQL_ = "COALESCE((SELECT a.pessoa FROM msg_pessoa_alias a WHERE a.canal=msg_conversa.canal AND a.contato=msg_conversa.contato),(SELECT g.pessoa FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),NULLIF(msg_conversa.pessoa,''),'')";
 const MSG_NOME_SQL_ = "COALESCE((SELECT p.nome FROM msg_pessoa p WHERE p.id="+MSG_IDENTIDADE_SQL_+"),(SELECT g.nome FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),msg_conversa.nome)";
+/** v7.65: canais ABERTOS do mesmo cliente (mesma identidade unificada) que ainda não estão em `ids`. Grupos ficam fora. */
+async function canaisIrmaosAbertos_(env, ids) {
+  const marca = ids.map(() => '?').join(',');
+  const pessoas = ((await env.DB.prepare('SELECT DISTINCT ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE grupo=0 AND id IN (' + marca + ')').bind(...ids).all()).results || []).map((x) => x.pessoa).filter(Boolean);
+  if (!pessoas.length) return [];
+  return ((await env.DB.prepare('SELECT id, canal FROM msg_conversa WHERE grupo=0 AND encerrada_em=\'\' AND id NOT IN (' + marca + ') AND ' + MSG_IDENTIDADE_SQL_ + ' IN (' + pessoas.map(() => '?').join(',') + ') ORDER BY id LIMIT 50').bind(...ids, ...pessoas).all()).results || []).map((x) => ({ id: x.id, canal: x.canal }));
+}
 const MSG_NOTAS_ALVO_SQL_ = "(CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||msg_conversa.id END)";
 const MSG_NOTAS_COUNT_SQL_ = "(SELECT COUNT(*) FROM msg_nota nn WHERE nn.alvo="+MSG_NOTAS_ALVO_SQL_+" AND nn.excluida_em='')";
 // Leitura, espiar, "assumir" e automações NÃO iniciam atendimento (regra do #305, que continua
@@ -5109,12 +5116,14 @@ async function conferirAcompanhamento_(env,id){
 }
 async function finalizarAcompanhamento_(env,a,em){
   const alvo="(SELECT CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END FROM msg_conversa WHERE id=?)";
+  // v7.65: o encerramento automático fecha TODOS os canais abertos do cliente, no mesmo instante e na mesma transação.
+  const doCliente="(id=? OR (grupo=0 AND (CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END)="+alvo+"))";
   const [r]=await env.DB.batch([
-    env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?,encerrada_motivo='sem_resposta',nao_lidas=0,atualizada_em=? WHERE id=? AND encerrada_em='' AND EXISTS(SELECT 1 FROM msg_acompanhamento WHERE id=? AND status='ativo') AND NOT EXISTS(SELECT 1 FROM msg_mensagem m WHERE m.direcao='entrada' AND m.id>? AND m.conversa_id IN (SELECT id FROM msg_conversa WHERE id=? OR (grupo=0 AND (CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END)="+alvo+")))").bind(em,em,a.conversa_id,a.acompanhamento,a.entrada_ref,a.conversa_id,a.conversa_id),
-    env.DB.prepare("INSERT INTO msg_encerramento(conversa_id,canal,pessoa,contato,motivo,em,por) SELECT id,canal,pessoa,contato,'sem_resposta',?,? FROM msg_conversa WHERE id=? AND changes()=1").bind(em,a.autor,a.conversa_id),
+    env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?,encerrada_motivo='sem_resposta',nao_lidas=0,atualizada_em=? WHERE encerrada_em='' AND "+doCliente+" AND EXISTS(SELECT 1 FROM msg_acompanhamento WHERE id=? AND status='ativo') AND NOT EXISTS(SELECT 1 FROM msg_mensagem m WHERE m.direcao='entrada' AND m.id>? AND m.conversa_id IN (SELECT id FROM msg_conversa WHERE id=? OR (grupo=0 AND (CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END)="+alvo+")))").bind(em,em,a.conversa_id,a.conversa_id,a.acompanhamento,a.entrada_ref,a.conversa_id,a.conversa_id),
+    env.DB.prepare("INSERT INTO msg_encerramento(conversa_id,canal,pessoa,contato,motivo,em,por) SELECT id,canal,pessoa,contato,'sem_resposta',?,? FROM msg_conversa WHERE changes()>0 AND encerrada_em=? AND encerrada_motivo='sem_resposta' AND "+doCliente).bind(em,a.autor,em,a.conversa_id,a.conversa_id),
     env.DB.prepare("UPDATE msg_acompanhamento SET status='concluida',atualizado_em=?,erro=? WHERE id=? AND status='ativo' AND EXISTS(SELECT 1 FROM msg_conversa WHERE id=? AND encerrada_em=?)").bind(em,a.erroFinal||'',a.acompanhamento,a.conversa_id,em)
   ]);
-  return Number(r.meta?.changes)===1;
+  return Number(r.meta?.changes)>=1;
 }
 async function processarEtapaAcompanhamento_(env,a,ms){
   const id=a.acompanhamento;
@@ -5738,19 +5747,34 @@ async function temposGestor_(env,inicio,fim){
 const PRIORIDADE_CFG_='msg_prioridade_v1';
 function prioridadePadrao_(){return {versao:0,base:50,limiteEventos:5,regras:{vendeu:{pontos:10,dias:90},concluido:{pontos:2,dias:30},sem_resposta:{pontos:-3,dias:14},engano:{pontos:0,dias:14}}};}
 async function prioridadeCfg_(env){const r=await cfgGet(env,PRIORIDADE_CFG_);return r?JSON.parse(r):prioridadePadrao_();}
+/** v7.65: um CLIENTE pesa pela MÉDIA dos seus canais. Eventos de encerramento do mesmo cliente que acontecem na mesma "rodada"
+ *  (até 10 min entre si) formam um episódio; dentro dele cada motivo pesa (canais com esse motivo) / (canais encerrados no episódio).
+ *  O mesmo canal nunca aparece duas vezes no mesmo episódio (um novo encerramento dele abre outro episódio).
+ *  Cliente com 3 canais encerrados por falta de resposta = 1 evento (3/3), não 3. Resultados diferentes dividem o peso 1 entre os motivos.
+ *  Entrada: linhas {motivo,em,conversa_id} de UM cliente. Saída: [{motivo,em,peso}], um item por motivo e episódio. Não grava nada. */
+export const EPISODIO_JANELA_MS_=10*60000;
+export function episodiosCliente_(linhas){
+  const xs=linhas.map(l=>({motivo:l.motivo,em:l.em,t:Date.parse(l.em),conv:l.conversa_id==null?l.em+l.motivo:l.conversa_id})).filter(l=>Number.isFinite(l.t)).sort((a,b)=>a.t-b.t);
+  const saida=[];let ep=[],ultimo=-Infinity;
+  const fechar=()=>{if(!ep.length)return;const canais=new Set(ep.map(l=>l.conv)),porMotivo=new Map();
+    for(const l of ep){if(!porMotivo.has(l.motivo))porMotivo.set(l.motivo,{conv:new Set(),em:l.em,t:l.t});const m=porMotivo.get(l.motivo);m.conv.add(l.conv);if(l.t>=m.t){m.t=l.t;m.em=l.em;}}
+    for(const [motivo,m] of porMotivo)saida.push({motivo,em:m.em,peso:m.conv.size/canais.size});ep=[];};
+  for(const l of xs){if(l.t-ultimo>EPISODIO_JANELA_MS_||ep.some(x=>x.conv===l.conv))fechar();ep.push(l);ultimo=l.t;}
+  fechar();return saida;
+}
 export function pontuarCliente_(eventos,cfg,agoraMs){
   const vistos=new Set(),motivos=[],validos=eventos.filter(e=>{const r=cfg.regras[e.motivo],t=Date.parse(e.em),k=e.motivo+':'+e.em;if(!r||!Number.isFinite(t)||t>agoraMs||agoraMs-t>=r.dias*86400000||vistos.has(k))return false;vistos.add(k);return true;}).sort((a,b)=>String(b.em).localeCompare(String(a.em)));
   let bruto=cfg.base;
-  for(const [motivo,regra]of Object.entries(cfg.regras)){const xs=validos.filter(e=>e.motivo===motivo).slice(0,cfg.limiteEventos),pontos=xs.length*regra.pontos;bruto+=pontos;if(xs.length)motivos.push({motivo,eventos:xs.length,pontos,validadeDias:regra.dias,ultimo:xs[0].em});}
-  const pontos=Math.max(0,Math.min(100,bruto));return {pontos,faixa:pontos>=70?'Alta':pontos<40?'Baixa':'Normal',base:cfg.base,motivos,semHistorico:!validos.length};
+  for(const [motivo,regra]of Object.entries(cfg.regras)){const xs=validos.filter(e=>e.motivo===motivo),soma=xs.reduce((n,e)=>n+(e.peso==null?1:Number(e.peso)),0),qtd=Math.round(Math.min(cfg.limiteEventos,soma)*100)/100,pontos=Math.round(qtd*regra.pontos*100)/100;bruto+=pontos;if(xs.length)motivos.push({motivo,eventos:qtd,pontos,validadeDias:regra.dias,ultimo:xs[0].em});}
+  const pontos=Math.max(0,Math.min(100,Math.round(bruto)));return {pontos,faixa:pontos>=70?'Alta':pontos<40?'Baixa':'Normal',base:cfg.base,motivos,semHistorico:!validos.length};
 }
 async function prioridadeBase_(env){
-  const cfg=await prioridadeCfg_(env),ck=new Request('https://gestor.invalid/prioridade-v1/'+cfg.versao);let dados;
+  const cfg=await prioridadeCfg_(env),ck=new Request('https://gestor.invalid/prioridade-v2/'+cfg.versao);let dados;
   try{const r=await caches.default.match(ck);if(r)dados=await r.json();}catch(_){}
   if(!dados){const desde=new Date(Date.now()-Math.max(...Object.values(cfg.regras).map(r=>r.dias))*86400000).toISOString();
-    const linhas=(await env.DB.prepare("SELECT COALESCE(NULLIF(c.pessoa,''),NULLIF(e.pessoa,''),'conversa:'||c.id) AS alvo,e.motivo,e.em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=? GROUP BY alvo,e.motivo,e.em ORDER BY e.em DESC LIMIT 20001").bind(desde).all()).results||[];
+    const linhas=(await env.DB.prepare("SELECT COALESCE(NULLIF(c.pessoa,''),NULLIF(e.pessoa,''),'conversa:'||c.id) AS alvo,e.motivo,e.em,e.conversa_id FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=? ORDER BY e.em DESC LIMIT 20001").bind(desde).all()).results||[];
     const parcial=linhas.length>20000;linhas.splice(20000);const agrupadas=new Map();for(const x of linhas){if(!agrupadas.has(x.alvo))agrupadas.set(x.alvo,[]);agrupadas.get(x.alvo).push(x);}
-    const clientes=Object.create(null);for(const [alvo,xs]of agrupadas)clientes[alvo]=pontuarCliente_(xs,cfg,Date.now());dados={clientes,parcial,calculadoEm:agora()};
+    const clientes=Object.create(null);for(const [alvo,xs]of agrupadas)clientes[alvo]=pontuarCliente_(episodiosCliente_(xs),cfg,Date.now());dados={clientes,parcial,calculadoEm:agora()};
     try{await caches.default.put(ck,new Response(JSON.stringify(dados),{headers:{'Cache-Control':'max-age=300','Content-Type':'application/json'}}));}catch(_){}
   }return {...dados,config:cfg};
 }
@@ -5758,23 +5782,25 @@ async function prioridadeBase_(env){
 export function resumirRelacionamento_(linhas,cfg,calculadoEm){
   const historico=[],motivos=[];let bruto=cfg.base,totalEventos=0;
   for(const [motivo,regra]of Object.entries(cfg.regras)){
-    const r=linhas.find(x=>x.motivo===motivo),total=Number(r?.total)||0,ocorrencias=Number(r?.validos)||0,eventos=Math.min(cfg.limiteEventos,ocorrencias),pontos=eventos*regra.pontos;
+    const r=linhas.find(x=>x.motivo===motivo),total=Number(r?.total)||0,ocorrencias=Number(r?.validos)||0,eventos=Math.min(cfg.limiteEventos,ocorrencias),pontos=Math.round(eventos*regra.pontos*100)/100;
     totalEventos+=total;bruto+=pontos;if(total)historico.push({motivo,total,ultimo:r.ultimo});
     if(ocorrencias)motivos.push({motivo,ocorrencias,eventos,pontos,validadeDias:regra.dias});
   }
-  const pontos=Math.max(0,Math.min(100,bruto));return {pontos,faixa:pontos>=70?'Alta':pontos<40?'Baixa':'Normal',base:cfg.base,totalEventos,historico,motivos,semHistorico:!motivos.length,calculadoEm};
+  const pontos=Math.max(0,Math.min(100,Math.round(bruto)));return {pontos,faixa:pontos>=70?'Alta':pontos<40?'Baixa':'Normal',base:cfg.base,totalEventos,historico,motivos,semHistorico:!motivos.length,calculadoEm};
 }
 async function relacionamentosAtendimento_(env,conversas){
   const individuais=conversas.filter(c=>!c.grupo);if(individuais.length>50){for(let i=0;i<individuais.length;i+=50)await relacionamentosAtendimento_(env,individuais.slice(i,i+50));return;}
   const alvos=[...new Set(individuais.map(c=>c.pessoa||'conversa:'+c.id))].sort();if(!alvos.length)return;
-  const cfg=await prioridadeCfg_(env),ck=new Request('https://gestor.invalid/relacionamento-v1/'+cfg.versao+'/'+await sha(JSON.stringify(alvos)));let mapa;
+  const cfg=await prioridadeCfg_(env),ck=new Request('https://gestor.invalid/relacionamento-v2/'+cfg.versao+'/'+await sha(JSON.stringify(alvos)));let mapa;
   try{const r=await caches.default.match(ck);if(r)mapa=await r.json();}catch(_){}
   if(!mapa){const ms=Date.now(),t=new Date(ms).toISOString(),args=[];
-    const prazos=Object.entries(cfg.regras).map(([motivo,r])=>{args.push(motivo,new Date(ms-r.dias*86400000).toISOString());return 'WHEN ? THEN ?';}).join(' ');
-    // Agregado de eventos únicos: o mesmo encerramento em canais vinculados conta uma vez.
+    // v7.65: linhas cruas (alvo, motivo, quando, conversa); a média dos canais é feita em episodiosCliente_.
     const identidade=MSG_IDENTIDADE_SQL_.replaceAll('msg_conversa.','c.');
-    const sql="WITH eventos AS (SELECT DISTINCT COALESCE(NULLIF("+identidade+",''),'conversa:'||c.id) AS alvo,e.motivo,e.em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND julianday(e.em)<=julianday(?)) SELECT alvo,motivo,COUNT(*) AS total,MAX(em) AS ultimo,SUM(CASE WHEN julianday(em)>julianday(CASE motivo "+prazos+" ELSE NULL END) THEN 1 ELSE 0 END) AS validos FROM eventos WHERE alvo IN ("+alvos.map(()=>'?').join(',')+") GROUP BY alvo,motivo";
-    const rs=(await env.DB.prepare(sql).bind(t,...args,...alvos).all()).results||[];mapa=Object.create(null);
+    const sql="SELECT COALESCE(NULLIF("+identidade+",''),'conversa:'||c.id) AS alvo,e.motivo,e.em,e.conversa_id FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND julianday(e.em)<=julianday(?) AND COALESCE(NULLIF("+identidade+",''),'conversa:'||c.id) IN ("+alvos.map(()=>'?').join(',')+") LIMIT 5001";
+    const cruas=(await env.DB.prepare(sql).bind(t,...alvos).all()).results||[];mapa=Object.create(null);
+    const rs=[];for(const alvo of alvos){const eps=episodiosCliente_(cruas.filter(x=>x.alvo===alvo));
+      for(const motivo of Object.keys(cfg.regras)){const xs=eps.filter(e=>e.motivo===motivo);if(!xs.length)continue;const dias=cfg.regras[motivo].dias,corte=ms-dias*86400000;
+        rs.push({alvo,motivo,total:Math.round(xs.reduce((n,e)=>n+e.peso,0)*10)/10,ultimo:xs.reduce((m,e)=>e.em>m?e.em:m,''),validos:Math.round(xs.filter(e=>Date.parse(e.em)>corte).reduce((n,e)=>n+e.peso,0)*100)/100});}}
     for(const alvo of alvos)mapa[alvo]=resumirRelacionamento_(rs.filter(x=>x.alvo===alvo),cfg,t);
     try{await caches.default.put(ck,new Response(JSON.stringify(mapa),{headers:{'Cache-Control':'max-age=60','Content-Type':'application/json'}}));}catch(_){}
   }
@@ -6912,12 +6938,19 @@ export default {
         const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.conversas) ? d.conversas : [d.conversa]).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 200);
         if (!ids.length) return J({ ok: false, erro: 'Escolha ao menos uma conversa.' }, 400);
         if(await env.DB.prepare('SELECT id FROM msg_conversa WHERE grupo=1 AND id IN ('+ids.map(()=>'?').join(',')+') LIMIT 1').bind(...ids).first())return J({ok:false,erro:'Grupos internos ficam em atendimento e não são encerrados.'},409);
-        const t = agora(), reabrir = d.reabrir === true, marca = ids.map(() => '?').join(',');
+        const reabrir = d.reabrir === true;
+        // v7.65: encerrar um canal encerra TODOS os canais abertos do mesmo cliente, na mesma operação (batch = transação D1).
+        const irmas = reabrir ? [] : await canaisIrmaosAbertos_(env, ids);
+        const idsTodos = ids.concat(irmas.map((x) => x.id));
+        const t = agora(), marca = idsTodos.map(() => '?').join(',');
         // v2.13: motivo do encerramento (padrão "concluido"); cada encerramento fica no histórico
         const motivo = MSG_MOTIVOS_.includes(d.motivo) ? d.motivo : 'concluido', por = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(-4);
-        const r = await env.DB.prepare(reabrir ? "UPDATE msg_conversa SET encerrada_em='', encerrada_motivo='', reaberta_em='', atualizada_em=? WHERE id IN (" + marca + ")" : "UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo=?, nao_lidas=0, reaberta_em='', atualizada_em=? WHERE id IN (" + marca + ')').bind(...(reabrir ? [t] : [t, motivo, t]), ...ids).run();
-        if (!reabrir) await env.DB.prepare('INSERT INTO msg_encerramento (conversa_id, canal, pessoa, contato, motivo, em, por) SELECT id, canal, pessoa, contato, ?, ?, ? FROM msg_conversa WHERE id IN (' + marca + ')').bind(motivo, t, por, ...ids).run();
-        return J({ ok: true, alteradas: Number(r.meta && r.meta.changes) || 0, contagens: await msgContagens_(env) });
+        // Idempotente: só conversas ainda abertas recebem o encerramento e o evento (repetir o pedido não duplica nada). O evento entra antes da atualização.
+        const rs = await env.DB.batch(reabrir ? [env.DB.prepare("UPDATE msg_conversa SET encerrada_em='', encerrada_motivo='', reaberta_em='', atualizada_em=? WHERE id IN (" + marca + ")").bind(t, ...idsTodos)] : [
+          env.DB.prepare("INSERT INTO msg_encerramento (conversa_id, canal, pessoa, contato, motivo, em, por) SELECT id, canal, pessoa, contato, ?, ?, ? FROM msg_conversa WHERE encerrada_em='' AND id IN (" + marca + ')').bind(motivo, t, por, ...idsTodos),
+          env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo=?, nao_lidas=0, reaberta_em='', atualizada_em=? WHERE encerrada_em='' AND id IN (" + marca + ')').bind(t, motivo, t, ...idsTodos)]);
+        const r = rs[rs.length - 1];
+        return J({ ok: true, alteradas: Number(r.meta && r.meta.changes) || 0, tambemEncerradas: irmas, contagens: await msgContagens_(env) });
       }
       if (p === '/msg/config' && req.method === 'GET') {
         const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
