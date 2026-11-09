@@ -1,6 +1,6 @@
 # TENKiTER — padrões obrigatórios do site (a "constituição")
 
-Atualização: 08/11/2026. Vale para toda pessoa e toda IA que mexe em interface, textos ou regras de dados.
+Atualização: 09/11/2026. Vale para toda pessoa e toda IA que mexe em interface, textos ou regras de dados.
 
 **Princípio (decisão do dono, Pablo):** o TENKiTER é **UM site com vários módulos**. Cada módulo reaproveita o mesmo botão, a mesma janela, o mesmo aviso, a mesma cor e a mesma regra. Quem precisa de algo parecido **usa o componente dono**; não escreve outro. Padrão novo ou exceção entra **aqui primeiro** (seção 7), nunca dentro do CSS/JS de um módulo.
 
@@ -25,7 +25,7 @@ Atualização: 08/11/2026. Vale para toda pessoa e toda IA que mexe em interface
 | Camadas | escala `--z-sticky … --z-aviso` | `janelas.css` (`:root`) | `z-index` numérico acima de 10 (0–10 só para empilhar dentro do próprio componente) | `z-index` |
 | Travar o fundo | só a classe `html.tk-travado` | `janelas.css` | `body.style.overflow`, `fx-travado`, `body.x { overflow:hidden }` | `travar-fundo` |
 | Pular para o conteúdo | `.tk-pular` ("Ir para o conteúdo"), criado por `a11y.js` | `a11y.js` + `janelas.css` | skip link próprio | `pagina-sem-padrao` |
-| Foco | contorno 3 px laranja (`--tk-foco-cor`) | `janelas.css` / `tk-padrao.css` | `outline:none` sem substituto; foco de outra cor | `janelas_padrao.py`, `padrao_aparencia_ui.py` |
+| Foco | contorno 3 px, afastado 2 px, na cor do token `--tk-foco-cor` = **#D35400** (laranja escuro; o laranja da marca dava só 2,9:1 sobre branco, abaixo dos 3:1 da WCAG para indicador de foco). Contraste medido: 4,2:1 sobre #fff, 3,9:1 sobre #fff8e6, 3,7:1 sobre #f5f1e8, 3,6:1 sobre #eee, 4,7:1 sobre #0d0d0d e 3,4:1 sobre #2a2a2a. A cor vive **só** em `tk-padrao.css` (token); `janelas.css` desenha o anel com `var(--tk-foco-cor)` e os módulos usam o token, nunca o hexadecimal | `janelas.css` (anel) / `tk-padrao.css` (token) | `outline:none` sem substituto; foco de outra cor | `janelas_padrao.py`, `padrao_aparencia_ui.py` |
 | Toda página HTML | carrega `janelas.css`, `a11y.js` e `tk-padrao.css` | cada `.html` | página nova sem os três | `pagina-sem-padrao` |
 
 ## 1.1 z-index sem token — proposta (decisão de Pablo)

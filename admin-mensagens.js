@@ -727,6 +727,8 @@
       /* Em 320px os quatro rótulos não cabem com 10px por aba: a fonte desce um passo
          (nunca abaixo de 10px, que ainda é legível) para nenhuma palavra quebrar no meio. */
       @media(max-width:400px){.sheet-mensagens .ms-abas .ms-aba{font-size:.62rem;letter-spacing:-.015em;padding:0 1px}}
+      /* v7.65: no painel estreito do computador a palavra nunca parte no meio ("Solicitaçõe/s"): cada aba tem pelo menos a largura da maior palavra e, se faltar espaço, a faixa de abas rola dentro de si (altura de 44px mantida). */
+      @media(min-width:700px){.sheet-mensagens .ms-abas .ms-aba{overflow-wrap:normal;word-break:normal;hyphens:none;min-width:min-content;padding:0 5px}}
       /* Alvo de toque: 44px é o piso do projeto para qualquer controle. Uma regra global
          (acabamento) baixava a aba para 40px; aqui o piso é reafirmado para a barra. */
       .sheet-mensagens .ms-abas .ms-aba[role=tab]{min-height:44px!important;height:auto;box-sizing:border-box;border:0;position:relative}

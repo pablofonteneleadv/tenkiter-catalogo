@@ -1011,7 +1011,7 @@
 
 </style>
 <link rel="stylesheet" href="acabamento-admin.css?v=7.61.0">
-<link rel="stylesheet" href="janelas.css?v=7.62.2">
+<link rel="stylesheet" href="janelas.css?v=7.65.0">
 <style id="atendimento-edicao-rapida">
 /* Mostra só as escolhas necessárias. Campos originais permanecem no DOM para
    a atualização usar validações, mídias, auditoria e permissão já existentes. */
@@ -1046,7 +1046,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   }
 }
 </style>
-<link rel="stylesheet" href="tk-padrao.css?v=7.61.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.65.0">
 </head>
 <body>
 
@@ -1561,12 +1561,12 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <div class="sheet-topo"><strong id="precos-titulo">Alterar preços</strong><button type="button" class="sheet-x" id="precos-fechar" aria-label="Fechar">✕</button></div>
       <p class="juntar-ajuda" id="precos-resumo"></p>
       <div role="radiogroup" aria-label="O que fazer com o preço">
-        <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>Reajustar em %</b><small>10 = +10% · -15 = 15% de desconto. Produtos “Consulte valor” são puladas.</small></span></label>
-        <label class="precos-modo" id="precos-modo-escrito" hidden><input type="radio" name="precos-modo" value="escrito"><span><b>Valor escrito (preço fixo)</b><small>Todas as marcadas ficam com o MESMO preço. Serve também para tirar do “Consulte valor”.</small></span></label>
+        <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>Reajustar em %</b><small>10 = +10% · -15 = 15% de desconto. Produtos “Consulte valor” são pulados.</small></span></label>
+        <label class="precos-modo" id="precos-modo-escrito" hidden><input type="radio" name="precos-modo" value="escrito"><span><b>Valor escrito (preço fixo)</b><small>Todos os marcados ficam com o MESMO preço. Serve também para tirar do “Consulte valor”.</small></span></label>
         <label class="precos-modo" id="precos-modo-padrao" hidden><input type="radio" name="precos-modo" value="padrao"><span><b>Arrumar para ,99 / ,49</b><small>Ajusta o preço para o valor à vista terminar em ,99 ou ,49. Mostra antes quantas mudam e exemplos.</small></span></label>
-        <label class="precos-modo" id="precos-modo-consulta" hidden><input type="radio" name="precos-modo" value="consulta"><span><b>Consultar valor</b><small>Tira o preço das marcadas e o catálogo mostra “Consulte valor”.</small></span></label>
+        <label class="precos-modo" id="precos-modo-consulta" hidden><input type="radio" name="precos-modo" value="consulta"><span><b>Consultar valor</b><small>Tira o preço dos marcados e o catálogo mostra “Consulte valor”.</small></span></label>
       </div>
-      <label class="precos-todas" id="precos-todas-box" hidden><input type="checkbox" id="precos-todas"> <span>Valer para <b>todos os produtos com preço da loja</b> (não só as marcadas)</span></label>
+      <label class="precos-todas" id="precos-todas-box" hidden><input type="checkbox" id="precos-todas"> <span>Valer para <b>todos os produtos com preço da loja</b> (não só os marcados)</span></label>
       <div id="precos-campos">
         <div id="precos-campo-pct"><label for="precos-pct">Porcentagem</label><input type="text" id="precos-pct" inputmode="decimal" autocomplete="off" placeholder="Ex.: 10 ou -15"></div>
         <div id="precos-campo-valor" hidden><label for="precos-valor">Preço (R$)</label><input type="text" id="precos-valor" inputmode="decimal" autocomplete="off" placeholder="Ex.: 89.90"></div>
@@ -3685,7 +3685,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Produto', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: it.r.id, k: novoKEnvio_(), etapa: 'fila' });
       guardarEnvio_(envios[envios.length - 1]);
     });
-    document.getElementById('status').textContent = 'Enviando ' + (itens || []).length + ' produtos em segundo plano. Pode cadastrar a próxima produto.';
+    document.getElementById('status').textContent = 'Enviando ' + (itens || []).length + ' produtos em segundo plano. Pode cadastrar o próximo produto.';
     desenharEnvios(); processarEnvios();
   };
   function dadosDoPostSeparado_(base, r2) {
@@ -4452,7 +4452,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const dep = pendentesQueDependem_(), n = dep.length;
     if (!n) return '';
     const prontas = envios.filter(e => (e.estado === 'fila' || e.estado === 'enviando') && !e.ehEdicao && midiaPronta_(e)).length;
-    const base = '⚠️ ' + (n === 1 ? '1 produto ainda está ENVIANDO fotos/vídeos' : n + ' produtos ainda estão ENVIANDO fotos/vídeos') + '.\n\n' + (prontas ? (prontas === 1 ? '(1 outra já tem tudo no servidor e termina sozinha.)\n\n' : '(' + prontas + ' outras já têm tudo no servidor e terminam sozinhas.)\n\n') : '');
+    const base = '⚠️ ' + (n === 1 ? '1 produto ainda está ENVIANDO fotos/vídeos' : n + ' produtos ainda estão ENVIANDO fotos/vídeos') + '.\n\n' + (prontas ? (prontas === 1 ? '(1 outro já tem tudo no servidor e termina sozinho.)\n\n' : '(' + prontas + ' outros já têm tudo no servidor e terminam sozinhos.)\n\n') : '');
     return base + (envioGuardadoOk_
       ? 'Se você sair agora, o envio dessas fotos/vídeos PAUSA e continua quando você voltar ao painel.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.'
       : 'Se você sair agora, o que não terminou SE PERDE e precisa ser cadastrado de novo.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.');
@@ -4570,7 +4570,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       document.getElementById('status').textContent = 'Salvando a correção do produto. Não feche esta aba ainda.';
     } else {
       cancelarDuplicacao(); // libera o formulário já
-      document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima produto.';
+      document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar o próximo produto.';
       sairDoCadastro_();
     }
     desenharEnvios(); processarEnvios();
@@ -4615,7 +4615,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!a) return '';
     const partes = [];
     if (a.criadoPor) partes.push('Cadastrou: ' + a.criadoPor + (a.criadoEm ? ' · ' + quandoCurto_(a.criadoEm) : ''));
-    if (a.editadoPor) partes.push((a.ultimaAcao && a.ultimaAcao !== 'Editou o produto' ? a.ultimaAcao : 'Editou') + ': ' + a.editadoPor + (a.editadoEm ? ' · ' + quandoCurto_(a.editadoEm) : ''));
+    if (a.editadoPor) partes.push((a.ultimaAcao && !/^Editou (o produto|a pe\u00e7a)$/.test(a.ultimaAcao) ? a.ultimaAcao : 'Editou') + ': ' + a.editadoPor + (a.editadoEm ? ' · ' + quandoCurto_(a.editadoEm) : ''));
     return partes.join(' — ');
   }
   async function carregarAuditoria_() {
@@ -6528,13 +6528,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     aplicarPadroesNovo_();
   })();
 </script>
-<script src="admin-gestao.js?v=7.57.0"></script>
+<script src="admin-gestao.js?v=7.65.0"></script>
 <script src="admin-push.js?v=7.58.1"></script>
 <script src="admin-conexoes.js?v=7.63.0"></script>
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.61.0">
 <script src="admin-disponibilidade.js?v=7.58.1"></script>
-<script src="admin-familias.js?v=7.57.0"></script>
+<script src="admin-familias.js?v=7.65.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.61.0">
 <script src="mensagens-presenca.js?v=7.40.43"></script>
