@@ -60,3 +60,13 @@ Na janela "Histórico de relacionamento" (botão Hist. N da conversa): "Cliente 
 - A janela de 10 minutos é uma regra de leitura; os registros em `msg_encerramento` não foram alterados e nenhuma coluna nova foi criada.
 - O cache do cálculo (`prioridade-v2`, `relacionamento-v2`) foi renovado; resultados antigos em cache expiram sozinhos (60 s a 5 min).
 - Nada depende do Apps Script.
+
+## 6. Instagram: janela de resposta e Acompanhar (v7.69.0)
+
+Regra real da Meta: resposta padrão até 24 h depois da última mensagem do cliente; com a etiqueta `HUMAN_AGENT` (atendente humano) até 7 dias. O Worker (`enviarZernio_` e o envio direto `enviarInstagram_`) tenta normal e, se a Meta recusar por prazo, repete com `HUMAN_AGENT`. Por isso uma resposta com mais de 24 h chega.
+
+- Aviso da conversa: só além dos 7 dias ("Já passaram mais de 7 dias..."). Antes dos 7 dias não há alarme e o botão Enviar nunca é travado.
+- Agendar e Acompanhar: só recusam quando o horário cai depois dos 7 dias; antes eles eram recusados a partir de 24 h, e era por isso que o Acompanhar quase nunca armava no Instagram (o cliente costuma ter escrito há mais de 22 h). Mensagens agendadas e o lembrete do Acompanhar também usam `HUMAN_AGENT` ao sair, pois foram armadas por uma pessoa.
+- Se a Meta recusar mesmo assim, o erro aparece em português (e o Acompanhar fica "falhou" sem encerrar o atendimento).
+- Cuidado: a política da Meta para `HUMAN_AGENT` espera resposta de uma pessoa; lembrete/agendada pré-armada fica numa zona cinzenta. Se a Meta recusar, o servidor devolve o erro e nada é encerrado por engano.
+- Teste: `tests/worker_instagram_janela.js` (Zernio e Graph simulados, Instagram e WhatsApp, todos os canais encerrados, pontuação 47 uma vez) e `tests/mensagens_instagram_janela_ui.py`.

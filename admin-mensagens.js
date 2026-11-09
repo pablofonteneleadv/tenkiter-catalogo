@@ -2789,7 +2789,8 @@
   }
   function limiteTexto(c) { return c.canal === 'instagram' ? 1000 : 4000; }
   function dicaComposer(c) {
-    if (c.canal === 'instagram' && c.ult_entrada_em && Date.now() - Date.parse(c.ult_entrada_em) > 86400000) return 'Já passaram mais de 24 h da última mensagem deste cliente: o Instagram pode recusar a resposta.';
+    // v7.69: a regra real é 24 h (padrão) e até 7 dias com a etiqueta de atendente humano, que o servidor já usa. Só avisa além dos 7 dias; o botão Enviar nunca é travado.
+    if (c.canal === 'instagram' && c.ult_entrada_em && Date.now() - Date.parse(c.ult_entrada_em) > 7 * 86400000) return 'Já passaram mais de 7 dias da última mensagem deste cliente: o Instagram deve recusar a resposta.';
     if (c.canal !== 'instagram' && c.grupo) return 'Esta mensagem vai para todo o grupo.';
     return '';
   }

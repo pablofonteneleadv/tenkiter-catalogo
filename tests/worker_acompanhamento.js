@@ -76,9 +76,9 @@ await wh('reabre-final-incerto');a=await ligar('acompanhar-final-incerto');clock
 fim=sqlite.prepare('SELECT quando FROM msg_acompanhamento WHERE id=?').get(a.acompanhamento.id);clock=Date.parse(fim.quando);modo='incerto';const antesFimIncerto=envios.length;await W.processarAgenda_(env,clock);
 const planoFinal=sqlite.prepare('SELECT * FROM msg_acompanhamento WHERE id=?').get(a.acompanhamento.id);assert.equal(planoFinal.status,'concluida');assert(planoFinal.erro);assert.equal(sqlite.prepare("SELECT status FROM msg_agenda WHERE acompanhamento=? AND tipo='encerrar'").get(a.acompanhamento.id).status,'falhou');
 assert.equal(sqlite.prepare('SELECT encerrada_motivo FROM msg_conversa WHERE id=?').get(conv).encerrada_motivo,'sem_resposta');await W.processarAgenda_(env,clock);assert.equal(envios.length,antesFimIncerto+1,'Não repete a mensagem final incerta');modo='ok';
-// Limite oficial: não arma automação que já cairá fora das24h no Instagram.
-sqlite.prepare("INSERT INTO msg_conversa(id,canal,contato,nome,total,ult_entrada_em) VALUES(500,'instagram','17841400000099','Instagram simulado',1,?)").run(new Date(clock-25*3600000).toISOString());
-const expirado=await W.alterarAcompanhamento_(env,req,{conversa:500,ligado:true,idLocal:'ig-expirado-0001'});assert.equal(expirado.cod,400);assert(/24 horas/.test(expirado.erro));
+// Limite real: 24 h padrão; com HUMAN_AGENT até 7 dias. Só além dos 7 dias não arma (ver worker_instagram_janela.js).
+sqlite.prepare("INSERT INTO msg_conversa(id,canal,contato,nome,total,ult_entrada_em) VALUES(500,'instagram','17841400000099','Instagram simulado',1,?)").run(new Date(clock-8*86400000).toISOString());
+const expirado=await W.alterarAcompanhamento_(env,req,{conversa:500,ligado:true,idLocal:'ig-expirado-0001'});assert.equal(expirado.cod,400);assert(/7 dias/.test(expirado.erro));
 // Painel: paginação sem repetição e filtros combinados no servidor.
 for(let i=0;i<35;i++)sqlite.prepare("INSERT INTO msg_agenda(conversa_id,texto,quando,autor,whats,criado_em) VALUES(?,?,?,?,?,?)").run(conv,'Pesquisa painel '+i,'2026-11-03T12:00:00.000Z','Ana','5588999999999',new Date(clock).toISOString());
 const painel=async q=>{const r=await W.default.fetch(new Request('https://worker.test/msg/agendadas'+q,{headers}),env,{});return {status:r.status,j:await r.json()}};
