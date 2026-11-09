@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.77.1 — Mensageiro mostra a foto do story/post que o cliente compartilha no Instagram
+
+- Antes: quando o cliente compartilhava um story ou post, a conversa mostrava só "Compartilhamento" (a imagem era descartada).
+- Agora a imagem é copiada para o nosso armazenamento e aparece na conversa. Se o link não for uma imagem, continua só o aviso, sem gravar página como foto e sem ficar tentando de novo.
+- Só vale para mensagens novas: as já recebidas não trazem mais o endereço da imagem.
+
 ## 7.77.0 — perfil "tudo menos Admin": Esteira, Mensageiro, Fotos com IA e Postador funcionam juntos
 
 - Painel simplificado (perfil Equipe catálogo 1): continua escondendo pedidos, números, preços e configurações, mas agora mostra as ferramentas que a pessoa recebeu — Mensagens, Fotos com IA e Esteira. Antes escondia Fotos com IA mesmo com a permissão.

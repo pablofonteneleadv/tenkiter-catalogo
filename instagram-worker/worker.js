@@ -3603,7 +3603,7 @@ function normalizarInstagram_(b) {
     const anexo = a0 ? String(a0.type || 'anexo') : '';
     const ms = Number(ev.timestamp || m.timestamp || 0);
     const pu = a0 && a0.payload && typeof a0.payload.url === 'string' && /^https:\/\//i.test(a0.payload.url) ? a0.payload.url : '';
-    const dica = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/mp4', story_mention: 'image/jpeg', reel: 'video/mp4', ig_reel: 'video/mp4' }[anexo] || '';
+    const dica = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/mp4', story_mention: 'image/jpeg', share: 'image/jpeg', reel: 'video/mp4', ig_reel: 'video/mp4' }[anexo] || '';   // v7.77.1: story/post compartilhado também traz a imagem (antes só aparecia "Compartilhamento")
     const rt = m.reply_to && typeof m.reply_to === 'object' ? m.reply_to : null;
     const histUrl = rt && rt.story && typeof rt.story.url === 'string' && /^https:\/\//i.test(rt.story.url) ? rt.story.url : '';
     out.push({ extId: mid, contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora(),
@@ -3659,6 +3659,7 @@ async function copiarMidiaRemota_(env, url, dica, documento=false) {
     try{for(;;){const x=await reader.read();if(x.done)break;length+=x.value.byteLength;if(length>MSG_MIDIA_MAX_){await reader.cancel();return null;}chunks.push(x.value);}}finally{reader.releaseLock();}
     if(!length)return null;const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}const buf=bytes.buffer;
     let mime = mimeLimpo_(r.headers.get('Content-Type'));
+    if (!documento && /^text\//.test(mime)) return null;   // página/link em vez de mídia: nunca gravar HTML como foto
     if (mime === 'application/octet-stream' && MSG_MIME_EXT_[mimeLimpo_(dica)]) mime = mimeLimpo_(dica);
     if (!MSG_MIME_EXT_[mime]) mime = mimeLimpo_(dica);
     if (!MSG_MIME_EXT_[mime]&&documento)mime="application/octet-stream";
@@ -3671,7 +3672,7 @@ async function prepararMidia_(env, canal, m) {
   if (!m.midiaUrl && !m.ctxUrl) return;
   const ja = await env.DB.prepare('SELECT 1 AS x FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal, m.extId).first();
   if (ja) { m.midiaUrl = ''; m.ctxUrl = ''; return; }
-  if (m.midiaUrl) { const x = await copiarMidiaRemota_(env, m.midiaUrl, m.midiaMime,m.tipo==='documento'); if (x) { m.midiaChave = x.chave; m.midiaMime = x.mime; m.midiaUrl = ''; } }
+  if (m.midiaUrl) { const x = await copiarMidiaRemota_(env, m.midiaUrl, m.midiaMime,m.tipo==='documento'); if (x) { m.midiaChave = x.chave; m.midiaMime = x.mime; m.midiaUrl = ''; } else if (m.tipo === 'compartilhamento') { m.midiaUrl = ''; m.midiaMime = ''; } }   // compartilhamento sem imagem legível continua só como texto
   if (m.ctxUrl) { const x = await copiarMidiaRemota_(env, m.ctxUrl, m.ctxMime || ''); if (x) m.ctxChave = x.chave; m.ctxUrl = ''; }
 }
 const STATUS_CANAIS_ = { whatsapp1: ['whatsapp', 'ambos'], whatsapp2: ['whatsapp2'] };
@@ -3889,7 +3890,7 @@ async function completarMidiaEntrada_(env,canal,m) {
   const atual=await env.DB.prepare('SELECT id,conversa_id,midia_chave,ctx_chave,ctx_post,ctx_tipo,ctx_aprox FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();
   if(!atual)return;
   const alteracoes=[];
-  if(m.midiaUrl&&!atual.midia_chave){const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}:await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento');if(!x)throw Error('Mídia aguardando cópia.');m.midiaChave=x.chave;m.midiaMime=x.mime;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id));}
+  if(m.midiaUrl&&!atual.midia_chave){const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}:await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento');if(!x){if(m.tipo==='compartilhamento'){alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_url='',midia_mime='' WHERE id=? AND midia_chave=''").bind(atual.id));m.midiaUrl='';}else throw Error('Mídia aguardando cópia.');}else{m.midiaChave=x.chave;m.midiaMime=x.mime;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id));}}
   if(m.ctxUrl&&!atual.ctx_chave){const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'');if(!x)throw Error('Story aguardando cópia.');m.ctxChave=x.chave;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=?,ctx_post=CASE WHEN ctx_aprox=1 THEN 0 ELSE ctx_post END,ctx_aprox=0 WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id));}
   if(m.ctxPost&&!atual.ctx_post)alteracoes.push(env.DB.prepare('UPDATE msg_mensagem SET ctx_post=?,ctx_aprox=0 WHERE id=? AND ctx_post=0').bind(m.ctxPost,atual.id));
   if(m.ctxTipo==='story'&&atual.ctx_tipo!=='story')alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='story' WHERE id=? AND ctx_tipo<> 'story'").bind(atual.id));
