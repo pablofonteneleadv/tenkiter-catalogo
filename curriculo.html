@@ -142,7 +142,7 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.matches && t.matches('input[type=checkbox][data-max]')) {
     const max = +t.dataset.max; const marcados = document.querySelectorAll('input[name="' + t.name + '"]:checked');
-    if (marcados.length > max) { t.checked = false; alert('Escolha no máximo ' + max + '.'); }
+    if (marcados.length > max) { t.checked = false; TKAviso.aviso('Você pode escolher no máximo ' + max + '.'); }
   }
   condicionais();
 });
