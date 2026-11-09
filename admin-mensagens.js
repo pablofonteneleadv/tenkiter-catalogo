@@ -3358,6 +3358,7 @@
     if (falhas) aviso_(falhas === 1 ? 'Uma mensagem guardada neste aparelho não foi enviada. Abra a conversa e toque em Tentar de novo.' : falhas + ' mensagens guardadas neste aparelho não foram enviadas. Abra as conversas e toque em Tentar de novo.');
   }
   async function enviar(reenvio) {
+    if (!fila) { aviso_('Atualize a página para enviar.'); return; }
     if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
     if (reenvio) {       // "Tentar de novo": a mesma chave, o servidor não duplica
       const id = String(reenvio).replace(/^tmp-/, ''); if (fila && fila.itensDaConversa) { if (await fila.tentar(id)) return; }
