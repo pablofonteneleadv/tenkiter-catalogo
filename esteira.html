@@ -266,8 +266,8 @@
   #tkfg a.tkfg-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:10px;background:#fff;color:#0d0d0d;font-weight:700;text-decoration:none}#tkfg a.tkfg-link[hidden]{display:none}#tkfg a.tkfg-link:focus-visible{outline:3px solid var(--laranja);outline-offset:2px}
 .busca-res .t small{display:block;line-height:1.35;margin-top:4px}
 </style>
-<link rel="stylesheet" href="janelas.css?v=7.62.2">
-<link rel="stylesheet" href="tk-padrao.css?v=7.61.0">
+<link rel="stylesheet" href="janelas.css?v=7.65.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.65.0">
 </head>
 <body>
 <header>
@@ -276,7 +276,7 @@
 </header>
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
 
-<script src="avisos.js?v=7.60.0"></script>
+<script src="avisos.js?v=7.66.0"></script>
 <script src="common.js?v=7.59.0"></script>
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
@@ -2083,7 +2083,7 @@
     const bAddM = el('button', 'bt', 'Acrescentar tarefa'); bAddM.type = 'button';
     bAddM.onclick = () => { if (modelos.length >= 12) return aviso(cMod, 'O modelo aceita até 12 tarefas.'); modelos.push({ tipo: 'outro', orig: 'outro', titulo: '', instrucao: '', funcao: r.config.funcoes.includes('Fotos') ? 'Fotos' : '' }); desenharModelos(); const i = $('mod-titulo-' + (modelos.length - 1)); if (i) i.focus(); };
     const bSalM = el('button', 'bt prim', 'Salvar tarefas da preparação'); bSalM.type = 'button';
-    bSalM.onclick = async () => { const y = await srv('/esteira/config', { config: { modelosPreparacao: modelos.map((m) => ({ tipo: m.tipo, titulo: m.titulo, instrucao: m.instrucao, funcao: m.funcao })) } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cMod, y.erro || 'Não consegui salvar.'); aviso(cMod, 'Salvo. Vale para as próximas produtos colocadas em preparação.', true); };
+    bSalM.onclick = async () => { const y = await srv('/esteira/config', { config: { modelosPreparacao: modelos.map((m) => ({ tipo: m.tipo, titulo: m.titulo, instrucao: m.instrucao, funcao: m.funcao })) } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cMod, y.erro || 'Não consegui salvar.'); aviso(cMod, 'Salvo. Vale para os próximos produtos colocados em preparação.', true); };
     cMod.append(boxM, bAddM, bSalM);
     // v7.45.0: foco por categoria (com categoria fixa por pessoa) e reativação de peças paradas
     const cFoco = el('div', 'card'); cFoco.id = 'cfg-foco'; cFoco.append(el('h2', '', 'Foco por categoria e reativação'));
@@ -2106,7 +2106,7 @@
     boxD.append(lD1, lD2, lD3, lHr);
     const bFoco = el('button', 'bt prim', 'Salvar foco e reativação'); bFoco.type = 'button';
     bFoco.onclick = async () => { const y = await srv('/esteira/config', { config: { focoCategoria: cbF.checked, categoriasFixas: fixas, reativacao: [Number(iD1.value), Number(iD2.value), Number(iD3.value)], retratoHora: Number(iHr.value) } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cFoco, y.erro || 'Não consegui salvar.'); aviso(cFoco, 'Salvo. O foco vale para as próximas listas; os degraus valem no próximo retrato.', true); };
-    cFoco.append(el('h3', '', 'Categoria fixa por pessoa'), boxFx, el('h3', '', 'Reativação de produtos paradas'), el('p', 'muted', 'Sem venda = o estoque não caiu no retrato diário. O sistema cria as tarefas para Fotos e mostra as sugestões no Painel; nunca muda preço.'), boxD, bFoco);
+    cFoco.append(el('h3', '', 'Categoria fixa por pessoa'), boxFx, el('h3', '', 'Reativação de produtos parados'), el('p', 'muted', 'Sem venda = o estoque não caiu no retrato diário. O sistema cria as tarefas para Fotos e mostra as sugestões no Painel; nunca muda preço.'), boxD, bFoco);
     app.append(cEq, cHoje, cPad, cReg, cMod, cFoco);
     } finally {fluidez.concluir(vista);}
   }

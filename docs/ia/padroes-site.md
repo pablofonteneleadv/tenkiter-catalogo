@@ -1,6 +1,6 @@
 # TENKiTER — padrões obrigatórios do site (a "constituição")
 
-Atualização: 08/11/2026. Vale para toda pessoa e toda IA que mexe em interface, textos ou regras de dados.
+Atualização: 09/11/2026. Vale para toda pessoa e toda IA que mexe em interface, textos ou regras de dados.
 
 **Princípio (decisão do dono, Pablo):** o TENKiTER é **UM site com vários módulos**. Cada módulo reaproveita o mesmo botão, a mesma janela, o mesmo aviso, a mesma cor e a mesma regra. Quem precisa de algo parecido **usa o componente dono**; não escreve outro. Padrão novo ou exceção entra **aqui primeiro** (seção 7), nunca dentro do CSS/JS de um módulo.
 
@@ -25,8 +25,30 @@ Atualização: 08/11/2026. Vale para toda pessoa e toda IA que mexe em interface
 | Camadas | escala `--z-sticky … --z-aviso` | `janelas.css` (`:root`) | `z-index` numérico acima de 10 (0–10 só para empilhar dentro do próprio componente) | `z-index` |
 | Travar o fundo | só a classe `html.tk-travado` | `janelas.css` | `body.style.overflow`, `fx-travado`, `body.x { overflow:hidden }` | `travar-fundo` |
 | Pular para o conteúdo | `.tk-pular` ("Ir para o conteúdo"), criado por `a11y.js` | `a11y.js` + `janelas.css` | skip link próprio | `pagina-sem-padrao` |
-| Foco | contorno 3 px laranja (`--tk-foco-cor`) | `janelas.css` / `tk-padrao.css` | `outline:none` sem substituto; foco de outra cor | `janelas_padrao.py`, `padrao_aparencia_ui.py` |
+| Foco | contorno 3 px, afastado 2 px, na cor do token `--tk-foco-cor` = **#D35400** (laranja escuro; o laranja da marca dava só 2,9:1 sobre branco, abaixo dos 3:1 da WCAG para indicador de foco). Contraste medido: 4,2:1 sobre #fff, 3,9:1 sobre #fff8e6, 3,7:1 sobre #f5f1e8, 3,6:1 sobre #eee, 4,7:1 sobre #0d0d0d e 3,4:1 sobre #2a2a2a. A cor vive **só** em `tk-padrao.css` (token); `janelas.css` desenha o anel com `var(--tk-foco-cor)` e os módulos usam o token, nunca o hexadecimal | `janelas.css` (anel) / `tk-padrao.css` (token) | `outline:none` sem substituto; foco de outra cor | `janelas_padrao.py`, `padrao_aparencia_ui.py` |
 | Toda página HTML | carrega `janelas.css`, `a11y.js` e `tk-padrao.css` | cada `.html` | página nova sem os três | `pagina-sem-padrao` |
+
+## 1.1 z-index sem token — proposta (decisão de Pablo)
+
+Dívida do `z-index` (rule `z-index`, 24 ocorrências no baseline anterior). Nenhum número abaixo coincide com um degrau da escala `--z-*` de `janelas.css`; por isso NÃO foi criado token nem trocado valor (trocar mudaria a ordem das camadas). Opções para decidir: (a) acrescentar degraus à escala, (b) mover o componente para o degrau mais próximo (muda empilhamento, exige revisão visual), (c) aceitar como empilhamento local (0–10 já é livre). Valor mantido igual em todos.
+
+| Arquivo:linha | Valor | O que cobre | Degrau mais próximo (proposta) |
+|---|---|---|---|
+| admin.html:36 e catalogo.css:17 | 60 | `#toast-carregando` (faixa "carregando" no topo) | novo degrau entre `--z-sticky` (20) e `--z-menu` (80) |
+| admin.html:48, fila-lote.js:89 | 84 | `.sync-bar` / `.tk-fila-lote` (barra de envio colada acima da barra inferior) | `--z-barra` (90) ou novo `--z-barra-acima` |
+| admin.html:398, nav.js:363, catalogo.css:312 | 85 | `.envios-flut`, chip/aviso de envios, `#aviso-offline` | idem 84/85: um degrau "faixa acima da barra" |
+| catalogo.css:396 | 95 | `.cookie-aviso` | `--z-folha` (100) |
+| catalogo.css:516, 596 | 89, 91 | barra de seleção e desfazer da vitrine | `--z-barra` (90) (89 e 91 ficam em lados opostos dela hoje) |
+| catalogo.css:234 | 75 | `.barra-filtros-flut` | `--z-menu` (80) |
+| admin.html:1031 | 70 | barra fixa de ação da folha (min-height 52 px) | `--z-menu` (80) |
+| admin.html:182 | 40 | `.bulk-bar` (barra de seleção em lote, sticky) | `--z-sticky` (20) ou novo degrau |
+| admin.html:611 | 12 | `.mais-menu` (menu "mais" local) | local: aceitar |
+| catalogo.css:28 | 19 | `.filtros` (sticky) | `--z-sticky` (20) |
+| treinamentos.html:438, admin-mensagens.js:263 | 30 | menu do avatar; `.ms-trab` | `--z-sticky` (20) ou local |
+| pedido.js:202 | 102 | overlay do pedido (via `style.zIndex`) | `--z-folha` (100) |
+| tutorial-app.js:22, 25 | 20, 21, 22 | camadas locais dentro do tutorial (`position:absolute`) | local: aceitar (ou subir o piso da regra) |
+| tutorial-app.js:370 | 2147483646, 2147483647 | `.tk-tut-alvo` e `.tk-tut-seta` (acima de qualquer coisa de propósito) | `--z-tutorial` (3000) mudaria o comportamento: manter |
+| common.js:11 | 130 | `#tkfg` foto em tela cheia | igual a `--z-foto` (130); trocar é só do lote que pode tocar `common.js` (o APK embute o arquivo) |
 
 ## 2. Aparência
 

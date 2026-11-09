@@ -456,6 +456,12 @@
       "push",
       "catalogo"
     ],
+    "tests/textos_visual.py": [
+      "catalogo",
+      "mensagens",
+      "postagens",
+      "esteira"
+    ],
     "tests/fotos_mini_script.py": [
       "midia"
     ],

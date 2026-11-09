@@ -58,8 +58,8 @@
   .linha2 { display:flex; gap:10px; } .linha2 > * { flex:1; }
 </style>
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.61.0">
-<link rel="stylesheet" href="janelas.css?v=7.62.2">
-<link rel="stylesheet" href="tk-padrao.css?v=7.61.0">
+<link rel="stylesheet" href="janelas.css?v=7.65.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.65.0">
 </head>
 <body class="pg-curriculo">
 <header><img src="logo-mark.png" alt="" onerror="this.style.display='none'"><h1>TENKiTER Modas · Trabalhe com a gente</h1></header>
@@ -142,7 +142,7 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.matches && t.matches('input[type=checkbox][data-max]')) {
     const max = +t.dataset.max; const marcados = document.querySelectorAll('input[name="' + t.name + '"]:checked');
-    if (marcados.length > max) { t.checked = false; alert('Escolha no máximo ' + max + '.'); }
+    if (marcados.length > max) { t.checked = false; TKAviso.aviso('Você pode escolher no máximo ' + max + '.'); }
   }
   condicionais();
 });
@@ -657,7 +657,7 @@ function viewFim() {
   viewWhats();
 })();
 </script>
-<script src="avisos.js?v=7.60.0"></script>
+<script src="avisos.js?v=7.66.0"></script>
 <script src="icones.js?v=7.17.0"></script>
 <script src="nav.js?v=7.61.0" data-ativo="candidatura"></script>
 <script src="a11y.js?v=7.62.1"></script>

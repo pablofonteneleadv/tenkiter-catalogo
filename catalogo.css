@@ -196,7 +196,7 @@
   .conta-box .conta-principal { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 1rem; cursor: pointer; }
   .conta-box .conta-secundario { width: 100%; padding: 11px; border: 1px solid #ccc; border-radius: 10px; background: #fff; font-weight: 700; cursor: pointer; }
   .conta-abas { margin-bottom: 12px; }
-  .conta-abas > button { flex: 1; }   /* aparência da aba: .tk-abas (janelas.css) */
+  .conta-abas > button { flex: 1; } html body .conta-abas.tk-abas > button { flex: 1 1 0; }   /* aparência da aba: .tk-abas (janelas.css); as duas abas dividem a linha */
   .conta-opc-txt { font-size: 0.8rem; color: #555; margin: 4px 0 8px; line-height: 1.35; }
   .conta-opc { border-top: 1px solid #ddd; margin-top: 12px; padding-top: 10px; }
   .conta-erro { color: #c62828; font-size: 0.85rem; min-height: 1.1em; margin-bottom: 6px; }
