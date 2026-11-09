@@ -184,7 +184,7 @@ const $=id=>document.getElementById(id),esc=v=>escaparHtml(v),TIPOS=[["feed","ðŸ
       .po-addsheet button { cursor: pointer; }
       .po-add-cores { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
       .po-add-sw { width: 44px; min-height: 44px; height: 44px; border-radius: 50%; border: 2px solid #999; padding: 0; }
-      .po-add-sw[aria-pressed=true] { border: 4px solid #0d0d0d; box-shadow: 0 0 0 2px #E67E22; }
+      .po-add-sw[aria-pressed=true] { border: 4px solid #0d0d0d; box-shadow: 0 0 0 2px var(--laranja, #E67E22); }
       .po-add-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
       .po-add-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; width: auto; border: 1px solid #bbb; border-radius: 10px; background: #fff; color: #111; text-align: left; min-height: 44px; }
       .po-add-card canvas { width: 100%; height: auto; border-radius: 6px; background: #8a7358; }

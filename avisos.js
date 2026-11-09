@@ -31,7 +31,7 @@
       '.tk-aviso.tk-aviso-erro{border-color:#ff6b5e}' +
       '.tk-aviso-txt{flex:1;min-width:0;overflow-wrap:anywhere}' +
       '.tk-aviso button{flex:none;width:auto;min-width:44px;min-height:44px;padding:0 12px;border:0;border-radius:10px;background:#ffffff22;color:#fff;font:800 .85rem/1 system-ui,-apple-system,Roboto,Arial,sans-serif;cursor:pointer}' +
-      '.tk-aviso button.tk-aviso-desfazer{background:#E67E22;color:#0d0d0d}' +
+      '.tk-aviso button.tk-aviso-desfazer{background:var(--laranja, #E67E22);color:#0d0d0d}' +
       '.tk-aviso button:focus-visible{outline:3px solid #fff;outline-offset:2px}';
     document.head.appendChild(s);
   }
@@ -126,7 +126,7 @@
           '.tk-senha-caixa input{width:100%;min-height:48px;font-size:1rem;padding:0 12px;border:1px solid #888;border-radius:10px;box-sizing:border-box}' +
           '.tk-senha-erro{color:#b3261e;min-height:1.3em;margin:6px 0 0;font-size:.85rem}' +
           '.tk-senha-acoes{display:flex;gap:8px;margin-top:10px}.tk-senha-acoes button{flex:1;min-height:48px;border:0;border-radius:10px;font:800 .95rem system-ui,sans-serif;cursor:pointer;background:#e8e8e8;color:#111}' +
-          '.tk-senha-acoes button.tk-senha-ok{background:#E67E22;color:#0d0d0d}';
+          '.tk-senha-acoes button.tk-senha-ok{background:var(--laranja, #E67E22);color:#0d0d0d}';
         document.head.appendChild(st);
       }
       var minimo = o.minimo || 4, anterior = document.activeElement, fim = false;
