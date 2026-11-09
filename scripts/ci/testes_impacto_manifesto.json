@@ -175,6 +175,9 @@
     "tests/mensagens_registros_fundo_ui.py": [
       "mensagens"
     ],
+    "tests/mensagens_velocidade_ui.py": [
+      "mensagens"
+    ],
     "tests/mensagens_relacionamento_ui.py": [
       "mensagens"
     ],

@@ -47,16 +47,21 @@
   const APP_RECENTES = new URLSearchParams(location.search).get('app') === 'mensagens';
   const CACHE_RECENTES = 'tk_msg_recentes_v1';
   let cacheConversa = false, cacheBloqueado = false;
-  function limparRecentes_() { try { localStorage.removeItem(CACHE_RECENTES); } catch (_) {} }
+  function limparRecentes_() { try { localStorage.removeItem(CACHE_RECENTES); } catch (_) {} if (typeof limparRecentesWeb_ === 'function') limparRecentesWeb_(); }
   window.addEventListener('tk:mensagens-sair', limparRecentes_);
+  let donoMemo_ = {};
   async function donoRecentes_() {
     const s = typeof getSessao === 'function' && getSessao();
-    if (!APP_RECENTES || cacheBloqueado || !s || !podeGerir()) return '';
-    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s.whatsapp + ':' + s.sessao));
-    return Array.from(new Uint8Array(h), x=>x.toString(16).padStart(2,'0')).join('');
+    if (cacheBloqueado || !s || !podeGerir()) return '';
+    const entrada = s.whatsapp + ':' + s.sessao;
+    if (donoMemo_.entrada === entrada) return donoMemo_.hash;
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(entrada));
+    const hash = Array.from(new Uint8Array(h), x=>x.toString(16).padStart(2,'0')).join('');
+    donoMemo_ = { entrada, hash }; return hash;
   }
   async function recentes_(path, valor) {
     if (!/^\/msg\/(conversas\?|mensagens\?)/.test(path)) return null;
+    if (!APP_RECENTES) return recentesWeb_(path, valor);
     let dono;try{dono=await donoRecentes_();}catch(_){return null;}if(!dono)return null;
     try {
       let c = JSON.parse(localStorage.getItem(CACHE_RECENTES) || 'null');
@@ -75,6 +80,35 @@
       let json=JSON.stringify(c);
       while(json.length>500000&&keys.length>1){delete c.itens[keys.pop()];json=JSON.stringify(c);}
       if(json.length<=500000 && dono===await donoRecentes_()) localStorage.setItem(CACHE_RECENTES,json);
+    } catch (_) { /* armazenamento cheio ou indisponível não impede atendimento */ }
+    return null;
+  }
+  /* v7.65: abrir na hora (stale-while-revalidate). Fora do app, as telas recentes ficam na memória e no IndexedDB do aparelho, por conta + sessão,
+   * sem tokens, links nem mídia. A rede confirma sempre em seguida e o que chegar de lá substitui o guardado. Sair da conta apaga tudo. */
+  const recentesMem_ = new Map(); let recentesIdb_ = null, recentesPodado_ = false;
+  function idbRecentes_() { return recentesIdb_ || (recentesIdb_ = new Promise((ok, no) => { try { const r = indexedDB.open('tk_msg_recentes_web_v1', 1); r.onupgradeneeded = () => r.result.createObjectStore('itens'); r.onsuccess = () => ok(r.result); r.onerror = r.onblocked = () => { recentesIdb_ = null; no(r.error); }; } catch (e) { recentesIdb_ = null; no(e); } })); }
+  async function idbLerRecente_(k) { const b = await idbRecentes_(); return new Promise((ok) => { const r = b.transaction('itens').objectStore('itens').get(k); r.onsuccess = () => ok(r.result || null); r.onerror = () => ok(null); }); }
+  async function idbGravarRecente_(k, item, dono) {
+    const b = await idbRecentes_(); const t = b.transaction('itens', 'readwrite'), st = t.objectStore('itens'); st.put(item, k);
+    if (!recentesPodado_) { recentesPodado_ = true; const cur = st.openCursor(); cur.onsuccess = () => { const c = cur.result; if (!c) return; if (!String(c.key).startsWith(dono + '|') || Date.now() - (c.value && c.value.em || 0) > 86400000) c.delete(); c.continue(); }; }
+  }
+  function limparRecentesWeb_() { recentesMem_.clear(); recentesPodado_ = false; try { idbRecentes_().then((b) => { b.transaction('itens', 'readwrite').objectStore('itens').clear(); }, () => {}); } catch (_) { /* sem IndexedDB */ } }
+  async function recentesWeb_(path, valor) {
+    let dono; try { dono = await donoRecentes_(); } catch (_) { return null; } if (!dono) return null;
+    const k = dono + '|' + path;
+    if (!valor) {
+      let item = recentesMem_.get(k); if (!item) { try { item = await idbLerRecente_(k); } catch (_) { item = null; } }
+      const d = item && item.dados, valido = d && d.ok && (Array.isArray(d.conversas) || (d.conversa && Array.isArray(d.mensagens)));
+      if (!valido || Date.now() - item.em > 86400000) return null;
+      return dono === await donoRecentes_() ? structuredClone(d) : null;
+    }
+    try {
+      const dados = JSON.parse(JSON.stringify(valor, (kk, v) => /(?:url|chave|token|sessao)$/i.test(kk) ? undefined : v));
+      if (dados.mensagens) dados.mensagens = dados.mensagens.slice(-80);
+      if (dados.conversas) dados.conversas = dados.conversas.slice(0, 60);
+      const item = { em: Date.now(), dados }; recentesMem_.set(k, item);
+      if (recentesMem_.size > 24) recentesMem_.delete(recentesMem_.keys().next().value);
+      setTimeout(() => { idbGravarRecente_(k, item, dono).catch(() => {}); }, 0);
     } catch (_) { /* armazenamento cheio ou indisponível não impede atendimento */ }
     return null;
   }
@@ -119,6 +153,7 @@
         cacheBloqueado=true;limparRecentes_(); lista=[];msgs=[];aberta=null;cacheConversa=false;
         if($('ms-lista')) pintarLista(); if($('ms-conversa')) $('ms-conversa').textContent='';
       }
+      if (!APP_RECENTES && (r.status===401 || (r.status===403 && /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) limparRecentes_();
       if (dados.ok && (!metodo || metodo==='GET')) await recentes_(caminho,dados);
       if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
       return dados;
@@ -874,6 +909,9 @@
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => ul.addEventListener(t, () => clearTimeout(timerToque)));
     ul.addEventListener('scroll', () => clearTimeout(timerToque), { passive: true });
     ul.addEventListener('contextmenu', (ev) => { if (ev.target.closest('.ms-conv')) ev.preventDefault(); });
+    { let esperaMouse_ = 0; const alvoConversa_ = (ev) => { const b = ev.target.closest && ev.target.closest('[data-ms=abrir]'); return b && !selecao ? b.dataset.id : ''; };
+      ul.addEventListener('pointerdown', (ev) => { const id = alvoConversa_(ev); if (id) adiantarConversa_(id); }, { passive: true });
+      ul.addEventListener('pointerover', (ev) => { if (ev.pointerType !== 'mouse') return; clearTimeout(esperaMouse_); const id = alvoConversa_(ev); if (id) esperaMouse_ = setTimeout(() => adiantarConversa_(id), 120); }, { passive: true }); }
     const conv = el('section', 'ms-conversa'); conv.id = 'ms-conversa'; conv.setAttribute('aria-label', 'Conversa');
     conv.appendChild(vazioConversa_());
     app.append(lat, conv); sheet.appendChild(app); sheet.appendChild(av); o.appendChild(sheet); document.body.appendChild(o);
@@ -1974,7 +2012,7 @@
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_(), a0 = abaAtiva_, s0 = soNaoRespondidos_;
     const path = pathLista_();
-    const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
+    const salvo = reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
     if (mine !== seqLista || c0 !== canal || f0 !== filtro || b0 !== busca.trim() || t0 !== tipoParam_() || a0 !== abaAtiva_ || s0 !== soNaoRespondidos_) return;       // resposta velha de outra aba/filtro/busca: ignora
@@ -3061,6 +3099,16 @@
     gravacao = g; rec.start(); atualizarMic_();
     g.timer = setInterval(() => { atualizarMic_(); if (Date.now() - g.t0 > 300000) rec.stop(); }, 500);
   }
+  /* v7.65: ao encostar o dedo (ou parar o mouse) numa conversa, a leitura dela já sai; ao abrir, a resposta quase sempre está pronta. */
+  const adiantadas_ = new Map();
+  function adiantarConversa_(id) {
+    id = Number(id); if (!id || (aberta && aberta.id === id) || cacheConversa) return;
+    const path = '/msg/mensagens?conversa=' + encodeURIComponent(id), x = adiantadas_.get(path);
+    if (x && Date.now() - x.em < 8000) return;
+    adiantadas_.set(path, { em: Date.now(), p: worker_(path, 'GET') });
+    if (adiantadas_.size > 4) adiantadas_.delete(adiantadas_.keys().next().value);
+  }
+  function pegarAdiantada_(path) { const x = adiantadas_.get(path); adiantadas_.delete(path); return x && Date.now() - x.em < 8000 ? x.p : null; }
   async function abrirConversa(id, espiar) {
     citacaoPend_ = null;   // a citacao nunca atravessa para outra conversa
     const w = ++abrindo;
@@ -3068,10 +3116,21 @@
     const jaNaTela = aberta && aberta.id === id;
     if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); agendadas_ = []; acompanhamento_=null; }
     const path='/msg/mensagens?conversa=' + encodeURIComponent(id);
-    const salvo=APP_RECENTES ? await recentes_(path) : null;
+    const redeP=pegarAdiantada_(path)||worker_(path,'GET');   // v7.65: a rede sai já (ou já saiu ao encostar o dedo); o guardado aparece enquanto ela responde
+    const salvo=await recentes_(path);
     if(w!==abrindo)return;
-    cacheConversa=!!salvo;
-    if(salvo){
+    const rapido=!APP_RECENTES&&!!salvo&&!jaNaTela;   // fora do app: mostra o guardado SEM travar o envio
+    cacheConversa=!!salvo&&!rapido;
+    let guardadoJson='';
+    if(rapido){
+      aberta=salvo.conversa;guardadoJson=JSON.stringify(aberta);
+      ultIdSrv=salvo.mensagens.reduce((m,x)=>(x.id>m?x.id:m),0);
+      msgs=salvo.mensagens.concat(Array.from(pendentes.values()).filter((p)=>p.conversa===id).map((p)=>p.msg));
+      montarConversa(aberta);pintarFio(true);
+      vista='conversa';$('ms-app').dataset.vista='conversa';
+      if(!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa'))TKCamadas.empilhar('ms-conversa',mostrarLista_);
+    }
+    if(salvo&&!rapido){
       aberta=salvo.conversa;msgs=salvo.mensagens;montarConversa(aberta);pintarFio(true);
       vista='conversa';$('ms-app').dataset.vista='conversa';
       if(!APP_RECENTES&&!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa',mostrarLista_);
@@ -3081,9 +3140,10 @@
       info.style.cssText='flex:0 0 auto;margin:0;padding:6px 12px;background:#fff4d9;color:#664200;font-size:12px;line-height:1.4';
       const pai=$('ms-conversa');pai.insertBefore(info,pai.children[1]||null);aviso_('');
     }
-    const r = await worker_(path, 'GET');
+    const r = await redeP;
     if (w !== abrindo) return;
     if (!r.ok) {
+      if(rapido){if(r.semRede)aviso_('Sem conexão. Mostrando a conversa guardada neste aparelho.');else{aviso_(r.erro||'Não foi possível atualizar a conversa agora.');}return;}
       const info=$('ms-cache-status');
       if(info){info.textContent=r.semRede?'Salva no aparelho · sem conexão para responder.':'Salva no aparelho · aguarde atualizar para responder.';aviso_('');}
       else aviso_(r.erro || 'Não foi possível abrir a conversa agora.');
@@ -3094,7 +3154,8 @@
     const c = r.conversa; aberta = c; if (Array.isArray(r.agendadas)) agendadas_ = r.agendadas;if(Object.hasOwn(r,'acompanhamento'))acompanhamento_=r.acompanhamento;
     ultIdSrv = r.mensagens.reduce((m, x) => (x.id > m ? x.id : m), 0);
     msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
-    montarConversa(c); pintarFio(true);
+    if(!rapido||JSON.stringify(c)!==guardadoJson){const tinhaFoco=rapido&&document.activeElement&&document.activeElement.id==='ms-texto';montarConversa(c);if(tinhaFoco)$('ms-texto')?.focus();}   // v7.65: igual ao que já está na tela? não refaz o cabeçalho nem o campo de texto
+    pintarFio(true);
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
     if (!APP_RECENTES && !larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', mostrarLista_);
     pintarLista(); marcarLida();
@@ -3552,7 +3613,7 @@
         msgs = msgs.concat(novas);
         if (!noFim && entradas) novasAbaixo += entradas;
         pintarFio(noFim);
-        if(APP_RECENTES&&!cacheConversa) await recentes_('/msg/mensagens?conversa='+aberta.id,{ok:true,conversa:aberta,mensagens:msgs.filter(m=>typeof m.id==='number')});
+        if(!cacheConversa) await recentes_('/msg/mensagens?conversa='+aberta.id,{ok:true,conversa:aberta,mensagens:msgs.filter(m=>typeof m.id==='number')});
         if(aberturaDaSonda!==abrindo){agendar();return;}
         if (noFim && entradas && !document.hidden) { aberta.nao_lidas = 1; marcarLida(); }
         else if (entradas && aberta) aberta.nao_lidas = (aberta.nao_lidas || 0) + entradas;
@@ -4050,7 +4111,7 @@
 
   /* ---------- abrir / fechar ---------- */
   async function recarregar() {
-    const listaEmCurso=APP_RECENTES ? carregarLista(true) : null;
+    const listaEmCurso=carregarLista(true);   // v7.65: a lista não espera o resumo (antes eram em fila)
     carregarCfgLeitura_();
     resumo = await worker_('/msg/resumo', 'GET');
     if (!resumo.ok) { const ex = $('ms-extra'); ex.textContent = ''; ex.appendChild(el('p', 'ms-vazio', resumo.erro || 'Não foi possível carregar agora.')); return; }
