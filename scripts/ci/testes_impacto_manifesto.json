@@ -181,6 +181,9 @@
     "tests/mensagens_saude_entrada.py": [
       "mensagens"
     ],
+    "tests/mensagens_solicitacoes_excluir_ui.py": [
+      "mensagens"
+    ],
     "tests/mensagens_solicitacoes_retomada_ui.py": [
       "esteira",
       "mensagens"
@@ -395,6 +398,9 @@
     "tests/worker_relacionamento_atendente.js": [
       "mensagens"
     ],
+    "tests/worker_solicitacoes_excluir.js": [
+      "mensagens"
+    ],
     "tests/worker_solicitacoes.js": [
       "esteira",
       "mensagens"
@@ -488,6 +494,7 @@
   },
   "sql_fixture": [
     "tests/mensagens_solicitacoes_ui.py",
+    "tests/mensagens_solicitacoes_excluir_ui.py",
     "tests/mensagens_solicitacoes_retomada_ui.py",
     "tests/mensagens_registros_fundo_ui.py",
     "tests/postagens_agora_selecao_ui.py",

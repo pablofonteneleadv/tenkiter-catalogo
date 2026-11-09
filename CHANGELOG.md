@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.67.0 — excluir solicitação de cliente, com permissão
+
+- Mensageiro → Solicitações de clientes ganha "Excluir solicitação": confirmação nativa dizendo a consequência e aviso "Solicitação excluída · Desfazer". A solicitação some de todas as listas e filtros; fotos, conversa e registros continuam guardados (exclusão lógica, com quem excluiu e quando).
+- Nova permissão "Excluir solicitações de clientes": por padrão só o Admin total; ele libera outras pessoas em Acessos → Ferramentas de Mensagens. O servidor recusa quem não tem a permissão, mesmo por chamada direta. Funciona para sessões já abertas.
+- D1: duas colunas novas e opcionais (`excluida_em`, `excluida_por`) criadas de forma aditiva; nada é apagado.
+
 ## 7.64.0 — solicitações de clientes com fotos à vista e registro em segundo plano
 
 - Solicitações de clientes mostra até três miniaturas (4:5) lado a lado em cada pedido; o toque amplia e permite passar por todas as fotos, anexar à resposta e voltar à lista.
