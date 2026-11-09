@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.73.0 — encerrar cliente fecha todos os canais; pontuação pela média dos canais
+
+- Mensageiro: encerrar uma conversa (pela seleção, pelo menu da conversa, em lote ou automaticamente por falta de resposta no Acompanhar) encerra todos os canais abertos do mesmo cliente, na mesma operação. A pergunta "Incluir os outros canais deste cliente?" saiu; o aviso diz quais canais também serão encerrados.
+- O Worker garante a regra (transação D1, idempotente, sem apagar dados) e reabrir continua individual.
+- Ficha do cliente: uma venda encerrada em vários canais conta como uma compra só.
+- Pontuação (Hist.): cliente com vários canais conta uma vez, pela média dos canais. Histórico antigo não é reescrito; o cálculo agrupa por rodada de encerramento. Regras e exemplos em docs/ia/mensageiro-pontuacao.md.
+
 ## 7.72.0 — painel abre mais leve no celular
 
 - A lista de produtos do painel (e a vitrine) reconhece o tecido de cada produto por um índice lembrado, em vez de refazer a normalização de todos os apelidos para cada produto. No teste, desenhar 700 produtos caiu de ~57 ms para menos de 1 ms (mesmos resultados). No celular emulado esse trabalho ocupava ~1,4 s do processador logo ao abrir o painel, atrasando também o Mensageiro.

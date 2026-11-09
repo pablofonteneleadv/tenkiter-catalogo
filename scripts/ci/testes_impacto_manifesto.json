@@ -401,6 +401,9 @@
       "midia",
       "postagens"
     ],
+    "tests/worker_pontuacao_canais.js": [
+      "mensagens"
+    ],
     "tests/worker_prioridade_clientes.js": [
       "mensagens"
     ],
