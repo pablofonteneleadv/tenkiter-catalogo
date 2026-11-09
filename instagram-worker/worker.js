@@ -7713,7 +7713,13 @@ function estCaixaSaida_(x, nomeDe, eu, repet) {
 async function estCaixaRepetidas_(env, itens) {
   const out = {}, hs = [...new Set(itens.map((x) => x.hash).filter(Boolean))];
   if (!hs.length) return out;
-  const rows = (await env.DB.prepare('SELECT id, hash, enviada_em, enviada_por FROM est_caixa WHERE hash IN (' + hs.map(() => '?').join(',') + ") AND status<>'descartada' ORDER BY id").bind(...hs).all()).results || [];
+  /* v7.76.1: o D1 aceita no máximo 100 parâmetros por consulta; com 100+ fotos distintas na lista (ex.: "Usadas") a consulta única estourava e a lista dava erro 500. Em blocos de 80. */
+  const rows = [];
+  for (let i = 0; i < hs.length; i += 80) {
+    const bloco = hs.slice(i, i + 80);
+    rows.push(...((await env.DB.prepare('SELECT id, hash, enviada_em, enviada_por FROM est_caixa WHERE hash IN (' + bloco.map(() => '?').join(',') + ") AND status<>'descartada'").bind(...bloco).all()).results || []));
+  }
+  rows.sort((x, y) => x.id - y.id);
   for (const x of itens) { if (!x.hash) continue; const o = rows.find((r) => r.hash === x.hash && r.id < x.id); if (o) out[x.id] = { id: o.id, em: o.enviada_em || '', por: o.enviada_por || '' }; }
   return out;
 }

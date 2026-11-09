@@ -211,5 +211,14 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
     chk('arquivamento é reversível',(await A(BIA,'POST','/esteira/caixa/arquivar-proprias',{ids:[own],restaurar:true})).j.ok);
     chk('saber ID alheio não permite arquivar',(await A(BIA,'POST','/esteira/caixa/arquivar-proprias',{ids:[ids[U(4)]]})).r.status===409);
   }
+  // v7.76.1: lista com 100+ fotos distintas (ex.: "Usadas") não pode estourar o limite de 100 parâmetros do D1 (dava erro 500)
+  {
+    const prepOrig = env.DB.prepare.bind(env.DB);
+    env.DB.prepare = (sql) => { const st = prepOrig(sql); const bindOrig = st.bind.bind(st); st.bind = (...a) => { if (a.length > 100) throw new Error('too many SQL variables'); return bindOrig(...a); }; return st; };
+    for (let i = 0; i < 130; i++) await env.DB.prepare("INSERT INTO est_caixa (op, lote, url, descricao, descricao_lote, produto, produto_nome, hash, enviada_por, enviada_nome, enviada_em, status) VALUES (?, 'lote-grande', ?, '', '', '', '', ?, ?, 'Iara', '2026-11-09T10:00:00Z', 'usada')").bind('grande-' + String(i).padStart(4, '0'), 'https://tenkiter-midia.fake/m/202611/grande' + i + '.jpg', 'c'.repeat(30) + String(i).padStart(2, '0') + String(i), IARA).run();
+    const grande = await A(PABLO, 'GET', '/esteira/caixa?ver=usadas');
+    chk('lista Usadas com 130 fotos distintas abre sem erro (limite de 100 parâmetros do D1)', grande.r.status === 200 && grande.j.ok && grande.j.itens.length >= 130, grande.j);
+    env.DB.prepare = prepOrig;
+  }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); console.log('FALHAS=' + falhas.length); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

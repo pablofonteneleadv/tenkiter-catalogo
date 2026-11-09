@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.76.1 — Esteira: lista "Usadas" (e qualquer lista com mais de 100 fotos) volta a abrir
+
+- A lista de fotos recebidas dava erro no servidor quando tinha 100 ou mais fotos diferentes (ex.: "Usadas · 121"), porque a consulta de fotos repetidas passava de 100 parâmetros, o limite do banco. Agora a consulta é feita em blocos.
+
+
 ## 7.76.0 — Esteira: quem tem o acesso "Esteira" entra
 
 - Pessoa com o acesso "Esteira" em RH > Acessos recebia "Seu acesso não permite entrar na Esteira" quando a lista de equipe vinda do RH não a trazia (conta antiga, ajuste individual…). Agora o servidor trata quem tem o acesso como membro da equipe (confere e rodízio), como a própria tela da Esteira já diz. Sem o acesso continua barrado.
