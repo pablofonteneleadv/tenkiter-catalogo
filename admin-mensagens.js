@@ -2142,7 +2142,8 @@
     }); return bt;
   }
   function blocoMidia_(m) {
-    const tipo = m.tipo, local = m.localUrl || '';
+    let tipo = m.tipo; const local = m.localUrl || '';
+    if (tipo === 'compartilhamento') tipo = /^image\//.test(m.midia_mime || '') ? 'imagem' : /^video\//.test(m.midia_mime || '') ? 'vídeo' : tipo;   // story/post compartilhado com a imagem copiada
     if (!local && !(m.midia && typeof m.id === 'number')) return null;
     const w = el('div', 'ms-midia');
     if (tipo === 'imagem' || tipo === 'figurinha') {

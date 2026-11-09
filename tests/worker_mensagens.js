@@ -196,6 +196,12 @@ function d1() {
   chk('assinar chama subscribed_apps com messages', asn.j.ok === true && subChamadas.some((c) => c.m === 'POST' && c.u.includes('subscribed_fields=messages')), subChamadas);
   chk('depois de assinar, situação diz assinada', (await A('GET', '/msg/instagram/situacao')).j.assinada === true);
   chk('o token nunca volta na situação', !JSON.stringify(sit.j).includes(TOKEN));
+  // ---- story/post compartilhado pelo cliente no Instagram: a imagem aparece no Mensageiro ----
+  const igShare = JSON.stringify({ object: 'instagram', entry: [{ id: 'DONO', messaging: [{ sender: { id: 'CLI1' }, recipient: { id: 'DONO' }, timestamp: 1792000100000, message: { mid: 'IGSH1', attachments: [{ type: 'share', payload: { url: 'https://cdn.fake/story-compartilhado.jpg' } }] } }, { sender: { id: 'CLI1' }, recipient: { id: 'DONO' }, timestamp: 1792000110000, message: { mid: 'IGSH2', attachments: [{ type: 'share', payload: { url: 'https://pagina.fake/p/ABC' } }] } }] }] });
+  await wh('/wh/instagram/' + seg, igShare, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': await assinar(igShare) } });
+  const sh1 = await DB.prepare("SELECT tipo, midia_chave, midia_mime FROM msg_mensagem WHERE ext_id='IGSH1'").first(), sh2 = await DB.prepare("SELECT tipo, midia_chave, midia_url FROM msg_mensagem WHERE ext_id='IGSH2'").first();
+  chk('compartilhamento do Instagram com imagem: copia a foto para o nosso armazenamento', sh1 && sh1.tipo === 'compartilhamento' && sh1.midia_chave && sh1.midia_mime === 'image/jpeg', sh1);
+  chk('compartilhamento cujo link não é imagem continua só como aviso, sem gravar página como foto', sh2 && sh2.tipo === 'compartilhamento' && !sh2.midia_chave && !sh2.midia_url, sh2);
   await wh('/wh/instagram/' + seg, corpoIg, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': 'sha256=00' } });
   chk('assinatura recusada fica registrada para diagnóstico', (await A('GET', '/msg/instagram/situacao')).j.ultimaTentativa.res === 'assinatura');
 
