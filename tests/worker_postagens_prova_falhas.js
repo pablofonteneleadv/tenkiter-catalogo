@@ -90,6 +90,7 @@ function d1() {
   chk('code 190 / "Session has expired" = token (pausa + aviso)', F({ code: 190, message: 'x' }).conta === 'token' && F({ message: 'Error validating access token: Session has expired' }).conta === 'token');
   chk('HTTP 500 / sem conexão / code 2 = instável (espera curta)', F({ http: 500, message: 'x' }).transitorio && F({ http: 0, message: 'não consegui falar com o Instagram' }).transitorio && F({ code: 2, message: 'An unexpected error has occurred. Please retry your request later.' }).transitorio);
   chk('mídia recusada (2207052) = erro só do item, nunca pausa', !F({ code: 9004, sub: 2207052, message: 'Media download has failed' }).espera && !F({ code: 9004, sub: 2207052, message: 'Media download has failed' }).transitorio);
+  chk('"Media ID is not available" e "requested resource does not exist" = mídia ainda preparando (repete com o mesmo container, não é mídia inválida)', [F({ code: 9007, sub: 2207027, message: 'Media ID is not available' }), F({ code: 24, sub: 2207006, message: 'The requested resource does not exist' }), F({ message: 'Instagram: The requested resource does not exist' })].every((f) => f.transitorio && f.preparando && !f.espera));
   chk('frases em português, sem JSON e sem token', [F({ message: 'too many actions access_token=SEGREDO' }), F({ code: 190 }), F({ http: 500 })].every((f) => !/[{}]/.test(f.frase) && !f.frase.includes('SEGREDO')));
 
   console.log('== Caso real (05/11): série "ambos" parte 1 com WhatsApp ok + Instagram "too many actions" ==');

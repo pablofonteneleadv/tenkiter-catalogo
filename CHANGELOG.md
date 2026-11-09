@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.1 — Story no Instagram: "Media ID is not available" e "resource does not exist" não derrubam mais a postagem
+
+- Causa: às vezes o Instagram ainda está preparando a mídia quando o servidor consulta ou publica. As duas mensagens eram tratadas como mídia inválida: a postagem gastava tentativa, recriava o container e esperava 5 min (o Story atrasava; ex.: Story de 19:20 ainda na fila às 20:00).
+- Agora são tratadas como "preparando": volta em 1 min com o mesmo container, sem pausar o Instagram inteiro, e refaz o container na 3ª e na 5ª tentativa. Só vira erro depois de 6 tentativas.
+
 ## 7.77.1 — Mensageiro mostra a foto do story/post que o cliente compartilha no Instagram
 
 - Antes: quando o cliente compartilhava um story ou post, a conversa mostrava só "Compartilhamento" (a imagem era descartada).

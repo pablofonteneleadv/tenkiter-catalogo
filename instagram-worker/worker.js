@@ -831,6 +831,9 @@ export function fraseErroIG(e) {
   if (code === 190 || code === 102 || IG_TXT_TOKEN_.test(msg)) return { frase: 'O token do Instagram venceu ou foi recusado. Gere outro e conecte de novo (Conexões). As postagens do Instagram esperam; nada vira erro.', fatal: true, conta: 'token' };
   if (code === 10 || code === 200 || /permission/i.test(msg)) return { frase: 'O token não tem a permissão de publicar (instagram_business_content_publish). Gere outro token marcando essa permissão. As postagens do Instagram esperam; nada vira erro.', fatal: true, conta: 'permissao' };
   if (IG_CODIGOS_LIMITE_.indexOf(code) !== -1 || IG_SUB_LIMITE_.indexOf(sub) !== -1 || (code >= 80000 && code <= 80014) || http === 429 || IG_TXT_LIMITE_.test(msg)) return { frase: 'O Instagram pediu para esperar (limite de ações do Instagram). As postagens do Instagram ficam em pausa e saem sozinhas depois; o WhatsApp segue normal.', espera: true };
+  /* v7.78.1: o Instagram ainda estava preparando a mídia (publicou/consultou o container cedo demais): "Media ID is not available" (9007/2207027) e
+   * "The requested resource does not exist" (24/2207006) logo depois de criar. Não é mídia inválida: espera um pouco e repete com o MESMO container. */
+  if (code === 9007 || sub === 2207027 || sub === 2207006 || /media id is not available|requested resource does not exist/i.test(msg)) return { frase: 'O Instagram ainda estava preparando a mídia. Tento de novo em instantes, sem recriar a postagem.', transitorio: true, preparando: true };
   if (sub === 2207026 || sub === 2207052 || sub === 2207003 || sub === 2207004 || sub === 2207005 || sub === 2207009 || /download|fetch|unsupported|format|ratio|aspect|media (?:type|id)|invalid (?:image|video)/i.test(msg)) return { frase: 'O Instagram não aceitou a mídia (precisa ser JPEG ou MP4 público, dentro das proporções). ' + msg.slice(0, 140) };
   if (http === 0 || http >= 500 || code === 1 || code === 2 || (e && e.transitorio) || IG_TXT_TRANSITORIO_.test(msg)) return { frase: 'O Instagram ficou instável agora (sem resposta ou erro temporário). Tento de novo em poucos minutos.', transitorio: true };
   return { frase: 'Instagram: ' + (msg || 'erro desconhecido').slice(0, 200) };
@@ -1634,6 +1637,13 @@ async function falhaPostagem(env, p, e, ctxFila) {
     return;
   }
   const tent = (Number(p.tentativas) || 0) + 1;
+  if (f.preparando) {
+    /* Sem pausa global (não é culpa do Instagram inteiro) e sem gastar as 3 tentativas de mídia inválida: volta em 1 min com o mesmo container;
+     * na 3ª e na 5ª vez o container é refeito (pode ter vencido). */
+    if (tent >= MAX_TENT_TRANSITORIO_) { await env.DB.prepare("UPDATE postagem SET status='erro', tentativas=?, erro=?, containers='', atualizado_em=? WHERE id=?").bind(tent, 'O Instagram não terminou de preparar a mídia em ' + tent + ' tentativas. Use “Postar agora mesmo assim” ou repita a postagem.', agora(), p.id).run(); return; }
+    await env.DB.prepare("UPDATE postagem SET status='agendado', inicio_proc='', agendado_em=?, tentativas=?, containers=CASE WHEN ? IN (3,5) THEN '' ELSE containers END, erro=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() + 60000).toISOString(), tent, tent, f.frase, agora(), p.id).run();
+    return;
+  }
   if (f.transitorio) {
     const pausa = await pausarIg_(env, 'instavel', '');
     if (ctxFila) ctxFila.pausa = pausa;
