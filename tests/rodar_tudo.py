@@ -204,6 +204,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("video_lote_limites.py", lambda o: "OK vagas" in o),
     ("postagens_video_status.py", lambda o: "OK 320" in o),
     ("mensagens_registros_fundo_ui.py", lambda o: "FALHAS=0" in o),  # v7.64.0: registro de cliente em segundo plano (fila no aparelho, indicador flutuante, reenvio sem duplicar); exige o SQLite de tests/fixtures
+    ("worker_solicitacoes_excluir.js", lambda o: "OK solicitações excluir" in o),  # v7.67.0: exclusão lógica + permissão no servidor (D1 SQLite em memória)
+    ("mensagens_solicitacoes_excluir_ui.py", lambda o: "OK 320 excluir" in o),  # v7.67.0: botão por permissão, confirm(), Desfazer, axe; exige o SQLite de teste (fixtures/solicitacoes_server.cjs)
     ("janelas_sem_estouro.py", lambda o: "FALHAS=0" in o),  # v7.62.1: nenhuma janela/aba passa da largura do celular
     ("postagens_multi_sem_limite.py", lambda o: "FALHAS=0" in o),  # v7.62.0: produtos juntos sem teto de 8, prévias paginadas, aviso acima de 60
     ("padrao_vocabulario.py", lambda o: "FALHAS=0" in o),   # v7.57.0: vocabulário único (produto, seleção, Gestão…) e avisos

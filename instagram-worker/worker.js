@@ -282,7 +282,7 @@ async function permissoesConferir_(env, req) {
 }
 
 // Acessos adicionais são privados no Worker; não alteram os perfis do cadastro.
-const MSG_FERRAMENTAS_ = { acessar:'Acessar Mensagens', responder:'Responder e encerrar atendimentos', produtos:'Selecionar produtos no atendimento', arquivos:'Baixar arquivos recebidos', contatos:'Editar cadastro e canais', etiquetas:'Alterar etapa da venda', notas:'Ver e editar notas da equipe', agenda:'Agendar mensagens', respostas:'Usar e editar respostas rápidas', funil:'Ver e mover o funil', metricas:'Ver métricas', exportar:'Exportar e consultar exclusões', configuracoes:'Configurar conexões e automações' };
+const MSG_FERRAMENTAS_ = { acessar:'Acessar Mensagens', responder:'Responder e encerrar atendimentos', produtos:'Selecionar produtos no atendimento', arquivos:'Baixar arquivos recebidos', contatos:'Editar cadastro e canais', etiquetas:'Alterar etapa da venda', notas:'Ver e editar notas da equipe', agenda:'Agendar mensagens', respostas:'Usar e editar respostas rápidas', funil:'Ver e mover o funil', excluir_solicitacao:'Excluir solicitações de clientes', metricas:'Ver métricas', exportar:'Exportar e consultar exclusões', configuracoes:'Configurar conexões e automações' };
 const msgPerfil_ = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,100);
 const msgTelefone_ = s => foneNormal_(s).chave || String(s || '').replace(/\D/g,'').slice(0,20);
 async function msgRegras_(env) { const raw = await cfgGet(env,'msg_acessos_v1'); return raw ? JSON.parse(raw) : { perfis:{}, pessoas:{} }; }
@@ -293,7 +293,7 @@ function msgDireitos_(perms, whats, regras) {
   const pessoa = (regras.pessoas || {})[msgTelefone_(whats)] || {};
   const direitos = {};
   for (const k of Object.keys(MSG_FERRAMENTAS_)) {
-    let v = cat1 && !['funil','metricas','exportar','configuracoes'].includes(k);
+    let v = cat1 && !['funil','excluir_solicitacao','metricas','exportar','configuracoes'].includes(k);
     const definidos = perfis.map(n => (regras.perfis || {})[n]).filter(r => r && typeof r[k] === 'boolean');
     if (definidos.length) v = definidos.some(r => r[k]);
     if (perms.acessosConfiguraveis) {
@@ -313,6 +313,7 @@ function msgDireitos_(perms, whats, regras) {
   return direitos;
 }
 function msgRecurso_(p, req, url) {
+  if(p==='/msg/solicitacoes/excluir'||p==='/msg/solicitacoes/restaurar')return 'excluir_solicitacao';
   if(p==='/msg/cliente-foto'||p.startsWith('/msg/solicitacoes'))return req.method==='GET'?'acessar':'responder';
   if (['/msg/video-preparar','/msg/enviar','/msg/anexo','/msg/dono','/msg/encerrar'].includes(p)) return 'responder';
   if (p === '/msg/midia') return url.searchParams.get('baixar') === '1' ? 'arquivos' : 'acessar';
@@ -4928,6 +4929,8 @@ async function rotasSolicitacoes_(env,req,url,J){
     env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_solicitacao_foto(id TEXT NOT NULL,solicitacao TEXT NOT NULL,chave TEXT NOT NULL,mime TEXT NOT NULL,hash TEXT NOT NULL,por TEXT NOT NULL,em TEXT NOT NULL,PRIMARY KEY(solicitacao,id))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_solicitacao_evento(id INTEGER PRIMARY KEY AUTOINCREMENT,solicitacao TEXT NOT NULL,por TEXT NOT NULL,em TEXT NOT NULL,antes TEXT NOT NULL,depois TEXT NOT NULL)"),
   ]);
+  {const cols=new Set(((await env.DB.prepare('PRAGMA table_info(msg_solicitacao)').all()).results||[]).map(c=>c.name));   // v7.67.0: exclusão lógica, só colunas novas
+  for(const nome of ['excluida_em','excluida_por'])if(!cols.has(nome)){try{await env.DB.prepare('ALTER TABLE msg_solicitacao ADD COLUMN '+nome+" TEXT NOT NULL DEFAULT ''").run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}}
   const p=url.pathname,eu=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,''),em=agora(),uuid=v=>/^[a-f0-9-]{36}$/.test(String(v||''));
   if(p==='/msg/cliente-foto'&&req.method==='POST'){
     const [st,c]=await convFicha_(env,Number(url.searchParams.get('conversa')));if(st)return J({ok:false,erro:c},st);
@@ -4943,7 +4946,7 @@ async function rotasSolicitacoes_(env,req,url,J){
     return J({ok:true,id,nome:c.nome||'',vinculo:'mensageiro'});
   }
   if(p==='/msg/solicitacoes'&&req.method==='GET'){
-    const status=url.searchParams.get('status')||'abertas',conversa=Number(url.searchParams.get('conversa'))||0,antes=url.searchParams.get('antes')||'',args=[];let cond='1=1';
+    const status=url.searchParams.get('status')||'abertas',conversa=Number(url.searchParams.get('conversa'))||0,antes=url.searchParams.get('antes')||'',args=[];let cond="s.excluida_em=''";
     if(status==='abertas')cond+=" AND s.status<>'atendida'";else if(['pendente','em_atendimento','aguardando_cliente','atendida'].includes(status)){cond+=' AND s.status=?';args.push(status);}else if(status!=='todas')return J({ok:false,erro:'Filtro de solicitações inválido.'},400);
     if(conversa){const [st,c]=await convFicha_(env,conversa);if(st)return J({ok:false,erro:c},st);const ficha=await fichaDaConversa_(env,c);cond+=' AND s.conversa_id IN('+ficha.canais.map(()=>'?').join(',')+')';args.push(...ficha.canais.map(x=>x.id));}
     if(antes){const [data,cursorId]=antes.split('|');if(!data||!uuid(cursorId))return J({ok:false,erro:'Página inválida.'},400);cond+=' AND (s.criado_em<? OR (s.criado_em=? AND s.id<?))';args.push(data,data,cursorId);}
@@ -4963,7 +4966,7 @@ async function rotasSolicitacoes_(env,req,url,J){
   const id=url.searchParams.get('solicitacao')||'',foto=url.searchParams.get('foto')||'';
   if(p==='/msg/solicitacoes/foto'&&['GET','POST'].includes(req.method)){
     if(!uuid(id)||!uuid(foto))return J({ok:false,erro:'Foto inválida.'},400);
-    const item=await env.DB.prepare('SELECT id FROM msg_solicitacao WHERE id=?').bind(id).first();if(!item)return J({ok:false,erro:'Solicitação não encontrada.'},404);
+    const item=await env.DB.prepare("SELECT id FROM msg_solicitacao WHERE id=? AND excluida_em=''").bind(id).first();if(!item)return J({ok:false,erro:'Solicitação não encontrada.'},404);
     const existente=await env.DB.prepare('SELECT * FROM msg_solicitacao_foto WHERE solicitacao=? AND id=?').bind(id,foto).first();
     if(req.method==='GET'){if(!existente)return J({ok:false,erro:'Foto não encontrada.'},404);const obj=await env.MIDIA.get(existente.chave);return obj?new Response(obj.body,{headers:{'Content-Type':existente.mime,'Cache-Control':'no-store',...Object.fromEntries(cors(env,req))}}):J({ok:false,erro:'Foto indisponível.'},404);}
     const bytes=await corpoLimitadoVideo_(req,5*1048576),mime=detectarAnexo_(bytes,'imagem');if(!mime)return J({ok:false,erro:'Use uma foto JPG, PNG ou WebP até 5 MiB.'},415);
@@ -4975,8 +4978,16 @@ async function rotasSolicitacoes_(env,req,url,J){
     try{const r=await env.DB.prepare('INSERT OR IGNORE INTO msg_solicitacao_foto(id,solicitacao,chave,mime,hash,por,em) SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM msg_solicitacao_foto WHERE solicitacao=?)<20 AND NOT EXISTS(SELECT 1 FROM msg_solicitacao_foto WHERE solicitacao=? AND hash=?)').bind(foto,id,chave,mime,hash,eu,em,id,id,hash).run();if(!r.meta.changes){await env.MIDIA.delete(chave);const ref=await env.DB.prepare('SELECT hash FROM msg_solicitacao_foto WHERE solicitacao=? AND (id=? OR hash=?) LIMIT 1').bind(id,foto,hash).first();return ref?.hash===hash?J({ok:true,existente:true}):J({ok:false,erro:'A solicitação aceita até 20 fotos.'},409);}}catch(e){await env.MIDIA.delete(chave);throw e;}
     uso.bytes+=bytes.byteLength;uso.arquivos++;await env.CACHE.put('uso',JSON.stringify(uso));return J({ok:true});
   }
+  if((p==='/msg/solicitacoes/excluir'||p==='/msg/solicitacoes/restaurar')&&req.method==='POST'){   // exclusão lógica: nada é apagado do D1 nem do R2
+    const d=await req.json().catch(()=>({})),id=String(d.id||''),excluir=p.endsWith('/excluir');if(!uuid(id))return J({ok:false,erro:'Solicitação inválida. Atualize a lista e tente de novo.'},400);
+    const r=await env.DB.prepare('SELECT * FROM msg_solicitacao WHERE id=?').bind(id).first();if(!r)return J({ok:false,erro:'Solicitação não encontrada.'},404);
+    if(excluir?!r.excluida_em:!!r.excluida_em){
+      await env.DB.batch([env.DB.prepare('UPDATE msg_solicitacao SET excluida_em=?,excluida_por=?,atualizado_em=?,versao=versao+1 WHERE id=? AND excluida_em=?').bind(excluir?em:'',excluir?eu:'',em,id,excluir?'':r.excluida_em),env.DB.prepare('INSERT INTO msg_solicitacao_evento(solicitacao,por,em,antes,depois) SELECT ?,?,?,?,? WHERE changes()=1').bind(id,eu,em,JSON.stringify({excluida_em:r.excluida_em}),JSON.stringify({excluida_em:excluir?em:''}))]);
+    }
+    return J({ok:true,id,excluida:excluir});   // repetir a mesma ação é aceito e não muda nada
+  }
   if(p==='/msg/solicitacoes/editar'&&req.method==='POST'){
-    const d=await req.json().catch(()=>({})),r=await env.DB.prepare('SELECT * FROM msg_solicitacao WHERE id=?').bind(String(d.id||'')).first();if(!r)return J({ok:false,erro:'Solicitação não encontrada.'},404);
+    const d=await req.json().catch(()=>({})),r=await env.DB.prepare("SELECT * FROM msg_solicitacao WHERE id=? AND excluida_em=''").bind(String(d.id||'')).first();if(!r)return J({ok:false,erro:'Solicitação não encontrada.'},404);
     if(d.versao!==r.versao)return J({ok:false,erro:'Outra pessoa alterou a solicitação. Atualize antes de salvar; seu texto foi preservado.'},409);
     const status=d.status??r.status,obs=String(d.obs??r.obs).trim(),descricao=String(d.descricao??r.descricao).trim(),responsavel=d.assumir===true?eu:r.responsavel;
     if(!['pendente','em_atendimento','aguardando_cliente','atendida'].includes(status)||!descricao||descricao.length>2000||obs.length>2000)return J({ok:false,erro:'Confira a descrição, observações e situação.'},400);
