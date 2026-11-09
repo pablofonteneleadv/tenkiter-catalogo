@@ -38,7 +38,12 @@ with sync_playwright() as p:
   c.unroute('**/esteira/config',reter_escrita);pg.clock.fast_forward(31000)
   assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Rascunho mais novo'
   c.route('**/esteira/config',lambda r:r.abort())
-  pg.clock.fast_forward(31000);pg.wait_for_selector('.esteira-atualizacao');assert 'informações anteriores continuam visíveis' in pg.inner_text('.esteira-atualizacao')
+  # a mensagem aparece depois da tentativa falhar (assíncrono): avança o relógio simulado e confere até 10 vezes antes de reprovar
+  pg.clock.fast_forward(31000);pg.wait_for_selector('.esteira-atualizacao')
+  for _ in range(10):
+   if 'informações anteriores continuam visíveis' in pg.inner_text('.esteira-atualizacao'):break
+   pg.wait_for_timeout(300);pg.clock.fast_forward(31000)
+  assert 'informações anteriores continuam visíveis' in pg.inner_text('.esteira-atualizacao')
   assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Rascunho mais novo'
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   pg.evaluate('()=>{localStorage.clear();dispatchEvent(new Event("tk:sessao"))}');pg.wait_for_selector('#login-w');assert not pg.locator('#cfg-funcoes').count()
