@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.76.0 — Esteira: quem tem o acesso "Esteira" entra
+
+- Pessoa com o acesso "Esteira" em RH > Acessos recebia "Seu acesso não permite entrar na Esteira" quando a lista de equipe vinda do RH não a trazia (conta antiga, ajuste individual…). Agora o servidor trata quem tem o acesso como membro da equipe (confere e rodízio), como a própria tela da Esteira já diz. Sem o acesso continua barrado.
+
+
 ## 7.75.0 — Mensagens: aviso de acesso falso corrigido e recusa diz qual permissão falta
 
 - App (atalho/notificação): quem tem acesso às Mensagens e não é Admin recebia "Sua conta não tem acesso ao módulo Mensagens" por engano, porque o app decidia antes de o servidor responder os direitos. Agora espera a resposta.
