@@ -59,6 +59,7 @@
   "mensagens-eventos.js",
   "mensagens-ficha.js",
   "mensagens-gestor.css",
+  "mensagens-fila.js",
   "mensagens-gestor.js",
   "mensagens-presenca.js",
   "mensagens-registros.js",

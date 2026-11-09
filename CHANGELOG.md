@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.70.0 — Mensageiro: fila de envio
+
+- Dá para escrever e enviar outras mensagens enquanto uma ainda está saindo, na mesma conversa e em outras. Cada uma aparece na hora na conversa com ⏳ e vira ✓ quando o servidor confirma.
+- Na mesma conversa a ordem é sempre a que você escreveu; conversas diferentes saem ao mesmo tempo.
+- Se uma mensagem falha, as seguintes DA MESMA conversa esperam ("Aguardando a anterior") e as outras conversas seguem. "Tentar de novo" reenvia com a mesma chave (não duplica); "Descartar" libera as seguintes.
+- O texto fica guardado no aparelho antes de sair e volta ao recarregar a página. Mensagem guardada há mais de 30 minutos não sai sozinha: pede para você conferir. Foto, vídeo e áudio entram na mesma ordem, mas ficam só na memória.
+
 ## 7.69.0 — Mensageiro mais rápido: abre na hora e conversa sem espera
 
 - A lista de conversas, a conversa aberta e a troca de aba aparecem do que está guardado no aparelho (por conta, sem senhas, links ou fotos) enquanto a rede confirma em segundo plano; o campo de resposta não trava e o que você digitou não some quando a atualização chega.
