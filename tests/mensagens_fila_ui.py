@@ -31,6 +31,11 @@ def saidas(s, conv=None):
 def tiques(pg):
     return pg.evaluate("[...document.querySelectorAll('#ms-fio .ms-bolha.saida')].map(b=>[(b.querySelector('.ms-bolha-tx,.ms-tx')||b).textContent.slice(0,40),b.querySelector('.ms-tique')?.getAttribute('aria-label')||''])")
 
+def trocar(pg, cid):
+    pg.locator(f'#ms-lista .ms-conv[data-id="{cid}"]').click()
+    pg.wait_for_function(f"document.querySelector('#ms-lista .ms-conv[aria-current=true]')?.dataset.id=='{cid}'&&document.querySelector('#ms-texto')", timeout=15000)
+    pg.wait_for_timeout(700)
+
 def enviar(pg, texto):
     pg.fill('#ms-texto', texto); pg.click('#ms-enviar')
 
@@ -123,16 +128,16 @@ with sync_playwright() as p:
             ids = pg.locator('#ms-lista .ms-conv').evaluate_all("xs=>xs.map(x=>x.dataset.id)")
             a_, b_ = ids[0], ids[1]
             pg.evaluate("window.__cfg.atraso=1500;window.__simult=0")
-            pg.locator(f'#ms-lista .ms-conv[data-id="{a_}"]').click(); pg.wait_for_selector('#ms-texto'); enviar(pg, 'g-a')
-            pg.locator(f'#ms-lista .ms-conv[data-id="{b_}"]').click(); pg.wait_for_selector('#ms-texto'); enviar(pg, 'g-b')
+            trocar(pg, a_); enviar(pg, 'g-a')
+            trocar(pg, b_); enviar(pg, 'g-b')
             pg.wait_for_timeout(300)
             chk('trocar de conversa com envio em andamento: a bolha de b já está na tela', 'g-b' in pg.inner_text('#ms-fio'))
             pg.wait_for_timeout(3200)
             chk('as duas conversas enviaram ao mesmo tempo', pg.evaluate("window.__simult") >= 2, pg.evaluate("window.__simult"))
             chk('as duas mensagens chegaram, cada uma na sua conversa', 'g-a' in saidas(s, int(a_)) and 'g-b' in saidas(s, int(b_)))
             pg.evaluate("window.__cfg.atraso=100;window.__cfg.falhar=['g-erro']")
-            pg.locator(f'#ms-lista .ms-conv[data-id="{a_}"]').click(); pg.wait_for_selector('#ms-texto'); enviar(pg, 'g-erro')
-            pg.locator(f'#ms-lista .ms-conv[data-id="{b_}"]').click(); pg.wait_for_selector('#ms-texto'); enviar(pg, 'g-outra'); enviar(pg, 'g-outra2')
+            trocar(pg, a_); enviar(pg, 'g-erro')
+            trocar(pg, b_); enviar(pg, 'g-outra'); enviar(pg, 'g-outra2')
             pg.wait_for_timeout(2500)
             chk('a outra conversa enviou normalmente enquanto a primeira falhou', saidas(s, int(b_))[-2:] == ['g-outra', 'g-outra2'], saidas(s, int(b_)))
             chk('a mensagem que falhou não foi para o cliente', 'g-erro' not in saidas(s))
