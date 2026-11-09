@@ -25,6 +25,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Novo atalho "Esteira" em Ferramentas (quem tem o acesso Esteira ou é Admin total).
 - Teste do servidor com o perfil completo sem Admin: Esteira, Postador, Fotos com IA e Mensageiro abrem; funil, métricas, exportar e configurações do Mensageiro continuam fechados.
 
+## 7.76.2 — Esteira e demais acessos do RH funcionam mesmo com o Apps Script do catálogo desatualizado
+
+- Causa: o servidor lia as permissões no Apps Script do catálogo publicado (4.29), que não conhece os Acessos configuráveis; por isso "Esteira", Postador, Fotos com IA e Mensageiro marcados no RH não chegavam e a Esteira respondia "Seu acesso não permite entrar".
+- Agora, se o catálogo não devolver Acessos configuráveis, a sessão e a equipe da Esteira são conferidas no RH (fonte oficial). Se o RH falhar, nada muda. Quando o catálogo 4.30 for publicado, deixa de ser necessário.
+- Teste do servidor cobre catálogo antigo sem/ com RH.
+
 ## 7.76.1 — Esteira: lista "Usadas" (e qualquer lista com mais de 100 fotos) volta a abrir
 
 - A lista de fotos recebidas dava erro no servidor quando tinha 100 ou mais fotos diferentes (ex.: "Usadas · 121"), porque a consulta de fotos repetidas passava de 100 parâmetros, o limite do banco. Agora a consulta é feita em blocos.

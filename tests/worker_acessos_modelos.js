@@ -3,9 +3,11 @@ const fs=require('fs'),path=require('path'),vm=require('vm');
 let harness=fs.readFileSync(path.join(__dirname,'worker_esteira.js'),'utf8').replace(/\r/g,'').split('  // acesso\n')[0];
 harness=harness.replace('tk_ig_esteira.mjs','tk_ig_acessos_modelos.mjs').replace('estFornecedorLimpo_};','estFornecedorLimpo_,msgDireitos_,estEscalaDoDia_};');
 const cenarios=String.raw`
-  let equipe=[{whats:IARA,nome:'Iara',ativo:1,confere:1,rodizio:1,aceitar:0}],fora=false;
+  let legado=false;let equipe=[{whats:IARA,nome:'Iara',ativo:1,confere:1,rodizio:1,aceitar:0}],fora=false;
   const fetchAntigo=globalThis.fetch;
   globalThis.fetch=async(u,init)=>{
+    if(String(u).startsWith('https://rh.fake/')){const b={...JSON.parse(init.body),token:undefined};if(b.action==='esteira_equipe')return new Response(JSON.stringify(fora?{ok:false}:{ok:true,fonte:'acessos',equipe}));return fetchAntigo('https://api.fake/',{...init,body:JSON.stringify(b)});}
+    if(legado&&String(u).startsWith('https://api.fake/')&&init?.method==='POST'&&JSON.parse(init.body).action==='sessao'){const rr=await fetchAntigo(u,init),jj=await rr.json();if(jj.usuario){delete jj.usuario.acessosConfiguraveis;jj.usuario.permissoes=jj.usuario.permissoes.filter(k=>k==='catalogo_cadastrar'||k==='catalogo_admin');}return new Response(JSON.stringify(jj));}
     if(String(u).startsWith('https://api.fake/')&&init?.method==='POST'&&JSON.parse(init.body).action==='esteira_equipe')return new Response(JSON.stringify(fora?{ok:false}:{ok:true,fonte:'acessos',equipe}));
     return fetchAntigo(u,init);
   };
@@ -40,6 +42,10 @@ const cenarios=String.raw`
   chk('perfil completo sem Admin: Mensageiro acessa, responde e usa produtos/respostas/notas/agenda',dirCompleto.acessar&&dirCompleto.responder&&dirCompleto.produtos&&dirCompleto.respostas&&dirCompleto.notas&&dirCompleto.agenda,dirCompleto);
   chk('perfil completo sem Admin: não ganha funil, métricas, exportar nem configurações do Mensageiro',!dirCompleto.funil&&!dirCompleto.metricas&&!dirCompleto.exportar&&!dirCompleto.configuracoes,dirCompleto);
   usuarios[CLARICE].permissoes=[];cacheMem.clear();
+  usuarios[VISITA].permissoes=['esteira'];equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];cacheMem.clear();legado=true;
+  r=await A(VISITA,'GET','/esteira/hoje');chk('catálogo publicado sem Acessos configuráveis: sem o RH, a Esteira fica barrada',r.r.status===403,r.j);
+  env.RH_URL='https://rh.fake/';cacheMem.clear();r=await A(VISITA,'GET','/esteira/hoje');chk('catálogo antigo: a sessão é conferida no RH e o acesso Esteira funciona',r.r.status===200&&r.j.ok,r.j);
+  delete env.RH_URL;legado=false;cacheMem.clear();
   fora=true;r=await A(PABLO,'GET','/esteira/config');chk('falha no RH não recupera equipe antiga silenciosamente',r.r.status>=500,r.j);fora=false;
   r=await A(CLARICE,'GET','/posts');chk('cadastrar produtos não contorna Postador desativado',r.r.status===403,r.j);
   r=await A(CLARICE,'GET','/fotoia/config');chk('cadastrar produtos não contorna Geração IA desativada',r.r.status===403,r.j);
