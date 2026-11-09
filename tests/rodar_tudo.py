@@ -207,6 +207,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("mensagens_velocidade_ui.py", lambda o: "OK velocidade 1440" in o),  # v7.69.0: lista, conversa e troca de aba aparecem do guardado antes da rede lenta; campo livre; nada de credencial no cache
     ("mensagens_fila_ui.py", lambda o: "FALHAS=0" in o),  # v7.70.0: fila de envio (ordem por conversa, outra conversa em paralelo, falha no meio espera, recarga com fila pendente, resposta perdida sem duplicar)
     ("mensagens_receber_rapido.py", lambda o: "FALHAS=0" in o),  # v7.71.0: mensagem nova aparece na conversa aberta sem esperar a lista recarregar
+    ("worker_solicitacoes_excluir.js", lambda o: "OK solicitações excluir" in o),  # v7.67.0: exclusão lógica + permissão no servidor (D1 SQLite em memória)
+    ("mensagens_solicitacoes_excluir_ui.py", lambda o: "OK 320 excluir" in o),  # v7.67.0: botão por permissão, confirm(), Desfazer, axe; exige o SQLite de teste (fixtures/solicitacoes_server.cjs)
     ("janelas_sem_estouro.py", lambda o: "FALHAS=0" in o),  # v7.62.1: nenhuma janela/aba passa da largura do celular
     ("postagens_multi_sem_limite.py", lambda o: "FALHAS=0" in o),  # v7.62.0: produtos juntos sem teto de 8, prévias paginadas, aviso acima de 60
     ("padrao_vocabulario.py", lambda o: "FALHAS=0" in o),   # v7.57.0: vocabulário único (produto, seleção, Gestão…) e avisos
