@@ -87,6 +87,16 @@ with sync_playwright() as p:
         enviar(pg, 'perdida')
         pg.wait_for_function("document.querySelectorAll('#ms-fio .ms-bolha.saida .ms-tique[aria-label=Enviada]').length>=8", timeout=15000)
         chk('resposta perdida: reenvio automático não duplica', saidas(s)[antes:] == ['perdida'], saidas(s)[antes:])
+        # ---- D2) foto e texto em seguida: o arquivo entra na MESMA ordem (foto primeiro), um de cada vez
+        PNG = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc000000301010018dd8db00000000049454e44ae426082")
+        pg.evaluate("window.__cfg.atraso=900"); n_antes = len([m for m in s['msgs'] if m['direcao'] == 'saida'])
+        pg.set_input_files('#ms-arquivo', {'name': 'foto.png', 'mimeType': 'image/png', 'buffer': PNG})
+        pg.wait_for_function("document.querySelector('#ms-enviar')&&!document.querySelector('#ms-enviar').disabled", timeout=8000)
+        pg.click('#ms-enviar'); enviar(pg, 'depois da foto')
+        pg.wait_for_function("[...document.querySelectorAll('#ms-fio .ms-bolha.saida')].some(b=>b.textContent.includes('depois da foto')&&b.querySelector('.ms-tique[aria-label=Enviada]'))", timeout=20000); pg.wait_for_timeout(500)
+        novos = [(m['tipo'], re.sub(r'^\*[^*]+:\*\n', '', m['texto'])) for m in s['msgs'] if m['direcao'] == 'saida'][n_antes:]
+        chk('foto sai primeiro e o texto depois, uma vez cada', [t for t, _ in novos] == ['imagem', 'texto'] and novos[1][1] == 'depois da foto', novos)
+        chk('upload da foto feito uma única vez', len(s['anexos']) == 1, s['anexos'])
         # ---- E) recarga com a fila pendente: o texto estava guardado, volta e sai uma única vez
         pg.evaluate("window.__cfg.reter=true"); antes = len(saidas(s))
         enviar(pg, 'sobrevive')
