@@ -52,6 +52,8 @@ binding = "AI"
 [vars]
 API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"
 MIDIA_URL = "https://tenkiter-midia.distkrpconfeccoes.workers.dev"
+# Apps Script do RH (fonte oficial de Acessos). Usado quando o Apps Script do catálogo publicado ainda não tem Acessos configuráveis.
+RH_URL = "https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec"
 
 # ORIGENS: lista de origens que podem falar com este Worker (CORS).
 #
