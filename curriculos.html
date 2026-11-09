@@ -26,7 +26,7 @@
   textarea { min-height:70px; resize:vertical; }
   button { border:0; border-radius:9px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--preto); color:var(--laranja); }
   button.sec { background:#eee; color:#333; } button:disabled { opacity:.6; }
-  .abas { margin-bottom:12px; } .abas > button { flex:1; }   /* aparência da aba: .tk-abas (janelas.css) */
+  .abas { margin-bottom:12px; } html body .abas.tk-abas > button { flex:1 1 0; min-width:max-content; }   /* aparência da aba: .tk-abas (janelas.css) */
   .filtros { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; } .filtros input { grid-column:1/-1; }
   .filtros button { grid-column:1/-1; background:#eee; color:#333; } .filtros button.on { background:var(--laranja); color:var(--preto); }
   .item { background:#fff; border-radius:12px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
@@ -53,8 +53,8 @@
   @media(max-width:560px){ dl { grid-template-columns:1fr; } }
 </style>
 <link rel="stylesheet" href="acabamento-equipe.css?v=7.61.0">
-<link rel="stylesheet" href="janelas.css?v=7.62.2">
-<link rel="stylesheet" href="tk-padrao.css?v=7.61.0">
+<link rel="stylesheet" href="janelas.css?v=7.65.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.65.0">
 </head>
 <body class="pg-curriculos">
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>

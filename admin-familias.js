@@ -269,7 +269,7 @@
     const famIds = [...new Set(ps.map((p) => familiaDe(p.ID)).filter(Boolean).map((f) => f.id))];
     const livres = ps.filter((p) => !familiaDe(p.ID));
     const famUnica = famIds.length === 1 ? familias.find((f) => f.id === famIds[0]) : null;
-    corpo.append(el('p', 'fam-sub', 'Estes produtos são o mesmo produto (mudando estampa ou tamanho). Nada neles muda: cada um continua com as próprias fotos, estoque e link. No site elas aparecem juntas.'));
+    corpo.append(el('p', 'fam-sub', 'Estes produtos são o mesmo produto (mudando estampa ou tamanho). Nada neles muda: cada um continua com as próprias fotos, estoque e link. No site eles aparecem juntos.'));
     const bases = [...new Set(ps.map((p) => semAcento(separarNome(p.Nome).base)))];
     if (bases.length > 1) corpo.append(el('p', 'fam-alerta', 'Atenção: os nomes desses produtos são diferentes. Confira se são mesmo o mesmo produto.'));
     if (famUnica && !livres.length) {
