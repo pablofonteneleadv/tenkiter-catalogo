@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.75.0 — Mensagens: aviso de acesso falso corrigido e recusa diz qual permissão falta
+
+- App (atalho/notificação): quem tem acesso às Mensagens e não é Admin recebia "Sua conta não tem acesso ao módulo Mensagens" por engano, porque o app decidia antes de o servidor responder os direitos. Agora espera a resposta.
+- Quando o servidor recusa uma ação de Mensagens, o aviso diz qual permissão falta (ex.: "Falta a permissão \"Responder e encerrar atendimentos\" (Acessos → Ferramentas de Mensagens)") e a ferramenta vem no campo `ferramenta`.
+
+
 ## 7.74.0 — Instagram: janela real de resposta e Acompanhar funcionando
 
 - Instagram: o aviso "mais de 24 h" saiu. A regra real é 24 h padrão e até 7 dias com a etiqueta de atendente humano (o Worker já a usava); o aviso só aparece além dos 7 dias e o botão Enviar nunca é travado.
