@@ -5008,7 +5008,7 @@ export async function fichaDaConversa_(env, conv) {
   const canais = conv.pessoa ? ((await env.DB.prepare('SELECT id, canal, contato FROM msg_conversa WHERE grupo=0 AND (' + MSG_IDENTIDADE_SQL_ + '=? OR id=?) ORDER BY ultima_em DESC LIMIT 20').bind(conv.pessoa, conv.id).all()).results || []) : [{ id: conv.id, canal: conv.canal, contato: conv.contato }];
   const ids = canais.map((c) => c.id), marca = ids.map(() => '?').join(',');
   /* compra = encerramento "Vendeu" que valeu: se a mesma conversa foi encerrada de novo sem mensagem nenhuma no meio, foi correção do motivo e vale o último */
-  const compras = (await env.DB.prepare("SELECT e.em, e.canal FROM msg_encerramento e WHERE e.motivo='vendeu' AND e.conversa_id IN (" + marca + ") AND NOT EXISTS (SELECT 1 FROM msg_encerramento x WHERE x.conversa_id=e.conversa_id AND (x.em>e.em OR (x.em=e.em AND x.id>e.id)) AND NOT EXISTS (SELECT 1 FROM msg_mensagem m WHERE m.conversa_id=e.conversa_id AND m.enviada_em>e.em AND m.enviada_em<x.em)) ORDER BY e.em DESC LIMIT 20").bind(...ids).all()).results || [];
+  const compras = (await env.DB.prepare("SELECT e.em, e.canal FROM msg_encerramento e WHERE e.motivo='vendeu' AND e.conversa_id IN (" + marca + ") AND NOT EXISTS (SELECT 1 FROM msg_encerramento y WHERE y.motivo='vendeu' AND y.em=e.em AND y.id<e.id AND y.conversa_id IN (" + marca + ")) AND NOT EXISTS (SELECT 1 FROM msg_encerramento x WHERE x.conversa_id=e.conversa_id AND (x.em>e.em OR (x.em=e.em AND x.id>e.id)) AND NOT EXISTS (SELECT 1 FROM msg_mensagem m WHERE m.conversa_id=e.conversa_id AND m.enviada_em>e.em AND m.enviada_em<x.em)) ORDER BY e.em DESC LIMIT 20").bind(...ids, ...ids).all()).results || [];
   const notas = (await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em DESC, id DESC LIMIT 5').bind(alvo).all()).results || [];
   let etiquetas = []; try { etiquetas = (await etiquetasDosAlvos_(env, [alvo]))[alvo] || []; } catch (e) { /* etiqueta é conforto */ }
   return {
@@ -5120,7 +5120,7 @@ async function finalizarAcompanhamento_(env,a,em){
   const doCliente="(id=? OR (grupo=0 AND (CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END)="+alvo+"))";
   const [r]=await env.DB.batch([
     env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?,encerrada_motivo='sem_resposta',nao_lidas=0,atualizada_em=? WHERE encerrada_em='' AND "+doCliente+" AND EXISTS(SELECT 1 FROM msg_acompanhamento WHERE id=? AND status='ativo') AND NOT EXISTS(SELECT 1 FROM msg_mensagem m WHERE m.direcao='entrada' AND m.id>? AND m.conversa_id IN (SELECT id FROM msg_conversa WHERE id=? OR (grupo=0 AND (CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END)="+alvo+")))").bind(em,em,a.conversa_id,a.conversa_id,a.acompanhamento,a.entrada_ref,a.conversa_id,a.conversa_id),
-    env.DB.prepare("INSERT INTO msg_encerramento(conversa_id,canal,pessoa,contato,motivo,em,por) SELECT id,canal,pessoa,contato,'sem_resposta',?,? FROM msg_conversa WHERE changes()>0 AND encerrada_em=? AND encerrada_motivo='sem_resposta' AND "+doCliente).bind(em,a.autor,em,a.conversa_id,a.conversa_id),
+    env.DB.prepare("INSERT INTO msg_encerramento(conversa_id,canal,pessoa,contato,motivo,em,por) SELECT id,canal,pessoa,contato,'sem_resposta',?,? FROM msg_conversa WHERE changes()>0 AND encerrada_em=? AND encerrada_motivo='sem_resposta' AND "+doCliente+" ORDER BY CASE WHEN id=? THEN 0 ELSE 1 END, id").bind(em,a.autor,em,a.conversa_id,a.conversa_id,a.conversa_id),
     env.DB.prepare("UPDATE msg_acompanhamento SET status='concluida',atualizado_em=?,erro=? WHERE id=? AND status='ativo' AND EXISTS(SELECT 1 FROM msg_conversa WHERE id=? AND encerrada_em=?)").bind(em,a.erroFinal||'',a.acompanhamento,a.conversa_id,em)
   ]);
   return Number(r.meta?.changes)>=1;
@@ -6945,10 +6945,12 @@ export default {
         const t = agora(), marca = idsTodos.map(() => '?').join(',');
         // v2.13: motivo do encerramento (padrão "concluido"); cada encerramento fica no histórico
         const motivo = MSG_MOTIVOS_.includes(d.motivo) ? d.motivo : 'concluido', por = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(-4);
-        // Idempotente: só conversas ainda abertas recebem o encerramento e o evento (repetir o pedido não duplica nada). O evento entra antes da atualização.
+        // Idempotente: só conversas ainda abertas (ou a escolhida, com motivo diferente = correção do motivo) recebem o encerramento e o evento. O evento entra antes da atualização.
+        // json_each: um único parâmetro por lista (limite de parâmetros do D1).
+        const jTodos = JSON.stringify(idsTodos), jIds = JSON.stringify(ids), quais = "(encerrada_em='' OR (id IN (SELECT value FROM json_each(?)) AND encerrada_motivo<>?)) AND id IN (SELECT value FROM json_each(?))";
         const rs = await env.DB.batch(reabrir ? [env.DB.prepare("UPDATE msg_conversa SET encerrada_em='', encerrada_motivo='', reaberta_em='', atualizada_em=? WHERE id IN (" + marca + ")").bind(t, ...idsTodos)] : [
-          env.DB.prepare("INSERT INTO msg_encerramento (conversa_id, canal, pessoa, contato, motivo, em, por) SELECT id, canal, pessoa, contato, ?, ?, ? FROM msg_conversa WHERE encerrada_em='' AND id IN (" + marca + ')').bind(motivo, t, por, ...idsTodos),
-          env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo=?, nao_lidas=0, reaberta_em='', atualizada_em=? WHERE encerrada_em='' AND id IN (" + marca + ')').bind(t, motivo, t, ...idsTodos)]);
+          env.DB.prepare('INSERT INTO msg_encerramento (conversa_id, canal, pessoa, contato, motivo, em, por) SELECT id, canal, pessoa, contato, ?, ?, ? FROM msg_conversa WHERE ' + quais + ' ORDER BY CASE WHEN id IN (SELECT value FROM json_each(?)) THEN 0 ELSE 1 END, id').bind(motivo, t, por, jIds, motivo, jTodos, jIds),
+          env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo=?, nao_lidas=0, reaberta_em='', atualizada_em=? WHERE " + quais).bind(t, motivo, t, jIds, motivo, jTodos)]);
         const r = rs[rs.length - 1];
         return J({ ok: true, alteradas: Number(r.meta && r.meta.changes) || 0, tambemEncerradas: irmas, contagens: await msgContagens_(env) });
       }

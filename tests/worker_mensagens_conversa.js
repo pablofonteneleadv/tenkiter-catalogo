@@ -531,9 +531,9 @@ function d1() {
   chk('as duas conversas da Rita aparecem em "Nos 2 WhatsApp"', (await ambIds()).includes(rq1) && (await ambIds()).includes(rq2));
   await A('POST', '/msg/encerrar', { conversas: [rq2] });
   const aposEnc = await A('GET', '/msg/conversas?canal=whatsapp1');
-  chk('encerrar a do WhatsApp 2 tira a do WhatsApp 1 de "Nos 2 WhatsApp" (sem o aviso "Também no")', !(await ambIds()).includes(rq1) && aposEnc.j.conversas.find((x) => x.id === rq1).outro_id == null);
+  chk('encerrar a do WhatsApp 2 encerra também a do WhatsApp 1 (v7.65: todos os canais do cliente) e as duas saem de "Nos 2 WhatsApp"', !(await ambIds()).includes(rq1) && !(await ambIds()).includes(rq2) && !aposEnc.j.conversas.some((x) => x.id === rq1) && !!(await conv('whatsapp1', '5588977770001')).encerrada_em);
   await wh('/wh/wafly/2/' + seg, msg('RQ3', '558877770001', 'Voltei', { senderName: 'Rita', momment: Tg + 3000 }));
-  chk('o cliente escreve na encerrada: as duas voltam para "Nos 2 WhatsApp"', (await ambIds()).includes(rq1) && (await ambIds()).includes(rq2));
+  chk('o cliente escreve na encerrada: volta só o canal em que ele escreveu (o outro canal segue encerrado até ele escrever lá)', (await conv('whatsapp2', '558877770001')).encerrada_em === '' && !!(await conv('whatsapp1', '5588977770001')).encerrada_em);
   // lidas em lote
   const fLe = globalThis.fetch, chamadasLe = [];
   globalThis.fetch = async (u, init) => { if (/\/(modify-chat|read-message)$/.test(String(u))) { chamadasLe.push(String(u)); return new Response('{}'); } return fLe(u, init); };
@@ -1237,6 +1237,7 @@ function d1() {
     await A('POST', '/msg/encerrar', { conversas: [wa2P], motivo: 'vendeu' }); await pausa();
     await A('POST', '/msg/encerrar', { conversas: [wa2P], motivo: 'concluido' }); await pausa();
     chk('ficha: "Vendeu" corrigido logo depois (sem mensagem no meio) não conta', (await A('GET', '/msg/ficha?conversa=' + waPerson.id)).j.compras.length === 1);
+    await A('POST', '/msg/encerrar', { conversas: [waPerson.id], reabrir: true }); await pausa();
     await A('POST', '/msg/encerrar', { conversas: [waPerson.id], motivo: 'vendeu' }); await pausa();
     await wh('/wh/wafly/1/' + seg, msg('FICHA-VOLTOU', '5588989012345', 'Chegou, amei!', { momment: Date.now() })); await pausa();
     await A('POST', '/msg/encerrar', { conversas: [waPerson.id], motivo: 'concluido' }); await pausa();
