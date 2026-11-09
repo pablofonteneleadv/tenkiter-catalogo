@@ -26,6 +26,9 @@ const cenarios=String.raw`
   r=await A(IARA,'GET','/esteira/hoje');chk('revogação corta acesso na próxima consulta, mesmo com cache',r.r.status===403,r.j);
   usuarios[VISITA].permissoes=['esteira'];equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];
   r=await A(VISITA,'GET','/esteira/hoje');chk('novo acesso participa automaticamente no mesmo dia',r.j.ok&&r.j.total>0,r.j);
+  usuarios[CLARICE].permissoes=['esteira'];equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];cacheMem.clear();
+  r=await A(CLARICE,'GET','/esteira/hoje');chk('quem tem o acesso Esteira entra mesmo que a lista de equipe do RH não o traga',r.r.status===200&&r.j.ok,r.j);
+  usuarios[CLARICE].permissoes=[];cacheMem.clear();r=await A(CLARICE,'GET','/esteira/hoje');chk('sem o acesso Esteira continua barrado',r.r.status===403,r.j);
   fora=true;r=await A(PABLO,'GET','/esteira/config');chk('falha no RH não recupera equipe antiga silenciosamente',r.r.status>=500,r.j);fora=false;
   r=await A(CLARICE,'GET','/posts');chk('cadastrar produtos não contorna Postador desativado',r.r.status===403,r.j);
   r=await A(CLARICE,'GET','/fotoia/config');chk('cadastrar produtos não contorna Geração IA desativada',r.r.status===403,r.j);
