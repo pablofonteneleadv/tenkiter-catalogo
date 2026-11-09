@@ -207,6 +207,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("mensagens_registros_fundo_ui.py", lambda o: "FALHAS=0" in o),  # v7.64.0: registro de cliente em segundo plano (fila no aparelho, indicador flutuante, reenvio sem duplicar); exige o SQLite de tests/fixtures
     ("worker_instagram_janela.js", lambda o: "OK: Instagram janela real" in o),  # v7.74.0: Instagram 24 h + 7 dias, Agendar/Acompanhar
     ("mensagens_instagram_janela_ui.py", lambda o: "PASS Instagram janela" in o),
+    ("painel_simples_ferramentas.py", lambda o: "FALHAS=0" in o),  # v7.77.0: painel simplificado mostra IA/Esteira/Mensagens recebidas
     ("app_mensagens_acesso_lento.py", lambda o: "PASS app Mensagens: aviso falso" in o),  # v7.75.0: direitos lentos não geram aviso falso de acesso
     ("mensagens_velocidade_ui.py", lambda o: "OK velocidade 1440" in o),  # v7.69.0: lista, conversa e troca de aba aparecem do guardado antes da rede lenta; campo livre; nada de credencial no cache
     ("mensagens_fila_ui.py", lambda o: "FALHAS=0" in o),  # v7.70.0: fila de envio (ordem por conversa, outra conversa em paralelo, falha no meio espera, recarga com fila pendente, resposta perdida sem duplicar)

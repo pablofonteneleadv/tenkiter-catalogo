@@ -29,6 +29,17 @@ const cenarios=String.raw`
   usuarios[CLARICE].permissoes=['esteira'];equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];cacheMem.clear();
   r=await A(CLARICE,'GET','/esteira/hoje');chk('quem tem o acesso Esteira entra mesmo que a lista de equipe do RH não o traga',r.r.status===200&&r.j.ok,r.j);
   usuarios[CLARICE].permissoes=[];cacheMem.clear();r=await A(CLARICE,'GET','/esteira/hoje');chk('sem o acesso Esteira continua barrado',r.r.status===403,r.j);
+  // Perfil "tudo menos Admin": Esteira + Mensageiro + Fotos com IA + Postador (+ entrar no admin e conta de cliente), sem gerir_acessos
+  usuarios[CLARICE].permissoes=['catalogo_admin','cliente','painel_simples','esteira','postador','fotoia','msg_acessar','msg_responder','msg_produtos','msg_respostas','msg_notas','msg_agenda'];
+  equipe=[{whats:VISITA,nome:'Nova colega',ativo:1,confere:1,rodizio:1,aceitar:0}];cacheMem.clear();
+  r=await A(CLARICE,'GET','/esteira/hoje');chk('perfil completo sem Admin: Esteira abre',r.r.status===200&&r.j.ok,r.j);
+  r=await A(CLARICE,'GET','/posts');chk('perfil completo sem Admin: Postador abre',r.r.status===200,r.j);
+  r=await A(CLARICE,'GET','/fotoia/config');chk('perfil completo sem Admin: Fotos com IA abre',r.r.status===200&&r.j.ok,r.j);
+  const permsCompleto=usuarios[CLARICE].permissoes.slice();permsCompleto.acessosConfiguraveis=true;
+  const dirCompleto=W.msgDireitos_(permsCompleto,CLARICE,{perfis:{},pessoas:{}});
+  chk('perfil completo sem Admin: Mensageiro acessa, responde e usa produtos/respostas/notas/agenda',dirCompleto.acessar&&dirCompleto.responder&&dirCompleto.produtos&&dirCompleto.respostas&&dirCompleto.notas&&dirCompleto.agenda,dirCompleto);
+  chk('perfil completo sem Admin: não ganha funil, métricas, exportar nem configurações do Mensageiro',!dirCompleto.funil&&!dirCompleto.metricas&&!dirCompleto.exportar&&!dirCompleto.configuracoes,dirCompleto);
+  usuarios[CLARICE].permissoes=[];cacheMem.clear();
   fora=true;r=await A(PABLO,'GET','/esteira/config');chk('falha no RH não recupera equipe antiga silenciosamente',r.r.status>=500,r.j);fora=false;
   r=await A(CLARICE,'GET','/posts');chk('cadastrar produtos não contorna Postador desativado',r.r.status===403,r.j);
   r=await A(CLARICE,'GET','/fotoia/config');chk('cadastrar produtos não contorna Geração IA desativada',r.r.status===403,r.j);

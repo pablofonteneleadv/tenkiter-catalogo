@@ -187,6 +187,12 @@
     "tests/mensagens_receber_rapido.py": [
       "mensagens"
     ],
+    "tests/painel_simples_ferramentas.py": [
+      "esteira",
+      "fotoia",
+      "mensagens",
+      "postagens"
+    ],
     "tests/app_mensagens_acesso_lento.py": [
       "mensagens"
     ],

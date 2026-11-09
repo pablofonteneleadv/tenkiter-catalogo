@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.77.0 — perfil "tudo menos Admin": Esteira, Mensageiro, Fotos com IA e Postador funcionam juntos
+
+- Painel simplificado (perfil Equipe catálogo 1): continua escondendo pedidos, números, preços e configurações, mas agora mostra as ferramentas que a pessoa recebeu — Mensagens, Fotos com IA e Esteira. Antes escondia Fotos com IA mesmo com a permissão.
+- Novo atalho "Esteira" em Ferramentas (quem tem o acesso Esteira ou é Admin total).
+- Teste do servidor com o perfil completo sem Admin: Esteira, Postador, Fotos com IA e Mensageiro abrem; funil, métricas, exportar e configurações do Mensageiro continuam fechados.
+
+
 ## 7.76.0 — Esteira: quem tem o acesso "Esteira" entra
 
 - Pessoa com o acesso "Esteira" em RH > Acessos recebia "Seu acesso não permite entrar na Esteira" quando a lista de equipe vinda do RH não a trazia (conta antiga, ajuste individual…). Agora o servidor trata quem tem o acesso como membro da equipe (confere e rodízio), como a própria tela da Esteira já diz. Sem o acesso continua barrado.
