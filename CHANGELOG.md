@@ -23,7 +23,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 - A lista de conversas, a conversa aberta e a troca de aba aparecem do que está guardado no aparelho (por conta, sem senhas, links ou fotos) enquanto a rede confirma em segundo plano; o campo de resposta não trava e o que você digitou não some quando a atualização chega.
 - A lista não espera mais o resumo para carregar; ao encostar o dedo (ou parar o mouse) numa conversa, a leitura dela já começa.
-- Servidor: lista e conversa fazem as consultas independentes ao mesmo tempo (antes em fila). Nenhum dado é migrado ou apagado.
+- Servidor: resumo, lista e conversa fazem as consultas independentes ao mesmo tempo (antes em fila). Nenhum dado é migrado ou apagado.
 
 ## 7.66.0 — dívida de padrões: laranja, z-index e avisos (sem mudança visual)
 
