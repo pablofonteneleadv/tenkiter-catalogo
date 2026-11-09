@@ -1786,7 +1786,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function aplicarPermissoes(usuario) {
     { /* v7.77.0: o que a pessoa recebeu fica visível mesmo no painel simplificado */
       const admTot = temPermissao(usuario, 'gerir_acessos');
-      const podeIA = admTot || (usuario && usuario.acessosConfiguraveis ? temPermissao(usuario, 'fotoia') : temPermissao(usuario, 'catalogo_cadastrar'));
+      const podeIA = admTot || !!(usuario && usuario.acessosConfiguraveis && temPermissao(usuario, 'fotoia'));   /* só permissão dada de forma explícita: o perfil padrão Equipe catálogo 1 (modo antigo) continua sem esta ferramenta no painel simplificado */
       const podeEst = admTot || temPermissao(usuario, 'esteira');
       document.body.classList.toggle('tem-ia', !!podeIA); document.body.classList.toggle('tem-esteira', !!podeEst);
       const bEst = document.getElementById('btn-abrir-esteira'); if (bEst) bEst.hidden = !podeEst;

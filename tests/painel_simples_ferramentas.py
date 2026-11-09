@@ -19,7 +19,9 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     for w in (390, 1440):
         # Equipe catálogo 1 + Esteira + IA (modo antigo: IA vem de "cadastrar produtos")
-        ctx, pg, erros = abrir(b, w, ["catalogo_admin", "catalogo_cadastrar", "painel_simples", "cliente", "esteira"])
+        ctx, pg, erros = abrir(b, w, ["catalogo_admin", "catalogo_cadastrar", "painel_simples", "cliente", "esteira", "fotoia", "postador"])
+        # modo Acessos (permissões dadas uma a uma): a ferramenta recebida aparece mesmo no painel simplificado
+        pg.evaluate("() => { usuarioAdmin.acessosConfiguraveis = true; aplicarPermissoes(usuarioAdmin); }"); pg.wait_for_timeout(300)
         simples = pg.evaluate("document.body.classList.contains('painel-simples')")
         chk("%d: continua no painel simplificado (sem pedidos/números/preços)" % w, simples)
         chk("%d: Ferramentas aparece para quem recebeu IA/Esteira" % w, pg.evaluate(VIS, "details-ferramentas"))
@@ -31,6 +33,11 @@ with sync_playwright() as p:
             chk("%d: %s continua escondido" % (w, oculto), not pg.evaluate(VIS, oculto))
         chk("%d: sem rolagem lateral" % w, pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
         chk("%d: sem erro de JavaScript" % w, not erros, erros)
+        ctx.close()
+        # Perfil padrão Equipe catálogo 1 (modo antigo, sem permissões explícitas): Fotos com IA continua fora do painel simplificado
+        ctx, pg, erros = abrir(b, w, ["catalogo_admin", "catalogo_cadastrar", "painel_simples", "cliente"])
+        pg.evaluate("document.getElementById('details-ferramentas').open = true"); pg.wait_for_timeout(200)
+        chk("%d: perfil padrão (sem permissão explícita) não ganha Fotos com IA nem Esteira" % w, not pg.evaluate(VIS, "btn-abrir-fotoia") and not pg.evaluate(VIS, "btn-abrir-esteira"))
         ctx.close()
         # Só o painel simplificado, sem Esteira: o tile da Esteira não aparece
         ctx, pg, erros = abrir(b, w, ["catalogo_admin", "painel_simples", "cliente"])
