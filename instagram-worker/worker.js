@@ -4527,26 +4527,29 @@ async function enviarMidiaWhats_(env, conv, anexo, legenda, cit) {
   if (cit && cit.extId && !String(cit.extId).startsWith('inc:')) corpo.messageId = String(cit.extId).slice(0, 200);   // v7.40.36: citação também na mídia
   return enviarWaflyGenerico_(env, conv, rota[0], corpo, 60000);
 }
-async function enviarInstagram_(env, conv, mensagem) {
+/** v7.69: janela REAL do Instagram = 24 h da última mensagem do cliente; com a etiqueta HUMAN_AGENT (resposta de uma pessoa) vale até 7 dias.
+ *  Tenta normal e, se a Meta recusar por prazo, repete uma vez com HUMAN_AGENT. Só depois dos 7 dias a recusa vira erro. */
+const IG_JANELA_HUMANO_MS_ = 7 * 24 * 3600000;
+async function enviarInstagram_(env, conv, mensagem, etiqueta = false) {
   const tk = await cfgGet(env, 'ig_token');
   if (!tk) return { ok: false, erro: 'O Instagram não está conectado. Conecte em Produtos para aceitar → Conectar.' };
   try {
-    const r = await fetch(igBase(env) + '/me/messages', { method: 'POST', signal: AbortSignal.timeout(40000), headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: conv.contato }, message: mensagem }) });
+    const r = await fetch(igBase(env) + '/me/messages', { method: 'POST', signal: AbortSignal.timeout(40000), headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ recipient: { id: conv.contato }, message: mensagem }, etiqueta ? { messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT' } : {})) });
     const j = await r.json().catch(() => ({}));
     if (r.ok && j && j.message_id) return { ok: true, extId: String(j.message_id) };
     if (r.ok) return { ok: false, incerto: true, erro: 'O Instagram respondeu sem confirmar. Confira no app antes de tentar de novo.' };
     const e = (j && j.error) || {}, msg = String(e.message || '');
-    if (e.code === 10 || /window|24|outside/i.test(msg)) return { ok: false, erro: 'Já passaram mais de 24 horas da última mensagem deste cliente. O Instagram só deixa responder dentro desse prazo.' };
+    if (e.code === 10 || /window|24|outside/i.test(msg)) return etiqueta ? { ok: false, erro: 'Já passaram mais de 7 dias da última mensagem deste cliente. O Instagram não deixa responder por aqui.' } : enviarInstagram_(env, conv, mensagem, true);
     if (e.code === 190) return { ok: false, erro: 'O Instagram desconectou. Reconecte em Produtos para aceitar → Conectar.' };
     if (e.code === 200 || e.code === 3 || /permission/i.test(msg)) return { ok: false, erro: 'Falta a permissão de mensagens do Instagram no app da Meta (instagram_business_manage_messages).' };
     if (r.status >= 500) return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' };
     return { ok: false, erro: 'O Instagram recusou a mensagem agora. Tente de novo em instantes.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' }; }
 }
-async function enviarTextoInstagram_(env, conv, texto, automatico=false) { const z = await zernioCfg_(env); if (z) return enviarZernio_(env, z, conv, { message: texto }, !automatico); return enviarInstagram_(env, conv, { text: texto }); }
+async function enviarTextoInstagram_(env, conv, texto, automatico=false) { const z = await zernioCfg_(env); if (z) return enviarZernio_(env, z, conv, { message: texto }, true); return enviarInstagram_(env, conv, { text: texto }); }
 async function enviarMidiaInstagram_(env, conv, anexo, automatico=false) {
   const tipo = ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], z = await zernioCfg_(env);
-  if (z) return enviarZernio_(env, z, conv, { attachmentUrl: anexo.url, attachmentType: tipo }, !automatico);
+  if (z) return enviarZernio_(env, z, conv, { attachmentUrl: anexo.url, attachmentType: tipo }, true);   // v7.69: lembrete/agendada foi armada por uma pessoa: pode usar HUMAN_AGENT como a resposta digitada
   return enviarInstagram_(env, conv, { attachment: { type: tipo, payload: { url: anexo.url } } });
 }
 /* ---- v2.18: Instagram Direct pelo Zernio (API oficial da Meta pelo app aprovado deles) ----
@@ -4818,7 +4821,7 @@ async function responderMensagem_(env, whats, d) {
   try { await env.DB.prepare("DELETE FROM cfg WHERE chave LIKE 'msgenv:%' AND substr(valor,1,24)<?").bind(new Date(Date.now() - 3 * 86400000).toISOString()).run(); } catch (e) { /* limpeza é conforto */ }
   const automatico=whats==='auto'||d._janelaAutomatica===true;
   if(d._acompanhamento&&!await conferirAcompanhamento_(env,Number(d._acompanhamento))){await cfgSet(env,chave,null);return [409,{ok:false,cancelado:true,erro:'Cliente respondeu; acompanhamento cancelado.'}];}
-  if(automatico&&conv.canal==='instagram'){const c=await env.DB.prepare('SELECT ult_entrada_em FROM msg_conversa WHERE id=?').bind(id).first();if(!c?.ult_entrada_em||Date.now()-Date.parse(c.ult_entrada_em)>=24*3600000){await cfgSet(env,chave,null);return [409,{ok:false,erro:'O prazo de 24 horas do Instagram terminou. Confira a conversa antes de enviar.'}];}}
+  if(automatico&&conv.canal==='instagram'){const c=await env.DB.prepare('SELECT ult_entrada_em FROM msg_conversa WHERE id=?').bind(id).first();if(c?.ult_entrada_em&&Date.now()-Date.parse(c.ult_entrada_em)>=IG_JANELA_HUMANO_MS_){await cfgSet(env,chave,null);return [409,{ok:false,erro:'Já passaram mais de 7 dias da última mensagem deste cliente. O Instagram não deixa responder por aqui.'}];}}
   const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo, automatico) : await enviarMidiaWhats_(env, conv, anexo, texto, cit))
     : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, textoEnvio, automatico) : (d.previa === true && !cit) ? await enviarTextoComPrevia_(env, conv, textoEnvio, d) : await enviarTextoWhats_(env, conv, textoEnvio, cit));
   if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
@@ -5088,7 +5091,7 @@ async function alterarAcompanhamento_(env,req,d){
   const atual=await acompanhamentoDaConversa_(env,id);if(atual?.status==='ativo')return {ok:true,acompanhamento:atual};
   const config=await msgAuto_(env);let quando;
   try{quando=somarMinutosUteis_(Date.now(),120,config.expediente,config.feriados);const fim=somarMinutosUteis_(Date.parse(quando),120,config.expediente,config.feriados);if(Date.parse(fim)>Date.now()+60*DIA_MS_)throw Error('Confira o expediente: o acompanhamento precisa terminar nos próximos 60 dias.');}catch(e){return {ok:false,cod:400,erro:e.message};}
-  if(c.canal==='instagram'&&(!c.ult_entrada_em||Date.parse(quando)>=Date.parse(c.ult_entrada_em)+24*3600000))return {ok:false,cod:400,erro:'Esse lembrete ficará fora das 24 horas permitidas pelo Instagram. Aguarde uma nova mensagem do cliente.'};
+  if(c.canal==='instagram'&&c.ult_entrada_em&&Date.parse(quando)>=Date.parse(c.ult_entrada_em)+IG_JANELA_HUMANO_MS_)return {ok:false,cod:400,erro:'Esse lembrete cairia depois dos 7 dias que o Instagram permite após a última mensagem do cliente. Aguarde uma nova mensagem dele.'};
   const whats=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'').slice(0,20),chave=await sha(whats+'|'+d.idLocal);
   const repetido=await env.DB.prepare('SELECT '+ACOMP_COLS_+' FROM msg_acompanhamento WHERE chave=?').bind(chave).first();
   if(repetido)return {ok:true,acompanhamento:repetido};
@@ -6802,7 +6805,7 @@ export default {
         if(!conv)return J({ok:false,erro:'Conversa não encontrada.'},404);
         if(!perms.includes('gerir_acessos')&&String(d.texto||'').trim())d.texto=await textoAssinadoEquipe_(env,req,conv.canal,d.texto);
         const [erro,v]=validarAgenda_(d);if(erro)return J({ok:false,erro},400);
-        if(conv.canal==='instagram'&&(!conv.ult_entrada_em||Date.parse(v.quando)>=Date.parse(conv.ult_entrada_em)+24*3600000))return J({ok:false,erro:'Escolha um horário dentro das 24 horas da última mensagem recebida no Instagram.'},400);
+        if(conv.canal==='instagram'&&conv.ult_entrada_em&&Date.parse(v.quando)>=Date.parse(conv.ult_entrada_em)+IG_JANELA_HUMANO_MS_)return J({ok:false,erro:'Escolha um horário dentro dos 7 dias que o Instagram permite após a última mensagem do cliente.'},400);
         let mime='',nome='';
         if(v.anexo){
           const head=await env.MIDIA.head(v.anexo);mime=mimeLimpo_(head?.httpMetadata?.contentType||'');

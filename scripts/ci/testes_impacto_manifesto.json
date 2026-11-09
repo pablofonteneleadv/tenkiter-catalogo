@@ -175,6 +175,9 @@
     "tests/mensagens_registros_fundo_ui.py": [
       "mensagens"
     ],
+    "tests/mensagens_instagram_janela_ui.py": [
+      "mensagens"
+    ],
     "tests/mensagens_relacionamento_ui.py": [
       "mensagens"
     ],
@@ -388,6 +391,9 @@
       "infra",
       "midia",
       "postagens"
+    ],
+    "tests/worker_instagram_janela.js": [
+      "mensagens"
     ],
     "tests/worker_pontuacao_canais.js": [
       "mensagens"

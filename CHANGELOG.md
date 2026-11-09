@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.69.0 — Instagram: janela real de resposta e Acompanhar funcionando
+
+- Instagram: o aviso "mais de 24 h" saiu. A regra real é 24 h padrão e até 7 dias com a etiqueta de atendente humano (o Worker já a usava); o aviso só aparece além dos 7 dias e o botão Enviar nunca é travado.
+- Agendar e Acompanhar no Instagram só recusam horários depois dos 7 dias (antes: 24 h, por isso o Acompanhar quase não armava). Lembrete e agendadas saem com a etiqueta quando o prazo de 24 h passou; recusas da Meta viram erro claro em português.
+- Envio direto pela API da Meta (sem Zernio) também repete com a etiqueta.
+
 ## 7.68.0 — encerrar cliente fecha todos os canais; pontuação pela média dos canais
 
 - Mensageiro: encerrar uma conversa (pela seleção, pelo menu da conversa, em lote ou automaticamente por falta de resposta no Acompanhar) encerra todos os canais abertos do mesmo cliente, na mesma operação. A pergunta "Incluir os outros canais deste cliente?" saiu; o aviso diz quais canais também serão encerrados.
