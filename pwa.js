@@ -202,7 +202,7 @@
         '#tk-convite-app b{display:block;font-size:15px;margin-bottom:2px}#tk-convite-app p{margin:0 0 10px;color:#e6e6e6}' +
         '#tk-convite-app .tkcv-l{display:flex;gap:8px;flex-wrap:wrap;align-items:center}' +
         '#tk-convite-app button{width:auto;font:inherit;cursor:pointer;border-radius:10px;padding:9px 14px;min-height:40px}' +
-        '#tk-convite-app .tkcv-p{background:#E67E22;color:#0d0d0d;border:0;font-weight:700}' +
+        '#tk-convite-app .tkcv-p{background:var(--laranja, #E67E22);color:#0d0d0d;border:0;font-weight:700}' +
         '#tk-convite-app .tkcv-s{background:transparent;color:#fff;border:1px solid #888}' +
         '#tk-convite-app .tkcv-n{background:transparent;color:#9a9a9a;border:0;text-decoration:underline;font-size:10px;line-height:1;min-height:0;padding:3px 4px;margin-left:auto;align-self:flex-end}';
       document.head.appendChild(st);
