@@ -113,6 +113,8 @@ def _eh_laranja(r, g, b):
     h, l, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
     return 15 <= h * 360 <= 42 and sat >= 0.45 and 0.15 <= l <= 0.75
 
+FALLBACK_TOKEN = re.compile(r"var\(\s*--(?:laranja\s*,\s*#e67e22|laranja-txt\s*,\s*#a85200|tk-foco-cor\s*,\s*#a85200)\s*$", re.I)
+
 def r_laranja(s: Site):
     rx = re.compile(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b|rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})")
     donos = ("tk-padrao.css", "catalogo.css")   # onde os tokens --laranja/--laranja-txt são DEFINIDOS
@@ -130,6 +132,9 @@ def r_laranja(s: Site):
                 continue
             ini = l.rfind("\n", 0, m.start()) + 1
             if n in donos and re.search(r"--[\w-]+\s*:\s*$", l[max(ini, m.start() - 60):m.start()]):
+                continue
+            # fallback do próprio token (var(--laranja, #E67E22)) é o jeito sancionado: o valor segue o token
+            if m.group(1) and FALLBACK_TOKEN.search(l[max(0, m.start() - 24):m.end()]):
                 continue
             out.append((n, linha_de(l, m.start()), trecho(l, m.start(), m.end())))
     return out
