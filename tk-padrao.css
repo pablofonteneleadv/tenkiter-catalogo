@@ -53,7 +53,7 @@
   /* foco: mesmo valor de janelas.css (dona da regra): laranja, 3 px, afastado 2 px */
   --tk-foco-w: 3px;
   --tk-foco-off: 2px;
-  --tk-foco-cor: var(--laranja);
+  --tk-foco-cor: #D35400;   /* laranja escuro só do anel de foco: 4,2:1 sobre #fff, 3,6:1 sobre #eee, 4,7:1 sobre #0d0d0d (o --laranja dava 2,9:1) */
 
   /* foto de produto */
   --tk-foto: 4/5;
@@ -79,8 +79,9 @@ html body input.produto-chk {
   -webkit-appearance: none; appearance: none; width: var(--tk-alvo); height: var(--tk-alvo); left: 4px; top: 4px;
   background: transparent; border: 0; cursor: pointer;
 }
-html body input.produto-chk::before { content: ""; position: absolute; inset: 10px; border: 2px solid #fff; border-radius: 6px; background: rgba(13, 13, 13, .45); box-shadow: 0 0 0 1px rgba(13, 13, 13, .5); }
+html body input.produto-chk::before { content: ""; position: absolute; inset: 10px; border: 2px solid #fff; border-radius: 6px; background: rgba(13, 13, 13, .55); box-shadow: 0 0 0 1.5px rgba(13, 13, 13, .7), 0 1px 5px rgba(0, 0, 0, .45); }   /* vazia: borda branca + anel e sombra escuros, legível sobre foto clara ou escura */
 html body input.produto-chk:checked::before {
+  border-color: #fff; box-shadow: 0 0 0 1.5px rgba(13, 13, 13, .8), 0 1px 5px rgba(0, 0, 0, .5);   /* marcada: laranja cheio + visto escuro, nunca parecida com a vazia */
   background: var(--laranja) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230d0d0d' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7'/%3E%3C/svg%3E") center / 14px no-repeat;
 }
 html body :is(.ig-meta a, .mt-link) { min-height: var(--tk-alvo); display: inline-flex; align-items: center; box-sizing: border-box; }

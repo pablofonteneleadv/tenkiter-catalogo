@@ -74,10 +74,10 @@
       '.tkc-box label{display:block;font-weight:700;font-size:.9rem;margin:12px 0 4px;color:#111}.tkc-box label small{font-weight:400;color:#555}' +
       '.tkc-box input{width:100%;box-sizing:border-box;padding:13px 12px;border:1.5px solid #bbb;border-radius:10px;font-size:1rem;background:#fff;color:#111}' +
       '.tkc-box button{width:100%;box-sizing:border-box;min-height:48px;border:0;border-radius:10px;font-weight:800;font-size:1rem;cursor:pointer;margin-top:12px;padding:0 14px}' +
-      '.tkc-pri{background:#E67E22;color:#0d0d0d}.tkc-sec{background:#eee;color:#111}.tkc-zap{background:#1d8a46;color:#fff}' +
+      '.tkc-pri{background:var(--laranja, #E67E22);color:#0d0d0d}.tkc-sec{background:#eee;color:#111}.tkc-zap{background:#1d8a46;color:#fff}' +
       '.tkc-erro{background:#fde8e8;color:#8a1111;border-radius:10px;padding:10px 12px;margin-top:12px;font-size:.92rem;font-weight:600}' +
       '.tkc-ok{background:#e3f4e8;color:#14532d;border-radius:10px;padding:10px 12px;margin-top:12px;font-size:.92rem;font-weight:600}' +
-      '.tkc-exist{background:#fff8e6;border:2px solid #E67E22;border-radius:12px;padding:12px;margin:10px 0;color:#111}' +
+      '.tkc-exist{background:#fff8e6;border:2px solid var(--laranja, #E67E22);border-radius:12px;padding:12px;margin:10px 0;color:#111}' +
       '.tkc-exist b{display:block;margin-bottom:6px}.tkc-exist .tkc-linha{display:flex;gap:8px;flex-wrap:wrap}.tkc-exist button{flex:1 1 140px;width:auto;margin-top:6px;min-height:46px;border:0;border-radius:10px;font-weight:800;font-size:.95rem;cursor:pointer}' +
       '.tkc-faixa{background:#b3151b;color:#fff;border-radius:14px;padding:16px;margin:0 0 14px;box-shadow:0 2px 10px rgba(179,21,27,.35)}' +
       '.tkc-faixa strong{display:block;font-size:1.15rem;margin-bottom:6px}.tkc-faixa p{margin:0 0 10px;font-size:.95rem;line-height:1.4;color:#fff}' +
@@ -95,7 +95,7 @@
     caixa.appendChild(el('b', { text: 'Você já tem cadastro com esse dado 😊' }));
     caixa.appendChild(el('div', { text: 'Não precisa criar outra conta: é só entrar. Se não lembra a senha, a gente recupera em 1 minuto.' }));
     var linha = el('div', { 'class': 'tkc-linha' });
-    var bE = el('button', { type: 'button', 'class': 'tkc-pri', text: 'Entrar' }); bE.style.background = '#E67E22'; bE.style.color = '#0d0d0d';
+    var bE = el('button', { type: 'button', 'class': 'tkc-pri', text: 'Entrar' }); bE.style.background = 'var(--laranja, #E67E22)'; bE.style.color = '#0d0d0d';
     var bR = el('button', { type: 'button', text: 'Esqueci a senha' }); bR.style.background = '#111'; bR.style.color = '#fff';
     bE.addEventListener('click', function () { if (o.aoEntrar) o.aoEntrar(); });
     bR.addEventListener('click', function () { if (o.aoRecuperar) o.aoRecuperar(); });

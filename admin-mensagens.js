@@ -479,7 +479,7 @@
       .ms-link-cartao b { font-size: .9rem; line-height: 1.3; }
       .ms-link-cartao small { font-size: .75rem; line-height: 1.35; margin-top: 4px; }
       .ms-previa small { color: #4a443b; font-size: 0.76rem; }
-      .ms-prod.marcado { background: #fff7ee; box-shadow: inset 3px 0 0 #E67E22; }
+      .ms-prod.marcado { background: #fff7ee; box-shadow: inset 3px 0 0 var(--laranja, #E67E22); }
       .sheet-mensagens .ms-prod-marca { position: relative; flex: none; width: 72px; height: 90px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; }
       .ms-prod-marca .ms-prod-foto { display: block; }
       .ms-prod-marca .ms-prod-caixa { position: absolute; top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 6px; border: 2px solid #141414; background: rgba(255,255,255,0.92); display: flex; align-items: center; justify-content: center; font: 800 0.95rem/1 Inter, Arial, sans-serif; color: #141414; }
@@ -762,6 +762,8 @@
       /* Em 320px os quatro rótulos não cabem com 10px por aba: a fonte desce um passo
          (nunca abaixo de 10px, que ainda é legível) para nenhuma palavra quebrar no meio. */
       @media(max-width:400px){.sheet-mensagens .ms-abas .ms-aba{font-size:.62rem;letter-spacing:-.015em;padding:0 1px}}
+      /* v7.65: no painel estreito do computador a palavra nunca parte no meio ("Solicitaçõe/s"): cada aba tem pelo menos a largura da maior palavra e, se faltar espaço, a faixa de abas rola dentro de si (altura de 44px mantida). */
+      @media(min-width:700px){.sheet-mensagens .ms-abas .ms-aba{overflow-wrap:normal;word-break:normal;hyphens:none;min-width:min-content;padding:0 5px}}
       /* Alvo de toque: 44px é o piso do projeto para qualquer controle. Uma regra global
          (acabamento) baixava a aba para 40px; aqui o piso é reafirmado para a barra. */
       .sheet-mensagens .ms-abas .ms-aba[role=tab]{min-height:44px!important;height:auto;box-sizing:border-box;border:0;position:relative}

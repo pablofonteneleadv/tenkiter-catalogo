@@ -104,6 +104,9 @@ passa("tokens e camadas", arquivos={"modulo.css": ".b { background: var(--laranj
 passa("SITE_URL e fallback defensivo", "<script>var u = (typeof SITE_URL === 'string' ? SITE_URL : location.origin + '/');</script>")
 passa("comentários não contam", "<!-- alert('x') --><script>// alert('x')\n/* z-index: 999 */</script>")
 passa("TKPadrao com padrao-dados.js", '<script src="padrao-dados.js"></script><script>TKPadrao.erro(e)</script>')
+passa("fallback do próprio token (var(--laranja, #E67E22)) não conta como laranja solto", arquivos={"modulo.css": ".b { background: var(--laranja, #E67E22); color: var(--laranja-txt,#A85200); outline: 3px solid var(--tk-foco-cor,#A85200); }"})
+reprova("laranja literal ainda reprova", "laranja-solto", "<style>.b { background: #E67E22; }</style>")
+reprova("fallback com outro valor reprova", "laranja-solto", "<style>.b { background: var(--laranja, #E67E23); color: var(--laranja-txt, #E67E22); }</style>")
 passa("token do laranja definido no dono (tk-padrao.css)", arquivos={"tk-padrao.css": ":root { --laranja: #E67E22; --laranja-txt: #A85200; }"})
 
 print("== Catraca ==")

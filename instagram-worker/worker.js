@@ -4038,16 +4038,19 @@ async function ligarWebhookWafly_(env, slot, origem) {
   return { ok: true, avisos: avisos, detalhes: diag };
 }
 async function resumoMensagens_(env, origem) {
-  const canais = {};
-  for (const c of MSG_CANAIS) {
-    const x = await env.DB.prepare('SELECT SUM(CASE WHEN encerrada_em=\'\' THEN 1 ELSE 0 END) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
-    canais[c] = { v2: !!(await cfgGet(env, 'msg_wh_v2_' + c)), conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
-  }
-  const cont = await msgContagens_(env);
+  /* v7.69.0: canais, contagens e segredo do app são independentes: consultas ao mesmo tempo (antes uma atrás da outra). */
+  const canais = {}, contP = msgContagens_(env), segP = igAppSecret_(env);
+  contP.catch(() => {}); segP.catch(() => {});
+  await Promise.all(MSG_CANAIS.map(async (c) => {
+    const [x, v2, ligadoEm, pausado] = await Promise.all([env.DB.prepare('SELECT SUM(CASE WHEN encerrada_em=\'\' THEN 1 ELSE 0 END) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first(), cfgGet(env, 'msg_wh_v2_' + c), cfgGet(env, 'msg_wh_ligado_' + c), msgPausado_(env, c)]);
+    canais[c] = { v2: !!v2, conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: ligadoEm || '', pausado: pausado };
+  }));
+  const ordenado = {}; for (const c of MSG_CANAIS) ordenado[c] = canais[c];
+  const cont = await contP;
   for (const c of MSG_CANAIS) { canais[c].naoLidas = cont[c].nao_lidas; canais[c].semResposta = cont[c].sem_resposta; }
-  const temSegApp = !!(await igAppSecret_(env));
+  const temSegApp = !!(await segP);
   canais.instagram.pronto = temSegApp;
-  return { ok: true, canais: canais, urlInstagram: temSegApp ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
+  return { ok: true, canais: ordenado, urlInstagram: temSegApp ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
 }
 /* ---------------------------------------------------------------------------
  * Mensagens v2 — responder pelo painel, entrega/leitura, "falta responder", novidades ao vivo, exportação e métricas.
