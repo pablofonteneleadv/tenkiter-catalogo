@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.69.0 — Mensageiro mais rápido: abre na hora e conversa sem espera
+
+- A lista de conversas, a conversa aberta e a troca de aba aparecem do que está guardado no aparelho (por conta, sem senhas, links ou fotos) enquanto a rede confirma em segundo plano; o campo de resposta não trava e o que você digitou não some quando a atualização chega.
+- A lista não espera mais o resumo para carregar; ao encostar o dedo (ou parar o mouse) numa conversa, a leitura dela já começa.
+- Servidor: resumo, lista e conversa fazem as consultas independentes ao mesmo tempo (antes em fila). Nenhum dado é migrado ou apagado.
+
 ## 7.67.0 — excluir solicitação de cliente, com permissão
 
 - Mensageiro → Solicitações de clientes ganha "Excluir solicitação": confirmação nativa dizendo a consequência e aviso "Solicitação excluída · Desfazer". A solicitação some de todas as listas e filtros; fotos, conversa e registros continuam guardados (exclusão lógica, com quem excluiu e quando).

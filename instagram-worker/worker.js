@@ -4039,16 +4039,19 @@ async function ligarWebhookWafly_(env, slot, origem) {
   return { ok: true, avisos: avisos, detalhes: diag };
 }
 async function resumoMensagens_(env, origem) {
-  const canais = {};
-  for (const c of MSG_CANAIS) {
-    const x = await env.DB.prepare('SELECT SUM(CASE WHEN encerrada_em=\'\' THEN 1 ELSE 0 END) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
-    canais[c] = { v2: !!(await cfgGet(env, 'msg_wh_v2_' + c)), conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
-  }
-  const cont = await msgContagens_(env);
+  /* v7.69.0: canais, contagens e segredo do app são independentes: consultas ao mesmo tempo (antes uma atrás da outra). */
+  const canais = {}, contP = msgContagens_(env), segP = igAppSecret_(env);
+  contP.catch(() => {}); segP.catch(() => {});
+  await Promise.all(MSG_CANAIS.map(async (c) => {
+    const [x, v2, ligadoEm, pausado] = await Promise.all([env.DB.prepare('SELECT SUM(CASE WHEN encerrada_em=\'\' THEN 1 ELSE 0 END) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first(), cfgGet(env, 'msg_wh_v2_' + c), cfgGet(env, 'msg_wh_ligado_' + c), msgPausado_(env, c)]);
+    canais[c] = { v2: !!v2, conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: ligadoEm || '', pausado: pausado };
+  }));
+  const ordenado = {}; for (const c of MSG_CANAIS) ordenado[c] = canais[c];
+  const cont = await contP;
   for (const c of MSG_CANAIS) { canais[c].naoLidas = cont[c].nao_lidas; canais[c].semResposta = cont[c].sem_resposta; }
-  const temSegApp = !!(await igAppSecret_(env));
+  const temSegApp = !!(await segP);
   canais.instagram.pronto = temSegApp;
-  return { ok: true, canais: canais, urlInstagram: temSegApp ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
+  return { ok: true, canais: ordenado, urlInstagram: temSegApp ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
 }
 /* ---------------------------------------------------------------------------
  * Mensagens v2 — responder pelo painel, entrega/leitura, "falta responder", novidades ao vivo, exportação e métricas.
@@ -4399,12 +4402,12 @@ async function msgContagens_(env, canal, tipo) {
   const pendenteDesde="COALESCE((SELECT MIN(p.enviada_em) FROM msg_mensagem p WHERE p.conversa_id=msg_conversa.id AND p.direcao='entrada' AND COALESCE(p.cortesia,0)=0 AND p.enviada_em>COALESCE("+MSG_ULT_ENC_+",'')),NULLIF(ult_entrada_em,''),NULLIF(criado_em,''))";
   const cols=Object.entries(fields).map(([name,condition])=>"COUNT(DISTINCT CASE WHEN "+condition+" THEN "+key+" END) AS "+name).join(',')+",MIN(CASE WHEN "+fields.esperando+" THEN "+pendenteDesde+" END) AS esperando_desde";
   const where=' FROM msg_conversa WHERE total>0'+(canal?' AND canal=?':'')+(tipo==='grupo'?' AND grupo=1':tipo==='individual'?' AND grupo=0':'');
-  const rows=(await env.DB.prepare('SELECT canal,'+cols+where+' GROUP BY canal').bind(...(canal?[canal]:[])).all()).results;
+  const [rowsRs,metasCfg,todosRow]=await Promise.all([env.DB.prepare('SELECT canal,'+cols+where+' GROUP BY canal').bind(...(canal?[canal]:[])).all(),gestorCfg_(env),env.DB.prepare('SELECT '+cols+where).bind(...(canal?[canal]:[])).first()]),rows=rowsRs.results;
   const zero=()=>Object.fromEntries(Object.keys(fields).map(k=>[k,0])),out={};for(const c of MSG_CANAIS)out[c]=zero();
   for(const row of rows)for(const k of Object.keys(fields))out[row.canal][k]=Number(row[k])||0;
-  const metas=(await gestorCfg_(env)).metas;
+  const metas=metasCfg.metas;
   for(const c of MSG_CANAIS){out[c].esperando_desde=rows.find(x=>x.canal===c)?.esperando_desde||'';out[c].meta_resposta_min=metas[c];}
-  out.todos=Object.assign(zero(),await env.DB.prepare('SELECT '+cols+where).bind(...(canal?[canal]:[])).first());
+  out.todos=Object.assign(zero(),todosRow);
   return out;
 }
 
@@ -6545,6 +6548,8 @@ export default {
         const termo='%'+busca.replace(/[%_]/g,'')+'%',buscaArgs=Array(busca.length>=3?5:4).fill(termo);
         // A página seleciona PESSOAS; só depois traz seus canais. Uma conversa antiga
         // não pode desaparecer do bloco porque outras 50 conversas são mais recentes.
+        /* v7.65: as contagens não dependem da página; correm junto com a consulta principal (antes eram em fila, uma ida e volta ao D1 cada). */
+        const contagensEmParalelo_=Promise.all([msgContagens_(env, todos ? '' : canal), tipo ? msgContagens_(env, todos ? '' : canal, tipo) : null]);contagensEmParalelo_.catch(()=>{});
         let rs,paginacao={temMais:false,proximo:null};
         if(busca||url.searchParams.get('blocos')==='1'){
         const key = "CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";
@@ -6561,7 +6566,10 @@ export default {
           const blocos=[...new Set(rs.results.map(c=>c.bloco))],permitidos=new Set(blocos.slice(0,50));paginacao.temMais=blocos.length>50;rs.results=rs.results.filter(c=>permitidos.has(c.bloco));
           if(paginacao.temMais){const ultimo=rs.results.filter(c=>c.bloco===blocos[49]);paginacao.proximo={em:ultimo.map(c=>c.ultima_em).sort().at(-1),id:Math.max(...ultimo.map(c=>c.id))};}
         }
+        const etiquetasDaLista_=(async()=>{
         try { const mp = await etiquetasDosAlvos_(env, rs.results.map(alvoDe_)); rs.results.forEach((r) => { r.etiquetas = mp[alvoDe_(r)] || []; }); } catch (e) { /* etiqueta é conforto */ }
+        })();
+        const agendaDaLista_=(async()=>{
         // Indicador de agenda na fila: consulta em lote, sem N requisições por cliente.
         // Somente agendamentos realmente pendentes; não mostrar cancelados, enviados ou falhos.
         if (direitos.agenda && rs.results.length) {
@@ -6581,9 +6589,11 @@ export default {
             }
           } catch (e) { /* Agenda não disponível: não inventar indicador. */ }
         }
-        try{await relacionamentosAtendimento_(env,rs.results);}catch(_){/* Histórico indisponível não impede atendimento. */}
-        const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
-        return J({ ok: true,...paginacao, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
+        })();
+        const relacionamentoDaLista_=(async()=>{try{await relacionamentosAtendimento_(env,rs.results);}catch(_){/* Histórico indisponível não impede atendimento. */}})();
+        await Promise.all([etiquetasDaLista_,agendaDaLista_,relacionamentoDaLista_]);
+        const [contagensGeral_,contagensTipo_]=await contagensEmParalelo_,geral=contagensGeral_[canal];
+        return J({ ok: true,...paginacao, conversas: rs.results, contagens: tipo ? contagensTipo_[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
       }
       if(p==='/msg/relacionamento'&&req.method==='GET'){
         const id=Number(url.searchParams.get('conversa'));if(!Number.isSafeInteger(id)||id<1)return J({ok:false,erro:'Escolha uma conversa individual.'},400);
@@ -6596,16 +6606,19 @@ export default {
         if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
         const conv = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE id=?').bind(id).first();
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
-        try{await relacionamentosAtendimento_(env,[conv]);}catch(_){/* sem inventar nota */}
+        /* v7.65: relacionamento, notas, etiquetas, ficha, agenda e acompanhamento são independentes entre si: saem juntos em vez de em fila. */
+        const relacionamentoDaConversa_=(async()=>{try{await relacionamentosAtendimento_(env,[conv]);}catch(_){/* sem inventar nota */}})();
         const antesId=Number(url.searchParams.get('antesId'))||0;
         const where=antes?(antesId>0?' AND (enviada_em<? OR (enviada_em=? AND id<?))':' AND enviada_em<?'):'';
         const args=antes?(antesId>0?[id,antes,antes,antesId]:[id,antes]):[id];
-        const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
-        const notas = antes ? [] : ((await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all()).results || []);
-        try { conv.etiquetas = (await etiquetasDosAlvos_(env, [alvoDe_(conv)]))[alvoDe_(conv)] || []; } catch (e) { conv.etiquetas = []; }
-        if (!antes && !conv.grupo) { try { const fx = await env.DB.prepare('SELECT tamanhos FROM msg_ficha WHERE alvo=?').bind(alvoDe_(conv)).first(); conv.tamanhos = (fx && fx.tamanhos) || ''; } catch (e) { conv.tamanhos = ''; } }   // v7.40.14: "Veste M · 38" na faixa
-        let agendadas; if (!antes) { try { agendadas = (await agendasDaConversa_(env, id)).pendentes; } catch (e) { agendadas = []; } }
-        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, agendadas: agendadas, acompanhamento:direitos.agenda?await acompanhamentoDaConversa_(env,id):undefined, temMais: rs.results.length === 100, cursor: agora() });
+        const mensagensDaConversa_ = env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
+        const notasDaConversa_ = antes ? Promise.resolve([]) : env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all().then((x) => x.results || []);
+        const etiquetasDaConversa_ = (async () => { try { conv.etiquetas = (await etiquetasDosAlvos_(env, [alvoDe_(conv)]))[alvoDe_(conv)] || []; } catch (e) { conv.etiquetas = []; } })();
+        const fichaDaConversa_ = (async () => { if (!antes && !conv.grupo) { try { const fx = await env.DB.prepare('SELECT tamanhos FROM msg_ficha WHERE alvo=?').bind(alvoDe_(conv)).first(); conv.tamanhos = (fx && fx.tamanhos) || ''; } catch (e) { conv.tamanhos = ''; } } })();   // v7.40.14: "Veste M · 38" na faixa
+        const agendaDaConversa_ = (async () => { if (!antes) { try { return (await agendasDaConversa_(env, id)).pendentes; } catch (e) { return []; } } })();
+        const acompanhamentoDaConversa2_ = direitos.agenda ? acompanhamentoDaConversa_(env, id) : Promise.resolve(undefined);
+        const [rs, notas, agendadas, acompanhamentoConversa_] = await Promise.all([mensagensDaConversa_, notasDaConversa_, agendaDaConversa_, acompanhamentoDaConversa2_, etiquetasDaConversa_, fichaDaConversa_, relacionamentoDaConversa_]);
+        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, agendadas: agendadas, acompanhamento:acompanhamentoConversa_, temMais: rs.results.length === 100, cursor: agora() });
       }
       if (p === '/msg/etiquetas' && req.method === 'GET') {
         const lista = await etiquetas_(env);
