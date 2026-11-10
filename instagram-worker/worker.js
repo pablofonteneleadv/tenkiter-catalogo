@@ -4190,7 +4190,7 @@ async function salvarPessoaAtendimento_(env, d) {
   const all = (await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE grupo=0 AND ('+MSG_IDENTIDADE_SQL_+' IN ('+keys.map(()=>'?').join(',')+') OR id IN ('+ids.map(()=>'?').join(',')+')) LIMIT 100').bind(...keys,...ids).all()).results;
   const t=agora(), batch=[env.DB.prepare('INSERT INTO msg_pessoa (id,nome,whatsapp,segundo,em) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome,whatsapp=excluded.whatsapp,segundo=excluded.segundo,em=excluded.em').bind(key,nome,phone?phone.d:'',second?second.d:'',t)];
   const nomeAnterior = await env.DB.prepare('SELECT nome,whatsapp FROM msg_pessoa WHERE id=?').bind(key).first();
-  if (phone && (!nomeAnterior || nomeAnterior.nome!==nome || nomeAnterior.whatsapp!==phone.d)) {const google=pedidoNomeGoogle_(env,key,phone.d,nome,t);if(google)batch.push(google);}
+  if (phone && (!nomeAnterior || nomeAnterior.nome!==nome || nomeAnterior.whatsapp!==phone.d)) {const google=pedidoNomeGoogle_(env,key,phone.d,nome,t);if(google)batch.push(...google);}
   for(const c of all){batch.push(env.DB.prepare('INSERT INTO msg_pessoa_alias (canal,contato,pessoa) VALUES (?,?,?) ON CONFLICT(canal,contato) DO UPDATE SET pessoa=excluded.pessoa').bind(c.canal,c.contato,key));batch.push(env.DB.prepare('UPDATE msg_conversa SET pessoa=?,atualizada_em=? WHERE id=?').bind(key,t,c.id));}
   for(const n of [phone,second].filter(Boolean)) for(const canal of ['whatsapp1','whatsapp2']) for(const fone of [...new Set([n.d,n.chave])]) batch.push(env.DB.prepare('INSERT INTO msg_pessoa_alias (canal,contato,pessoa) VALUES (?,?,?) ON CONFLICT(canal,contato) DO UPDATE SET pessoa=excluded.pessoa').bind(canal,fone,key));
   await env.DB.batch(batch);
@@ -5722,10 +5722,15 @@ async function processarFilaContatos_(env, limite) {
 function pedidoNomeGoogle_(env, pessoa, fone, nome, rev) {
   const n = pessoaTelefone_(fone);
   if (!n || !/^55\d{10,11}$/.test(n.d) || !String(nome || '').trim()) return null;
-  return env.DB.prepare(
-    "INSERT INTO msg_google_sync (pessoa,fone,nome,rev,estado,tentativas,erro,r,em) VALUES (?,?,?,?,'pendente',0,'','',?) " +
-    "ON CONFLICT(pessoa) DO UPDATE SET fone=excluded.fone,nome=excluded.nome,rev=excluded.rev,estado='pendente',tentativas=0,erro='',r='',em=excluded.em"
-  ).bind(String(pessoa), n.d, String(nome).trim().slice(0,120), String(rev), agora());
+  return [
+    // Se o WhatsApp ainda iria criar "TM Cliente ...", a ficha assume essa criação:
+    // não deixar dois crons criarem o mesmo Google Contatos em paralelo.
+    env.DB.prepare("UPDATE msg_contatos_fila SET estado='substituido',erro='' WHERE chave=? AND estado='pendente'").bind(n.chave),
+    env.DB.prepare(
+      "INSERT INTO msg_google_sync (pessoa,fone,nome,rev,estado,tentativas,erro,r,em) VALUES (?,?,?,?,'pendente',0,'','',?) " +
+      "ON CONFLICT(pessoa) DO UPDATE SET fone=excluded.fone,nome=excluded.nome,rev=excluded.rev,estado='pendente',tentativas=0,erro='',r='',em=excluded.em"
+    ).bind(String(pessoa), n.d, String(nome).trim().slice(0,120), String(rev), agora())
+  ];
 }
 async function processarFilaNomesGoogle_(env, limite = 3) {
   if (!(await cfgGet(env, 'contatos_url')) || !(await cfgGet(env, 'contatos_chave'))) return { ok: true, desligada: true };
@@ -5735,7 +5740,10 @@ async function processarFilaNomesGoogle_(env, limite = 3) {
   let feitos = 0;
   for (const t of tarefas) {
     const atual = await env.DB.prepare('SELECT nome FROM msg_pessoa WHERE id=?').bind(t.pessoa).first();
-    if (!atual || atual.nome !== t.nome) continue; // nome trocado de novo: nunca reenvia nome antigo
+    if (!atual || atual.nome !== t.nome) {
+      await env.DB.prepare("UPDATE msg_google_sync SET estado='obsoleto' WHERE pessoa=? AND rev=?").bind(t.pessoa,t.rev).run();
+      continue; // nome trocado de novo: nunca reenvia nome antigo
+    }
     const lock = await env.DB.prepare(
       "UPDATE msg_google_sync SET estado='enviando',em=? WHERE pessoa=? AND rev=? AND (estado='pendente' OR (estado='enviando' AND em<?))"
     ).bind(agora(),t.pessoa,t.rev,new Date(Date.now()-5*60000).toISOString()).run();
@@ -6839,7 +6847,7 @@ export default {
           const key = conv.pessoa || 'c:' + conv.id;
           const antes = await env.DB.prepare('SELECT nome,whatsapp FROM msg_pessoa WHERE id=?').bind(key).first();
           const foneGoogle = antes?.whatsapp || (conv.canal.startsWith('whatsapp') ? conv.contato : key);
-          if (!antes || antes.nome!==nome) { const google = pedidoNomeGoogle_(env,key,foneGoogle,nome,em); if(google)gravacoes.push(google); }
+          if (!antes || antes.nome!==nome) { const google = pedidoNomeGoogle_(env,key,foneGoogle,nome,em); if(google)gravacoes.push(...google); }
           gravacoes.push(env.DB.prepare("INSERT INTO msg_pessoa (id,nome,whatsapp,segundo,em) VALUES (?,?,?,'',?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome,em=excluded.em").bind(key,nome,conv.canal==='instagram'?'':conv.contato,em));
           if (!conv.pessoa) gravacoes.push(env.DB.prepare('UPDATE msg_conversa SET pessoa=? WHERE id=?').bind(key,conv.id));
           gravacoes.push(env.DB.prepare('UPDATE msg_conversa SET nome=?,atualizada_em=? WHERE id=? OR '+MSG_IDENTIDADE_SQL_+'=?').bind(nome,em,conv.id,key));
