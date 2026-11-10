@@ -6546,7 +6546,11 @@ export default {
         return J({ ok: true, configurada: true, conta: conta, contas: contas, aviso: aviso, avisoLigado: !!(await cfgGet(env, 'zernio_wh_id')), conferidaEm: await cfgGet(env, 'zernio_conferida') });
       }
       if(p==='/msg/contexto'&&req.method==='POST'){const d=await req.json().catch(()=>({}));return J(await repararContextoInstagram_(env,Number(d.conversa)));}
-      if(p==='/msg/pessoas/google'&&req.method==='POST')return J(await indexarNomesGoogle_(env));
+      if(p==='/msg/pessoas/google'&&req.method==='POST'){
+        const d=await req.json().catch(()=>({}));
+        // Acesso 'configuracoes' é exigido por msgRecurso_; quem só atende não reindexa o Google.
+        return J(await indexarNomesGoogle_(env,d.forcar===true));
+      }
       if(p==='/msg/pessoa'&&req.method==='GET'){const r=await pessoaAtendimento_(env,Number(url.searchParams.get('conversa')));return r?J(r):J({ok:false,erro:'Conversa não encontrada.'},404);}
       if(p==='/msg/pessoa'&&req.method==='POST'){const r=await salvarPessoaAtendimento_(env,await req.json().catch(()=>({})));return J(r,r.ok?200:400);}
       if(p==='/msg/cortesia/rever'&&req.method==='POST'){
