@@ -899,10 +899,10 @@ function d1() {
   const oldestPg=mp1[0],mp2=(await A('GET','/msg/mensagens?conversa='+cidPag+'&antes='+encodeURIComponent(oldestPg.enviada_em)+'&antesId='+oldestPg.id)).j.mensagens;
   chk('paginação do histórico com mesmo horário não omite mensagens',mp1.length===100&&mp2.length===5&&new Set([...mp1,...mp2].map(m=>m.id)).size===105);
   // Identidade, nomes Google e limites dos contadores: somente serviços falsos.
-  const beforePeopleFetch=globalThis.fetch;let googleCalls=0;
+  const beforePeopleFetch=globalThis.fetch;let googleCalls=0, googleName='Nome completo do Google';
   await cfg('contatos_url','https://script.google.com/macros/s/pessoas-index-test/exec');await cfg('contatos_chave','google-test-only');
   globalThis.fetch=async(u,init)=>{
-    if(String(u).includes('/macros/s/pessoas-index-test/')){const b=JSON.parse(init.body);chk('índice Google apenas lê, nunca altera contatos',b.acao==='listar');googleCalls++;return Response.json({ok:true,contatos:[{r:'people/test',n:'Nome completo do Google',f:['+55 88 98901-2345','+55 88 98901-2346']}],total:1,proxima:''});}
+    if(String(u).includes('/macros/s/pessoas-index-test/')){const b=JSON.parse(init.body);chk('índice Google apenas lê, nunca altera contatos',b.acao==='listar');googleCalls++;return Response.json({ok:true,contatos:[{r:'people/test',n:googleName,f:['+55 88 98901-2345','+55 88 98901-2346']}],total:1,proxima:''});}
     return beforePeopleFetch(u,init);
   };
   await wh('/wh/wafly/1/'+seg,msg('PERSON-A','5588989012345','Oi',{momment:Date.now()}));
@@ -911,11 +911,29 @@ function d1() {
   let indexed=await A('POST','/msg/pessoas/google',{});chk('índice Google conclui só uma página',indexed.j.fim&&googleCalls===1,indexed.j);
   let indexedConv=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa;
   chk('nome do Google passa a aparecer no atendimento',indexedConv.nome==='Nome completo do Google',indexedConv);
+  const tsAntes=(await DB.prepare('SELECT atualizada_em FROM msg_conversa WHERE id=?').bind(waPerson.id).first()).atualizada_em;
+  const recente=await A('POST','/msg/pessoas/google',{});
+  chk('índice Google recente não relê milhares de contatos',recente.j.recente===true&&googleCalls===1,recente.j);
+  googleName='Nome atualizado no Google';
+  const forcar=await A('POST','/msg/pessoas/google',{forcar:true});
+  const convAtual=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa;
+  chk('forçar conferência lê Google mesmo antes do prazo e propaga novo nome',forcar.j.ok&&googleCalls===2&&convAtual.nome===googleName,forcar.j);
+  const tsAlterado=(await DB.prepare('SELECT atualizada_em FROM msg_conversa WHERE id=?').bind(waPerson.id).first()).atualizada_em;
+  chk('nova informação torna conversa atualizada para todos os acessos',tsAlterado>=tsAntes,{tsAntes,tsAlterado});
+  const semMudanca=await A('POST','/msg/pessoas/google',{forcar:true});
+  const tsIgual=(await DB.prepare('SELECT atualizada_em FROM msg_conversa WHERE id=?').bind(waPerson.id).first()).atualizada_em;
+  chk('conferência sem mudança não regrava nomes nem ativa atualização de conversa',semMudanca.j.alterados===0&&tsAlterado===tsIgual,semMudanca.j);
+
   let invalidPerson=await A('POST','/msg/pessoa',{conversa:waPerson.id,nome:'Manual',whatsapp:'abc'});chk('não permite cadastro de WhatsApp inválido',invalidPerson.r.status===400);
   await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em,nao_lidas,ult_dir) VALUES('instagram','person-ig','Nome parecido',0,1,?,2,'entrada')").bind(new Date().toISOString()).run();
   const igPerson=await DB.prepare("SELECT id FROM msg_conversa WHERE contato='person-ig'").first();
   let linkedPerson=await A('POST','/msg/pessoa',{conversa:waPerson.id,nome:'Nome confirmado',whatsapp:'+55 88 98901-2345',segundo:'+55 88 98901-2346',vincular:[igPerson.id]});
   chk('vínculo explícito reúne WhatsApp1, WhatsApp2 e Instagram',linkedPerson.j.ok&&linkedPerson.j.canais.length===3&&linkedPerson.j.canais.every(x=>x.pessoa===linkedPerson.j.pessoa&&x.nome==='Nome confirmado'),linkedPerson.j);
+  googleName='Outro nome vindo do Google';
+  await A('POST','/msg/pessoas/google',{forcar:true});
+  const nomePreferido=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa.nome;
+  chk('nome manual centralizado permanece prioritário mesmo após atualização do Google',nomePreferido==='Nome confirmado',nomePreferido);
+
   await wh('/wh/wafly/1/'+seg,msg('PERSON-C','5588989012346','Segundo número',{momment:Date.now()}));
   const personAfter=(await A('GET','/msg/pessoa?conversa='+waPerson.id)).j;
   chk('segundo número futuro entra no cadastro vinculado',personAfter.canais.length===4&&personAfter.canais.every(x=>x.nome==='Nome confirmado'),personAfter);
