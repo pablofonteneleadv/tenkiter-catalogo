@@ -75,12 +75,12 @@ with sync_playwright() as p:
     chk("tentar de novo salva normalmente", "Salvo" in pg.inner_text("[data-k=ms]") and est["gravacoes"] == 2, pg.inner_text("[data-k=ms]")); ctx.close()
 
     print("== RH: manuais ainda não iniciados + atualização de permissões + cache na memória ==")
-    iniciando = {"titulo": "TM Funcionário Iniciando", "total": 8, "lidos": 8, "faltam": 0, "precisamReler": 0}
-    online1 = {"titulo": "TM Online 1", "total": 6, "lidos": 0, "faltam": 6, "precisamReler": 0}
-    online2 = {"titulo": "TM Online 2", "total": 4, "lidos": 0, "faltam": 4, "precisamReler": 0}
+    iniciando = {"titulo": "TM Funcionário Iniciando", "total": 8, "lidos": 8, "faltam": 0, "precisamReler": 0, "podeProva": True}
+    online1 = {"titulo": "TM Online 1", "total": 6, "lidos": 0, "faltam": 6, "precisamReler": 0, "podeProva": True}
+    online2 = {"titulo": "TM Online 2", "total": 4, "lidos": 0, "faltam": 4, "precisamReler": 0, "podeProva": False}
     est = {"vistos": [], "gravacoes": 0, "treinos": [
-        {"ok": True, "leitura": [iniciando, online1], "resultados": []},
-        {"ok": True, "leitura": [online1, online2], "resultados": []},
+        {"ok": True, "acessoConferido": True, "leitura": [iniciando, online1], "resultados": []},
+        {"ok": True, "acessoConferido": True, "leitura": [online1, online2], "resultados": []},
         {"ok": False, "erro": "temporariamente indisponível"}
     ]}
     ctx, pg = nova(est); pg.goto(BASE + "curriculos.html"); pg.wait_for_timeout(1600)
@@ -97,9 +97,37 @@ with sync_playwright() as p:
     pg.click("[data-k=atualizar-treino]")
     pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('última consulta')")
     txt = pg.inner_text("[data-k=treino]")
-    chk("falha de atualização não apaga lista válida", "TM Online 1" in txt and "TM Online 2" in txt and "última consulta" in txt, txt[:300])
+    chk("falha de atualização preserva histórico só para consulta, sem cobrar", "TM Online 1" in txt and "TM Online 2" in txt and "apenas informativa" in txt and "Cobrar leitura" not in txt and "Cobrar prova" not in txt, txt[:300])
     chk("atualização manual faz uma consulta, sem duplicar", est.get("leituras") == 3, est.get("leituras"))
     chk("botão Atualizar tem altura mínima de 44px", pg.locator("[data-k=atualizar-treino]").evaluate("(el) => el.getBoundingClientRect().height") >= 44)
+    ctx.close()
+
+    print("== Contrato RH 2.0: não cobrar sem prova atual de acesso ==")
+    est = {"vistos": [], "gravacoes": 0, "treinos": [
+        {"ok": True, "leitura": [online1, online2], "resultados": []},  # Apps Script antigo sem prova de acesso
+        {"ok": True, "acessoConferido": True, "leitura": [], "resultados": []},  # nível 0 / Cliente
+        {"ok": True, "acessoConferido": True, "leitura": [iniciando], "resultados": []},
+        {"ok": True, "acessoConferido": True, "leitura": [online2], "resultados": []},
+    ]}
+    ctx, pg = nova(est); pg.goto(BASE + "curriculos.html"); pg.wait_for_timeout(1600)
+    pg.click(".item .topo")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('conferência de acessos')")
+    txt = pg.inner_text("[data-k=treino]")
+    chk("servidor antigo não autoriza cobranças mesmo trazendo todos os manuais", "Cobrar" not in txt and "TM Online 1" not in txt, txt)
+    pg.click("[data-k=atualizar-treino]")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('Nenhum treinamento liberado')")
+    chk("nível 0 não vê manual nem recebe cobrança", "Cobrar" not in pg.inner_text("[data-k=treino]"))
+    pg.click("[data-k=atualizar-treino]")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('TM Funcionário Iniciando')")
+    chk("manual liberado pode ser visto, sem outros manuais", "TM Online" not in pg.inner_text("[data-k=treino]"))
+    pg.click("[data-k=atualizar-treino]")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('TM Online 2')")
+    txt = pg.inner_text("[data-k=treino]")
+    chk("revogação remove antigo da cobrança após atualizar", "TM Funcionário Iniciando" not in txt, txt)
+    chk("manual sem avaliações permite leitura mas impede cobrar prova", "Cobrar leitura" in txt and "Cobrar prova" not in txt, txt)
+    chk("sem rolagem horizontal no celular", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    pg.set_viewport_size({"width": 1440, "height": 900})
+    chk("sem rolagem horizontal em desktop", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
     ctx.close()
     chk("sem erro de JavaScript", not erros, erros); b.close()
 print("\nOK=%d FALHAS=%d" % (len(OK), len(BAD)), BAD)
