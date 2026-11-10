@@ -384,11 +384,9 @@ async function carregarTreino(r, slot) {
   const sessaoAtual = getSessao();
   if (!sessaoAtual) { slot.innerHTML = '<div class="meta">Entre de novo para conferir os treinamentos.</div>'; return; }
   const chave = String(sessaoAtual.whatsapp || '') + ':' + String(r.WhatsApp || '');
-  const salvo = treinoCache[chave];
-  // Reabrir exibe a última resposta imediatamente e confirma alterações com o servidor.
-  slot.innerHTML = salvo
-    ? treinoHtml(r, salvo, true) + '<div class="meta" role="status">Conferindo o acesso atual antes de liberar cobranças…</div>'
-    : '<div class="meta" role="status">Carregando os treinamentos disponíveis…</div>';
+  // O cache não é fonte de permissão: nunca exibir manuais possivelmente revogados.
+  // Cada abertura consulta o servidor antes de revelar a lista e as cobranças.
+  slot.innerHTML = '<div class="meta" role="status">Conferindo os treinamentos liberados para esta pessoa…</div>';
   let pedido = treinoPendente[chave];
   if (!pedido) {
     pedido = chamar('curriculos_treinamento', { whatsappAlvo: r.WhatsApp })
@@ -406,8 +404,8 @@ async function carregarTreino(r, slot) {
   if (!slot.isConnected || !slot.closest('.item')?.classList.contains('aberto')) return;
   if (x && x.ok) slot.innerHTML = treinoHtml(r, x);
   else if (treinoCache[chave]) {
-    slot.innerHTML = treinoHtml(r, treinoCache[chave], true) +
-      '<div class="meta" role="status">Não foi possível conferir os acessos agora. A consulta anterior é apenas informativa; cobranças desativadas até atualizar.</div>';
+    // Permissões podem ter sido revogadas desde a última consulta: nem os títulos aparecem.
+    slot.innerHTML = '<div class="meta" role="status">Não foi possível confirmar os acessos atuais. Nenhum treinamento será cobrado até você tocar em Atualizar.</div>';
   } else {
     slot.innerHTML = '<div class="meta" role="status">' +
       E(TKPadrao.erro(x, 'Não foi possível carregar os treinamentos. Tente de novo.')) + '</div>';
