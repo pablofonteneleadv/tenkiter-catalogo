@@ -4128,23 +4128,41 @@ async function aplicarLeiturasInstagram_(env, lst) {
 }
 /* Identidade do atendimento: vínculo explícito por telefone/contato, sem inferir por nome. */
 const pessoaTelefone_ = (v) => { const n = foneNormal_(String(v || '')); return n.ok ? n : null; };
-async function indexarNomesGoogle_(env) {
+/* Fonte única dos nomes: cadastro manual (msg_pessoa), Google e nome recebido na conversa.
+ * A ponte 1.2 continua sendo somente leitura aqui. Atualizar em etapas e apenas
+ * quando o Google realmente mudar evita gastar a cota D1 com 15 mil UPSERTs iguais. */
+const MSG_GOOGLE_INTERVALO_MS_ = 4 * 60 * 60 * 1000;
+async function indexarNomesGoogle_(env, forcar = false) {
   if (!(await cfgGet(env, 'contatos_url'))) return { ok: true, fim: true, ligada: false };
-  const done = Date.parse((await cfgGet(env, 'msg_google_index_em')) || '');
-  if (done && Date.now() - done < 86400000) return { ok: true, fim: true };
   const pagina = (await cfgGet(env, 'msg_google_index_pagina')) || '';
+  const done = Date.parse((await cfgGet(env, 'msg_google_index_em')) || '');
+  if (!pagina && !forcar && done && Date.now() - done < MSG_GOOGLE_INTERVALO_MS_) return { ok: true, fim: true, recente: true };
   const r = await ponte_(env, { acao: 'listar', pagina: pagina || undefined });
   if (!r.ok) return r;
-  const statements = [];
+  const statements = [], t = agora();
   for (const c of (Array.isArray(r.contatos) ? r.contatos : [])) {
     const numbers = (Array.isArray(c.f) ? c.f : []).map(pessoaTelefone_).filter(Boolean);
-    const nome = String(c.n || '').trim().slice(0, 120); if (!nome || !numbers.length) continue;
-    for (const n of numbers) statements.push(env.DB.prepare('INSERT INTO msg_google_nome (chave,nome,pessoa,em) VALUES (?,?,?,?) ON CONFLICT(chave) DO UPDATE SET nome=excluded.nome,pessoa=excluded.pessoa,em=excluded.em').bind(n.chave,nome,numbers[0].chave,agora()));
+    const nome = String(c.n || '').trim().slice(0, 120);
+    if (!nome || !numbers.length) continue;
+    for (const n of numbers) statements.push(env.DB.prepare(
+      'INSERT INTO msg_google_nome (chave,nome,pessoa,em) VALUES (?,?,?,?) ' +
+      'ON CONFLICT(chave) DO UPDATE SET nome=excluded.nome,pessoa=excluded.pessoa,em=excluded.em ' +
+      'WHERE msg_google_nome.nome<>excluded.nome OR msg_google_nome.pessoa<>excluded.pessoa'
+    ).bind(n.chave,nome,numbers[0].chave,t));
   }
-  for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
+  let alterados = 0;
+  for (let i = 0; i < statements.length; i += 100) {
+    const rs = await env.DB.batch(statements.slice(i, i + 100));
+    alterados += rs.reduce((total, x) => total + Number(x?.meta?.changes || 0), 0);
+  }
+  // Só as conversas com nome Google realmente modificado entram em /msg/novidades.
+  // Todos os acessos recebem o mesmo nome na próxima sincronização, sem alterar contatos reais.
+  if (alterados) await env.DB.prepare(
+    'UPDATE msg_conversa SET atualizada_em=? WHERE grupo=0 AND pessoa IN (SELECT chave FROM msg_google_nome WHERE em=?)'
+  ).bind(t,t).run();
   await cfgSet(env, 'msg_google_index_pagina', String(r.proxima || ''));
-  if (!r.proxima) { await cfgSet(env, 'msg_google_index_em', agora()); await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE grupo=0').bind(agora()).run(); }
-  return { ok: true, fim: !r.proxima, lidos: Number(r.contatos && r.contatos.length) || 0, total: Number(r.total) || 0 };
+  if (!r.proxima) await cfgSet(env, 'msg_google_index_em', agora());
+  return { ok: true, fim: !r.proxima, lidos: Number(r.contatos && r.contatos.length) || 0, total: Number(r.total) || 0, alterados };
 }
 async function pessoaAtendimento_(env, id) {
   const c = await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE id=?').bind(id).first();
@@ -6335,6 +6353,9 @@ export default {
     ctx.waitUntil(dispararPostagens_(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
+    // Sincroniza uma página do Google por minuto, de forma independente da conta de atendente aberta.
+    // Uma rodada completa ocorre no máximo a cada 4 h; a ponte não grava contatos nesta leitura.
+    ctx.waitUntil(indexarNomesGoogle_(env).catch(() => {}));
     ctx.waitUntil(estRetratoCron_(env, ev && ev.scheduledTime ? Number(ev.scheduledTime) : Date.now()).catch(() => {}));   // v7.45.0: 1 leitura de KV; retrato do estoque 1x por dia
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
     if (min === 7) {ctx.waitUntil(limparVideoPreparo_(env));ctx.waitUntil(limparTemporarios(env).catch(() => {}));ctx.waitUntil((async()=>{const c=await env.CACHE.get('contatos_staging_cursor');const r=await contatosR2ExpurgarOrfaos_(env,Date.now(),c||undefined);if(r.cursor)await env.CACHE.put('contatos_staging_cursor',r.cursor,{expirationTtl:86400});else await env.CACHE.delete('contatos_staging_cursor');})().catch(()=>{}));}      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
