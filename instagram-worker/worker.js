@@ -5730,12 +5730,16 @@ function pedidoNomeGoogle_(env, pessoa, fone, nome, rev) {
 async function processarFilaNomesGoogle_(env, limite = 3) {
   if (!(await cfgGet(env, 'contatos_url')) || !(await cfgGet(env, 'contatos_chave'))) return { ok: true, desligada: true };
   const tarefas = (await env.DB.prepare(
-    "SELECT pessoa,fone,nome,rev,tentativas FROM msg_google_sync WHERE estado='pendente' AND tentativas<5 ORDER BY em LIMIT ?"
-  ).bind(Math.min(5,Math.max(1,Number(limite)||3))).all()).results || [];
+    "SELECT pessoa,fone,nome,rev,tentativas FROM msg_google_sync WHERE (estado='pendente' OR (estado='enviando' AND em<?)) AND tentativas<5 ORDER BY em LIMIT ?"
+  ).bind(new Date(Date.now()-5*60000).toISOString(),Math.min(5,Math.max(1,Number(limite)||3))).all()).results || [];
   let feitos = 0;
   for (const t of tarefas) {
     const atual = await env.DB.prepare('SELECT nome FROM msg_pessoa WHERE id=?').bind(t.pessoa).first();
     if (!atual || atual.nome !== t.nome) continue; // nome trocado de novo: nunca reenvia nome antigo
+    const lock = await env.DB.prepare(
+      "UPDATE msg_google_sync SET estado='enviando',em=? WHERE pessoa=? AND rev=? AND (estado='pendente' OR (estado='enviando' AND em<?))"
+    ).bind(agora(),t.pessoa,t.rev,new Date(Date.now()-5*60000).toISOString()).run();
+    if (!lock.meta?.changes) continue; // outro cron já reservou este contato
     let resposta, recurso = '';
     try {
       // A ponte 1.2 já procura o telefone exato e nunca cria um contato duplicado.
@@ -5748,7 +5752,7 @@ async function processarFilaNomesGoogle_(env, limite = 3) {
       if (!resposta.ok) throw Error(resposta.erro || 'Google não confirmou a atualização.');
       // Compare-and-set: outra edição da ficha nunca é apagada pela conclusão desta.
       const ok = await env.DB.prepare(
-        "UPDATE msg_google_sync SET estado='feito',tentativas=0,erro='',r=?,em=? WHERE pessoa=? AND rev=? AND estado='pendente'"
+        "UPDATE msg_google_sync SET estado='feito',tentativas=0,erro='',r=?,em=? WHERE pessoa=? AND rev=? AND estado='enviando'"
       ).bind(recurso,agora(),t.pessoa,t.rev).run();
       if (ok.meta?.changes) {
         const chave = pessoaTelefone_(t.fone)?.chave || '';
@@ -5759,8 +5763,8 @@ async function processarFilaNomesGoogle_(env, limite = 3) {
       }
     } catch (e) {
       await env.DB.prepare(
-        "UPDATE msg_google_sync SET tentativas=tentativas+1,erro=? WHERE pessoa=? AND rev=? AND estado='pendente'"
-      ).bind(String(e?.message||'Falha no Google').slice(0,180),t.pessoa,t.rev).run();
+        "UPDATE msg_google_sync SET estado='pendente',tentativas=tentativas+1,erro=?,em=? WHERE pessoa=? AND rev=? AND estado='enviando'"
+      ).bind(String(e?.message||'Falha no Google').slice(0,180),agora(),t.pessoa,t.rev).run();
     }
   }
   return {ok:true,processados:tarefas.length,feitos};
