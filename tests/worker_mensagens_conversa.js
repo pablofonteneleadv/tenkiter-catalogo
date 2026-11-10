@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_msg_conversa.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_,processarEntradas_,processarEntrada_,guardarEntrada_,corpoWebhook_,contatosR2Atual_,contatosR2PlanSlice_};');
+fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_,processarEntradas_,processarEntrada_,guardarEntrada_,corpoWebhook_,contatosR2Atual_,contatosR2PlanSlice_,processarFilaNomesGoogle_};');
 let ok = 0, falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 
@@ -899,10 +899,16 @@ function d1() {
   const oldestPg=mp1[0],mp2=(await A('GET','/msg/mensagens?conversa='+cidPag+'&antes='+encodeURIComponent(oldestPg.enviada_em)+'&antesId='+oldestPg.id)).j.mensagens;
   chk('paginação do histórico com mesmo horário não omite mensagens',mp1.length===100&&mp2.length===5&&new Set([...mp1,...mp2].map(m=>m.id)).size===105);
   // Identidade, nomes Google e limites dos contadores: somente serviços falsos.
-  const beforePeopleFetch=globalThis.fetch;let googleCalls=0, googleName='Nome completo do Google';
+  const beforePeopleFetch=globalThis.fetch;let googleCalls=0, googleName='Nome completo do Google', googleWrites=[], googleFalha=0;
   await cfg('contatos_url','https://script.google.com/macros/s/pessoas-index-test/exec');await cfg('contatos_chave','google-test-only');
   globalThis.fetch=async(u,init)=>{
-    if(String(u).includes('/macros/s/pessoas-index-test/')){const b=JSON.parse(init.body);chk('índice Google apenas lê, nunca altera contatos',b.acao==='listar');googleCalls++;return Response.json({ok:true,contatos:[{r:'people/test',n:googleName,f:['+55 88 98901-2345','+55 88 98901-2346']}],total:1,proxima:''});}
+    if(String(u).includes('/macros/s/pessoas-index-test/')){
+      const b=JSON.parse(init.body);
+      if(b.acao==='listar'){chk('índice Google apenas lê, nunca altera contatos',true);googleCalls++;return Response.json({ok:true,contatos:[{r:'people/c987654321',n:googleName,f:['+55 88 98901-2345','+55 88 98901-2346']}],total:1,proxima:''});}
+      if(b.acao==='criar_lote'){googleWrites.push({acao:b.acao,contatos:b.contatos});return Response.json({ok:true,resultados:(b.contatos||[]).map(c=>({fone:c.fone,ok:true,ja:true,r:'people/c987654321'}))});}
+      if(b.acao==='atualizar'){googleWrites.push({acao:b.acao,nome:b.nome,r:b.r});if(googleFalha>0){googleFalha--;return Response.json({ok:false,erro:'Google temporariamente indisponível'});}googleName=b.nome;return Response.json({ok:true,contato:{r:b.r,n:b.nome}});}
+      return Response.json({ok:false,erro:'Ação Google inesperada no teste'});
+    }
     return beforePeopleFetch(u,init);
   };
   await wh('/wh/wafly/1/'+seg,msg('PERSON-A','5588989012345','Oi',{momment:Date.now()}));
@@ -933,6 +939,28 @@ function d1() {
   await A('POST','/msg/pessoas/google',{forcar:true});
   const nomePreferido=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa.nome;
   chk('nome manual centralizado permanece prioritário mesmo após atualização do Google',nomePreferido==='Nome confirmado',nomePreferido);
+  const pendenteManual=await DB.prepare('SELECT nome,estado,tentativas FROM msg_google_sync WHERE pessoa=?').bind(linkedPerson.j.pessoa).first();
+  chk('nome alterado no cadastro central entra na fila segura do Google',pendenteManual?.nome==='Nome confirmado'&&pendenteManual?.estado==='pendente',pendenteManual);
+  const syncPrimeiro=await W.processarFilaNomesGoogle_(env,1);
+  const concluidoManual=await DB.prepare('SELECT estado,r FROM msg_google_sync WHERE pessoa=?').bind(linkedPerson.j.pessoa).first();
+  chk('cadastro central atualiza Google via ponte existente sem criar duplicata',syncPrimeiro.feitos===1&&googleName==='Nome confirmado'&&concluidoManual?.estado==='feito'&&concluidoManual.r==='people/c987654321',googleWrites);
+  const fichaNova=await A('POST','/msg/ficha',{conversa:waPerson.id,nome:'Nome revisado na ficha'});
+  const filaFicha=await DB.prepare('SELECT nome,estado,tentativas FROM msg_google_sync WHERE pessoa=?').bind(linkedPerson.j.pessoa).first();
+  chk('edição na Ficha salva imediatamente e pede atualização do Google',fichaNova.j.ok&&filaFicha?.nome==='Nome revisado na ficha'&&filaFicha.estado==='pendente',filaFicha);
+  googleFalha=1;
+  await W.processarFilaNomesGoogle_(env,1);
+  const depoisErro=await DB.prepare('SELECT estado,tentativas FROM msg_google_sync WHERE pessoa=?').bind(linkedPerson.j.pessoa).first();
+  chk('falha do Google mantém a Ficha e permite tentar novamente',depoisErro?.estado==='pendente'&&depoisErro?.tentativas===1&&googleName==='Nome confirmado',depoisErro);
+  const retentou=await W.processarFilaNomesGoogle_(env,1);
+  chk('tentativa posterior confirma atualização do Google',retentou.feitos===1&&googleName==='Nome revisado na ficha',retentou);
+  await A('POST','/msg/ficha',{conversa:waPerson.id,nome:'Nome confirmado'});
+  await W.processarFilaNomesGoogle_(env,1);
+  chk('novo nome na Ficha substitui edição anterior em ambos sistemas',googleName==='Nome confirmado');
+  const jaFeito=googleWrites.length;
+  const semNovaAlteracao=await A('POST','/msg/ficha',{conversa:waPerson.id,nome:'Nome confirmado'});
+  await W.processarFilaNomesGoogle_(env,1);
+  chk('salvar outros dados não renomeia Google sem necessidade',semNovaAlteracao.j.ok&&googleWrites.length===jaFeito);
+
 
   await wh('/wh/wafly/1/'+seg,msg('PERSON-C','5588989012346','Segundo número',{momment:Date.now()}));
   const personAfter=(await A('GET','/msg/pessoa?conversa='+waPerson.id)).j;
