@@ -1298,6 +1298,10 @@
       b.append(u, k, l, st); return b;
     }
     b.appendChild(el('p', 'ms-ok', 'Ligada à conta ' + (contatosSit.conta || '(sem e-mail)') + '.'));
+    const manualSync = el('div', 'ms-linha');
+    manualSync.appendChild(botao('ms-btn', 'Conferir nomes do Google agora', 'ponte-nomes'));
+    b.appendChild(manualSync);
+    b.appendChild(el('p', 'ms-cfg-res', 'Atualiza os nomes para toda a equipe com base na conta ligada acima. Não altera os contatos do Google. Nomes corrigidos na ficha do cliente têm prioridade.'));
     const bk = contatosSit.backup;
     const pb = el('p', 'ms-cfg-res', bk ? 'Última cópia de segurança: ' + hora(bk.em) + ' (' + numBR_(bk.total) + ' contatos). ' : 'Antes de qualquer limpeza, faça uma cópia de segurança dos contatos (fica no Drive da conta dos contatos).');
     if (bk && bk.url) { const a = el('a', 'ms-link', 'Abrir no Drive'); a.href = bk.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; pb.appendChild(a); }
@@ -3983,6 +3987,21 @@
       b.disabled = true; pontesStatus_('Conferindo a ponte…'); const r = await worker_('/msg/contatos/config', 'POST', { url: ($('ms-ponte-url') || {}).value || '', chave: ($('ms-ponte-chave') || {}).value || '' }); b.disabled = false;
       if (!r.ok) { pontesStatus_(r.erro || 'Não foi possível ligar agora.'); return; }
       pontesStatus_('Ponte ligada à conta ' + (r.conta || '') + '.'); contatosSit = null; desenharEstado();
+    }
+    else if (a === 'ponte-nomes') {
+      pontesStatus_('Conferindo os nomes na conta Google ligada…');
+      const r = await rodarFases_([{
+        titulo: 'Conferindo os nomes do Google', unidade: 'contatos',
+        passo: async (estado) => {
+          const x = await worker_('/msg/pessoas/google', 'POST', estado.iniciado ? {} : { forcar: true });
+          if (!x.ok) return x;
+          const feito = (estado.feito || 0) + (Number(x.lidos) || 0);
+          return { ok: true, fim: !!x.fim, feito, total: Number(x.total) || 0, estado: { iniciado: true, feito } };
+        }
+      }]);
+      if (!r.ok) { pontesStatus_('Não foi possível atualizar os nomes: ' + (r.erro || 'tente de novo.')); return; }
+      pontesStatus_('✓ Nomes do Google conferidos. A equipe verá as alterações ao sincronizar as conversas.');
+      await carregarLista(true);
     }
     else if (a === 'ponte-backup') {
       b.disabled = true; pontesStatus_('Fazendo a cópia de segurança dos contatos em partes. Com muitos contatos pode levar alguns minutos.');
