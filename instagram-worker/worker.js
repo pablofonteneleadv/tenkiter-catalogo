@@ -121,6 +121,7 @@ async function iniciar(env) {
     await garantirEsquemaFotoIA_(env);
     // Referências do WhatsApp são aditivas, inclusive para bancos já na versão atual.
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS postagem_status_ref (canal TEXT NOT NULL, ext_id TEXT NOT NULL, postagem_id INTEGER NOT NULL, PRIMARY KEY(canal,ext_id))').run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_google_sync (pessoa TEXT PRIMARY KEY, fone TEXT NOT NULL, nome TEXT NOT NULL, rev TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pendente', tentativas INTEGER NOT NULL DEFAULT 0, erro TEXT NOT NULL DEFAULT '', r TEXT NOT NULL DEFAULT '', em TEXT NOT NULL)").run();
     let versao;
     try { versao = await cfgGet(env,'schema_ig_version'); }
     catch(e) { if (!/no such table/i.test(String(e))) throw e; }
@@ -4188,6 +4189,8 @@ async function salvarPessoaAtendimento_(env, d) {
   const keys = [...new Set([atual.pessoa,key,...selected.map(x=>x.pessoa).filter(Boolean),...(second?[second.chave]:[])])];
   const all = (await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE grupo=0 AND ('+MSG_IDENTIDADE_SQL_+' IN ('+keys.map(()=>'?').join(',')+') OR id IN ('+ids.map(()=>'?').join(',')+')) LIMIT 100').bind(...keys,...ids).all()).results;
   const t=agora(), batch=[env.DB.prepare('INSERT INTO msg_pessoa (id,nome,whatsapp,segundo,em) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome,whatsapp=excluded.whatsapp,segundo=excluded.segundo,em=excluded.em').bind(key,nome,phone?phone.d:'',second?second.d:'',t)];
+  const nomeAnterior = await env.DB.prepare('SELECT nome,whatsapp FROM msg_pessoa WHERE id=?').bind(key).first();
+  if (phone && (!nomeAnterior || nomeAnterior.nome!==nome || nomeAnterior.whatsapp!==phone.d)) {const google=pedidoNomeGoogle_(env,key,phone.d,nome,t);if(google)batch.push(google);}
   for(const c of all){batch.push(env.DB.prepare('INSERT INTO msg_pessoa_alias (canal,contato,pessoa) VALUES (?,?,?) ON CONFLICT(canal,contato) DO UPDATE SET pessoa=excluded.pessoa').bind(c.canal,c.contato,key));batch.push(env.DB.prepare('UPDATE msg_conversa SET pessoa=?,atualizada_em=? WHERE id=?').bind(key,t,c.id));}
   for(const n of [phone,second].filter(Boolean)) for(const canal of ['whatsapp1','whatsapp2']) for(const fone of [...new Set([n.d,n.chave])]) batch.push(env.DB.prepare('INSERT INTO msg_pessoa_alias (canal,contato,pessoa) VALUES (?,?,?) ON CONFLICT(canal,contato) DO UPDATE SET pessoa=excluded.pessoa').bind(canal,fone,key));
   await env.DB.batch(batch);
@@ -5713,6 +5716,56 @@ async function processarFilaContatos_(env, limite) {
   }
   return { ok: true, feitos: pend.length };
 }
+
+/* Direção aprovada: Ficha TENKiTER -> Google Contatos. A ficha nunca espera pela rede
+ * externa e a fila mantém a alteração até confirmar o Google; sem migração de cadastros. */
+function pedidoNomeGoogle_(env, pessoa, fone, nome, rev) {
+  const n = pessoaTelefone_(fone);
+  if (!n || !/^55\d{10,11}$/.test(n.d) || !String(nome || '').trim()) return null;
+  return env.DB.prepare(
+    "INSERT INTO msg_google_sync (pessoa,fone,nome,rev,estado,tentativas,erro,r,em) VALUES (?,?,?,?,'pendente',0,'','',?) " +
+    "ON CONFLICT(pessoa) DO UPDATE SET fone=excluded.fone,nome=excluded.nome,rev=excluded.rev,estado='pendente',tentativas=0,erro='',r='',em=excluded.em"
+  ).bind(String(pessoa), n.d, String(nome).trim().slice(0,120), String(rev), agora());
+}
+async function processarFilaNomesGoogle_(env, limite = 3) {
+  if (!(await cfgGet(env, 'contatos_url')) || !(await cfgGet(env, 'contatos_chave'))) return { ok: true, desligada: true };
+  const tarefas = (await env.DB.prepare(
+    "SELECT pessoa,fone,nome,rev,tentativas FROM msg_google_sync WHERE estado='pendente' AND tentativas<5 ORDER BY em LIMIT ?"
+  ).bind(Math.min(5,Math.max(1,Number(limite)||3))).all()).results || [];
+  let feitos = 0;
+  for (const t of tarefas) {
+    const atual = await env.DB.prepare('SELECT nome FROM msg_pessoa WHERE id=?').bind(t.pessoa).first();
+    if (!atual || atual.nome !== t.nome) continue; // nome trocado de novo: nunca reenvia nome antigo
+    let resposta, recurso = '';
+    try {
+      // A ponte 1.2 já procura o telefone exato e nunca cria um contato duplicado.
+      const localizado = await ponte_(env, { acao:'criar_lote', contatos:[{fone:t.fone,nome:t.nome,nota:'Cadastro TENKiTER'}] });
+      const item = Array.isArray(localizado.resultados) ? localizado.resultados.find(x=>String(x.fone)===t.fone) : null;
+      if (!localizado.ok || !item || !item.ok || !/^people\/c?\d+$/.test(String(item.r||'')))
+        throw Error((item && item.erro) || localizado.erro || 'Contato Google não localizado.');
+      recurso = item.r;
+      resposta = item.ja ? await ponte_(env,{acao:'atualizar',r:recurso,nome:t.nome}) : {ok:true};
+      if (!resposta.ok) throw Error(resposta.erro || 'Google não confirmou a atualização.');
+      // Compare-and-set: outra edição da ficha nunca é apagada pela conclusão desta.
+      const ok = await env.DB.prepare(
+        "UPDATE msg_google_sync SET estado='feito',tentativas=0,erro='',r=?,em=? WHERE pessoa=? AND rev=? AND estado='pendente'"
+      ).bind(recurso,agora(),t.pessoa,t.rev).run();
+      if (ok.meta?.changes) {
+        const chave = pessoaTelefone_(t.fone)?.chave || '';
+        if (chave) await env.DB.prepare(
+          'UPDATE msg_google_nome SET nome=?,em=? WHERE chave=?'
+        ).bind(t.nome.slice(0,80),agora(),chave).run();
+        feitos++;
+      }
+    } catch (e) {
+      await env.DB.prepare(
+        "UPDATE msg_google_sync SET tentativas=tentativas+1,erro=? WHERE pessoa=? AND rev=? AND estado='pendente'"
+      ).bind(String(e?.message||'Falha no Google').slice(0,180),t.pessoa,t.rev).run();
+    }
+  }
+  return {ok:true,processados:tarefas.length,feitos};
+}
+
 async function filaContatosAuto_(env) { try { if ((await cfgGet(env, 'contatos_auto')) !== '1' || !(await cfgGet(env, 'contatos_url'))) return; await processarFilaContatos_(env, 5); } catch (e) { /* a fila tenta de novo no próximo minuto */ } }
 /** v2.16: aplica a limpeza aprovada por etapas: juntar (100 grupos por vez), padronizar (páginas), criar (fila), fim. */
 async function limpezaContatos_(env, d) {
@@ -6352,7 +6405,8 @@ export default {
     ctx.waitUntil(processarAgenda_(env).catch(()=>{}));                      // a cada minuto: mensagens agendadas que chegaram na hora
     ctx.waitUntil(dispararPostagens_(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
-    ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
+    ctx.waitUntil(filaContatosAuto_(env));
+    ctx.waitUntil((async()=>{await iniciar(env);await processarFilaNomesGoogle_(env,3);})().catch(()=>{}));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
     // Sincroniza uma página do Google por minuto, de forma independente da conta de atendente aberta.
     // Uma rodada completa ocorre no máximo a cada 4 h; a ponte não grava contatos nesta leitura.
     ctx.waitUntil(indexarNomesGoogle_(env).catch(() => {}));
@@ -6779,6 +6833,9 @@ export default {
         const gravacoes = [env.DB.prepare('INSERT INTO msg_ficha (alvo, tamanhos, preferencias, cidade, atualizado_em, autor, perfil_json) VALUES (?,?,?,?,?,?,?) ON CONFLICT(alvo) DO UPDATE SET tamanhos=excluded.tamanhos, preferencias=excluded.preferencias, cidade=excluded.cidade, atualizado_em=excluded.atualizado_em, autor=excluded.autor, perfil_json=excluded.perfil_json').bind(alvo, n.tamanhos, n.preferencias, n.cidade, em, await meuNomeAtendente_(env, req), pjson)];
         if (nome !== null) {
           const key = conv.pessoa || 'c:' + conv.id;
+          const antes = await env.DB.prepare('SELECT nome,whatsapp FROM msg_pessoa WHERE id=?').bind(key).first();
+          const foneGoogle = antes?.whatsapp || (conv.canal.startsWith('whatsapp') ? conv.contato : key);
+          if (!antes || antes.nome!==nome) { const google = pedidoNomeGoogle_(env,key,foneGoogle,nome,em); if(google)gravacoes.push(google); }
           gravacoes.push(env.DB.prepare("INSERT INTO msg_pessoa (id,nome,whatsapp,segundo,em) VALUES (?,?,?,'',?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome,em=excluded.em").bind(key,nome,conv.canal==='instagram'?'':conv.contato,em));
           if (!conv.pessoa) gravacoes.push(env.DB.prepare('UPDATE msg_conversa SET pessoa=? WHERE id=?').bind(key,conv.id));
           gravacoes.push(env.DB.prepare('UPDATE msg_conversa SET nome=?,atualizada_em=? WHERE id=? OR '+MSG_IDENTIDADE_SQL_+'=?').bind(nome,em,conv.id,key));
