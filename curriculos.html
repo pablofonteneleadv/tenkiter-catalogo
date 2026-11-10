@@ -351,9 +351,12 @@ function errosHtml(ultima) {
       ${er.correta ? `<div style="color:#666;font-size:.8rem;margin-top:2px">Certa: ${E(er.correta)}</div>` : ''}
     </div>`).join('') + '</details>';
 }
-function treinoHtml(r, x) {
-  const leitura = Array.isArray(x && x.leitura) ? x.leitura : [], resultados = Array.isArray(x && x.resultados) ? x.resultados : [];
-  if (!leitura.length) return '<div class="meta">Nenhum treinamento disponibilizado para esta pessoa.</div>';
+function treinoHtml(r, x, somenteConsulta = false) {
+  // Nenhuma cobrança sem confirmação explícita das permissões da pessoa pelo RH.
+  // Backend antigo ou cache antigo não provam que o manual ainda está acessível.
+  if (!x || x.acessoConferido !== true) return '<div class="meta" role="status">A conferência de acessos ainda não está disponível. Para evitar cobrança indevida, atualize o servidor RH e consulte novamente.</div>';
+  const leitura = Array.isArray(x.leitura) ? x.leitura : [], resultados = Array.isArray(x.resultados) ? x.resultados : [];
+  if (!leitura.length) return '<div class="meta">Nenhum treinamento liberado para esta pessoa no momento.</div>';
   const ativos = leitura.filter(m => m && m.titulo); // O servidor determina os manuais autorizados, mesmo ainda não iniciados.
   if (!ativos.length) return '<div class="meta">Nenhum treinamento disponibilizado para esta pessoa.</div>';
   return ativos.map(m => {
@@ -362,7 +365,7 @@ function treinoHtml(r, x) {
     const lidos = Math.max(0, Number(m.lidos) || 0), total = Math.max(0, Number(m.total) || 0);
     const faltam = Math.max(0, Number(m.faltam) || 0, total - lidos), reler = Math.max(0, Number(m.precisamReler) || 0);
     const faltaLer = faltam > 0 || reler > 0;
-    const faltaProva = !ultima && !faltaLer && total > 0;
+    const faltaProva = m.podeProva === true && !ultima && !faltaLer && total > 0;
     const statusLeitura = !total ? 'sem capítulos cadastrados'
       : (!lidos && !reler && !provas.length) ? 'ainda não iniciou'
       : (!faltam && !reler) ? 'leu tudo ✓'
@@ -370,7 +373,7 @@ function treinoHtml(r, x) {
     return `<div style="padding:8px 0;border-bottom:1px solid #eee">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
         <div><b>${E(m.titulo)}</b><br><span class="meta">${lidos} de ${total} capítulos lidos — ${statusLeitura}</span></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${faltaLer ? botaoAcao(linkCobrarLeitura(r, m), 'Cobrar leitura') : ''}${faltaProva ? botaoAcao(linkCobrarProva(r, m), 'Cobrar prova') : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${!somenteConsulta && faltaLer ? botaoAcao(linkCobrarLeitura(r, m), 'Cobrar leitura') : ''}${!somenteConsulta && faltaProva ? botaoAcao(linkCobrarProva(r, m), 'Cobrar prova') : ''}</div>
       </div>
       ${ultima ? `<div class="meta" style="margin-top:4px">Última prova: <b>${ultima.nota}/${ultima.total}</b> (${ultima.percentual}%) em ${fmtDataHora(ultima.dataHora)}${provas.length > 1 ? ' · +' + (provas.length - 1) + ' tentativa(s) anterior(es)' : ''}</div>${errosHtml(ultima)}` : ''}
     </div>`;
@@ -384,7 +387,7 @@ async function carregarTreino(r, slot) {
   const salvo = treinoCache[chave];
   // Reabrir exibe a última resposta imediatamente e confirma alterações com o servidor.
   slot.innerHTML = salvo
-    ? treinoHtml(r, salvo) + '<div class="meta" role="status">Conferindo os treinamentos disponíveis…</div>'
+    ? treinoHtml(r, salvo, true) + '<div class="meta" role="status">Conferindo o acesso atual antes de liberar cobranças…</div>'
     : '<div class="meta" role="status">Carregando os treinamentos disponíveis…</div>';
   let pedido = treinoPendente[chave];
   if (!pedido) {
@@ -403,8 +406,8 @@ async function carregarTreino(r, slot) {
   if (!slot.isConnected || !slot.closest('.item')?.classList.contains('aberto')) return;
   if (x && x.ok) slot.innerHTML = treinoHtml(r, x);
   else if (treinoCache[chave]) {
-    slot.innerHTML = treinoHtml(r, treinoCache[chave]) +
-      '<div class="meta" role="status">Não foi possível atualizar agora. Mostrando a última consulta; toque em Atualizar para tentar de novo.</div>';
+    slot.innerHTML = treinoHtml(r, treinoCache[chave], true) +
+      '<div class="meta" role="status">Não foi possível conferir os acessos agora. A consulta anterior é apenas informativa; cobranças desativadas até atualizar.</div>';
   } else {
     slot.innerHTML = '<div class="meta" role="status">' +
       E(TKPadrao.erro(x, 'Não foi possível carregar os treinamentos. Tente de novo.')) + '</div>';
