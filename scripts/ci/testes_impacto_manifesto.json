@@ -45,6 +45,9 @@
       "catalogo",
       "ci"
     ],
+    "tests/curriculos_lento.py": [
+      "treinamentos"
+    ],
     "tests/disponibilidade_rapida.py": [
       "mensagens"
     ],

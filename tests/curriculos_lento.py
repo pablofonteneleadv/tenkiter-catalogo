@@ -29,7 +29,10 @@ with sync_playwright() as p:
                 est["listagens"] = est.get("listagens", 0) + 1
                 if est.get("listar_cai_1a") and est["listagens"] == 1: return route.abort()
                 return resp(route, {"ok": True, "curriculos": [dict(CV)], "status": ["Novo", "Entrevista"], "motivos": []})
-            if a == "curriculos_treinamento": return resp(route, {"ok": True, "leitura": [], "resultados": []})
+            if a == "curriculos_treinamento":
+                est["leituras"] = est.get("leituras", 0) + 1
+                respostas = est.get("treinos") or [{"ok": True, "leitura": [], "resultados": []}]
+                return resp(route, respostas[min(est["leituras"] - 1, len(respostas) - 1)])
             if a == "curriculos_atualizar":
                 est["gravacoes"] += 1
                 if est.get("grava_trava"): return   # nunca responde: o tempo limite da página corta
@@ -70,6 +73,34 @@ with sync_playwright() as p:
     chk("soltou a proteção e o botão voltou", pg.evaluate("TKOcupado.pendentes()") == 0 and pg.is_enabled("[data-k=sv]"))
     est["grava_trava"] = False; pg.click("[data-k=sv]"); pg.wait_for_timeout(600)
     chk("tentar de novo salva normalmente", "Salvo" in pg.inner_text("[data-k=ms]") and est["gravacoes"] == 2, pg.inner_text("[data-k=ms]")); ctx.close()
+
+    print("== RH: manuais ainda não iniciados + atualização de permissões + cache na memória ==")
+    iniciando = {"titulo": "TM Funcionário Iniciando", "total": 8, "lidos": 8, "faltam": 0, "precisamReler": 0}
+    online1 = {"titulo": "TM Online 1", "total": 6, "lidos": 0, "faltam": 6, "precisamReler": 0}
+    online2 = {"titulo": "TM Online 2", "total": 4, "lidos": 0, "faltam": 4, "precisamReler": 0}
+    est = {"vistos": [], "gravacoes": 0, "treinos": [
+        {"ok": True, "leitura": [iniciando, online1], "resultados": []},
+        {"ok": True, "leitura": [online1, online2], "resultados": []},
+        {"ok": False, "erro": "temporariamente indisponível"}
+    ]}
+    ctx, pg = nova(est); pg.goto(BASE + "curriculos.html"); pg.wait_for_timeout(1600)
+    pg.click(".item .topo")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('TM Online 1')")
+    txt = pg.inner_text("[data-k=treino]")
+    chk("manual disponível sem leitura aparece", "TM Online 1" in txt and "0 de 6" in txt and "ainda não iniciou" in txt, txt[:260])
+    chk("manual concluído continua visível", "TM Funcionário Iniciando" in txt, txt[:260])
+    pg.click(".item .topo"); pg.click(".item .topo")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('TM Online 2')")
+    txt = pg.inner_text("[data-k=treino]")
+    chk("nova permissão e novo manual atualizam ao reabrir", "TM Online 2" in txt and "TM Funcionário Iniciando" not in txt, txt[:260])
+    chk("reabertura provoca nova leitura autenticada", est.get("leituras") == 2, est.get("leituras"))
+    pg.click("[data-k=atualizar-treino]")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('última consulta')")
+    txt = pg.inner_text("[data-k=treino]")
+    chk("falha de atualização não apaga lista válida", "TM Online 1" in txt and "TM Online 2" in txt and "última consulta" in txt, txt[:300])
+    chk("atualização manual faz uma consulta, sem duplicar", est.get("leituras") == 3, est.get("leituras"))
+    chk("botão Atualizar tem altura mínima de 44px", pg.locator("[data-k=atualizar-treino]").evaluate("(el) => el.getBoundingClientRect().height") >= 44)
+    ctx.close()
     chk("sem erro de JavaScript", not erros, erros); b.close()
 print("\nOK=%d FALHAS=%d" % (len(OK), len(BAD)), BAD)
 sys.exit(1 if BAD else 0)
