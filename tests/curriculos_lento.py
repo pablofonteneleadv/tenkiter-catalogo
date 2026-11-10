@@ -95,7 +95,7 @@ with sync_playwright() as p:
     chk("nova permissão e novo manual atualizam ao reabrir", "TM Online 2" in txt and "TM Funcionário Iniciando" not in txt, txt[:260])
     chk("reabertura provoca nova leitura autenticada", est.get("leituras") == 2, est.get("leituras"))
     pg.click("[data-k=atualizar-treino]")
-    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('última consulta')")
+    pg.wait_for_function("document.querySelector('[data-k=treino]')?.textContent.includes('apenas informativa')")
     txt = pg.inner_text("[data-k=treino]")
     chk("falha de atualização preserva histórico só para consulta, sem cobrar", "TM Online 1" in txt and "TM Online 2" in txt and "apenas informativa" in txt and "Cobrar leitura" not in txt and "Cobrar prova" not in txt, txt[:300])
     chk("atualização manual faz uma consulta, sem duplicar", est.get("leituras") == 3, est.get("leituras"))
