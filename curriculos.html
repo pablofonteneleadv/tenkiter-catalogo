@@ -76,7 +76,8 @@ const E = escaparHtml;
 let sessao = null, novos = [], antigos = [], STATUS = [], MOTIVOS = [], aba = 'novos', busca = '', fStatus = 'Novo', fEtapa = '', soAgenda = false, fStatusAnterior = '', carregou = { novos: false, antigos: false };
 let ordemAsc = false; // false = mais novo primeiro (padrão)
 let totalAntigos = 0, completoAntigos = false, buscandoAntigos = false, buscaAntigosTimer = null;
-let treinoCache = {}; // WhatsApp -> resposta de curriculos_treinamento já buscada (evita repetir a cada abrir/fechar)
+let treinoCache = {}; // Só em memória; resposta autenticada mais recente por conta e currículo
+let treinoPendente = {}; // Uma consulta simultânea por pessoa
 
 function fotoUrlOk(u) {
   u = String(u || '');
@@ -351,20 +352,24 @@ function errosHtml(ultima) {
     </div>`).join('') + '</details>';
 }
 function treinoHtml(r, x) {
-  const leitura = x.leitura || [], resultados = x.resultados || [];
-  if (!leitura.length) return '<div class="meta">Nenhum manual cadastrado ainda.</div>';
-  const ativos = leitura.filter(m => Number(m.lidos) > 0 || Number(m.precisamReler) > 0 || resultados.some(rr => rr.manual === m.titulo));
-  if (!ativos.length) return '<div class="meta">Ainda não iniciou nenhum manual ou avaliação.</div>';
+  const leitura = Array.isArray(x && x.leitura) ? x.leitura : [], resultados = Array.isArray(x && x.resultados) ? x.resultados : [];
+  if (!leitura.length) return '<div class="meta">Nenhum treinamento disponibilizado para esta pessoa.</div>';
+  const ativos = leitura.filter(m => m && m.titulo); // O servidor determina os manuais autorizados, mesmo ainda não iniciados.
+  if (!ativos.length) return '<div class="meta">Nenhum treinamento disponibilizado para esta pessoa.</div>';
   return ativos.map(m => {
     const provas = resultados.filter(rr => rr.manual === m.titulo);
     const ultima = provas[0]; // o servidor já devolve mais recente primeiro
-    const faltaLer = m.faltam > 0 || m.precisamReler > 0;
-    const faltaProva = !ultima && !faltaLer && m.total > 0;
-    const statusLeitura = (!m.faltam && !m.precisamReler) ? 'leu tudo ✓' :
-      [m.precisamReler ? (m.precisamReler + ' pra reler (mudou)') : '', m.faltam ? ('falta ' + m.faltam) : ''].filter(Boolean).join(' · ');
+    const lidos = Math.max(0, Number(m.lidos) || 0), total = Math.max(0, Number(m.total) || 0);
+    const faltam = Math.max(0, Number(m.faltam) || 0, total - lidos), reler = Math.max(0, Number(m.precisamReler) || 0);
+    const faltaLer = faltam > 0 || reler > 0;
+    const faltaProva = !ultima && !faltaLer && total > 0;
+    const statusLeitura = !total ? 'sem capítulos cadastrados'
+      : (!lidos && !reler && !provas.length) ? 'ainda não iniciou'
+      : (!faltam && !reler) ? 'leu tudo ✓'
+      : [reler ? (reler + ' pra reler (mudou)') : '', faltam ? ('falta ' + faltam) : ''].filter(Boolean).join(' · ');
     return `<div style="padding:8px 0;border-bottom:1px solid #eee">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <div><b>${E(m.titulo)}</b><br><span class="meta">${m.lidos} de ${m.total} capítulos lidos — ${statusLeitura}</span></div>
+        <div><b>${E(m.titulo)}</b><br><span class="meta">${lidos} de ${total} capítulos lidos — ${statusLeitura}</span></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${faltaLer ? botaoAcao(linkCobrarLeitura(r, m), 'Cobrar leitura') : ''}${faltaProva ? botaoAcao(linkCobrarProva(r, m), 'Cobrar prova') : ''}</div>
       </div>
       ${ultima ? `<div class="meta" style="margin-top:4px">Última prova: <b>${ultima.nota}/${ultima.total}</b> (${ultima.percentual}%) em ${fmtDataHora(ultima.dataHora)}${provas.length > 1 ? ' · +' + (provas.length - 1) + ' tentativa(s) anterior(es)' : ''}</div>${errosHtml(ultima)}` : ''}
@@ -372,12 +377,38 @@ function treinoHtml(r, x) {
   }).join('');
 }
 async function carregarTreino(r, slot) {
-  if (treinoCache[r.WhatsApp]) { slot.innerHTML = treinoHtml(r, treinoCache[r.WhatsApp]); return; }
-  slot.innerHTML = '<div class="meta">Carregando treinamento…</div>';
-  const x = await chamar('curriculos_treinamento', { whatsappAlvo: r.WhatsApp });
-  if (!x.ok) { slot.innerHTML = '<div class="meta">Não consegui carregar o treinamento (' + (x.erro || 'erro') + ').</div>'; return; }
-  treinoCache[r.WhatsApp] = x;
-  slot.innerHTML = treinoHtml(r, x);
+  if (!slot || !slot.isConnected) return;
+  const sessaoAtual = getSessao();
+  if (!sessaoAtual) { slot.innerHTML = '<div class="meta">Entre de novo para conferir os treinamentos.</div>'; return; }
+  const chave = String(sessaoAtual.whatsapp || '') + ':' + String(r.WhatsApp || '');
+  const salvo = treinoCache[chave];
+  // Reabrir exibe a última resposta imediatamente e confirma alterações com o servidor.
+  slot.innerHTML = salvo
+    ? treinoHtml(r, salvo) + '<div class="meta" role="status">Conferindo os treinamentos disponíveis…</div>'
+    : '<div class="meta" role="status">Carregando os treinamentos disponíveis…</div>';
+  let pedido = treinoPendente[chave];
+  if (!pedido) {
+    pedido = chamar('curriculos_treinamento', { whatsappAlvo: r.WhatsApp })
+      .catch(() => ({ ok: false, erro: 'Não foi possível consultar os treinamentos.' }))
+      .then(x => {
+        if (x && x.ok) treinoCache[chave] = x;
+        else if (x && (x.semPermissao || x.sessaoInvalida)) delete treinoCache[chave];
+        return x;
+      });
+    treinoPendente[chave] = pedido;
+    pedido.then(() => { if (treinoPendente[chave] === pedido) delete treinoPendente[chave]; });
+  }
+  const x = await pedido;
+  // Não redesenha um cartão fechado/removido enquanto a resposta estava pendente.
+  if (!slot.isConnected || !slot.closest('.item')?.classList.contains('aberto')) return;
+  if (x && x.ok) slot.innerHTML = treinoHtml(r, x);
+  else if (treinoCache[chave]) {
+    slot.innerHTML = treinoHtml(r, treinoCache[chave]) +
+      '<div class="meta" role="status">Não foi possível atualizar agora. Mostrando a última consulta; toque em Atualizar para tentar de novo.</div>';
+  } else {
+    slot.innerHTML = '<div class="meta" role="status">' +
+      E(TKPadrao.erro(x, 'Não foi possível carregar os treinamentos. Tente de novo.')) + '</div>';
+  }
 }
 function itemNovo(r) {
   const d = document.createElement('div'); d.className = 'item';
@@ -390,7 +421,7 @@ function itemNovo(r) {
   d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img ${atribSrc(fotoUrlOk(r.FotoUrl))} onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${criadoTxt ? 'Cadastrada ' + criadoTxt + ' · ' : ''}${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}${paradaTxt}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span>${desistiuAntes(r) ? ' <span class="tag ru">↩️ já desistiu antes</span>' : ''}</div></div>
     <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img ${atribSrc(fotoUrlOk(r.FotoUrl))} onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">Cobrar currículo</a>` : ''}</div>
     ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
-    <div class="grupo">Treinamento</div><div data-k="treino" style="margin:4px 0 12px">Abra o card pra ver.</div>
+    <div class="linha" style="align-items:center;justify-content:space-between;gap:8px"><div class="grupo" style="margin-top:0;grid-column:auto;flex:1 1 auto">Treinamento</div><button type="button" class="sec" data-k="atualizar-treino" style="min-height:44px;min-width:0;flex:0 0 auto">Atualizar</button></div><div data-k="treino" style="margin:4px 0 12px">Abra o card para ver.</div>
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
     <select data-k="mo"><option value="">Motivo (se descartada ou desistiu)</option>${MOTIVOS.map(s => `<option ${s === r.Motivo ? 'selected' : ''}>${E(s)}</option>`).join('')}</select></div>
     <div class="linha ${(r.Status || 'Novo') === 'Agendada' ? '' : 'oculto'}" data-k="aglinha"><input type="datetime-local" data-k="ag" value="${E(r.AgendadoEm || '')}"></div>
@@ -400,6 +431,7 @@ function itemNovo(r) {
     <dl>${dl}</dl>${historicoHtml(r)}</div>`;
   /* abrir o card SEMPRE carrega o treinamento (também quando abre sozinho pelo link ?abrir=: antes ficava em "Abra o card pra ver.") */
   d._abrir = () => { d.classList.add('aberto'); carregarTreino(r, d.querySelector('[data-k=treino]')); };
+  d.querySelector('[data-k=atualizar-treino]').onclick = () => carregarTreino(r, d.querySelector('[data-k=treino]'));
   d.querySelector('.topo').onclick = () => {
     if (d.classList.contains('aberto')) d.classList.remove('aberto'); else d._abrir();
   };
