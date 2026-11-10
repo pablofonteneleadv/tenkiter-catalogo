@@ -41,6 +41,12 @@ with sync_playwright() as p:
     chk("endereço errado: aviso em português, continua desligada", "script.google.com" in pg.locator("#ms-ponte-st").inner_text() and pg.locator("#ms-ponte-url").count() == 1)
     pg.fill("#ms-ponte-url", "https://script.google.com/macros/s/AKfycbTESTE1234567890abcdefgh/exec"); pg.click("[data-ms=ponte-ligar]"); pg.wait_for_timeout(800)
     chk("ligar mostra a conta dos contatos", "Ligada à conta contatos@exemplo.com" in pg.locator("#ms-contatos").inner_text())
+    chk("gestão pode conferir nomes do Google sem editar contatos", pg.locator("[data-ms=ponte-nomes]").count() == 1)
+    pedidos_antes = S["calls"].count("/msg/pessoas/google")
+    pg.click("[data-ms=ponte-nomes]"); pg.wait_for_timeout(550)
+    chk("sincronização de nomes pede o índice autenticado e conclui", S["calls"].count("/msg/pessoas/google") > pedidos_antes and "Nomes do Google conferidos" in pg.locator("#ms-ponte-st").inner_text())
+    chk("atualização dos nomes não cria, apaga nem edita contatos do Google", not any(x in S["calls"] for x in ["/msg/contatos/limpeza"]), S["calls"][-5:])
+
     chk("relatório só depois da cópia de segurança (botão travado)", pg.locator("[data-ms=ponte-relatorio]").is_disabled())
     pg.click("[data-ms=ponte-backup]"); pg.wait_for_timeout(800)
     txt = pg.locator("#ms-contatos").inner_text()
