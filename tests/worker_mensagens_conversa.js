@@ -866,7 +866,25 @@ function d1() {
   if(outraConv){await A('DELETE','/msg/notas?conversa='+outraConv.id+'&id='+otherNote.j.nota.id);chk('não apaga nota de outra pessoa',(await A('GET','/msg/notas?conversa='+nConv)).j.notas.some(n=>n.id===otherNote.j.nota.id));}
   // v7.40.4: etiquetas
   const eL = await A('GET', '/msg/etiquetas'), eId = (n) => eL.j.etiquetas.find((e) => e.nome === n).id;
-  chk('etiquetas padrão criadas na primeira vez', eL.j.ok && eL.j.etiquetas.length === 6 && eL.j.etiquetas[0].nome === 'Novo cliente');
+  const tagsPerfil = ['Prioridade','Não responder','Cliente indesejável','Compra na loja','Responder com atenção','Já teve problema'];
+  chk('etiquetas de venda originais e etiquetas de cliente são independentes',
+    eL.j.ok && eL.j.etiquetas.length===12 && eL.j.etiquetas[0].nome==='Novo cliente' &&
+    tagsPerfil.every(n=>eL.j.etiquetas.some(e=>e.nome===n && Number(e.venda)===0)),eL.j.etiquetas.map(e=>e.nome));
+  const eRepetiu = await A('GET', '/msg/etiquetas');
+  chk('consultar novamente não duplica categorias de cliente',
+    eRepetiu.j.ok && eRepetiu.j.etiquetas.length===12 &&
+    tagsPerfil.every(n=>eRepetiu.j.etiquetas.filter(e=>e.nome===n).length===1));
+  const eNovoPerfil = await A('POST', '/msg/rotular',
+    { conversa:nConv, etiquetas:[eId('Reserva'),eId('Troca'),eId('Prioridade'),eId('Já teve problema')] });
+  chk('cliente pode ter duas etiquetas próprias simultaneamente sem mudar Reserva',
+    eNovoPerfil.j.ok && eNovoPerfil.j.etiquetas.map(e=>e.nome).sort().join('|')===
+    ['Reserva','Troca','Prioridade','Já teve problema'].sort().join('|'));
+  const eRemoveuUma = await A('POST', '/msg/rotular',
+    { conversa:nConv, etiquetas:[eId('Reserva'),eId('Troca'),eId('Prioridade')] });
+  chk('desmarcar uma etiqueta de cliente remove só ela e mantém etapa e demais',
+    eRemoveuUma.j.ok && eRemoveuUma.j.etiquetas.map(e=>e.nome).sort().join('|')===
+    ['Reserva','Troca','Prioridade'].sort().join('|'));
+
   const eR = await A('POST', '/msg/rotular', { conversa: nConv, etiquetas: [eId('Novo cliente'), eId('Reserva'), eId('Troca')] });
   chk('de venda fica uma só (a última) e as outras somam', eR.j.ok && eR.j.etiquetas.map((e) => e.nome).sort().join() === 'Reserva,Troca', eR.j);
   const eF = await A('GET', '/msg/conversas?canal=todos&etiqueta=' + eId('Reserva'));
