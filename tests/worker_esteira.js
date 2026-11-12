@@ -575,5 +575,58 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   usuarios[PABLO].permissoes=['catalogo_cadastrar'];kv.clear();cacheMem.clear();
   chk('permissão revogada não recupera resposta administrativa',(await recibo(PABLO,op,null,true)).status===403);
   }
+  { // BUG-23: permissão de Gestão permite reconciliar fotos sem depender da LISTA RH.
+    // Usa SQLite em memória e RH simulado indisponível; nunca usa planilhas, D1 ou pessoas reais.
+    const fetchAntes = globalThis.fetch, rhAntes = env.RH_URL, usuarioAntes = { ...usuarios[PABLO] };
+    let chamadasRH = 0;
+    try {
+      usuarios[PABLO] = { nome: 'Admin Teste', permissoes: ['gerir_acessos', 'catalogo_cadastrar'], acessosConfiguraveis: true };
+      env.RH_URL = 'https://rh-indisponivel.fake/exec';
+      globalThis.fetch = async (url, init) => {
+        if (String(url).startsWith('https://rh-indisponivel.fake/')) {
+          chamadasRH++;
+          throw new Error('RH de teste indisponível');
+        }
+        return fetchAntes(url, init);
+      };
+      const pend = [];
+      for (const k of [1, 2]) {
+        const inserido = await env.DB.prepare("INSERT INTO est_caixa(op,url,status) VALUES(?,?,'nova')")
+          .bind('test-caixa-rh-' + k, 'https://midia.fake/m/caixa-' + k + '.jpg').run();
+        pend.push(inserido.meta.last_row_id);
+      }
+      const r1 = await A(PABLO, 'POST', '/esteira/caixa/usar',
+        { ids: [pend[0]], uso: 'criado', produto: 'P-SIMULADO', produtoNome: 'Produto simulado' });
+      const salvo = await env.DB.prepare('SELECT status,uso_produto,usada_nome FROM est_caixa WHERE id=?').bind(pend[0]).first();
+      chk('Gestão confirma caixa mesmo com lista RH indisponível (sem permissão extra)',
+        r1.r.status === 200 && r1.j.ok && r1.j.marcadas === 1 && salvo.status === 'usada'
+          && salvo.uso_produto === 'P-SIMULADO' && salvo.usada_nome === 'Admin Teste',
+        { status: r1.r.status, ok: r1.j.ok, atualizou: salvo.status });
+      const repetido = await A(PABLO, 'POST', '/esteira/caixa/usar',
+        { ids: [pend[0]], uso: 'criado', produto: 'P-SIMULADO', produtoNome: 'Produto simulado' });
+      chk('Mesmo recibo não altera foto já utilizada', repetido.r.status === 200 && repetido.j.ok && repetido.j.marcadas === 0,
+          { status: repetido.r.status, marcadas: repetido.j.marcadas });
+      const opReq = new Request('https://ig.fake/esteira/caixa/usar', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO,
+                   'X-TK-Operacao': 'teste-caixa-gestao-rh-fora-20261112' },
+        body: JSON.stringify({ ids: [pend[1]], uso: 'criado', produto: 'P-SIMULADO-2' }) });
+      const respostaOp = await w.fetch(opReq, env, ctx), rOp = await respostaOp.json();
+      chk('Confirmação com identificador de operação também dispensa consulta RH',
+          respostaOp.status === 200 && rOp.ok && rOp.marcadas === 1,
+          { status: respostaOp.status, ok: rOp.ok });
+      chk('Nenhuma consulta à lista de equipe RH na confirmação autorizada', chamadasRH === 0, chamadasRH);
+      usuarios[PABLO].permissoes = [];
+      const neg = await A(PABLO, 'POST', '/esteira/caixa/usar',
+        { ids: [pend[1]], uso: 'criado', produto: 'OUTRO-PRODUTO' });
+      chk('Revogação de permissões continua bloqueando uso da caixa', neg.r.status === 403,
+          { status: neg.r.status, erro: neg.j.erro });
+      const final = await env.DB.prepare('SELECT uso_produto FROM est_caixa WHERE id=?').bind(pend[1]).first();
+      chk('Tentativa sem permissão não sobrescreve vínculo já salvo', final.uso_produto === 'P-SIMULADO-2');
+    } finally {
+      globalThis.fetch = fetchAntes;
+      if (rhAntes === undefined) delete env.RH_URL; else env.RH_URL = rhAntes;
+      usuarios[PABLO] = usuarioAntes;
+    }
+  }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

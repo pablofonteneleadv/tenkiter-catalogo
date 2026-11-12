@@ -7875,7 +7875,11 @@ async function esteiraComando_(env,req,url,J,perms,ctx){
   await iniciar(env);
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS est_comando(dono TEXT NOT NULL,op TEXT NOT NULL,rota TEXT NOT NULL,hash TEXT NOT NULL,estado TEXT NOT NULL,resultado TEXT NOT NULL DEFAULT '',http INTEGER NOT NULL DEFAULT 200,autorizacao TEXT NOT NULL,criado_em TEXT NOT NULL,atualizado_em TEXT NOT NULL,PRIMARY KEY(dono,op))").run();
   const dono=estFone_(req.headers.get('X-TK-Whats')),em=agora(),autorizacao=perms.slice().sort().join('|');
-  await estIniciar_(env);const equipe=await estEquipe_(env,req,perms),admin=perms.includes('gerir_acessos'),membro=equipe.some(e=>estFone_(e.whats)===dono),gestor=admin||perms.includes('catalogo_cadastrar')||perms.includes('catalogo_admin');
+  await estIniciar_(env);
+  const admin=perms.includes('gerir_acessos'),gestor=admin||perms.includes('catalogo_cadastrar')||perms.includes('catalogo_admin');
+  // Para gestor já autorizado, confirmar fotos não exige consultar a lista de equipe RH.
+  const caixaConfirmacao=perms.acessosConfiguraveis&&gestor&&url.pathname==='/esteira/caixa/usar';
+  const equipe=caixaConfirmacao?[]:await estEquipe_(env,req,perms),membro=equipe.some(e=>estFone_(e.whats)===dono);
   if(!admin&&!membro&&!(gestor&&(url.pathname.startsWith('/esteira/caixa')||consulta)))return J({ok:false,erro:'Seu acesso à Esteira mudou. Confira com o administrador.'},403);
   const ler=()=>env.DB.prepare('SELECT * FROM est_comando WHERE dono=? AND op=?').bind(dono,op).first();
   const responder=r=>{if(!r)return J({ok:false,erro:'Este processo não foi encontrado nesta conta.'},404);if(r.autorizacao!==autorizacao)return J({ok:false,erro:'Seu acesso mudou. Confira este processo com o administrador.'},403);if(r.estado==='concluido'){try{return J(JSON.parse(r.resultado),r.http)}catch(_){return J({ok:false,incerto:true,erro:'Não consegui recuperar a confirmação. Confira o resultado antes de repetir.'},409)}}const incerto=r.estado==='incerto'||Date.now()-Date.parse(r.criado_em)>120000;return J({ok:false,aguardando:!incerto,incerto,erro:incerto?'Este processo ainda não tem confirmação. Confira o resultado antes de repetir.':'Conferindo a confirmação do processo.'},incerto?409:202)};
@@ -7891,7 +7895,10 @@ async function rotasEsteira_(env, req, url, J, perms) {
   await iniciar(env); await estIniciar_(env);
   if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
-  const cfg = await estCfg_(env), equipe = await estEquipe_(env,req,perms);
+  const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');   // permissão já conferida na sessão
+  // A marcação da caixa pode continuar quando a lista RH estiver indisponível; demais rotas continuam consultando RH.
+  const caixaConfirmacao=perms.acessosConfiguraveis&&gestorFotos&&p==='/esteira/caixa/usar';
+  const cfg = await estCfg_(env), equipe = caixaConfirmacao?[]:await estEquipe_(env,req,perms);
   let membro = equipe.find((e) => estFone_(e.whats) === eu) || null;
   /* v7.76.0: quem tem o acesso "Esteira" em RH > Acessos participa. Se a lista de equipe do RH não trouxe a pessoa (conta antiga, ajuste individual, linha repetida…),
    * ela não fica barrada nem fora do rodízio: entra nesta consulta como membro padrão (confere e rodízio; aceitar só se o RH marcar). */
@@ -7902,7 +7909,7 @@ async function rotasEsteira_(env, req, url, J, perms) {
   const nomeDe = (w) => { const e = equipe.find((x) => estFone_(x.whats) === estFone_(w)); return e ? e.nome : ''; };
   const meuNome = membro ? membro.nome : String(perms.msgNome || '').trim().slice(0, 60);   // v7.52.0: guardado junto (Admin total pode não estar na equipe)
   const quemSou = () => ({ whats: eu, nome: membro ? membro.nome : (perms.msgNome || ''), admin, membro: !!membro, confere: !!(membro && membro.confere), aceitar: admin || !!(membro && membro.aceitar) });
-  const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');   // v7.52.0: quem processa a caixa de fotos (Admin total e quem cadastra peças)
+
   if (!admin && !membro && !(gestorFotos && p.startsWith('/esteira/caixa'))) return J({ ok: false, erro: 'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
   const podeAceitar = admin || !!(membro && membro.aceitar);
   let escalaHojeCache = null; const escalaHoje = async () => (escalaHojeCache = escalaHojeCache || await estEscalaDoDia_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined));
