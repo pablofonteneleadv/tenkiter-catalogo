@@ -159,6 +159,9 @@
     "tests/mensagens_ficha_ui.js": [
       "mensagens"
     ],
+    "tests/mensagens_funil.py": [
+      "mensagens"
+    ],
     "tests/mensagens_gavetas_proposta.py": [
       "mensagens"
     ],
