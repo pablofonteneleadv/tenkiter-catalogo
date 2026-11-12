@@ -4207,12 +4207,33 @@ const MSG_OUTRO_SQL_ = "(SELECT o.id FROM msg_conversa o WHERE msg_conversa.pess
 /* v7.40.4: etiquetas da pessoa (alvo = identidade da pessoa ou "c:<id da conversa>") */
 const ETIQUETAS_PADRAO_ = [['Novo cliente', 'cinza', 1], ['Reserva', 'ambar', 1], ['Aguardando pagamento', 'azul', 1], ['Pago', 'verde', 1], ['Enviado', 'roxo', 1], ['Troca', 'rosa', 0]];
 const ETQ_CORES_ = ['cinza', 'ambar', 'azul', 'verde', 'roxo', 'rosa'];
+/* Etiquetas informativas sobre a pessoa, separadas das etapas do funil.
+ * Nenhuma classificação cria bloqueio automático, notificação ou postagem.
+ * Inserção aditiva e idempotente: nunca altera os nomes/ids/associações anteriores.
+ */
+const ETQ_CLIENTE_PADRAO_ = [
+  ['Prioridade', 'ambar'], ['Não responder', 'roxo'], ['Cliente indesejável', 'rosa'],
+  ['Compra na loja', 'verde'], ['Responder com atenção', 'azul'], ['Já teve problema', 'cinza']
+];
 async function etiquetas_(env) {
   let rs = (await env.DB.prepare('SELECT id, nome, cor, ordem, venda FROM msg_etiqueta WHERE arquivada=0 ORDER BY ordem, id').all()).results || [];
   if (!rs.length && !(await cfgGet(env, 'msg_etq_semeada'))) {
     await env.DB.batch(ETIQUETAS_PADRAO_.map((e, i) => env.DB.prepare('INSERT INTO msg_etiqueta (nome, cor, ordem, venda) VALUES (?,?,?,?)').bind(e[0], e[1], i, e[2])));
     await cfgSet(env, 'msg_etq_semeada', '1');
     rs = (await env.DB.prepare('SELECT id, nome, cor, ordem, venda FROM msg_etiqueta WHERE arquivada=0 ORDER BY ordem, id').all()).results || [];
+  }
+  // A versão 7.40.4 tinha "Outras" etiquetas; uma reformulação deixou só "Etapa da venda".
+  // Restaurar as classificações do cliente sem converter nem apagar etiquetas legadas.
+  if (!(await cfgGet(env,'msg_etq_cliente_v1'))) {
+    for (let i=0;i<ETQ_CLIENTE_PADRAO_.length;i++) {
+      const [nome,cor] = ETQ_CLIENTE_PADRAO_[i];
+      await env.DB.prepare(
+        "INSERT INTO msg_etiqueta (nome,cor,ordem,venda) " +
+        "SELECT ?,?,?,0 WHERE NOT EXISTS (SELECT 1 FROM msg_etiqueta WHERE lower(trim(nome))=lower(trim(?)) AND venda=0)"
+      ).bind(nome,cor,50+i,nome).run();
+    }
+    await cfgSet(env,'msg_etq_cliente_v1','1');
+    rs=(await env.DB.prepare('SELECT id,nome,cor,ordem,venda FROM msg_etiqueta WHERE arquivada=0 ORDER BY ordem,id').all()).results || [];
   }
   return rs;
 }
