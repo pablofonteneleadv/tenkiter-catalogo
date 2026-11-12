@@ -74,6 +74,23 @@ def levantar(root: Path = ROOT) -> dict:
     }
 
 
+
+# Compatibilidade: consumidores antigos de inventory() e JSON precisam continuar
+# recebendo 'arquivo', 'execucao', 'counts' e 'files' sem mudança semântica.
+def inventory(root: Path = ROOT) -> list[dict]:
+    dados = levantar(root)
+    auxiliares = {"tests/mock_msg.py", "tests/mock.py", "tests/run_support.py",
+                  "tests/backend_source.cjs", "tests/rodar_tudo.py"}
+    resultado = []
+    for path in sorted(dados["files"]):
+        estado = ("runner" if path in dados["full"]
+                  else "ci" if path in dados["ci_direto"]
+                  else "auxiliar declarado" if path in auxiliares
+                  else "revisar registro")
+        resultado.append({"arquivo": path.removeprefix("tests/"), "execucao": estado})
+    return resultado
+
+
 def classes_atuais(dados: dict, auxiliares: set[str]) -> dict:
     saida = {k: set() for k in CLASSES}
     for p in dados["files"]:
@@ -135,11 +152,15 @@ def avaliar(root: Path = ROOT, arquivo_baseline: Path | None = None) -> dict:
             "full": len(dados["full"]),
             "impacto": len(dados["impacto"]),
             "citados_diretamente_na_ci": len(dados["ci_direto"]),
-            "novos_classificados": len(novos - set(p for e in erros for p in novos if p in e)),
+            "novos_classificados": len(novos & (dados["full"] | dados["impacto"] | dados["ci_direto"])),
         },
         "classes": {c: sorted(atual[c]) for c in CLASSES},
         "erros": erros,
     }
+    linhas = inventory(root)
+    relatorio["files"] = linhas
+    relatorio["counts"] = {estado: sum(row["execucao"] == estado for row in linhas)
+                           for estado in ("runner", "ci", "auxiliar declarado", "revisar registro")}
     return relatorio
 
 
