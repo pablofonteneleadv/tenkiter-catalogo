@@ -373,10 +373,6 @@
     "tests/worker_familias.js": [
       "catalogo"
     ],
-    "tests/worker_google_nome_prioridade.js": [
-      "mensagens",
-      "ci"
-    ],
     "tests/worker_fila_originais.js": [
       "midia",
       "postagens"
@@ -395,6 +391,10 @@
     "tests/worker_gestor.js": [
       "esteira",
       "mensagens"
+    ],
+    "tests/worker_google_nome_prioridade.js": [
+      "mensagens",
+      "ci"
     ],
     "tests/worker_grupo.js": [
       "mensagens",
