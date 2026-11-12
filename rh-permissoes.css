@@ -1,5 +1,5 @@
 /* RH/Admin: escopo local; mantém os tokens e componentes da equipe. */
-body.rh-admin{font-family:Inter,system-ui,sans-serif;--bg:#f5f1e8;--surface:#fff;--surface-2:#f1eee7;--text:#1c1b18;--muted:#5f5b53;--border:#d5d0c6;color:#1c1b18;background:#f5f1e8;color-scheme:light}
+body.rh-admin{font-family:Inter,system-ui,sans-serif;--bg:#f5f1e8;--surface:#fff;--surface-2:#f1eee7;--text:#1c1b18;--muted:#5f5b53;--border:#d5d0c6;--danger:#B3261E;color:#1c1b18;background:#f5f1e8;color-scheme:light}
 body.rh-admin #btn-admin-rh{display:none}
 body.rh-admin .topbar{flex-wrap:nowrap}
 body.rh-admin .topbar .brand{font-size:clamp(15px,4vw,18px);min-width:0}
