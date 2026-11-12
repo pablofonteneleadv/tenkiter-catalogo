@@ -6794,7 +6794,13 @@ export default {
         const conv = await env.DB.prepare('SELECT id, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
         const validas = await etiquetas_(env), quer = (Array.isArray(d.etiquetas) ? d.etiquetas : []).map(Number).filter((x) => validas.some((e) => e.id === x));
-        const venda = quer.filter((x) => validas.find((e) => e.id === x).venda), fica = quer.filter((x) => !validas.find((e) => e.id === x).venda).concat(venda.slice(-1));
+        // Não perder vínculos históricos ao editar etiquetas atuais. Um ID arquivado
+        // só é preservado se já pertence a esta pessoa; não é possível adicioná-lo pela API.
+        const antigos = (await env.DB.prepare(
+          'SELECT x.etiqueta_id AS id FROM msg_alvo_etiqueta x LEFT JOIN msg_etiqueta e ON e.id=x.etiqueta_id WHERE x.alvo=? AND (e.arquivada=1 OR e.id IS NULL)'
+        ).bind(alvoDe_(conv)).all()).results || [];
+        const venda = quer.filter((x) => validas.find((e) => e.id === x).venda);
+        const fica = quer.filter((x) => !validas.find((e) => e.id === x).venda).concat(venda.slice(-1), antigos.map(x => Number(x.id)));
         return J({ ok: true, etiquetas: await gravarEtiquetas_(env, conv, fica) });
       }
       if (p === '/msg/funil' && req.method === 'GET') {   // v7.40.15: funil de vendas
