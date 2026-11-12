@@ -274,7 +274,8 @@ async function permissoesConferir_(env, req) {
   if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; v.permissoes.acessosConfiguraveis = v.configuraveis === true;v.permissoes.msgModelos=v.msgModelos||{}; return v.permissoes; }
   let lista = null, perfis = [], nome = '', configuraveis = false, msgModelos = {};
   try {
-    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
+    // Backend indisponível: falha fechada (503), sem confundir com sessão inválida (401).
+    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
     const j = await r.json();
     if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { lista = j.usuario.permissoes; configuraveis = j.usuario.acessosConfiguraveis === true; msgModelos=j.usuario.msgModelos||{}; nome = String(j.usuario.nome || j.usuario.name || '').trim().slice(0,120); perfis = Array.isArray(j.usuario.perfis) ? j.usuario.perfis : String(j.usuario.perfil || '').split(','); }
     /* v7.77.1: o Apps Script do catálogo publicado pode ser mais antigo que o RH (sem Acessos configuráveis: não devolve Esteira, Postador, Fotos com IA nem Mensageiro).
