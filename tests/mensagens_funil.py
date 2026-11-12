@@ -71,9 +71,12 @@ with sync_playwright() as p:
     boxes = pg.locator("#ms-gaveta .ms-etq-op input[type=checkbox]")
     nomes = pg.eval_on_selector_all("#ms-gaveta .ms-etq-op:has(input[type=checkbox])",
                                       "es=>es.map(e=>e.textContent.trim())")
-    chk("admin: seis etiquetas pessoais aparecem e não entram no funil",
-        len(nomes)==6 and all(n in nomes for n in
-          ["Prioridade","Não responder","Cliente indesejável","Compra na loja","Responder com atenção","Já teve problema"]) and boxes.count()==6,nomes)
+    # As seis etiquetas pedidas são ADICIONADAS. A "Troca" histórica não pode sumir.
+    esperadas = {"Prioridade", "Não responder", "Cliente indesejável", "Compra na loja",
+                 "Responder com atenção", "Já teve problema", "Troca"}
+    chk("admin: seis etiquetas pessoais e a legada Troca coexistem fora do funil",
+        esperadas.issubset(set(nomes)) and len(nomes)==len(set(nomes)) and
+        boxes.count()==len(nomes),nomes)
     chk("admin: etapa de venda permanece exclusiva e selecionada",
         pg.locator("#ms-gaveta .ms-etq-op input[type=radio]:checked").count()==1 and
         "Aguardando pagamento" in pg.locator("#ms-gaveta .ms-etq-op input[type=radio]:checked").locator("..").inner_text())
@@ -150,11 +153,20 @@ with sync_playwright() as p:
     abrir_funil(pg)
     pg.go_back(); pg.wait_for_timeout(500)
     chk("'voltar' do aparelho fecha o funil e a caixa de mensagens continua aberta", not pg.locator("#ms-funil").is_visible() and pg.locator("#ms-lista").is_visible() and pg.locator("#overlay-mensagens.aberto").count() == 1)
-    # filtro de canal
+    # Canais deixaram de ser abas e passaram ao menu Filtros. Verificar o fluxo real,
+    # sem recriar a interface antiga nem omitir a validação por canal.
     abrir_funil(pg)
-    pg.click("[data-ms=aba][data-canal=whatsapp2]"); pg.wait_for_timeout(900)
+    pg.click("#ms-funil [data-ms=fechar-painel]")
+    pg.wait_for_selector("#ms-btn-filtros:visible", timeout=5000)
+    pg.click("#ms-btn-filtros")
+    pg.locator("#ms-gaveta [name=ms-ft-canal]").select_option("whatsapp2")
+    pg.click("#ms-gaveta [data-ms=filtros-aplicar]")
+    pg.wait_for_selector("#ms-lista", state="visible", timeout=5000)
+    abrir_funil(pg)
     ids = pg.eval_on_selector_all(".ms-fcard", "es=>es.map(e=>e.dataset.id)")
-    chk("trocar a aba de canal com o funil aberto mostra o funil daquele canal", (S.get("funil_consultas") or [""])[-1] == "whatsapp2" and sorted(ids) == ["4", "6"] and "WhatsApp 2" in pg.inner_text("#ms-ftitulo"), ids)
+    chk("Filtro Canal → WhatsApp 2 preserva funil e mostra somente aquele canal",
+        (S.get("funil_consultas") or [""])[-1] == "whatsapp2" and
+        sorted(ids) == ["4", "6"] and "WhatsApp 2" in pg.inner_text("#ms-ftitulo"), ids)
     chk("390: sem rolagem lateral da página no canal filtrado", pg.evaluate(SEM_ROLAGEM) == "")
     pg.click("#ms-funil [data-ms=fechar-painel]"); pg.wait_for_timeout(500)
     chk("'← Conversas' volta para a lista", pg.locator("#ms-lista").is_visible() and not pg.locator("#ms-funil").is_visible())
