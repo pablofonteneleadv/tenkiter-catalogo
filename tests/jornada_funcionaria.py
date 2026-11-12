@@ -29,8 +29,19 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200)
     chk("todos os capítulos marcados (%d)"%n,pg.locator(".chapter input[type=checkbox]:checked").count()==n)
     chk("avaliação destravou",pg.locator("#btn-ir-avaliacao").count()==1 and not pg.locator("#btn-ir-avaliacao").is_disabled())
+    # O conteúdo protegido deve ter IDs estáveis e hashes. Não aceitar só o clique
+    # local: o servidor simulado precisa receber a ação e os capítulos corretos.
+    caps=pg.locator(".chapter").evaluate_all(
+        "(els) => els.map(e => ({id:e.dataset.capid, hash:e.dataset.caphash, manual:e.dataset.manual}))")
+    chk("capítulos com ID/hash estáveis", len(caps)>0 and all(c["id"] and c["hash"] and c["manual"] for c in caps),caps)
+    pg.wait_for_timeout(600)
     acoes=sorted(set(x.get("action") for x in log)); print("   ações enviadas:",acoes)
-    chk("progresso foi enviado ao servidor",any("prog" in (a or "").lower() or "leit" in (a or "").lower() or "cap" in (a or "").lower() or "lido" in (a or "").lower() for a in acoes),acoes)
+    leituras=[x for x in log if x.get("action")=="manual_marcar_lido" and x.get("lido") is True]
+    gravados={(str(x.get("manualId")),str(x.get("capId")),str(x.get("hash"))) for x in leituras}
+    esperados={(str(c["manual"]),str(c["id"]),str(c["hash"])) for c in caps if c["id"] and c["hash"]}
+    chk("progresso foi enviado ao servidor",
+        bool(esperados) and esperados.issubset(gravados) and len(leituras)>=len(esperados),
+        {"esperados":sorted(esperados),"enviados":sorted(gravados)})
     pg.click("#btn-ir-avaliacao"); pg.wait_for_timeout(900)
     txt=pg.inner_text("#app")
     chk("tela da avaliação abre",("avalia" in txt.lower()),txt[:100].replace("\n"," | "))
@@ -53,3 +64,4 @@ with sync_playwright() as p:
     chk("senha errada mostra mensagem legível (sem JSON cru)",("incorreta" in pg.inner_text("#app").lower()) and "{" not in pg.inner_text("#app")[:300],pg.inner_text("#app")[:200])
     ctx.close(); b.close()
 print("\nOK=%d FALHAS=%d"%(len(OK),len(BAD)),BAD)
+sys.exit(1 if BAD else 0)
