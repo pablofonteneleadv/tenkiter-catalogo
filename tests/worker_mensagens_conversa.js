@@ -899,7 +899,7 @@ function d1() {
   const oldestPg=mp1[0],mp2=(await A('GET','/msg/mensagens?conversa='+cidPag+'&antes='+encodeURIComponent(oldestPg.enviada_em)+'&antesId='+oldestPg.id)).j.mensagens;
   chk('paginação do histórico com mesmo horário não omite mensagens',mp1.length===100&&mp2.length===5&&new Set([...mp1,...mp2].map(m=>m.id)).size===105);
   // Identidade, nomes Google e limites dos contadores: somente serviços falsos.
-  const beforePeopleFetch=globalThis.fetch;let googleCalls=0, googleName='Nome completo do Google', googleWrites=[], googleFalha=0;
+  const beforePeopleFetch=globalThis.fetch;let googleCalls=0, googleName='TM Cliente Nome completo do Google', googleWrites=[], googleFalha=0;
   await cfg('contatos_url','https://script.google.com/macros/s/pessoas-index-test/exec');await cfg('contatos_chave','google-test-only');
   globalThis.fetch=async(u,init)=>{
     if(String(u).includes('/macros/s/pessoas-index-test/')){
@@ -916,7 +916,7 @@ function d1() {
   const waPerson=await DB.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp1' AND contato='5588989012345'").first();
   let indexed=await A('POST','/msg/pessoas/google',{});chk('índice Google conclui só uma página',indexed.j.fim&&googleCalls===1,indexed.j);
   let indexedConv=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa;
-  chk('nome do Google passa a aparecer no atendimento',indexedConv.nome==='Nome completo do Google',indexedConv);
+  chk('marcador TM Cliente do Google é preservado no nome exibido sem Ficha',indexedConv.nome==='TM Cliente Nome completo do Google',indexedConv);
   const tsAntes=(await DB.prepare('SELECT atualizada_em FROM msg_conversa WHERE id=?').bind(waPerson.id).first()).atualizada_em;
   const recente=await A('POST','/msg/pessoas/google',{});
   chk('índice Google recente não relê milhares de contatos',recente.j.recente===true&&googleCalls===1,recente.j);
@@ -935,7 +935,7 @@ function d1() {
   const igPerson=await DB.prepare("SELECT id FROM msg_conversa WHERE contato='person-ig'").first();
   let linkedPerson=await A('POST','/msg/pessoa',{conversa:waPerson.id,nome:'Nome confirmado',whatsapp:'+55 88 98901-2345',segundo:'+55 88 98901-2346',vincular:[igPerson.id]});
   chk('vínculo explícito reúne WhatsApp1, WhatsApp2 e Instagram',linkedPerson.j.ok&&linkedPerson.j.canais.length===3&&linkedPerson.j.canais.every(x=>x.pessoa===linkedPerson.j.pessoa&&x.nome==='Nome confirmado'),linkedPerson.j);
-  googleName='Outro nome vindo do Google';
+  googleName='TM Cliente Outro nome vindo do Google';
   await A('POST','/msg/pessoas/google',{forcar:true});
   const nomePreferido=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa.nome;
   chk('nome manual centralizado permanece prioritário mesmo após atualização do Google',nomePreferido==='Nome confirmado',nomePreferido);
@@ -960,6 +960,19 @@ function d1() {
   const semNovaAlteracao=await A('POST','/msg/ficha',{conversa:waPerson.id,nome:'Nome confirmado'});
   await W.processarFilaNomesGoogle_(env,1);
   chk('salvar outros dados não renomeia Google sem necessidade',semNovaAlteracao.j.ok&&googleWrites.length===jaFeito);
+  // Contrato de prefixos legados: se a Ficha recebeu explicitamente 'Cli ...',
+  // preservar o nome inteiro no Mensagens e sincronizar o mesmo valor com Google.
+  // Teste com banco/Google falsos; não altera nenhum cadastro de produção.
+  const nomePrefixado='Cli Pessoa Simulada';
+  const salvouTagFicha=await A('POST','/msg/ficha',{conversa:waPerson.id,nome:nomePrefixado});
+  const nomeTagConversa=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa.nome;
+  const filaTagFicha=await DB.prepare('SELECT nome,estado FROM msg_google_sync WHERE pessoa=?').bind(linkedPerson.j.pessoa).first();
+  chk('tag Cli salva intencionalmente na Ficha não some do Mensagens',salvouTagFicha.j.ok&&nomeTagConversa===nomePrefixado,nomeTagConversa);
+  chk('tag Cli é encaminhada na fila idempotente de sincronização',filaTagFicha?.nome===nomePrefixado&&filaTagFicha?.estado==='pendente',filaTagFicha);
+  await W.processarFilaNomesGoogle_(env,1);
+  chk('Google recebe o nome prefixado da Ficha sem criar contato adicional',googleName===nomePrefixado,googleName);
+  await A('POST','/msg/ficha',{conversa:waPerson.id,nome:'Nome confirmado'});
+  await W.processarFilaNomesGoogle_(env,1);
 
 
   await wh('/wh/wafly/1/'+seg,msg('PERSON-C','5588989012346','Segundo número',{momment:Date.now()}));
