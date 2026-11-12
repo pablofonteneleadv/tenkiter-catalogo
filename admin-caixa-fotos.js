@@ -11,15 +11,38 @@
   function aviso(t) { if (typeof window.tkAvisoRapido === 'function') window.tkAvisoRapido(t, 'aviso'); }
   function lerPend() { try { var l = JSON.parse(localStorage.getItem(CHAVE) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
   function gravarPend(l) { try { localStorage.setItem(CHAVE, JSON.stringify(l.slice(-50))); } catch (e) { /* conforto */ } }
-  var emVoo = {};
+  var emVoo = {}, falhas = {}, tentarDepois = {}, avisouPendencia = false;
   function enviarPend() {
     var h = cab(), l = lerPend(); if (!h || !l.length || typeof INSTAGRAM_URL === 'undefined') return;
     l.forEach(function (x) {
-      if (emVoo[x.k]) return; emVoo[x.k] = 1;
+      if (!x || !x.k || !Array.isArray(x.ids) || !x.ids.length || !x.produto) return; // conservar registros antigos inválidos, nunca apagar
+      if (emVoo[x.k] || Date.now() < (tentarDepois[x.k] || 0)) return;
+      emVoo[x.k] = 1;
       fetch(INSTAGRAM_URL + '/esteira/caixa/usar', { method: 'POST', headers: h, body: JSON.stringify({ ids: x.ids, uso: 'criado', produto: x.produto, produtoNome: x.nome || '' }) })
-        .then(function (r) { return r.json(); }).then(function (j) { if (j && j.ok) gravarPend(lerPend().filter(function (y) { return y.k !== x.k; })); }).catch(function () {}).then(function () { delete emVoo[x.k]; });
+        .then(function (r) { if (!r.ok) throw new Error('Confirmação HTTP sem sucesso'); return r.json(); })
+        .then(function (j) {
+          if (!j || !j.ok) throw new Error('Confirmação não aceita pelo servidor');
+          gravarPend(lerPend().filter(function (y) { return y.k !== x.k; }));
+          delete falhas[x.k]; delete tentarDepois[x.k];
+          if (avisouPendencia && !lerPend().length) { avisouPendencia = false; aviso('A Esteira confirmou o uso das fotos do produto.'); }
+        })
+        .catch(function () {
+          falhas[x.k] = Math.min(6, (falhas[x.k] || 0) + 1);
+          tentarDepois[x.k] = Date.now() + Math.min(15 * 60000, 30000 * Math.pow(2, falhas[x.k] - 1));
+          if (!avisouPendencia) {
+            avisouPendencia = true;
+            aviso('A peça foi salva, mas a confirmação das fotos na Esteira ficou pendente neste aparelho. O sistema tentará novamente.');
+          }
+        })
+        .then(function () { delete emVoo[x.k]; });
     });
   }
+  // Reconciliar apenas operações já guardadas; servidor aplica uso=criado de modo idempotente.
+  // Eventos de retorno à página aceleram a recuperação, respeitando backoff por item.
+  window.addEventListener('online', enviarPend);
+  window.addEventListener('focus', enviarPend);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) enviarPend(); });
+  setInterval(function () { if (!document.hidden) enviarPend(); }, 60000);
   // produto salvo pelo cadastro: o envio leva rascunhoId "caixa:12.13" (o importador do Instagram ignora esse prefixo)
   window.addEventListener('tk:peca-salva', function (ev) {
     var d = ev && ev.detail; if (!d || !/^caixa:[0-9.]+$/.test(String(d.rascunhoId || ''))) return;
