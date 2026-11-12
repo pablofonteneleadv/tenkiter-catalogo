@@ -272,6 +272,10 @@
       "midia",
       "postagens"
     ],
+    "tests/postagens_fila_midia_cards.py": [
+      "midia",
+      "postagens"
+    ],
     "tests/janelas_sem_estouro.py": [
       "postagens"
     ],
