@@ -884,6 +884,19 @@ function d1() {
   chk('desmarcar uma etiqueta de cliente remove só ela e mantém etapa e demais',
     eRemoveuUma.j.ok && eRemoveuUma.j.etiquetas.map(e=>e.nome).sort().join('|')===
     ['Reserva','Troca','Prioridade'].sort().join('|'));
+  // Prova adversarial: salvar uma etapa nova NÃO pode excluir etiqueta antiga arquivada.
+  const legadoId=eId('Prioridade');
+  const vinculosAntigos=async()=>Number((await DB.prepare(
+    'SELECT COUNT(*) AS n FROM msg_alvo_etiqueta WHERE etiqueta_id=?').bind(legadoId).first()).n);
+  const anteriorArquivar=await vinculosAntigos();
+  await DB.prepare('UPDATE msg_etiqueta SET arquivada=1 WHERE id=?').bind(legadoId).run();
+  const salvouComArquivada=await A('POST','/msg/rotular',{conversa:nConv,etiquetas:[eId('Reserva'),eId('Troca')]});
+  const aposArquivar=await vinculosAntigos();
+  chk('salvar etiquetas atuais não apaga vínculo antigo arquivado',
+    anteriorArquivar>0&&salvouComArquivada.j.ok&&aposArquivar===anteriorArquivar,
+    {antes:anteriorArquivar,depois:aposArquivar});
+  await DB.prepare('UPDATE msg_etiqueta SET arquivada=0 WHERE id=?').bind(legadoId).run();
+  await A('POST','/msg/rotular',{conversa:nConv,etiquetas:[eId('Reserva'),eId('Troca')]});
 
   const eR = await A('POST', '/msg/rotular', { conversa: nConv, etiquetas: [eId('Novo cliente'), eId('Reserva'), eId('Troca')] });
   chk('de venda fica uma só (a última) e as outras somam', eR.j.ok && eR.j.etiquetas.map((e) => e.nome).sort().join() === 'Reserva,Troca', eR.j);
