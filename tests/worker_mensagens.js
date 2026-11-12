@@ -18,11 +18,11 @@ function d1() {
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
   const meta=new Map();
-  let seqR2=0;const r2meta=new Map();
+  let seqR2=0;const r2meta=new Map();let falharProximoR2Webhook=false;
   const R2 = {
     async get(k){const v=objs.get(k),m=r2meta.get(k)||{};return v?{size:v.length,etag:m.etag,customMetadata:m.customMetadata||{},httpMetadata:(meta.get(k)||{}),body:new Response(v).body,async arrayBuffer(){return v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength)}}:null;},
     async head(k){const v=objs.get(k),m=r2meta.get(k)||{};return v?{size:v.length,etag:m.etag,customMetadata:m.customMetadata||{},httpMetadata:meta.get(k)||{}}:null;},
-    async put(k,b,o={}){const atual=r2meta.get(k);if(o.onlyIf?.etagDoesNotMatch==='*'&&objs.has(k))return null;if(o.onlyIf?.etagMatches&&o.onlyIf.etagMatches!==atual?.etag)return null;objs.set(k,Buffer.from(b instanceof ReadableStream?await new Response(b).arrayBuffer():b));meta.set(k,o.httpMetadata||{});const m={etag:String(++seqR2),customMetadata:o.customMetadata||{}};r2meta.set(k,m);return m;},
+    async put(k,b,o={}){if(falharProximoR2Webhook&&String(k).startsWith('privado/mensagens/entrada/')){falharProximoR2Webhook=false;throw Error('R2 fictício indisponível');}const atual=r2meta.get(k);if(o.onlyIf?.etagDoesNotMatch==='*'&&objs.has(k))return null;if(o.onlyIf?.etagMatches&&o.onlyIf.etagMatches!==atual?.etag)return null;objs.set(k,Buffer.from(b instanceof ReadableStream?await new Response(b).arrayBuffer():b));meta.set(k,o.httpMetadata||{});const m={etag:String(++seqR2),customMetadata:o.customMetadata||{}};r2meta.set(k,m);return m;},
     async delete(k){objs.delete(k);r2meta.delete(k);},
     async list(o={}){const keys=[...objs.keys()].filter(k=>k.startsWith(o.prefix||'')).sort(),lim=o.limit||1000;const from=o.cursor?keys.findIndex(k=>k>o.cursor):0;const chosen=keys.slice(Math.max(0,from),Math.max(0,from)+lim);return {objects:chosen.map(k=>({key:k,size:objs.get(k).length,uploaded:tempDatas.get(k)||new Date(),customMetadata:r2meta.get(k)?.customMetadata||{}})),truncated:keys.length>Math.max(0,from)+lim,cursor:chosen.at(-1)};}
   };
@@ -239,5 +239,22 @@ function d1() {
   await wh('/wh/instagram/' + seg, corpoLido, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': await assinar(corpoLido) } });
   const ultIg = JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_ult_instagram'").first()).valor);
   chk('aviso sem mensagem registra só a FORMA (sem texto nem ids) para diagnóstico', ultIg.itens === 0 && /messaging:read/.test(ultIg.forma) && !/CLI1|DONO|IGM1/.test(ultIg.forma), ultIg);
+  // Contrato anti-perda: nunca acusar recebimento ao provedor sem persistir a entrada.
+  // Todos os recursos são locais, sem Wafly, Meta, R2 ou D1 reais.
+  const antesFalhaR2 = await cont('msg_mensagem');
+  const eventoSimulado = msg('R2-FALHA-SIMULADA', '5588999990000', 'Evento fictício durante falha de armazenamento');
+  falharProximoR2Webhook = true;
+  const r2Falhou = await wh('/wh/wafly/1/' + seg, eventoSimulado);
+  chk('R2 temporariamente indisponível: webhook devolve 5xx e não confirma mensagem inexistente',
+    r2Falhou.r.status >= 500 && (await cont('msg_mensagem')) === antesFalhaR2,
+    { status: r2Falhou.r.status });
+  const r2Recuperou = await wh('/wh/wafly/1/' + seg, eventoSimulado);
+  chk('R2 recuperado: reentrega do mesmo evento confirma uma gravação',
+    r2Recuperou.r.status === 200 && r2Recuperou.j?.ok === true &&
+    (await cont('msg_mensagem')) === antesFalhaR2+1,
+    { status:r2Recuperou.r.status, resultado:r2Recuperou.j });
+  await wh('/wh/wafly/1/' + seg, eventoSimulado);
+  chk('Reentrega repetida não cria uma segunda mensagem', (await cont('msg_mensagem')) === antesFalhaR2+1);
+
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });
