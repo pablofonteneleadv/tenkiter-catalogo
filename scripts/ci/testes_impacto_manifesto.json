@@ -27,6 +27,9 @@
     "tests/android_manifest_release.py": [
       "push"
     ],
+    "tests/axe_telas_b.py": [
+      "treinamentos"
+    ],
     "tests/aparencia_aprovada_ui.py": [
       "catalogo",
       "mensagens"
