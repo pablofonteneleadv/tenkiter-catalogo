@@ -37,6 +37,11 @@
       "infra",
       "padroes"
     ],
+    "tests/caixa_fotos_recuperacao.js": [
+      "catalogo",
+      "esteira",
+      "ci"
+    ],
     "tests/cadastro_vinculos.js": [
       "catalogo",
       "ci"
