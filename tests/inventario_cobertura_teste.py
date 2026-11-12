@@ -27,11 +27,11 @@ def fixture(root):
     manifest.write_text(json.dumps({"modules": ["ci"], "tests": {
         "tests/a.py": ["ci"], "tests/c.py": ["ci"]}}))
     workflow = workflows / "ci.yml"
-    workflow.write_text("jobs:\n  tests:\n    steps:\n      - run: python3 tests/d.py\n")
+    workflow.write_text("jobs:\n  tests:\n    steps:\n      - run: python3 tests/d.py\n      - run: python3 tests/rodar_tudo.py\n")
     baseline = ci / "inventario_baseline.json"
     baseline.write_text(json.dumps({
         "schema": 1, "ambos": ["tests/a.py"], "somente_full": ["tests/b.py"],
-        "somente_impacto": ["tests/c.py"], "ci_direto": ["tests/d.py"],
+        "somente_impacto": ["tests/c.py"], "ci_direto": ["tests/d.py", "tests/rodar_tudo.py"],
         "auxiliares": ["tests/mock.py"], "legado_sem_registro": ["tests/legacy.py"]
     }))
     return runner, manifest, workflow, baseline
@@ -68,7 +68,7 @@ def adicionar_na_lista(root, runner, manifest, workflow, baseline):
 
 
 check("baseline válido e legado explicitamente não aprovado",
-      esperado=dict(zip(CLASSES, [1, 1, 1, 1, 1, 1])))
+      esperado=dict(zip(CLASSES, [1, 1, 1, 2, 1, 1])))
 check("arquivo novo registrado no manifesto é permitido", adicionar_na_lista)
 check("arquivo novo sem nenhum registro reprova",
       lambda r, *f: (r / "tests/new.py").write_text("# órfão\n"),
