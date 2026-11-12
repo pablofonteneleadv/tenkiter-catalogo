@@ -373,6 +373,10 @@
     "tests/worker_familias.js": [
       "catalogo"
     ],
+    "tests/worker_google_nome_prioridade.js": [
+      "mensagens",
+      "ci"
+    ],
     "tests/worker_fila_originais.js": [
       "midia",
       "postagens"
