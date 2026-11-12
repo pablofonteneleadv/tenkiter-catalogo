@@ -21,6 +21,14 @@ def foto(pg, nome):
 E = {e["nome"]: e["id"] for e in mock_msg.ETQ_PADRAO}
 def preparar(S):
     S["etq_mock"] = [dict(e) for e in mock_msg.ETQ_PADRAO]
+    # Contrato de classificações pessoais independente da etapa comercial
+    tags_cliente = [
+        ("Prioridade", "ambar"), ("Não responder", "roxo"),
+        ("Cliente indesejável", "rosa"), ("Compra na loja", "verde"),
+        ("Responder com atenção", "azul"), ("Já teve problema", "cinza"),
+    ]
+    S["etq_mock"].extend({"id": 7+i, "nome": nome, "cor": cor, "venda": 0, "ordem": 50+i, "pessoas": 0}
+                        for i,(nome,cor) in enumerate(tags_cliente))
     et = lambda *ns: [dict(e) for e in S["etq_mock"] if e["nome"] in ns]
     c = {x["id"]: x for x in S["convs"]}
     chave = mock_msg.pessoa(c[1])
@@ -55,6 +63,42 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     # ===================== celular 390×844 =====================
     ctx, pg, S, erros = tela(b, 390, 844, True)
+    # Teste de regressão restaurada, usando somente Admin total e pessoas simuladas.
+    pg.locator("#ms-lista .ms-conv[data-id='4']").click()
+    pg.wait_for_selector("#ms-etq-faixa [data-ms=etiquetas]", timeout=5000)
+    pg.click("#ms-etq-faixa [data-ms=etiquetas]")
+    pg.wait_for_selector("#ms-gaveta .ms-etq-op", timeout=5000)
+    boxes = pg.locator("#ms-gaveta .ms-etq-op input[type=checkbox]")
+    nomes = pg.eval_on_selector_all("#ms-gaveta .ms-etq-op:has(input[type=checkbox])",
+                                      "es=>es.map(e=>e.textContent.trim())")
+    chk("admin: seis etiquetas pessoais aparecem e não entram no funil",
+        len(nomes)==6 and all(n in nomes for n in
+          ["Prioridade","Não responder","Cliente indesejável","Compra na loja","Responder com atenção","Já teve problema"]) and boxes.count()==6,nomes)
+    chk("admin: etapa de venda permanece exclusiva e selecionada",
+        pg.locator("#ms-gaveta .ms-etq-op input[type=radio]:checked").count()==1 and
+        "Aguardando pagamento" in pg.locator("#ms-gaveta .ms-etq-op input[type=radio]:checked").locator("..").inner_text())
+    pg.locator("#ms-gaveta .ms-etq-op",has_text="Prioridade").locator("input[type=checkbox]").check()
+    pg.locator("#ms-gaveta .ms-etq-op",has_text="Responder com atenção").locator("input[type=checkbox]").check()
+    pg.click("#ms-gaveta [data-ms=etq-salvar]")
+    pg.wait_for_timeout(400)
+    etq4 = [e["nome"] for e in next(x for x in S["convs"] if x["id"]==4)["etiquetas"]]
+    chk("salvar duas etiquetas próprias não remove etapa de venda",
+        sorted(etq4)==sorted(["Aguardando pagamento","Prioridade","Responder com atenção"]),etq4)
+    chk("as classificações aparecem no cabeçalho, sem mudar o nome",
+        all(x in pg.inner_text("#ms-etq-faixa") for x in ["Prioridade","Responder com atenção"]) and
+        "João" in pg.inner_text(".ms-cab"))
+    pg.click("#ms-etq-faixa [data-ms=etiquetas]")
+    pg.locator("#ms-gaveta .ms-etq-op",has_text="Prioridade").locator("input[type=checkbox]").uncheck()
+    pg.click("#ms-gaveta [data-ms=etq-salvar]")
+    pg.wait_for_timeout(400)
+    nomes4 = [e["nome"] for e in next(x for x in S["convs"] if x["id"]==4)["etiquetas"]]
+    chk("desmarcar só Prioridade preserva Responder com atenção e a etapa",
+        sorted(nomes4)==sorted(["Aguardando pagamento","Responder com atenção"]),nomes4)
+    pg.click("[data-ms=voltar]")
+    pg.wait_for_selector("#ms-lista .ms-conv[data-id='4']", timeout=5000)
+    chk("lista preserva etiqueta pessoal sem excluir o nome", 
+        "Responder com atenção" in pg.locator("#ms-lista .ms-conv[data-id='4']").inner_text() and
+        "João" in pg.locator("#ms-lista .ms-conv[data-id='4']").inner_text())
     itens = pg.eval_on_selector_all("#ms-nav button", "es=>es.map(e=>e.textContent)")
     chk("Funil tem acesso direto na navegação inferior", itens == ["Conversas", "Funil", "Com notas", "Mais"], itens)
     pg.click("#ms-nav [data-ms=funil]"); pg.wait_for_selector(".ms-fcol", timeout=4000); pg.wait_for_timeout(300)
