@@ -57,6 +57,20 @@ with sync_playwright() as p:
     ctx, pg, S, erros = tela(b, 390, 844, True)
     itens = pg.eval_on_selector_all("#ms-nav button", "es=>es.map(e=>e.textContent)")
     chk("Funil tem acesso direto na navegação inferior", itens == ["Conversas", "Funil", "Com notas", "Mais"], itens)
+    # Sentinela anti-regressao: etiqueta comercial deve acompanhar a identidade
+    # na lista e no cabecalho, sem virar parte do nome nem perder a tag legado.
+    # O teste simula dados, nao consulta clientes reais nem envia mensagens.
+    etiquetas4 = pg.eval_on_selector_all('#ms-lista .ms-conv[data-id="4"] .ms-etq', "es=>es.map(e=>e.textContent.trim())")
+    chk("lista: João mantém etiqueta Aguardando pagamento visível junto ao nome", etiquetas4 == ["Aguardando pagamento"], etiquetas4)
+    chk("lista: nome do cliente não foi substituído pela etiqueta", pg.locator('#ms-lista .ms-conv[data-id="4"] .ms-nome').inner_text() == "João")
+    pg.locator('#ms-lista .ms-conv[data-id="4"]').click()
+    pg.wait_for_selector('#ms-conversa #ms-etq-faixa .ms-etq', timeout=5000)
+    cab_etq = pg.eval_on_selector_all('#ms-conversa #ms-etq-faixa .ms-etq', "es=>es.map(e=>e.textContent.trim())")
+    chk("conversa: etiqueta comercial sobrevive ao abrir o atendimento", cab_etq == ["Aguardando pagamento"], cab_etq)
+    pg.locator('#ms-conversa [data-ms="voltar"]').click()
+    pg.wait_for_selector('#ms-lista .ms-conv[data-id="4"]', timeout=5000)
+    etiquetas4_volta = pg.eval_on_selector_all('#ms-lista .ms-conv[data-id="4"] .ms-etq', "es=>es.map(e=>e.textContent.trim())")
+    chk("voltar: nenhuma etiqueta desaparece ou altera o nome", etiquetas4_volta == ["Aguardando pagamento"], etiquetas4_volta)
     pg.click("#ms-nav [data-ms=funil]"); pg.wait_for_selector(".ms-fcol", timeout=4000); pg.wait_for_timeout(300)
     chk("colunas = etiquetas de venda, na ordem (Troca fica fora)", colunas(pg) == ["Novo cliente", "Reserva", "Aguardando pagamento", "Pago", "Enviado"], colunas(pg))
     chk("pede o funil do canal atual (Todas)", (S.get("funil_consultas") or [""])[-1] == "todos")
