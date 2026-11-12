@@ -105,6 +105,9 @@
     "tests/gestao_unioes.py": [
       "esteira"
     ],
+    "tests/jornada_funcionaria.py": [
+      "treinamentos"
+    ],
     "tests/jornada_pedido.py": [
       "catalogo"
     ],
