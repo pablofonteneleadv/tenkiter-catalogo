@@ -42,6 +42,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("jornada_funcionaria.py", lambda o: "FALHAS=1 ['progresso foi enviado ao servidor']" in o or "FALHAS=0" in o),  # manuais-semente não têm id de capítulo: não sincronizam
     ("mensagens_acesso_equipe.py", lambda o: "ferramentas administrativas ocultas" in o),
     ("mensagens_dashboard.py", lambda o: "FALHAS=0" in o),
+    ("mensagens_funil.py", lambda o: "FALHAS=0" in o),  # etiquetas de cliente e funil de venda não podem perder controles
     ("mensagens_audio_ogg.py", lambda o: "FALHAS=0" in o),
     ("teclado.py", lambda o: "FALHAS=0" in o),
     ("busca.py", lambda o: "FALHAS=0" in o),

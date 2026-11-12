@@ -1048,29 +1048,29 @@
     else f.appendChild(botao('ms-etq-mais', 'Assumir', 'assumir'));
     if (c.tamanhos) { const v = el('span', 'ms-veste', 'Veste ' + c.tamanhos); v.id = 'ms-veste'; v.title = 'Tamanhos da ficha do cliente'; f.appendChild(v); }   // v7.40.14
     (c.etiquetas || []).forEach((e) => f.appendChild(tagEtq_(e)));
-    f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).some(e=>e.venda) ? 'Mudar etapa' : '+ Etapa da venda', 'etiquetas'));
+    f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).length ? 'Editar etiquetas' : '+ Etiquetas', 'etiquetas'));
     const n = msgs.filter(m => m.direcao === 'nota').length;
     if (aberta && aberta.id === c.id && n) f.appendChild(botao('ms-etq-mais', 'Notas · ' + n, 'notas-abrir'));
     return f;
   }
   function abrirEtiquetas_() {
-    if (!aberta) return; const corpo = gaveta_('Etapa da venda'); if (!corpo) return;
+    if (!aberta) return; if (!ETQ || !ETQ.length) { aviso_('Não consegui carregar as etiquetas. Atualize e tente de novo.'); return; } const corpo = gaveta_('Etiquetas do cliente'); if (!corpo) return;
     const tem = new Set((aberta.etiquetas || []).map((e) => e.id)), lista = ETQ || [];
     const grupo = (titulo, itens, tipo) => {
       if (!itens.length) return; corpo.appendChild(el('p', 'ms-etq-rot', titulo));
       itens.forEach((e) => { const lb = el('label', 'ms-etq-op'), i = el('input'); i.type = tipo; i.name = tipo === 'radio' ? 'ms-etq-venda' : 'ms-etq-' + e.id; i.value = String(e.id); i.checked = tem.has(e.id); lb.append(i, pontoEtq_(e), document.createTextNode(e.nome)); corpo.appendChild(lb); });
     };
     grupo('Etapa da venda · uma por vez', lista.filter((e) => e.venda), 'radio');
-
+    grupo('Etiquetas do cliente · marque quantas precisar', lista.filter((e) => !e.venda), 'checkbox');
     const pe = el('div', 'ms-etq-pe'); pe.append(botao('ms-btn', 'Tirar etapa', 'etq-sem-etapa'), botao('ms-btn prim', 'Salvar', 'etq-salvar')); corpo.appendChild(pe);
   }
   async function salvarEtiquetas_() {
     const g = $('ms-gaveta'); if (!g || !aberta) return;
-    const ids = [...new Set(Array.from(g.querySelectorAll('.ms-etq-op input:checked')).map((i) => Number(i.value)).concat((aberta.etiquetas||[]).filter(e=>!e.venda).map(e=>e.id)))];
+    const ids = [...new Set(Array.from(g.querySelectorAll('.ms-etq-op input:checked')).map((i) => Number(i.value)).concat((aberta.etiquetas||[]).filter(e => !(ETQ||[]).some(v => Number(v.id)===Number(e.id))).map(e=>Number(e.id))))];
     const c = aberta, r = await worker_('/msg/rotular', 'POST', { conversa: c.id, etiquetas: ids });
-    if (!r.ok) { aviso_(r.erro || 'Não salvei a etapa da venda. Tente de novo.'); return; }
+    if (!r.ok) { aviso_(r.erro || 'Não salvei as etiquetas. Tente de novo.'); return; }
     c.etiquetas = r.etiquetas; fecharGaveta_(); const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c));
-    aviso_('Etapa da venda salva.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
+    aviso_('Etiquetas do cliente salvas.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
     ETQ = null; desenharFiltros(); await carregarLista(false);
   }
   function desenharFiltros() {
@@ -1081,7 +1081,7 @@
     if(abaAtiva_==='atendimento'&&soNaoRespondidos_)ativos.push('Não respondidos');
 
     if(filtro)ativos.push((FILTROS.find(x=>x[0]===filtro)||[])[1]||'Situação filtrada');
-    if(etqFiltro)ativos.push((ETQ||[]).find(e=>e.id===etqFiltro)?.nome||'Etapa filtrada');
+    if(etqFiltro)ativos.push((ETQ||[]).find(e=>e.id===etqFiltro)?.nome||'Etiqueta filtrada');
     f.hidden=!!busca.trim()||!ativos.length;
     desenharTipos_();
     if($('ms-estado-wrap'))$('ms-estado-wrap').hidden=!!busca.trim();
@@ -1433,7 +1433,14 @@
       agenda.setAttribute('aria-label', agenda.title);
       l3.appendChild(agenda);
     }
-    (c.etiquetas || []).slice(0, 2).forEach((e) => l3.appendChild(tagEtq_(e)));
+    // Alertas de cuidado surgem antes das etapas comerciais; tags não alteram o nome nem bloqueiam envios.
+    const ordemAlertas_ = ['Não responder', 'Cliente indesejável', 'Responder com atenção', 'Já teve problema', 'Prioridade'];
+    const tagsLista_ = (c.etiquetas || []).slice().sort((a,b) => {
+      const ia=ordemAlertas_.indexOf(a.nome), ib=ordemAlertas_.indexOf(b.nome);
+      return (ia<0 ? 99 : ia)-(ib<0 ? 99 : ib);
+    });
+    tagsLista_.slice(0, 2).forEach((e) => l3.appendChild(tagEtq_(e)));
+    if (tagsLista_.length>2) { const mais=el('span','ms-etq-restantes','+'+(tagsLista_.length-2)); mais.title='Outras etiquetas: '+tagsLista_.slice(2).map(e=>e.nome).join(', '); mais.setAttribute('aria-label',mais.title); l3.appendChild(mais); }
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
     const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : semFormatacao_(c.previa))); l2.appendChild(pv);
