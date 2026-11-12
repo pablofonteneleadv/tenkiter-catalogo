@@ -114,7 +114,8 @@ jobs:
           python3 tests/saude_publica.py
           python3 tests/distribuicao_cache.py
           node tests/pedido_idempotencia.js
-          python3 scripts/ci/inventario_testes.py --json-report tests/saida/inventario-testes.json
+          python3 tests/inventario_cobertura_teste.py
+          python3 scripts/ci/inventario_testes.py --json-report tests/saida/inventario-testes.json --fail-on-regression
       - name: Contrato público em produção (somente leitura agendada)
         if: github.event_name == 'schedule'
         run: python3 scripts/ci/contrato_catalogo.py --live
