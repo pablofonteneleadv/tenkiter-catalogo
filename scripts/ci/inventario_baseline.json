@@ -210,6 +210,7 @@
     "tests/agendamentos_painel_ui.py",
     "tests/agendar_acompanhar_ui.py",
     "tests/cadastro_vinculos.js",
+    "tests/caixa_fotos_recuperacao.js",
     "tests/catalogo_tecido.js",
     "tests/disponibilidade_rapida.py",
     "tests/esteira_continuidade_edicao_ui.py",
