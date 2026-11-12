@@ -1054,7 +1054,7 @@
     return f;
   }
   function abrirEtiquetas_() {
-    if (!aberta) return; if (!ETQ || !ETQ.length) { aviso_('Não consegui carregar as etiquetas. Atualize e tente novamente.'); return; } const corpo = gaveta_('Etiquetas do cliente'); if (!corpo) return;
+    if (!aberta) return; if (!ETQ || !ETQ.length) { aviso_('Não consegui carregar as etiquetas. Atualize e tente de novo.'); return; } const corpo = gaveta_('Etiquetas do cliente'); if (!corpo) return;
     const tem = new Set((aberta.etiquetas || []).map((e) => e.id)), lista = ETQ || [];
     const grupo = (titulo, itens, tipo) => {
       if (!itens.length) return; corpo.appendChild(el('p', 'ms-etq-rot', titulo));
