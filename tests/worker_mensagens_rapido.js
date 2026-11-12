@@ -110,6 +110,51 @@ function d1() {
   const conv = await DB.prepare('SELECT dono FROM msg_conversa WHERE id=?').bind(cx).first();
   chk('quem respondeu primeiro virou o responsável', conv && /Bia/.test(conv.dono || ''), conv);
 
+
+  console.log('--- sessão travada no Apps Script não segura o Worker indefinidamente ---');
+  {
+    // Prova sintética: nenhum envio real. Tempo real de 15 s é comprimido a 35 ms.
+    const fetchNormal = globalThis.fetch, tempoNormal = AbortSignal.timeout;
+    let calls = 0, signalPresent = false, limiteMs = 0;
+    try {
+      AbortSignal.timeout = function (ms) { limiteMs = ms; return tempoNormal.call(AbortSignal, 35); };
+      globalThis.fetch = (url, init) => {
+        if (String(url).startsWith('https://api.fake') && init && init.method === 'POST') {
+          const body = JSON.parse(init.body || '{}');
+          if (body.action === 'sessao' && body.sessao === 'tk2.sessao-travada-teste') {
+            calls++;
+            signalPresent = !!init.signal;
+            return new Promise((resolve, reject) => {
+              if (!init.signal) {
+                // Sem AbortSignal, a dependência demora: reproduz o bug em 140 ms.
+                setTimeout(() => reject(new Error('Apps Script fictício indisponível')), 140);
+              } else if (init.signal.aborted) {
+                reject(init.signal.reason || new Error('abort'));
+              } else {
+                init.signal.addEventListener('abort',
+                  () => reject(init.signal.reason || new Error('abort')), { once: true });
+              }
+            });
+          }
+        }
+        return fetchNormal(url, init);
+      };
+      const t = Date.now();
+      const falha = await B('POST', '/msg/tempo-real/ticket',
+        { canais: ['whatsapp1'] }, 'tk2.sessao-travada-teste');
+      const duracao = Date.now() - t;
+      chk('Apps Script de sessão travado retorna 503, não 401 nem acesso permitido',
+        falha.r.status === 503 && falha.j && falha.j.ok === false,
+        { status: falha.r.status, resposta: falha.j });
+      chk('requisição externa tem timeout explícito de até 20s e aborta cedo no teste',
+        calls === 1 && signalPresent && limiteMs >= 5000 && limiteMs <= 20000 && duracao < 120,
+        { calls, signalPresent, limiteMs, duracao });
+    } finally {
+      globalThis.fetch = fetchNormal;
+      AbortSignal.timeout = tempoNormal;
+    }
+  }
+
   console.log('\nOK=' + ok + ' FALHAS=' + falhas.length + ' ' + JSON.stringify(falhas));
   process.exit(falhas.length ? 1 : 0);
 })();
