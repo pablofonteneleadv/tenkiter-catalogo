@@ -31,7 +31,7 @@
           tentarDepois[x.k] = Date.now() + Math.min(15 * 60000, 30000 * Math.pow(2, falhas[x.k] - 1));
           if (!avisouPendencia) {
             avisouPendencia = true;
-            aviso('A peça foi salva, mas a confirmação das fotos na Esteira ficou pendente neste aparelho. O sistema tentará novamente.');
+            aviso('O produto foi salvo, mas a confirmação das fotos na Esteira ficou pendente neste aparelho. O sistema vai tentar de novo.');
           }
         })
         .then(function () { delete emVoo[x.k]; });
