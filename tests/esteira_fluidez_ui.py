@@ -12,12 +12,14 @@ with sync_playwright() as p:
   print('INICIO',w,flush=True)
   inicio=[]
   pg.on('request',lambda r:inicio.append(r.url) if r.url.endswith('/esteira/hoje') else None)
-  pg.clock.install();pg.goto(BASE+'esteira.html');pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1');pg.wait_for_selector('.peca')
+  pg.goto(BASE+'esteira.html');pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1');pg.wait_for_selector('.peca')
   assert len(inicio)==1,inicio
-  assert pg.evaluate("performance.getEntriesByName('esteira:hoje:util').length===1")
+  pg.wait_for_function("performance.getEntriesByName('esteira:hoje:util','mark').length===1")
   pg.locator('[data-aba=pedidos]').focus();pg.keyboard.press('Enter');pg.wait_for_selector('text=Pedidos ao fornecedor')
   assert pg.locator('[data-aba=pedidos]').evaluate('b=>document.activeElement===b')
-  assert pg.evaluate("performance.getEntriesByName('esteira:pedidos:util').length===1")
+  pg.wait_for_function("performance.getEntriesByName('esteira:pedidos:util','mark').length===1")
+  # Instale o relógio simulado depois das verificações de User Timing.
+  pg.clock.install()
   pg.click('[data-aba=hoje]');pg.clock.fast_forward(16000)
   held=[];c.route('**/esteira/pedidos',lambda r:held.append(r))
   print('PENDENTE',flush=True)
