@@ -98,7 +98,7 @@ with sync_playwright() as p:
   c.route('**/esteira/config?basico=1',lambda r:r.fulfill(json=config_base))
   cats=[]
   c.route('**/esteira/config/categorias',lambda r:cats.append(r))
-  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg=c.new_page();erros_config=[];pg.on('pageerror',lambda e:erros_config.append(str(e)));pg.goto(BASE+'esteira.html')
   pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
   pg.click('[data-aba=config]')
   try: pg.wait_for_selector('#cfg-funcoes')
@@ -136,6 +136,7 @@ with sync_playwright() as p:
   ns['aguardar_processos'](pg)
   assert st['cfg']['config']['categoriasFixas']=={'88999999999':'Blusas'}
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  assert not erros_config,erros_config
   c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
