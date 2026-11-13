@@ -238,6 +238,22 @@ async function migrarEsquema_(env) {
 /* ---------- utilidades ---------- */
 const agora = () => new Date().toISOString();
 const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => ('0' + b.toString(16)).slice(-2)).join('');
+/** Somente categorias e rotas allowlist: jamais incluir URL completa, token, telefone ou corpo. */
+function classeFalhaHTTP_(mensagem) {
+  const s=String(mensagem==null?'':mensagem).toLowerCase().slice(0,500);
+  if (/(sqlite|database|\bd1\b|no such table|no such column|sql error|banco de dados|coluna inexistente)/.test(s)) return 'banco';
+  if (/(quota|too many requests|rate.?limit|throttl|429)/.test(s)) return 'limite';
+  if (/(timeout|timed out|deadline|tempo esgotado|tempo limite)/.test(s)) return 'tempo';
+  if (/(network|fetch failed|upstream|gateway|502|503|connection|conex[aã]o|indispon[ií]vel)/.test(s)) return 'externo';
+  return 'indeterminado';
+}
+function rotaErroHTTP_(pathname) {
+  const p=String(pathname||'');
+  for (const rota of ['/msg/acesso','/msg/tempo-real','/msg/mobile','/esteira/caixa','/esteira/conferir','/esteira/hoje']) {
+    if (p===rota||p.startsWith(rota+'/')) return rota;
+  }
+  return '/outras';
+}
 function resp(corpo, status, h) { const x = new Headers(h || {}); x.set('Content-Type', 'application/json; charset=utf-8'); x.set('Cache-Control', 'no-store'); return new Response(JSON.stringify(corpo), { status: status || 200, headers: x }); }
 function cors(env, req) {
   const o = req.headers.get('Origin') || '';
@@ -6456,6 +6472,14 @@ export default {
     const acoesAuditadas={'/msg/enviar':'responder','/msg/encerrar':'encerrar','/msg/dono':'responsavel','/msg/notas':'notas','/msg/rotular':'etapa','/msg/ficha':'ficha','/msg/agendar':'agendar','/msg/acompanhamento':'acompanhar','/msg/iniciar':'criar'};
     let auditarAtividade_=req.method==='POST'&&acoesAuditadas[url.pathname]?req.clone().json().catch(()=>({})):null;
     const J = (c, s) => {
+      if (Number(s) >= 500) {
+        // Diagnostico sem PII, sem cabecalhos e sem a mensagem de erro.
+        // Best effort: telemetria NUNCA modifica a resposta nem a permissao.
+        try {
+          console.error(JSON.stringify({evento:'tk_http5xx',rota:rotaErroHTTP_(url.pathname),
+            codigo:Number(s),tipo:classeFalhaHTTP_(c?.erro)}));
+        } catch (_) { /* nao interferir com o atendimento */ }
+      }
       // v7.40.33: trilha da equipe — só ação confirmada, nunca o texto da mensagem.
       // Best effort: se o D1 falhar na trilha, a ação do atendente não é desfeita.
       if(c?.ok&&(!s||s<300)&&auditarAtividade_){
