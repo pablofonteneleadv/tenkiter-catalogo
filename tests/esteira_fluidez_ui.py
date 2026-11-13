@@ -42,7 +42,7 @@ with sync_playwright() as p:
   pg.fill('#cfg-funcoes','Fotos, Rascunho mais novo');escritos.pop(0).fallback();pg.wait_for_selector('text=Salvo. As novas regras')
   c.unroute('**/esteira/config',reter_escrita);pg.clock.fast_forward(31000)
   assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Rascunho mais novo'
-  c.route('**/esteira/config',lambda r:r.abort())
+  c.route('**/esteira/config?basico=1',lambda r:r.abort())
   # a mensagem aparece depois da tentativa falhar (assíncrono): avança o relógio simulado e confere até 10 vezes antes de reprovar
   pg.clock.fast_forward(31000);pg.wait_for_selector('.esteira-atualizacao')
   for _ in range(10):
@@ -80,6 +80,52 @@ with sync_playwright() as p:
   pg.wait_for_timeout(200)
   assert pg.locator('[data-aba=pedidos]').get_attribute('aria-selected')=='true'
   assert not pg.get_by_text('Minha conferência',exact=True).is_visible()
+  c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block')
+  st=ns['instalar'](c)
+  config_base={
+   'ok':True,'fonteEquipe':'acessos','equipe':st['equipe'],'escalaPadrao':[],'hoje':'2026-11-01','escalaHoje':{},
+   'config':{'porPessoa':20,'diasSemRepetir':21,'funcoes':['Fotos'],'pesos':{},
+             'categoriasFixas':{'88999999999':'Categoria antiga'},'reativacao':[30,60,90],'retratoHora':6}
+  }
+  c.route('**/esteira/config?basico=1',lambda r:r.fulfill(json=config_base))
+  cats=[]
+  c.route('**/esteira/config/categorias',lambda r:cats.append(r))
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=config]')
+  pg.wait_for_selector('#cfg-funcoes')
+  pg.wait_for_function("document.querySelector('#cfg-foco [role=status]')?.textContent==='Carregando categorias…'")
+  cat=pg.locator('#cfg-foco select[data-whats="88999999999"]')
+  assert cat.is_disabled() and cat.input_value()=='Categoria antiga'
+  pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
+  pg.screenshot(path=str(OUT/f'config-antes-de-categorias-{w}.png'))
+  pg.wait_for_timeout(100)
+  assert len(cats)==1
+  cats[0].fulfill(status=503,json={'ok':False,'erro':'Categorias indisponíveis.'})
+  retry=pg.get_by_role('button',name='Tentar carregar categorias')
+  retry.wait_for()
+  retry.scroll_into_view_if_needed()
+  pg.screenshot(path=str(OUT/f'config-categorias-indisponiveis-{w}.png'))
+  pg.locator('#cfg-reat-1').fill('20')
+  pg.get_by_role('button',name='Salvar foco e reativação').click()
+  pg.wait_for_selector('#cfg-foco >> text=Salvo.')
+  assert 'categoriasFixas' not in st['cfg']['config']
+  retry.click()
+  pg.wait_for_timeout(100)
+  assert len(cats)==2
+  cats[1].fulfill(json={'ok':True,'categorias':[{'nome':'Blusas','pecas':20}]})
+  pg.wait_for_function("!document.querySelector('#cfg-foco select').disabled")
+  assert cat.input_value()=='Categoria antiga'
+  assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
+  assert pg.locator('#cfg-reat-1').input_value()=='20'
+  cat.select_option('Blusas')
+  pg.get_by_role('button',name='Salvar foco e reativação').click()
+  pg.wait_for_function("!document.documentElement.dataset.esteiraGuardando")
+  ns['aguardar_processos'](pg)
+  assert st['cfg']['config']['categoriasFixas']=={'88999999999':'Blusas'}
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')

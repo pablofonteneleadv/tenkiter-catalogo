@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.11 — Configurações da Esteira com categorias em separado
+
+- Funções, escala, regras e modelos abrem sem consultar o catálogo. A lista de categorias carrega em separado, com nova tentativa em caso de falha.
+- O gestor pode salvar a reativação com as categorias indisponíveis. A categoria fixa cadastrada continua visível e só é enviada se houver edição nesse campo.
+
 ## 7.78.10 — Pedidos, catálogo sob demanda e listas da Esteira
 
 - O editor de Pedidos abre com dados do pedido e do fornecedor. Detalhes do catálogo entram conforme chegam, sem remontar os campos.

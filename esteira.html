@@ -2100,9 +2100,10 @@
     versaoTela++;
     const vista=fluidez.preparar('config','Carregando as configurações…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    let carregarCategorias;
     try {
 
-    const r = await srv('/esteira/config'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaConfig);
+    const r = await srv('/esteira/config?basico=1'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaConfig);
     app.replaceChildren();
     const aviso = (box, txt, ok) => { let p = box.querySelector('.retorno'); if (!p) { p = el('p', 'retorno'); p.setAttribute('role', 'status'); box.append(p); } p.className = 'retorno ' + (ok ? 'ok' : 'erro'); p.textContent = txt; };
     // Equipe
@@ -2185,26 +2186,61 @@
     const cFoco = el('div', 'card'); cFoco.id = 'cfg-foco'; cFoco.append(el('h2', '', 'Foco por categoria e reativação'));
     const mFoco = el('div', 'marcas'), lbF = el('label'), cbF = el('input'); cbF.type = 'checkbox'; cbF.id = 'cfg-foco-liga'; cbF.checked = r.config.focoCategoria !== false; lbF.append(cbF, document.createTextNode('Foco por categoria: cada pessoa confere uma categoria principal por dia')); mFoco.append(lbF);
     cFoco.append(mFoco, el('p', 'muted', 'As categorias mudam de um dia para o outro (rodízio). Fixe uma categoria só para quem deve ficar sempre nela.'));
-    const fixas = Object.assign({}, r.config.categoriasFixas || {}), cats = (r.categorias || []).map((c) => c.nome);
+    const fixas = Object.assign({}, r.config.categoriasFixas || {});
+    const categoriasProntas = Array.isArray(r.categorias);
     const boxFx = el('div'); boxFx.style.cssText = 'display:grid;gap:10px';
+    const seletores = [];
+    let fixasEditadas = false;
+    const atualizarOpcoes = (sx, cats) => {
+      const whats = sx.dataset.whats, atual = fixas[whats];
+      const auto = el('option', '', 'Rodízio automático'); auto.value = '';
+      sx.replaceChildren(auto);
+      const opcoes = atual && !cats.includes(atual) ? [...cats, atual] : cats;
+      for (const cat of opcoes) { const o = el('option', '', cat); o.value = cat; sx.append(o); }
+      sx.value = atual || '';
+    };
     r.equipe.filter((e) => e.ativo && e.confere).forEach((e) => {
       const lb = el('label', 'campo'); lb.append(document.createTextNode('Categoria de ' + e.nome));
-      const sx = el('select'); sx.dataset.whats = e.whats; const o0 = el('option', '', 'Rodízio automático'); o0.value = ''; sx.append(o0);
-      const opc = cats.slice(); if (fixas[e.whats] && !opc.includes(fixas[e.whats])) opc.push(fixas[e.whats]);
-      opc.forEach((c) => { const o = el('option', '', c); o.value = c; if (fixas[e.whats] === c) o.selected = true; sx.append(o); });
-      sx.onchange = () => { if (sx.value) fixas[e.whats] = sx.value; else delete fixas[e.whats]; };
-      lb.append(sx); boxFx.append(lb);
+      const sx = el('select'); sx.dataset.whats = e.whats; sx.disabled = !categoriasProntas;
+      atualizarOpcoes(sx, (r.categorias || []).map(c => c.nome));
+      sx.onchange = () => { fixasEditadas = true; if (sx.value) fixas[e.whats] = sx.value; else delete fixas[e.whats]; };
+      seletores.push(sx); lb.append(sx); boxFx.append(lb);
     });
-    if (!boxFx.childNodes.length) boxFx.append(el('p', 'muted', 'Ninguém está marcado para conferir produtos.'));
+    if (!seletores.length) boxFx.append(el('p', 'muted', 'Ninguém está marcado para conferir produtos.'));
+    if (seletores.length && !categoriasProntas) {
+      const estado = el('p', 'muted'); estado.setAttribute('role', 'status');
+      const tentar = el('button', 'bt', 'Tentar carregar categorias'); tentar.type = 'button'; tentar.hidden = true;
+      const carregar = async () => {
+        tentar.hidden = true;
+        estado.textContent = 'Carregando categorias…';
+        const cats = await srv('/esteira/config/categorias');
+        if (cats.sessaoMudou) return;
+        if (cats.exigeLogin && cFoco.isConnected) return telaLogin('');
+        if (!cats.ok || !Array.isArray(cats.categorias)) {
+          estado.textContent = cats.erro || 'Não consegui carregar as categorias.';
+          tentar.hidden = false;
+          return;
+        }
+        const nomes = cats.categorias.map(c => c.nome);
+        for (const sx of seletores) { atualizarOpcoes(sx, nomes); sx.disabled = false; }
+        estado.remove(); tentar.remove();
+      };
+      tentar.onclick = carregar;
+      boxFx.append(estado, tentar);
+      carregarCategorias = () => { if (cFoco.isConnected) void carregar(); };
+    }
     const deg = r.config.reativacao || [30, 60, 90], boxD = el('div', 'pesos');
     const [lD1, iD1] = num('Foto nova depois de (dias sem venda)', 'cfg-reat-1', deg[0], 1, 365), [lD2, iD2] = num('Vídeo curto e Postagens depois de (dias)', 'cfg-reat-2', deg[1], 1, 365), [lD3, iD3] = num('Promoção ou combinação depois de (dias)', 'cfg-reat-3', deg[2], 1, 365);
     const [lHr, iHr] = num('Retrato diário do estoque às (hora, Fortaleza)', 'cfg-retrato-hora', r.config.retratoHora == null ? 6 : r.config.retratoHora, 0, 23);
     boxD.append(lD1, lD2, lD3, lHr);
     const bFoco = el('button', 'bt prim', 'Salvar foco e reativação'); bFoco.type = 'button';
-    bFoco.onclick = async () => { const y = await srv('/esteira/config', { config: { focoCategoria: cbF.checked, categoriasFixas: fixas, reativacao: [Number(iD1.value), Number(iD2.value), Number(iD3.value)], retratoHora: Number(iHr.value) } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cFoco, y.erro || 'Não consegui salvar.'); aviso(cFoco, 'Salvo. O foco vale para as próximas listas; os degraus valem no próximo retrato.', true); };
+    bFoco.onclick = async () => { const y = await srv('/esteira/config', { config: { focoCategoria: cbF.checked, ...(fixasEditadas ? { categoriasFixas: fixas } : {}), reativacao: [Number(iD1.value), Number(iD2.value), Number(iD3.value)], retratoHora: Number(iHr.value) } }); if(y.foraDaTela)return; if (!y.ok) return aviso(cFoco, y.erro || 'Não consegui salvar.'); aviso(cFoco, 'Salvo. O foco vale para as próximas listas; os degraus valem no próximo retrato.', true); };
     cFoco.append(el('h3', '', 'Categoria fixa por pessoa'), boxFx, el('h3', '', 'Reativação de produtos parados'), el('p', 'muted', 'Sem venda = o estoque não caiu no retrato diário. O sistema cria as tarefas para Fotos e mostra as sugestões no Painel; nunca muda preço.'), boxD, bFoco);
     app.append(cEq, cHoje, cPad, cReg, cMod, cFoco);
-    } finally {fluidez.concluir(vista);}
+    } finally {
+      fluidez.concluir(vista);
+      carregarCategorias?.();
+    }
   }
 
   function resultadoOk(r,padrao){if(!r?.ok)throw Error(legivel(r?.erro,padrao));return r;}

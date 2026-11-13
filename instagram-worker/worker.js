@@ -7457,7 +7457,7 @@ const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString()
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
 const estFone_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 13);
-const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config']);
+const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
 const EST_INICIALIZACOES_ = new WeakMap();
 function estIniciar_(env) {
   let inicializacao = EST_INICIALIZACOES_.get(env.DB);
@@ -8649,11 +8649,21 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
     } else novoId = (await env.DB.prepare('INSERT INTO est_fornecedor (nome, endereco, fone1, fone2, fone3, ativo, criado_em, criado_por, atualizado_em) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)').bind(f.nome, f.endereco, f.fone1, f.fone2, f.fone3, agora, eu, agora).run()).meta.last_row_id;
     return J({ ok: true, fornecedor: estFornecedorSaida_(await env.DB.prepare('SELECT * FROM est_fornecedor WHERE id=?').bind(novoId).first()) });
   }
+  if (p === '/esteira/config/categorias' && req.method === 'GET') {
+    try { return J({ ok: true, categorias: estCategorias_(await lerCatalogo()) }); }
+    catch (e) { return J({ ok: false, erro: 'Não consegui carregar as categorias do catálogo. Tente de novo.' }, 503); }
+  }
   if (p === '/esteira/config' && req.method === 'GET') {
-    const cfg = await lerConfig();
-    const padrao = (await env.DB.prepare('SELECT dia, funcao, whats FROM est_escala_padrao').all()).results || [];
-    let categorias = []; try { categorias = estCategorias_(await lerCatalogo()); } catch (e) { categorias = []; }   // v7.45.0: para a categoria fixa
-    return J({ ok: true, config: cfg, padrao: EST_CFG_PADRAO_, fonteEquipe: perms.acessosConfiguraveis ? 'acessos' : 'manual', equipe: perms.acessosConfiguraveis ? equipe : (await env.DB.prepare('SELECT * FROM est_equipe ORDER BY ativo DESC, nome').all()).results || [], escalaPadrao: padrao, hoje: data, escalaHoje: await estEscalaDoDia_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined), categorias });
+    const basico = url.searchParams.get('basico') === '1';
+    const acessos = perms.acessosConfiguraveis;
+    const [cfg, padrao, equipeConfig, escala, categorias] = await Promise.all([
+      lerConfig(),
+      basico && acessos ? null : env.DB.prepare('SELECT dia, funcao, whats FROM est_escala_padrao').all(),
+      acessos ? equipe : env.DB.prepare('SELECT * FROM est_equipe ORDER BY ativo DESC, nome').all().then(r => r.results || []),
+      escalaHoje(),
+      basico ? null : lerCatalogo().then(estCategorias_).catch(() => []),
+    ]);
+    return J({ ok: true, config: cfg, padrao: EST_CFG_PADRAO_, fonteEquipe: acessos ? 'acessos' : 'manual', equipe: equipeConfig, escalaPadrao: padrao?.results || [], hoje: data, escalaHoje: escala, ...(basico ? {} : { categorias }) });
   }
   if (p === '/esteira/config' && req.method === 'POST') {
     const cfg = await lerConfig();
