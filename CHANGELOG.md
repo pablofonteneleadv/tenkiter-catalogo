@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.12 — Resumo do Painel da Esteira antes dos detalhes
+
+- Conferências já gravadas, pendências e pedidos aparecem enquanto listas detalhadas e informações do catálogo carregam. Falhas de atualização deixam o resumo disponível com opção de tentar novamente.
+- O servidor agrupa as listas por pessoa e deixa a contagem de famílias coerente entre o resumo e o painel completo.
+
 ## 7.78.11 — Configurações da Esteira com categorias em separado
 
 - Funções, escala, regras e modelos abrem sem consultar o catálogo. A lista de categorias carrega em separado, com nova tentativa em caso de falha.

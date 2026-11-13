@@ -165,8 +165,14 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('instruções da função aparecem para quem está nela', (hc.j.funcoes.find((f) => f.funcao === 'Fotos') || {}).instrucoes === 'Fotografar as peças novas no manequim.');
 
   // painel
+  const antesResumo = listas;
+  const qtdListasAntes = (await env.DB.prepare('SELECT COUNT(*) AS n FROM est_lista').first()).n;
+  const resumoPainel = await A(PABLO, 'GET', '/esteira/painel?resumo=1');
+  chk('resumo do painel abre sem catálogo, sem gerar listas e sem enviar detalhes', resumoPainel.j.ok && resumoPainel.j.detalhesPendentes && resumoPainel.j.idade === null && resumoPainel.j.reativacao === null && listas === antesResumo && (await env.DB.prepare('SELECT COUNT(*) AS n FROM est_lista').first()).n === qtdListasAntes && resumoPainel.j.listas.every(l => !('itens' in l)));
+  chk('resumo mantém o acesso de admin total', (await A(IARA, 'GET', '/esteira/painel?resumo=1')).r.status === 403);
   const pn = await A(PABLO, 'GET', '/esteira/painel');
   chk('painel mostra progresso de cada uma, divergência e idade do estoque', pn.j.ok && pn.j.progresso.length === 2 && pn.j.divergencia30.divergentes === 1 && pn.j.idade && pn.j.idade.ate30 + pn.j.idade.ate60 + pn.j.idade.ate90 + pn.j.idade.mais90 === 70, pn.j);
+  chk('resumo preserva progresso, divergência e pedidos do painel completo', ['progresso', 'divergencia30', 'pedidos', 'fornecedores'].every(k => JSON.stringify(resumoPainel.j[k]) === JSON.stringify(pn.j[k])) && !pn.j.detalhesPendentes);
   chk('funcionária não abre o painel', (await A(IARA, 'GET', '/esteira/painel')).r.status === 403);
   const rf = await A(PABLO, 'POST', '/esteira/refazer-hoje');
   chk('refazer hoje mantém a lista já começada', rf.j.ok && rf.j.mantidas === 1, rf.j);

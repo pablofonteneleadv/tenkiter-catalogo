@@ -127,5 +127,36 @@ with sync_playwright() as p:
   assert st['cfg']['config']['categoriasFixas']=={'88999999999':'Blusas'}
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block')
+  ns['instalar'](c)
+  pendentes=[]
+  resumo={'ok':True,'detalhesPendentes':True,'focoCategoria':True,
+          'listas':[{'whats':'88999999999','nome':'Iara','total':0,'feitas':0}],
+          'pedidos':{'aCaminho':[{'fornecedor':'Fornecedor do resumo','itens':2}],'aprovar':[]},
+          'divergencia30':{'conferencias':12,'divergentes':1}}
+  c.route('**/esteira/painel?resumo=1',lambda r:r.fulfill(json=resumo))
+  c.route('**/esteira/painel',lambda r:pendentes.append(r))
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=painel]')
+  pg.wait_for_selector('text=Fornecedor do resumo')
+  assert pg.get_by_text('Aguardando lista de hoje').is_visible()
+  assert not pg.get_by_role('button',name='Ver e alterar a lista de Iara').count()
+  pg.wait_for_timeout(100)
+  assert len(pendentes)==1
+  pg.screenshot(path=str(OUT/f'painel-resumo-com-catalogo-pendente-{w}.png'))
+  pendentes[0].fulfill(status=503,json={'ok':False,'erro':'Detalhes indisponíveis.'})
+  retry=pg.get_by_role('button',name='Tentar carregar detalhes')
+  retry.wait_for()
+  assert pg.get_by_text('Fornecedor do resumo').is_visible()
+  retry.click()
+  pg.wait_for_timeout(100)
+  assert len(pendentes)==2
+  pendentes[1].fallback()
+  pg.get_by_role('button',name='Ver e alterar a lista de Iara').wait_for()
+  assert not pg.get_by_text('Aguardando lista de hoje').count()
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
