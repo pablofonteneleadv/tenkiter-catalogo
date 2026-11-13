@@ -687,5 +687,49 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
       usuarios[PABLO] = usuarioAntes;
     }
   }
+  { // No D1 frio, consultar RH em paralelo sem reaproveitar autorização.
+    const banco = d1(), fetchOriginal = globalThis.fetch, usuarioOriginal = usuarios[PABLO];
+    const espera = {};
+    espera.banco = new Promise(ok => { espera.liberarBanco = ok; });
+    espera.rh = new Promise(ok => { espera.liberarRH = ok; });
+    let consultaRH = 0, concluir = false;
+    const db = {
+      prepare(sql) {
+        const consulta = banco.prepare(sql);
+        const executar = consulta.run;
+        consulta.run = async () => { await espera.banco; return executar(); };
+        return consulta;
+      },
+      batch: banco.batch,
+    };
+    const frio = { ...env, DB: db, RH_URL: 'https://rh.fake/exec' };
+    const consultar = () => w.fetch(new Request('https://ig.fake/esteira/pedidos', { headers: {
+      'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO, 'Origin': 'https://tenkitermodas.com.br',
+    } }), frio, ctx);
+    try {
+      usuarios[PABLO] = { nome: 'Admin Teste', permissoes: ['gerir_acessos'], acessosConfiguraveis: true };
+      globalThis.fetch = async (url, init) => {
+        if (String(url) !== frio.RH_URL) return fetchOriginal(url, init);
+        chk('consulta paralela mantém o contrato de equipe autenticada', JSON.parse(init.body).action === 'esteira_equipe');
+        consultaRH++;
+        espera.liberarRH();
+        return new Response(JSON.stringify({ ok: true, fonte: 'acessos', equipe: [] }));
+      };
+      const leitura = consultar().finally(() => { concluir = true; });
+      let timer;
+      await Promise.race([espera.rh, new Promise(ok => { timer = setTimeout(ok, 500); })]);
+      clearTimeout(timer);
+      chk('RH inicia sem depender do D1 frio, e a rota ainda espera o banco', consultaRH === 1 && !concluir);
+      espera.liberarBanco();
+      const r = await leitura;
+      chk('Pedidos preserva a resposta após a inicialização', r.status === 200 && (await r.json()).ok);
+      usuarios[PABLO] = { ...usuarios[PABLO], permissoes: [] };
+      chk('revogação na requisição seguinte bloqueia e não consulta a equipe', (await consultar()).status === 403 && consultaRH === 1);
+    } finally {
+      espera.liberarBanco();
+      globalThis.fetch = fetchOriginal;
+      usuarios[PABLO] = usuarioOriginal;
+    }
+  }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });
