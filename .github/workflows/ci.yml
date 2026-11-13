@@ -108,6 +108,8 @@ jobs:
           python3 tests/testes_impacto_seletor.py
           python3 tests/padroes_check_teste.py
           python3 tests/auditoria_interna.py
+          # QA: nao perder indicador de agendamento nos cards.
+          python3 tests/indicador_agenda_card.py
           python3 tests/worker_credenciais.py
           node tests/estoque_opcional.js
           node tests/manual_fidelidade.js
