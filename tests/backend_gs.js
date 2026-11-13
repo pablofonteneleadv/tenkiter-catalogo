@@ -2074,6 +2074,16 @@ function servicosFalsos(amb, est) {
   ok(!other.ok && !other.codigo, 'outro telefone não recupera pedido por opId');
 })();
 
+// Regressão do limite de 20 fotos: uma capa separada e até 19 URLs adicionais.
+(function limiteVinteFotos() {
+  const amb = criarAmbiente(); semear(amb);
+  const urls = Array.from({ length: 21 }, (_, i) => 'https://midia.fake/foto-' + i + '.jpg');
+  const resposta = amb.run('limitarGaleria_(' + JSON.stringify(urls.join(',')) + ')');
+  const lista = String(resposta).split(',').filter(Boolean);
+  ok(lista.length === 19 && lista[0] === urls[0] && lista[18] === urls[18], 'backend preserva 19 fotos extras e limita excedente, total 20 com a capa');
+  ok(amb.run('MAX_FOTOS_GALERIA') === 19, 'limite interno de galeria é 19 além da capa');
+})();
+
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length + (falhas.length ? ' ' + JSON.stringify(falhas) : ''));
 process.exit(falhas.length ? 1 : 0);
