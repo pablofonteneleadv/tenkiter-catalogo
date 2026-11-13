@@ -1,5 +1,10 @@
 """Pré-requisitos e relatório do runner; importar este módulo não inicia testes."""
 import importlib.util
+from contextlib import contextmanager
+import os
+import socket
+import time
+import urllib.request
 import json
 import re
 import shutil
@@ -7,12 +12,77 @@ import subprocess
 from pathlib import Path
 
 
+def sqlite_fixture_needed(root, suites):
+    """Usa a lista única da CI de impacto para selecionar o Worker SQLite de teste."""
+    manifest = json.loads((root / 'scripts/ci/testes_impacto_manifesto.json').read_text(encoding='utf8'))
+    requires = set(manifest['sql_fixture'])
+    return any('tests/' + name in requires for name, _ in suites)
+
+
+def sqlite_fixture_server(root, suites):
+    """Inicia/espera/encerra somente fixture LOCAL; nunca conecta a uma API da loja.
+
+    Se TK_QA_PORT for fornecida pelo executor por impacto, exige a fixture
+    já disponível. Sem esse env cria uma porta local efêmera e encerra o
+    processo no finally mesmo após falha de qualquer suíte.
+    """
+    if not sqlite_fixture_needed(root, suites):
+        from contextlib import nullcontext
+        return nullcontext(None)
+
+    @contextmanager
+    def open_fixture():
+        external = os.environ.get('TK_QA_PORT', '').strip()
+        if external:
+            port = int(external)
+            if not (1 <= port <= 65535):
+                raise RuntimeError('TK_QA_PORT fora do intervalo permitido.')
+            own = None
+        else:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.bind(('127.0.0.1', 0))
+                port = sock.getsockname()[1]
+            env = dict(os.environ, TK_QA_PORT=str(port))
+            own = subprocess.Popen(
+                ['node', str(root / 'tests/fixtures/solicitacoes_server.cjs')],
+                cwd=root, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        try:
+            for _ in range(80):
+                if own is not None and own.poll() is not None:
+                    raise RuntimeError('Servidor SQLite simulado terminou antes de ficar disponível.')
+                try:
+                    with urllib.request.urlopen(
+                        'http://127.0.0.1:%d/qa/estado' % port, timeout=.3
+                    ) as response:
+                        if response.status == 200:
+                            state = json.loads(response.read(65536))
+                            if isinstance(state, dict) and isinstance(state.get('solicitacoes'), list):
+                                break
+                except (OSError, ValueError):
+                    time.sleep(.125)
+            else:
+                raise RuntimeError('Fixture SQLite não respondeu em /qa/estado na porta local.')
+            yield str(port)
+        finally:
+            if own is not None:
+                if own.poll() is None:
+                    own.terminate()
+                try:
+                    own.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    own.kill()
+                    own.wait(timeout=5)
+
+    return open_fixture()
+
+
 def preflight(root, suites):
     missing = []
     sources = '\n'.join((root / 'tests' / name).read_text() for name, _ in suites)
     # Python autônomo não depende de Node. Suites JS/CJS e Python que invoca
     # Node continuam exigindo o runtime mínimo do projeto.
-    needs_node = any(name.endswith(('.js', '.cjs')) for name, _ in suites) or re.search(r"['\"]node['\"]|node:", sources)
+    needs_node = any(name.endswith(('.js', '.cjs')) for name, _ in suites) or re.search(r"['\"]node['\"]|node:", sources) or sqlite_fixture_needed(root, suites)
     if needs_node:
         node = shutil.which('node')
         if not node:
