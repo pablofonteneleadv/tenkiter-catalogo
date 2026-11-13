@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.6 — Abertura dos pedidos na Esteira
+
+- O servidor calcula os contadores de cada pedido em uma passagem pelos itens. O editor abre com os dados do pedido e do fornecedor, sem esperar pela listagem completa do catálogo.
+
+
 ## 7.78.5 — Caixa de fotos com paginação no servidor
 
 - A Caixa abre com as primeiras 24 fotos e permite carregar as anteriores sem perder as fotos já selecionadas. O servidor mantém contagens por situação e o mesmo controle de acesso.

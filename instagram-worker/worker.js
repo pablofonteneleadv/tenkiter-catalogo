@@ -8388,12 +8388,22 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
     const umItem = (cond) => env.DB.prepare('SELECT * FROM est_pedido_item WHERE id=? AND pedido=?' + (cond || '')).bind(Number(d.item) || 0, pid).first();
     const semItem = () => J({ ok: false, erro: 'Este item não está no pedido. Atualize a tela.' }, 404);
     if (p === '/esteira/pedidos' && req.method === 'GET') {
-      if (!admin) {
-        const rows = (await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS n, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1)) AS contados FROM est_pedido p WHERE p.status='a_caminho' ORDER BY p.previsao, p.id").all()).results || [];
-        return J({ ok: true, admin: false, pedidos: rows.map((x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: x.n, contados: x.contados })) });
-      }
-      const rows = (await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS n, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1)) AS contados, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) AS falta_aplicar FROM est_pedido p WHERE p.status<>'cancelado' OR p.criado_em>=? ORDER BY p.id DESC LIMIT 80").bind(new Date(Date.now() - 30 * 864e5).toISOString()).all()).results || [];
-      return J({ ok: true, admin: true, pedidos: rows.map((x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: x.n, contados: x.contados, faltaAplicar: x.falta_aplicar || 0, criado_em: x.criado_em || '' })) });
+      const campos = 'id, fornecedor, previsao, status, enviado_em, conferido_em, conferido_por, criado_em';
+      const selecao = admin
+        ? 'SELECT ' + campos + " FROM est_pedido WHERE status<>'cancelado' OR criado_em>=? ORDER BY id DESC LIMIT 80"
+        : 'SELECT ' + campos + " FROM est_pedido WHERE status='a_caminho' ORDER BY previsao, id";
+      const resumo = admin ? ', SUM(CASE WHEN i.qtd_aceita>0 AND i.aplicado_em IS NULL THEN 1 ELSE 0 END) AS falta_aplicar' : '';
+      const ordem = admin ? 'p.id DESC' : 'p.previsao, p.id';
+      const sql = 'WITH pedidos AS MATERIALIZED (' + selecao + ') SELECT p.*, ' +
+        "SUM(CASE WHEN i.tipo<>'extra' THEN 1 ELSE 0 END) AS n, " +
+        "SUM(CASE WHEN i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1) THEN 1 ELSE 0 END) AS contados" +
+        resumo + ' FROM pedidos p LEFT JOIN est_pedido_item i ON i.pedido=p.id GROUP BY p.id ORDER BY ' + ordem;
+      const consulta = env.DB.prepare(sql);
+      const rows = (await medir('d1', () => (admin ? consulta.bind(new Date(Date.now() - 30 * 864e5).toISOString()) : consulta).all())).results || [];
+      return J({ ok: true, admin, pedidos: rows.map(x => Object.assign(estPedidoBase_(x, nomeDe), {
+        itens: x.n, contados: x.contados,
+        ...(admin ? { faltaAplicar: x.falta_aplicar || 0, criado_em: x.criado_em || '' } : {}),
+      })) });
     }
     if (p === '/esteira/pedidos/abrir' && req.method === 'GET') {
       if (!ped) return semPedido();

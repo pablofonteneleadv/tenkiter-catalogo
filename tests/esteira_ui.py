@@ -715,7 +715,18 @@ with sync_playwright() as p:
         pg.goto(BASE + "esteira.html"); pg.wait_for_selector(".peca", timeout=8000)
         pg.click("nav.abas button[data-aba=pedidos]"); pg.wait_for_selector('.peca.pedido[data-pedido="9"]', timeout=6000)
         chk(f"{w} 7.48: pedido antigo com fornecedor em texto continua aparecendo", "Fornecedor Antigo Ltda" in pg.inner_text('.peca.pedido[data-pedido="9"]'))
+        # Mesmo sem resposta da listagem integral, o editor abre pelos dados do pedido e fornecedores.
+        catalogo_pendente = []
+        def reter_catalogo(rota):
+            if "action=list" in rota.request.url and "todos=true" in rota.request.url:
+                catalogo_pendente.append(rota)
+            else:
+                rota.fallback()
+        ctx.route("**/exec?*", reter_catalogo)
         pg.click('.peca.pedido[data-pedido="9"]'); pg.wait_for_selector("#ped-fornecedor", timeout=6000)
+        for rota in catalogo_pendente:
+            rota.fallback()
+        ctx.unroute("**/exec?*", reter_catalogo)
         chk(f"{w} 7.48: no editor o nome antigo fica escolhido, marcado como sem cadastro", pg.input_value("#ped-fornecedor") == "texto" and "(sem cadastro)" in pg.inner_text("#ped-fornecedor"))
         chk(f"{w} 7.48: lista grande de fornecedores ganha busca", pg.locator("#ped-forn-busca").count() == 1)
         pg.fill("#ped-forn-busca", "sert"); pg.wait_for_timeout(150)
