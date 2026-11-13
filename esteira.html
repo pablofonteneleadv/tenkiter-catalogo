@@ -282,7 +282,7 @@
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.72.0"></script>
 <script src="conta.js"></script>
-<script src="esteira-fluidez.js?v=7.53.3"></script>
+<script src="esteira-fluidez.js?v=7.78.4"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script src="fotos-novas.js"></script>
 <script src="produtos-busca.js?v=7.55.6"></script>
@@ -293,7 +293,12 @@
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const app = $('app');
   let EU = null, ABA = 'hoje', HOJE = null, CATALOGO = null, usuario = null;
-  let versaoTela=0;
+  let versaoTela=0, sessaoAtual=null;
+  const medirTela = (etapa, aba) => {
+    const nome = 'esteira:' + aba + ':' + etapa;
+    performance.clearMarks(nome);
+    performance.mark(nome);
+  };
   const fotosLocais=new Map();
   function snapshotEnvio(v){if(typeof v==='string'&&fotosLocais.has(v))return fotosLocais.get(v) instanceof Blob?{fotoLocal:true,urlLocal:v,arquivo:fotosLocais.get(v)}:fotosLocais.get(v);if(Array.isArray(v))return v.map(snapshotEnvio);if(v&&typeof v==='object'&&!(v instanceof Blob))return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,snapshotEnvio(x)]));return v;}
   async function resolverFotos(v,c,caminho='anexo'){if(v?.fotoLocal&&v.arquivo instanceof Blob){const url=await c.etapa(caminho,async()=>{const blob=await reduzirFoto(v.arquivo);c.assert();return enviarFoto(blob)});if(v.urlLocal){fotosLocais.set(v.urlLocal,url);document.querySelectorAll('img').forEach(i=>{if(i.src===v.urlLocal)i.src=url});URL.revokeObjectURL(v.urlLocal);}return url;}if(Array.isArray(v)){const a=[];for(let i=0;i<v.length;i++)a.push(await resolverFotos(v[i],c,caminho+'-'+i));return a;}if(v&&typeof v==='object'&&!(v instanceof Blob)){const a={};for(const[k,x]of Object.entries(v))a[k]=await resolverFotos(x,c,caminho+'-'+k);return a;}return v;}
@@ -422,6 +427,8 @@
 
   /* ---------- login ---------- */
   function telaLogin(msg) {
+    sessaoAtual = null;
+    EU = null; HOJE = null; ABA = 'hoje'; fluidez.limpar();
     $('abas').hidden = true; $('quem').textContent = '';
     app.replaceChildren();
     const c = el('div', 'card'); c.append(el('h2', '', 'Entrar'), el('p', 'muted', 'Use o mesmo e-mail, WhatsApp ou CPF e a mesma senha do painel e do Mensageiro.'));
@@ -430,9 +437,9 @@
     const er = el('p', 'erro', msg || ''); er.hidden = !msg;
     const go = el('button', 'bt prim', 'Entrar'); go.type = 'button';
     const esq = el('button', 'bt', 'Esqueci a senha'); esq.type = 'button';
-    go.onclick = async () => { go.disabled = true; const r = await entrarComSenha(w.value, s.value); go.disabled = false; if (!r || !r.ok) { er.textContent = (r && r.erro) || 'Não foi possível entrar.'; er.hidden = false; return; } iniciar(); };
+    go.onclick = async () => { go.disabled = true; const r = await entrarComSenha(w.value, s.value); go.disabled = false; if (!r || !r.ok || !getSessao()) { er.textContent = (r && r.erro) || 'Não foi possível entrar.'; er.hidden = false; } };
     s.onkeydown = (e) => { if (e.key === 'Enter') go.click(); };
-    esq.onclick = () => { if (window.TKConta) TKConta.abrirRecuperar({ identificador: w.value, chamar: (d) => apiPost(d), aoEntrar: (r) => { salvarSessao(r.usuario.whatsapp, r.sessao); iniciar(); } }); };
+    esq.onclick = () => { if (window.TKConta) TKConta.abrirRecuperar({ identificador: w.value, chamar: (d) => apiPost(d), aoEntrar: (r) => salvarSessao(r.usuario.whatsapp, r.sessao) }); };
     c.append(w, s, er, go, esq); app.append(c); w.focus();
   }
   function falha(msg, tentar) {
@@ -442,14 +449,35 @@
 
   /* ---------- abas ---------- */
   function desenharAbas() {
-    const nav = $('abas'); nav.replaceChildren();
+    const nav = $('abas');
     const abas = [['hoje', 'Hoje', 'Hoje'], ['prep', 'Preparação', 'Preparo'], ['fotos', 'Fotos', 'Fotos'], ['pedidos', 'Pedidos', 'Pedidos']].concat(EU && EU.admin ? [['painel', 'Painel', 'Painel'], ['config', 'Configurações', 'Ajustes']] : []);
     nav.hidden = abas.length < 2;
     const curto = abas.length > 4 && window.matchMedia('(max-width: 560px)').matches;   // v7.43.0: 5 abas cabem em 390 px sem rolar
     nav.classList.toggle('curto', curto);
     const fz = (HOJE && HOJE.fotos) || {}, nFotos = (fz.pedidas || 0) + (fz.caixa || 0);   // v7.52.0: aviso discreto na aba Fotos
-    abas.forEach(([id, rot, rc]) => { const b = el('button', '', curto ? rc : rot); b.type = 'button'; b.dataset.aba = id; if (curto && rc !== rot) b.setAttribute('aria-label', rot);
-      if (id === 'fotos' && nFotos) { b.append(el('span', 'aba-num', String(nFotos))); b.setAttribute('aria-label', 'Fotos, ' + nFotos + (nFotos === 1 ? ' pendência' : ' pendências')); } b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(ABA === id)); b.onclick = () => { ABA = id; desenharAbas(); abrirAba(); }; nav.append(b); });
+    const ids = abas.map(([id]) => id);
+    for (const botao of [...nav.children]) if (!ids.includes(botao.dataset.aba)) botao.remove();
+    abas.forEach(([id, rot, rc], indice) => {
+      let b = nav.children[indice];
+      if (b?.dataset.aba !== id) {
+        b = el('button'); b.type = 'button'; b.dataset.aba = id; b.setAttribute('role', 'tab');
+        b.onclick = () => {
+          if (ABA === id && app.dataset.tela === id) return;
+          performance.clearMarks('esteira:' + id + ':util');
+          medirTela('toque', id); ABA = id; desenharAbas(); abrirAba();
+        };
+        nav.insertBefore(b, nav.children[indice] || null);
+      }
+      const texto = curto ? rc : rot;
+      const contagem = id === 'fotos' && nFotos ? String(nFotos) : '';
+      if (b.firstChild?.textContent !== texto || (b.querySelector('.aba-num')?.textContent || '') !== contagem) {
+        b.textContent = texto;
+        if (contagem) b.append(el('span', 'aba-num', contagem));
+      }
+      const rotulo = contagem ? 'Fotos, ' + contagem + (nFotos === 1 ? ' pendência' : ' pendências') : texto !== rot ? rot : '';
+      if (rotulo) b.setAttribute('aria-label', rotulo); else b.removeAttribute('aria-label');
+      b.setAttribute('aria-selected', String(ABA === id));
+    });
   }
   function abrirAba() { if (ABA === 'prep') return telaPrep(); if (ABA === 'fotos') return telaFotos(); if (ABA === 'pedidos') return telaPedidos(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
 
@@ -1121,6 +1149,7 @@
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
 
+    const filaLocal = cxTodos().catch(() => []);
     const r = await srv('/esteira/fotos'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren(); catalogoFundo();
@@ -1128,27 +1157,38 @@
     const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (AVISO_FOTOS) stTopo.diga(AVISO_FOTOS, 'ok');
     topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de um produto', '', () => abrirPedirFotos(null, (m) => telaFotos(m))), bt('Atualizar fotos', 'leve', () => {fluidez.invalidar();telaFotos();}), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros())), stTopo);
     app.append(topo);
-    const pend = await cxTodos();                    // envio interrompido: continua sozinho e mostra o andamento
-    if (pend.length) {
-      const c = el('div', 'card aviso-cx'); c.id = 'caixa-pendente'; const st = linhaStatus();
-      c.append(el('p', '', (pend.length === 1 ? '1 foto ainda não chegou' : pend.length + ' fotos ainda não chegaram') + ' à caixa. Continuando o envio…'), st);
-      topo.after(c);
-      cxProcessar((m) => st.diga(m)).then((x) => { if (!x.faltam && !x.erro && ABA==='fotos' && c.isConnected) st.diga('Envio concluído. Use “Atualizar fotos” quando terminar o que está fazendo.', 'ok'); else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); } });
-    }
     const cp = el('div', 'card'); cp.id = 'fotos-pedidas';
     cp.append(el('h2', '', 'Fotos pedidas'));
     if (!r.pedidos.length) cp.append(el('p', 'muted', 'Nenhum pedido de fotos aberto.'));
     else cp.append(...r.pedidos.map((g) => cartaoPedidoFotos(g, () => telaFotos())));
     app.append(cp);
     const cx = el('div', 'card'); cx.id = 'caixa'; app.append(cx);
-    desenharCaixa(cx);
+    void desenharCaixa(cx);
+    void filaLocal.then((pendentes) => {
+      const topoAtual = $('fotos-topo');
+      if (!pendentes.length || !vista.valida() || ABA !== 'fotos' || !topoAtual || $('caixa-pendente')) return;
+      const c = el('div', 'card aviso-cx'); c.id = 'caixa-pendente';
+      const st = linhaStatus();
+      c.append(el('p', '', (pendentes.length === 1 ? '1 foto ainda não chegou' : pendentes.length + ' fotos ainda não chegaram') + ' à caixa. Continuando o envio…'), st);
+      topoAtual.after(c);
+      void cxProcessar((m) => { if (c.isConnected) st.diga(m); }).then((x) => {
+        if (!x || !c.isConnected || !vista.valida()) return;
+        if (!x.faltam && !x.erro) st.diga('Envio concluído. Use “Atualizar fotos” quando terminar o que está fazendo.', 'ok');
+        else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); }
+      });
+    });
     } finally {fluidez.concluir(vista);}
   }
+  const leiturasCaixa = new WeakMap();
   async function desenharCaixa(cx) {
-    const gestor = !!(EU && EU.gestorFotos);
+    const gestor = !!(EU && EU.gestorFotos), filtroAtual = CAIXA_VER, sessao = sessaoAtual;
+    const tentativa = {};
+    leiturasCaixa.set(cx, tentativa);
     cx.replaceChildren(el('h2', '', gestor ? 'Fotos recebidas' : 'Suas fotos enviadas'), el('p', 'muted', 'Carregando…'));
-    const r = await srv('/esteira/caixa' + (gestor ? '?ver=' + CAIXA_VER : ''));
-    cx.lastChild.remove();
+    const r = await srv('/esteira/caixa' + (gestor ? '?ver=' + filtroAtual : ''));
+    if (sessao !== sessaoAtual || leiturasCaixa.get(cx) !== tentativa || (gestor && filtroAtual !== CAIXA_VER)) return;
+    if (r.exigeLogin && cx.isConnected) return telaLogin('');
+    cx.lastChild?.remove();
     if (!r.ok) { cx.append(el('p', 'erro', r.erro || 'Não consegui abrir a caixa.'), bt('Tentar de novo', '', () => desenharCaixa(cx))); return; }
     const sel = new Set(), barra = el('div', 'cx-barra'); barra.hidden = true; const stB = linhaStatus();
     if (gestor) {
@@ -2135,15 +2175,34 @@
   /* ---------- início ---------- */
   async function iniciar() {
     if (!getSessao()) return telaLogin('');
-    fotosLocais.forEach((v,k)=>URL.revokeObjectURL(k));fotosLocais.clear();usuario = null; HOJE = null; AVISO_FOTOS=''; fluidez.invalidar();
+    performance.clearMarks('esteira:hoje:util');
+    medirTela('abertura', 'hoje');
     await telaHoje();
   }
-  setInterval(()=>{if(ABA!=='fotos'&&!document.hidden&&fluidez.visivel()&&!document.querySelector('.fundo,.cx-sel[aria-pressed=true]')&&![...document.querySelectorAll('.overlay')].some(e=>e.getClientRects().length))abrirAba();},30000);
-  window.addEventListener('online',()=>{fluidez.invalidar();if(ABA!=='fotos'&&fluidez.visivel())abrirAba();});
-  document.addEventListener('visibilitychange',()=>{if(ABA!=='fotos'&&!document.hidden&&fluidez.visivel()){fluidez.invalidar();abrirAba();}});
-  window.addEventListener('tk:sessao',()=>{document.querySelectorAll('.fundo').forEach(f=>{if(f.esteiraDono!==String(getSessao()?.whatsapp||''))f.esteiraFechar?.();});fluidez.limpar();iniciar();});
+  function sessaoMudou() {
+    const s = getSessao();
+    if (sessaoAtual && s && s.whatsapp === sessaoAtual.whatsapp && s.sessao === sessaoAtual.sessao) return;
+    sessaoAtual = s;
+    document.querySelectorAll('.fundo').forEach(f => f.esteiraFechar?.());
+    fotosLocais.forEach((_, url) => URL.revokeObjectURL(url));
+    fotosLocais.clear();
+    usuario = null; HOJE = null; EU = null; ABA = 'hoje'; CAIXA_VER = 'novas'; AVISO_FOTOS = '';
+    $('abas').hidden = true; $('quem').textContent = '';
+    fluidez.limpar();
+    void iniciar();
+  }
+  function revalidarAba(expirar = false) {
+    if (expirar && !document.hidden) fluidez.expirar();
+    if (ABA === 'fotos' || document.hidden || !fluidez.visivel() || document.querySelector('.fundo') ||
+        [...document.querySelectorAll('.overlay')].some(e => e.getClientRects().length)) return;
+    void abrirAba();
+  }
+  setInterval(revalidarAba, 30000);
+  window.addEventListener('online', () => revalidarAba(true));
+  document.addEventListener('visibilitychange', () => revalidarAba(true));
+  TKSessao.aoMudar(sessaoMudou);
   let larguraAbas = window.innerWidth; window.addEventListener('resize', () => { if ((window.innerWidth > 560) !== (larguraAbas > 560) && EU) desenharAbas(); larguraAbas = window.innerWidth; });
-  iniciar();
+  sessaoMudou();
 })();
 </script>
 <script src="a11y.js?v=7.62.1"></script>

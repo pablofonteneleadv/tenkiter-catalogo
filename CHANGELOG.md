@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.4 — Navegação e Fotos na Esteira
+
+- O login inicia a Esteira uma vez. A navegação mantém o foco e a revalidação retoma só a aba em uso.
+- Fotos começa a carregar a Caixa sem esperar pela fila local. Respostas atrasadas de outro filtro ou outra sessão deixam de substituir a tela.
+- O navegador registra marcos de abertura e retorno às abas, disponíveis para medir no Android.
+
+
 ## 7.78.3 — Primeira etapa de desempenho da Esteira
 
 - Hoje busca apenas os dados de conferência e família dos produtos da lista e agrupa as leituras independentes.
