@@ -78,6 +78,34 @@ const base = [
   r = await pedir('/qualquer-coisa');
   ok(r.status === 302 && r.headers.get('location') === SITE, 'endereço desconhecido leva à loja');
 
+  console.log('== Prévia OG com idades e numerações resumidas (sem mutar dados reais) ==');
+  const fichaOG = Object.assign({}, base[0], { ID: 1001, Codigo: 'TK-OG-ID', Tamanhos: 'Etiqueta: P,Idade: 2 anos,Idade: 3 anos,Idade: 4 anos' });
+  const numeroOG = Object.assign({}, base[0], { ID: 1002, Codigo: 'TK-OG-NUM', Tamanhos: 'Veste: 38,Veste: 40,Veste: 44' });
+  const quebraOG = Object.assign({}, base[0], { ID: 1003, Codigo: 'TK-OG-DIS', Tamanhos: 'Idade: 2 anos,Idade: 4 anos,Idade: 8 anos' });
+  const legadoOG = Object.assign({}, base[0], { ID: 1004, Codigo: 'TK-OG-LEG', Tamanhos: 'P,M' });
+  apiLista = base.concat([fichaOG, numeroOG, quebraOG, legadoOG]);
+  const descricaoOG = (html) => (html.match(/<meta property="og:description" content="([^"]*)"/) || [])[1] || '';
+  let hOG = await (await pedir('/p/TK-OG-ID')).text();
+  ok(descricaoOG(hOG).startsWith('Idades: 2 a 4 anos | ') && !descricaoOG(hOG).includes('Etiqueta:'),
+    'idades contínuas: 2 a 4 anos, sem expor a etiqueta textual');
+  ok(hOG.includes('<meta name="description" content="Idades: 2 a 4 anos') &&
+     hOG.includes('<meta name="twitter:description" content="Idades: 2 a 4 anos'),
+    'metadados comuns e Twitter seguem o resumo Open Graph');
+  const ldOG = JSON.parse((hOG.match(/<script type="application\\/ld\\+json">([\\s\\S]*?)<\\/script>/) || [])[1]);
+  ok(ldOG.offers.price === '50.00' && ldOG.sku === 'TK-OG-ID' &&
+     hOG.includes('location.replace("' + SITE + '?c=TK-OG-ID")'),
+    'JSON-LD, preço e destino de compartilhamento preservados');
+  hOG = await (await pedir('/p/TK-OG-NUM')).text();
+  ok(descricaoOG(hOG).startsWith('Numerações: 38/40/44 | '),
+    'numeração com salto: 38/40/44, sem inventar o 42');
+  hOG = await (await pedir('/p/TK-OG-DIS')).text();
+  ok(descricaoOG(hOG).startsWith('Idades: 2/4/8 anos | '),
+    'idades descontínuas: não transformar em faixa inclusiva');
+  hOG = await (await pedir('/p/TK-OG-LEG')).text();
+  ok(descricaoOG(hOG).startsWith('Tamanhos: P/M | '),
+    'dados legados sem idade/numeração permanecem legíveis');
+  apiLista = base;
+
   console.log('== Foto escolhida: /p/<código>?f=N (miniatura e destino acompanham a foto) ==');
   const CAPA = 'https://lh3.googleusercontent.com/d/CAPA123', G1 = 'https://res.cloudinary.com/z/image/upload/v1/g1.jpg', G2 = 'https://res.cloudinary.com/z/image/upload/v1/g2.jpg';
   const VID = 'https://res.cloudinary.com/z89/video/upload/v1791644263/tenkiter-catalogo/abc123.mp4';
