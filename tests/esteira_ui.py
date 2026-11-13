@@ -256,6 +256,8 @@ def instalar(ctx, admin=True, familia=False):
                 else:
                     st["seq_forn"] += 1; f = dict({"id": st["seq_forn"], "nome": nome, "endereco": b.get("endereco", ""), "ativo": True, "pedidos": 0}, **fones); st["fornecedores"].append(f)
                 return route.fulfill(json={"ok": True, "fornecedor": f})
+            if path == "/esteira/menu":
+                return route.fulfill(json={"ok": True, "eu": {"nome": "Iara", "admin": admin}})
             if path == "/esteira/hoje":
                 lista = [item(p, p["ID"] in st["conferidas"]) for p in PRODUTOS]
                 if familia: lista = lista[:1] + [dict(item(x, x["ID"] in st["conferidas"]), familia="fsunga", familiaNome="Sunga infantil masculino", rotulo=x["_rot"]) for x in FAMILIA]

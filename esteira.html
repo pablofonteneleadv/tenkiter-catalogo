@@ -317,6 +317,7 @@
       const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:corpo ? undefined : AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, ...(op?{'X-TK-Operacao':op}:{}) }, body: corpo ? JSON.stringify(corpo) : undefined });
       const j = await r.json().catch(() => ({ ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' }));
       if (r.status === 401) j.exigeLogin = true;
+      if (r.status === 403 && rota === '/esteira/hoje') j.acessoRevogado = true;
       if (j && j.ok === false && window.TKPadrao) j.erro = TKPadrao.erro(j, 'Não consegui agora. Tente de novo.');   // v7.57.0: nunca JSON nem código na tela
       return j;
     } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
@@ -487,7 +488,7 @@
     const vista=fluidez.preparar('hoje','Montando a sua lista de hoje…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
-    if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
+    if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (r.exigeLogin || r.acessoRevogado) return telaLogin(r.acessoRevogado ? r.erro : ''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
     app.replaceChildren();
     const r = HOJE;
     const pd = r.pedidos || {}, irPedidos = () => { ABA = 'pedidos'; desenharAbas(); telaPedidos(); };   // v7.43.0: pendências de pedido
@@ -2214,7 +2215,18 @@
     if (!getSessao()) return telaLogin('');
     performance.clearMarks('esteira:hoje:util');
     medirTela('abertura', 'hoje');
-    await telaHoje();
+    const sessao = sessaoAtual;
+    // Hoje ainda carrega quando a autorização do menu já estiver confirmada.
+    const menu = srv('/esteira/menu');
+    const hoje = telaHoje();
+    void menu.then(r => {
+      if (sessao !== sessaoAtual || EU || !r?.ok || !r.eu) return;
+      EU = r.eu;
+      $('quem').textContent = EU.nome || '';
+      desenharAbas();
+      medirTela('menu', 'hoje');
+    });
+    await hoje;
   }
   function sessaoMudou() {
     const s = getSessao();
