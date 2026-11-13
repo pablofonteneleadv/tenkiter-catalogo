@@ -1,5 +1,6 @@
 """Troca de abas e revalidação lenta; rede simulada, sem escrita real."""
 import os
+import re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 p=Path(__file__).with_name('esteira_ui.py');ns={'__file__':str(p),'__name__':'esteira_base'}
@@ -68,21 +69,18 @@ with sync_playwright() as p:
   st['pedidos'][9]={'id':9,'fornecedor':'Fornecedor Antigo Ltda','previsao':'','status':'rascunho',
                     'obs':'','fotos':[],'itens':[{'id':31,'tipo':'reposicao','produto':'1001','nome':'Vestido Midi Linho',
                                                 'fotos':[],'qtd_pedida':2,'custo':30,'qtd_contada':None}]}
+  retido=[]
+  c.route(re.compile(r'/exec\?action=list&todos=true$'),lambda r:retido.append(r))
   pg=c.new_page();pg.goto(BASE+'esteira.html')
   pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
   pg.click('[data-aba=pedidos]')
-  retido=[]
-  def reter_catalogo(r):
-   if 'action=list' in r.request.url and 'todos=true' in r.request.url:retido.append(r)
-   else:r.fallback()
-  c.route('**/exec?*',reter_catalogo)
   pg.click('.peca.pedido[data-pedido="9"]')
   pg.wait_for_selector('#ped-fornecedor')
   item=pg.locator('.item-ped[data-item="31"]')
   assert pg.input_value('#ped-fornecedor')=='texto'
-  assert item.get_by_text('Reposição',exact=True).is_visible()
   pg.wait_for_timeout(100)
-  assert len(retido)==1,retido
+  assert len(retido)==1,[r.request.url for r in retido]
+  assert item.get_by_text('Reposição',exact=True).is_visible(),item.inner_text()
   pg.fill('#ped-obs','Manter o texto ao carregar o catálogo')
   pg.screenshot(path=str(OUT/f'pedidos-editor-catalogo-atrasado-{w}.png'))
   retido[0].fallback()
