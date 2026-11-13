@@ -91,7 +91,7 @@ const base = [
   ok(hOG.includes('<meta name="description" content="Idades: 2 a 4 anos') &&
      hOG.includes('<meta name="twitter:description" content="Idades: 2 a 4 anos'),
     'metadados comuns e Twitter seguem o resumo Open Graph');
-  const ldOG = JSON.parse((hOG.match(/<script type="application\\/ld\\+json">([\\s\\S]*?)<\\/script>/) || [])[1]);
+  const ldOG = JSON.parse((hOG.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/) || [])[1]);
   ok(ldOG.offers.price === '50.00' && ldOG.sku === 'TK-OG-ID' &&
      hOG.includes('location.replace("' + SITE + '?c=TK-OG-ID")'),
     'JSON-LD, preço e destino de compartilhamento preservados');
