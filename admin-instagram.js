@@ -12,7 +12,7 @@
   const esc = (v) => escaparHtml(v);
   const GRUPOS = [['pendente', 'Pendentes'], ['duplicado', 'Prováveis duplicados'], ['nao_produto', 'Não é produto'], ['descartado', 'Descartados']];
   let grupo = 'pendente', lista = [], mais = false, cont = {}, st = null, editando = null, ocupado = false, desfazer = null, desfazerTimer = null;
-  const LIM_FOTOS = 8, LIM_VIDEOS = 1;   // o cadastro do produto aceita no máximo 8 fotos e 1 vídeo
+  const LIM_FOTOS = 20, LIM_VIDEOS = 1;   // a importação do Instagram aceita até 20 fotos e 1 vídeo
   let escolha = null;                    // tela de escolha quando juntar passa dos limites: { ordem, itens, sel:Set }
   const marcados = new Set();            // posts marcados com a caixinha para "Juntar"
   let iaRodando = false, iaTxt = '', tela = '';      // tela: 'lista' | 'editor' | 'conectar' (a leitura por IA só redesenha a lista)
@@ -118,7 +118,7 @@
     $('ig-corpo').addEventListener('change', (e) => { if (e.target.classList && e.target.classList.contains('ig-lg')) lerCampoLote(e.target); });
     $('ig-corpo').addEventListener('change', (ev) => {
       const esco = ev.target.closest && ev.target.closest('.ig-esc');
-      if (esco && escolha) {   // tela "o que fica ao juntar": respeita 8 fotos e 1 vídeo
+      if (esco && escolha) {   // tela "o que fica ao juntar": respeita 20 fotos e 1 vídeo
         const m = escolha.itens.find((x) => String(x.id) === String(esco.value)); if (!m) return;
         if (esco.checked) {
           const c = contagemEscolha(), ehV = m.tipo === 'video';
@@ -376,7 +376,7 @@
     const ordem = lista.filter((x) => marcados.has(x.id)); if (ordem.length < 2) { msg('Marque 2 ou mais posts.', 'erro'); return; }
     await iniciarJuncao(ordem);
   }
-  /** Se as mídias juntas cabem (8 fotos e 1 vídeo), junta direto; se passam, abre a tela para a pessoa ESCOLHER o que fica. */
+  /** Se as mídias juntas cabem (20 fotos e 1 vídeo), junta direto; se passam, abre a tela para a pessoa ESCOLHER o que fica. */
   async function iniciarJuncao(ordem) {
     const itens = midiasDe(ordem), fotos = itens.filter((m) => m.tipo !== 'video'), vids = itens.filter((m) => m.tipo === 'video');
     if (fotos.length <= LIM_FOTOS && vids.length <= LIM_VIDEOS) {
