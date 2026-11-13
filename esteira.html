@@ -562,7 +562,6 @@
       linha.append(p.sumiu ? el('div', 'semfoto') : fotoPeca(p.id, p.foto, p.nome, '', true), b);
       app.append(linha);
     });
-    catalogoFundo();                                   // v7.48.0: galeria pronta quando a pessoa tocar numa foto
     } finally {fluidez.concluir(vista);}
   }
   /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todas as peças conferidas (igual ao servidor). */
@@ -772,7 +771,7 @@
     const r = await srv('/esteira/preparacao'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren();
-    catalogoFundo();                                  // dados e fotos de cada produto chegam logo depois
+    if (r.produtos.length || r.outras.length) void catalogoFundo();
     const topo = el('div', 'card'); topo.id = 'prep-topo'; topo.append(el('h2', '', 'Preparação'));   // v7.52.0: sem o bloco de instruções (pedido do Pablo)
     if (r.podeAceitar) topo.append(...blocoColocar(r));
     app.append(topo);
@@ -1153,7 +1152,7 @@
     const filaLocal = cxTodos().catch(() => []);
     const r = await srv('/esteira/fotos'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
-    app.replaceChildren(); catalogoFundo();
+    app.replaceChildren();
     const topo = el('div', 'card'); topo.id = 'fotos-topo'; topo.append(el('h2', '', 'Fotos'));
     const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (AVISO_FOTOS) stTopo.diga(AVISO_FOTOS, 'ok');
     topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de um produto', '', () => abrirPedirFotos(null, (m) => telaFotos(m))), bt('Atualizar fotos', 'leve', () => {fluidez.invalidar();telaFotos();}), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros())), stTopo);
@@ -1610,17 +1609,29 @@
 
   /* ----- Admin total: montar o pedido ----- */
   async function telaEditor(id) {
-    versaoTela++;
+    const versao = ++versaoTela, sessao = getSessao();
+    app.dataset.tela = 'editor';
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
+    const atual = () => versao === versaoTela && ABA === 'pedidos' && getSessao()?.sessao === sessao?.sessao;
     let ped = { id: 0, fornecedor: '', previsao: '', obs: '', fotos: [], itens: [], status: 'rascunho' };
-    if (id) { const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos); ped = r.pedido; }
+    if (id) {
+      const r = await srv('/esteira/pedidos/abrir?id=' + id);
+      if (!atual()) return;
+      if (r.exigeLogin) return telaLogin('');
+      if (!r.ok) return falha(r.erro, telaPedidos);
+      ped = r.pedido;
+    }
     if (ped.status === 'conferido') return telaAprovacao(ped.id);
     if (ped.status === 'aprovado') return telaAplicacao(ped.id);
-    let cat = null; try { cat = await catalogoCompleto(); } catch (e) { cat = null; }
-    const fr = await srv('/esteira/fornecedores');   // v7.48.0: cadastro de fornecedores
+    const fornecedores = srv('/esteira/fornecedores');
+    const catalogo = ped.itens.some(it => it.tipo === 'reposicao') ? catalogoFundo() : Promise.resolve(null);
+    const fr = await fornecedores;
+    if (!atual()) return;
+    if (fr.exigeLogin) return telaLogin('');
     FORNECEDORES = fr.ok ? fr.fornecedores : null;
-    desenharEditor(ped, cat);
+    desenharEditor(ped, catalogo, atual);
   }
+
   let FORNECEDORES = null;
   const foneBR = (d) => TKPadrao.telefone(d);   // v7.57.0: uma função só (padrao-dados.js); o 55 do Brasil nunca aparece cru
   const foneValido = (v) => { const s = String(v || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''); return !String(v || '').trim() || s.length === 10 || s.length === 11; };
@@ -1652,7 +1663,7 @@
       pe.append(salvar);
     });
   }
-  function desenharEditor(ped, cat, aviso) {
+  function desenharEditor(ped, catalogo, atual) {
     const itens = ped.itens.filter((x) => x.tipo !== 'extra').map((x) => Object.assign({}, x, { fotos: (x.fotos || []).slice(), custo: x.custo == null ? '' : String(x.custo).replace('.', ','), qtd_pedida: x.qtd_pedida || '' }));
     const fotosPed = (ped.fotos || []).slice();
     app.replaceChildren();
@@ -1693,8 +1704,16 @@
     const focarQtd = (k) => setTimeout(() => { const i = caixa.querySelectorAll('input.qtd-ped')[k]; if (i) i.focus(); }, 60);
     const linhaItem = (it) => {
       const l = el('div', 'item-ped'); if (it.id) l.dataset.item = String(it.id);
-      const topo = el('div', 'prep-topo'), t = el('div', 't'), ref = it.tipo === 'reposicao' && cat ? cat.get(String(it.produto)) : null;
-      t.append(el('b', '', it.nome || 'Sem nome'), el('small', 'muted', it.tipo === 'novo' ? ['Produto novo', it.categoria, it.genero, Number.isFinite(numBR(it.preco)) ? reais(numBR(it.preco)) : 'consultar valor', it.tamanhos, it.cores, it.tecido].filter(Boolean).join(' · ') : ['Reposição', ref && ref.Codigo, ref && ref.Estoque !== '' && ref.Estoque != null ? 'estoque hoje: ' + ref.Estoque : ''].filter(Boolean).join(' · ')));
+      const topo = el('div', 'prep-topo'), t = el('div', 't');
+      const detalhe = el('small', 'muted', it.tipo === 'novo'
+        ? ['Produto novo', it.categoria, it.genero, Number.isFinite(numBR(it.preco)) ? reais(numBR(it.preco)) : 'consultar valor', it.tamanhos, it.cores, it.tecido].filter(Boolean).join(' · ')
+        : 'Reposição');
+      t.append(el('b', '', it.nome || 'Sem nome'), detalhe);
+      if (it.tipo === 'reposicao') void catalogo.then(cat => {
+        if (!atual() || !detalhe.isConnected) return;
+        const ref = cat?.get(String(it.produto));
+        if (ref) detalhe.textContent = ['Reposição', ref.Codigo, ref.Estoque !== '' && ref.Estoque != null ? 'estoque hoje: ' + ref.Estoque : ''].filter(Boolean).join(' · ');
+      });
       topo.append(it.tipo === 'reposicao' && it.produto ? fotoPeca(it.produto, it.fotos[0], it.nome) : fotoLista(it.fotos, it.nome), t); l.append(topo);
       const d = el('div', 'dois');
       const [lQ, iQ] = campoTexto('Quantidade', it.qtd_pedida, { tipo: 'number', modo: 'numeric', min: 1 }); iQ.className = 'qtd-ped'; iQ.oninput = () => { it.qtd_pedida = iQ.value; somar(); };
@@ -1776,7 +1795,6 @@
       c3.append(acoes(bCan));
     }
     app.append(c1, c2, c3); desenharItens();
-    if (aviso) stF.diga(aviso[0], aviso[1]);
   }
 
   /* ----- Admin total: aprovar a chegada (só as diferenças) ----- */

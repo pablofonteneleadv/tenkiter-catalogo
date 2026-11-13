@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.10 — Pedidos, catálogo sob demanda e listas da Esteira
+
+- O editor de Pedidos abre com dados do pedido e do fornecedor. Detalhes do catálogo entram conforme chegam, sem remontar os campos.
+- Preparação e Fotos vazias deixam de consultar a lista completa do catálogo. O navegador carrega os detalhes quando são necessários.
+- Duas aberturas simultâneas de Hoje gravam as atribuições e o foco de forma transacional. Quando a lista muda durante o cálculo, o Worker relê e recalcula.
+
+
 ## 7.78.7 — Menu da Esteira enquanto a lista de Hoje carrega
 
 - A Esteira confirma em paralelo o acesso ao menu. Depois da confirmação, as abas permitidas ficam disponíveis enquanto as listas de Hoje terminam de carregar.

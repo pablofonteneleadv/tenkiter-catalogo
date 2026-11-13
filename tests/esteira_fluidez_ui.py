@@ -1,5 +1,6 @@
 """Troca de abas e revalidação lenta; rede simulada, sem escrita real."""
 import os
+import re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 p=Path(__file__).with_name('esteira_ui.py');ns={'__file__':str(p),'__name__':'esteira_base'}
@@ -62,6 +63,31 @@ with sync_playwright() as p:
  pg.click('[data-aba=pedidos]')
  pg.wait_for_function("performance.getEntriesByName('esteira:pedidos:util','mark').length===1")
  c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',is_mobile=w<600,has_touch=w<600)
+  st=ns['instalar'](c)
+  st['pedidos'][9]={'id':9,'fornecedor':'Fornecedor Antigo Ltda','previsao':'','status':'rascunho',
+                    'obs':'','fotos':[],'itens':[{'id':31,'tipo':'reposicao','produto':'1001','nome':'Vestido Midi Linho',
+                                                'fotos':[],'qtd_pedida':2,'custo':30,'qtd_contada':None}]}
+  retido=[]
+  c.route(re.compile(r'/exec\?action=list&todos=true$'),lambda r:retido.append(r))
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=pedidos]')
+  pg.click('.peca.pedido[data-pedido="9"]')
+  pg.wait_for_selector('#ped-fornecedor')
+  item=pg.locator('.item-ped[data-item="31"]')
+  assert pg.input_value('#ped-fornecedor')=='texto'
+  pg.wait_for_timeout(100)
+  assert len(retido)==1,[r.request.url for r in retido]
+  assert item.get_by_text('Reposição',exact=True).is_visible(),item.inner_text()
+  pg.fill('#ped-obs','Manter o texto ao carregar o catálogo')
+  pg.screenshot(path=str(OUT/f'pedidos-editor-catalogo-atrasado-{w}.png'))
+  retido[0].fallback()
+  item.get_by_text('Reposição · TK-1001 · estoque hoje: 4',exact=True).wait_for()
+  assert pg.input_value('#ped-obs')=='Manter o texto ao carregar o catálogo'
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  c.close()
  for admin in (False, True):
   c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
   ns['instalar'](c,admin=admin)
