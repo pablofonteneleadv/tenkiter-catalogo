@@ -177,6 +177,8 @@ jobs:
             tests/saida/reparos/
             tests/saida/fotoia-catalogo/
             tests/saida/pedir-fotos-lote/
+            tests/saida/esteira-fotos/
+            tests/saida/esteira-fluidez/
             tests/saida/janelas-padrao/
           if-no-files-found: ignore
 

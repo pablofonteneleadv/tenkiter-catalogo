@@ -7510,6 +7510,8 @@ async function estCriarEsquema_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_caixa (id INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT NOT NULL, lote TEXT DEFAULT '', url TEXT NOT NULL, descricao TEXT DEFAULT '', descricao_lote TEXT DEFAULT '', produto TEXT DEFAULT '', produto_nome TEXT DEFAULT '', hash TEXT DEFAULT '', enviada_por TEXT DEFAULT '', enviada_nome TEXT DEFAULT '', enviada_em TEXT, status TEXT NOT NULL DEFAULT 'nova', uso_produto TEXT DEFAULT '', uso_nome TEXT DEFAULT '', usada_por TEXT DEFAULT '', usada_nome TEXT DEFAULT '', usada_em TEXT)"),
     env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ux_est_caixa_op ON est_caixa (op)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_est_caixa_status ON est_caixa (status, id)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_est_caixa_remetente ON est_caixa (enviada_por, id)'),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_caixa_hash_ativo ON est_caixa (hash, id) WHERE status<>'descartada'"),
   ]);
   await famIniciar_(env);
 }
@@ -7984,13 +7986,17 @@ async function estCaixaRepetidas_(env, itens) {
   const out = {}, hs = [...new Set(itens.map((x) => x.hash).filter(Boolean))];
   if (!hs.length) return out;
   /* v7.76.1: o D1 aceita no máximo 100 parâmetros por consulta; com 100+ fotos distintas na lista (ex.: "Usadas") a consulta única estourava e a lista dava erro 500. Em blocos de 80. */
-  const rows = [];
+  const primeiras = new Map();
   for (let i = 0; i < hs.length; i += 80) {
     const bloco = hs.slice(i, i + 80);
-    rows.push(...((await env.DB.prepare('SELECT id, hash, enviada_em, enviada_por FROM est_caixa WHERE hash IN (' + bloco.map(() => '?').join(',') + ") AND status<>'descartada'").bind(...bloco).all()).results || []));
+    const busca = "SELECT MIN(id) AS id FROM est_caixa WHERE hash IN (" + bloco.map(() => '?').join(',') + ") AND status<>'descartada' GROUP BY hash";
+    const rows = (await env.DB.prepare('SELECT id, hash, enviada_em, enviada_por FROM est_caixa WHERE id IN (' + busca + ')').bind(...bloco).all()).results || [];
+    for (const r of rows) primeiras.set(r.hash, r);
   }
-  rows.sort((x, y) => x.id - y.id);
-  for (const x of itens) { if (!x.hash) continue; const o = rows.find((r) => r.hash === x.hash && r.id < x.id); if (o) out[x.id] = { id: o.id, em: o.enviada_em || '', por: o.enviada_por || '' }; }
+  for (const x of itens) {
+    const anterior = primeiras.get(x.hash);
+    if (anterior && anterior.id < x.id) out[x.id] = { id: anterior.id, em: anterior.enviada_em || '', por: anterior.enviada_por || '' };
+  }
   return out;
 }
 /** Recibos por conta/operação: perder a resposta não repete uma criação.
@@ -8317,11 +8323,29 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   if (p === '/esteira/caixa' && req.method === 'GET') {                       // gestor: tudo; demais: só o que a pessoa enviou
     const ver = ['novas', 'usadas', 'descartadas'].includes(url.searchParams.get('ver')) ? url.searchParams.get('ver') : 'novas';
     const cond = ver === 'usadas' ? "status='usada'" : ver === 'descartadas' ? "status='descartada'" : "status IN ('nova','cadastro')";
-    const rows = gestorFotos ? (await env.DB.prepare('SELECT * FROM est_caixa WHERE ' + cond + ' ORDER BY id DESC LIMIT 200').all()).results || []
-      : (await env.DB.prepare('SELECT * FROM est_caixa WHERE enviada_por=? ORDER BY id DESC LIMIT 100').bind(eu).all()).results || [];
-    const cont = await env.DB.prepare("SELECT SUM(CASE WHEN status IN ('nova','cadastro') THEN 1 ELSE 0 END) AS novas, SUM(CASE WHEN status='usada' THEN 1 ELSE 0 END) AS usadas, SUM(CASE WHEN status='descartada' THEN 1 ELSE 0 END) AS descartadas FROM est_caixa" + (gestorFotos ? '' : ' WHERE enviada_por=?')).bind(...(gestorFotos ? [] : [eu])).first() || {};
-    const rep = await estCaixaRepetidas_(env, rows);
-    return J({ ok: true, gestor: gestorFotos, podeArquivarProprias:admin||perms.includes('esteira_arquivar_fotos'), ver: gestorFotos ? ver : 'minhas', contagem: { novas: cont.novas || 0, usadas: cont.usadas || 0, descartadas: cont.descartadas || 0 }, itens: rows.map((x) => estCaixaSaida_(x, nomeDe, eu, rep[x.id] ? Object.assign({}, rep[x.id], { por: nomeDe(rep[x.id].por) || 'alguém da equipe' }) : null)) });
+    const paginada = url.searchParams.get('pagina') === '1';
+    const antesBruto = url.searchParams.get('antes');
+    const antes = antesBruto == null ? null : Number(antesBruto);
+    if (paginada && antesBruto !== null && (!/^\d+$/.test(antesBruto) || !Number.isSafeInteger(antes) || antes < 1)) {
+      return J({ ok: false, erro: 'A página de fotos não é válida. Volte à primeira página e tente de novo.' }, 400);
+    }
+    const limite = paginada ? 24 : gestorFotos ? 200 : 100;
+    const temCursor = paginada && antes !== null;
+    const filtro = gestorFotos ? cond : 'enviada_por=?';
+    const args = gestorFotos ? [] : [eu];
+    const [pagina, cont] = await medir('d1', () => Promise.all([
+      env.DB.prepare('SELECT * FROM est_caixa WHERE ' + filtro + (temCursor ? ' AND id<?' : '') + ' ORDER BY id DESC LIMIT ?')
+        .bind(...args, ...(temCursor ? [antes] : []), limite + Number(paginada)).all(),
+      env.DB.prepare("SELECT SUM(CASE WHEN status IN ('nova','cadastro') THEN 1 ELSE 0 END) AS novas, SUM(CASE WHEN status='usada' THEN 1 ELSE 0 END) AS usadas, SUM(CASE WHEN status='descartada' THEN 1 ELSE 0 END) AS descartadas FROM est_caixa" + (gestorFotos ? '' : ' WHERE enviada_por=?')).bind(...args).first(),
+    ]));
+    const rows = (pagina.results || []).slice(0, limite);
+    const rep = await medir('duplicadas', () => estCaixaRepetidas_(env, rows));
+    return J({
+      ok: true, gestor: gestorFotos, podeArquivarProprias: admin || perms.includes('esteira_arquivar_fotos'), ver: gestorFotos ? ver : 'minhas',
+      contagem: { novas: cont?.novas || 0, usadas: cont?.usadas || 0, descartadas: cont?.descartadas || 0 },
+      ...(paginada ? { proximo: pagina.results?.length > limite ? rows.at(-1).id : null } : {}),
+      itens: rows.map((x) => estCaixaSaida_(x, nomeDe, eu, rep[x.id] ? Object.assign({}, rep[x.id], { por: nomeDe(rep[x.id].por) || 'alguém da equipe' }) : null)),
+    });
   }
   if (p.startsWith('/esteira/caixa/') && !gestorFotos) return J({ ok: false, erro: 'Só o administrador total e quem cadastra peças usam as fotos recebidas.' }, 403);
   if (p === '/esteira/caixa/itens' && req.method === 'GET') {                // a Gestão abre o cadastro já com estas fotos

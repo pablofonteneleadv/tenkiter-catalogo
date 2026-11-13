@@ -80,7 +80,13 @@ def fotos_srv(ctx, st, admin=True):
             else: its = [i for i in f["caixa"] if (i["status"] in ("nova", "cadastro") if ver == "novas" else i["status"] == ("usada" if ver == "usadas" else "descartada"))]
             base_ = f["caixa"] if admin else [i for i in f["caixa"] if i["minha"]]
             cont = {"novas": sum(1 for i in base_ if i["status"] in ("nova", "cadastro")), "usadas": sum(1 for i in base_ if i["status"] == "usada"), "descartadas": sum(1 for i in base_ if i["status"] == "descartada")}
-            return J({"ok": True, "gestor": admin, "ver": ver if admin else "minhas", "contagem": cont, "itens": [item_saida(i) for i in its]})
+            extra = {}
+            if 'pagina=1' in u:
+                antes = re.search(r"[?&]antes=(\d+)", u)
+                its = sorted((i for i in its if not antes or i["id"] < int(antes[1])), key=lambda i: -i["id"])
+                extra["proximo"] = its[23]["id"] if len(its) > 24 else None
+                its = its[:24]
+            return J({"ok": True, "gestor": admin, "ver": ver if admin else "minhas", "contagem": cont, "itens": [item_saida(i) for i in its], **extra})
         if path.startswith("/esteira/caixa/") and not admin: return J({"ok": False, "erro": "Só o administrador total e quem cadastra produtos usam as fotos recebidas."}, 403)
         if path == "/esteira/caixa/usar":
             f["usar"].append(b); n = 0
@@ -228,6 +234,25 @@ with sync_playwright() as p:
         pg.click('.cx-item[data-caixa="104"] .cx-sel')
         chk(f"{w}: escolher marca a foto e mostra a barra", pg.get_attribute('.cx-item[data-caixa="104"] .cx-sel', "aria-pressed") == "true" and pg.is_visible(".cx-barra") and "1 foto escolhida" in pg.inner_text(".cx-barra"))
         shot(pg, f"caixa-gestor-{w}")
+        # Carregue uma segunda página sem perder a seleção já feita.
+        lote_pag = [dict(f["caixa"][0], id=1000 + i, lote="lote-paginado", status="nova", minha=True) for i in range(25)]
+        f["caixa"].extend(lote_pag)
+        pg.locator('.cx-item[data-caixa="104"] .cx-sel').click()
+        pg.get_by_role('button', name='Atualizar fotos', exact=True).click()
+        pg.wait_for_selector('.cx-item[data-caixa="1024"] .cx-sel')
+        chk(f"{w}: a primeira página mostra 24 fotos", pg.locator("#caixa .cx-item").count() == 24)
+        pg.locator('.cx-item[data-caixa="1024"] .cx-sel').click()
+        pg.get_by_role('button', name='Carregar mais fotos', exact=True).click()
+        pg.wait_for_selector('.cx-item[data-caixa="104"] .cx-sel')
+        chk(f"{w}: carregar mais preserva seleção, traz fotos anteriores e não repete IDs",
+            pg.locator('.cx-item[data-caixa="1024"] .cx-sel').get_attribute("aria-pressed") == "true"
+            and pg.locator('.cx-item[data-caixa="1024"]').count() == 1 and "1 foto escolhida" in pg.inner_text(".cx-barra"))
+        shot(pg, f"caixa-paginada-{w}")
+        pg.locator('.cx-item[data-caixa="1024"] .cx-sel').click()
+        f["caixa"] = [i for i in f["caixa"] if i["id"] < 1000]
+        pg.get_by_role('button', name='Atualizar fotos', exact=True).click()
+        pg.wait_for_selector('.cx-item[data-caixa="1024"]', state="detached")
+        pg.locator('.cx-item[data-caixa="104"] .cx-sel').click()
         pg.click(".cx-barra .cx-colocar"); pg.wait_for_selector(".folha .peca-escolhida", timeout=6000)
         chk(f"{w}: 'Colocar num produto' já sugere o produto indicada por quem enviou", "Vestido Longo Floral" in pg.inner_text(".folha .peca-escolhida") and "Tem 1 foto; cabem mais 7." in pg.inner_text(".folha"))
         pg.click('.folha .cx-capa button:has-text("Capa: foto 1")')
@@ -239,16 +264,17 @@ with sync_playwright() as p:
         chk(f"{w}: a caixa marca a foto como usada naquela produto", f["usar"][-1] == {"ids": [104], "uso": "produto", "produto": "1002", "produtoNome": "Vestido Longo Floral"}, f["usar"][-1])
         chk(f"{w}: conta como foto novo do produto (toque com as fotos que entraram)", (st.get("toques") or [{}])[-1].get("fotos") == [{"url": M + "iara1.jpg", "de": ""}], (st.get("toques") or [{}])[-1])
         pg.wait_for_selector("#fotos-status >> text=1 foto colocada em Vestido Longo Floral.", timeout=6000)
+        # A API ordena da foto mais nova para a mais antiga. A primeira da lista vira capa.
         pg.click('.cx-item[data-caixa="101"] .cx-sel'); pg.click('.cx-item[data-caixa="102"] .cx-sel')
         pg.click(".cx-barra .cx-novo"); pg.wait_for_selector("#cx-abrir-cadastro", timeout=4000)
-        chk(f"{w}: 'Cadastrar produto novo' abre a Gestão com as fotos (um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=101,102&modo=um" and pg.get_attribute("#cx-abrir-cadastro", "target") == "_blank")
+        chk(f"{w}: 'Cadastrar produto novo' abre a Gestão com as fotos (um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=102,101&modo=um" and pg.get_attribute("#cx-abrir-cadastro", "target") == "_blank")
         pg.click('.folha .cx-modo[data-modo="varias"]')
-        chk(f"{w}: opção 'Vários produtos' (cada foto vira um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=101,102&modo=varias")
+        chk(f"{w}: opção 'Vários produtos' (cada foto vira um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=102,101&modo=varias")
         shot(pg, f"caixa-cadastro-folha-{w}")
         with ctx.expect_page() as pop: pg.click("#cx-abrir-cadastro")
         pop.value.close()
         pg.wait_for_selector('.cx-item[data-caixa="101"] >> text=Em cadastro', timeout=6000)
-        chk(f"{w}: as fotos ficam 'Em cadastro' (continuam na caixa) até o produto ser salvo", f["usar"][-1] == {"ids": [101, 102], "uso": "cadastro"} and pg.locator('.cx-item[data-caixa="101"] .cx-voltar').count() == 1)
+        chk(f"{w}: as fotos ficam 'Em cadastro' (continuam na caixa) até o produto ser salvo", f["usar"][-1] == {"ids": [102, 101], "uso": "cadastro"} and pg.locator('.cx-item[data-caixa="101"] .cx-voltar').count() == 1)
         pg.click('.cx-item[data-caixa="102"] .cx-voltar'); pg.wait_for_selector("#fotos-status >> text=A foto voltou para a caixa.", timeout=6000)
         chk(f"{w}: 'Voltar para a caixa' desfaz o cadastro aberto e não feito", f["descartar"][-1] == {"ids": [102], "desfazer": True})
         pg.click('.cx-item[data-caixa="103"] .cx-sel'); bd = pg.locator(".cx-barra .cx-descartar")
