@@ -12,14 +12,10 @@ with sync_playwright() as p:
   print('INICIO',w,flush=True)
   inicio=[]
   pg.on('request',lambda r:inicio.append(r.url) if r.url.endswith('/esteira/hoje') else None)
-  pg.goto(BASE+'esteira.html');pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1');pg.wait_for_selector('.peca')
+  pg.clock.install();pg.goto(BASE+'esteira.html');pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1');pg.wait_for_selector('.peca')
   assert len(inicio)==1,inicio
-  pg.wait_for_function("performance.getEntriesByName('esteira:hoje:util','mark').length===1")
   pg.locator('[data-aba=pedidos]').focus();pg.keyboard.press('Enter');pg.wait_for_selector('text=Pedidos ao fornecedor')
   assert pg.locator('[data-aba=pedidos]').evaluate('b=>document.activeElement===b')
-  pg.wait_for_function("performance.getEntriesByName('esteira:pedidos:util','mark').length===1")
-  # Instale o relógio simulado depois das verificações de User Timing.
-  pg.clock.install()
   pg.click('[data-aba=hoje]');pg.clock.fast_forward(16000)
   held=[];c.route('**/esteira/pedidos',lambda r:held.append(r))
   print('PENDENTE',flush=True)
@@ -57,5 +53,13 @@ with sync_playwright() as p:
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   pg.evaluate('()=>{localStorage.clear();dispatchEvent(new Event("tk:sessao"))}');pg.wait_for_selector('#login-w');assert not pg.locator('#cfg-funcoes').count()
   assert not erros,erros;c.close()
- b.close()
+ # User Timing precisa do relógio nativo. A jornada acima acelera apenas a
+ # revalidação e o vencimento do cache por meio do relógio do Playwright.
+ c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
+ ns['instalar'](c);pg=c.new_page();pg.goto(BASE+'esteira.html')
+ pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+ pg.wait_for_function("performance.getEntriesByName('esteira:hoje:util','mark').length===1")
+ pg.click('[data-aba=pedidos]')
+ pg.wait_for_function("performance.getEntriesByName('esteira:pedidos:util','mark').length===1")
+ c.close();b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
