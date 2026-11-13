@@ -148,7 +148,7 @@ with sync_playwright() as p:
     for i in range(3): pg.locator(".ig-selr").nth(i).check()
     pg.click("[data-ig=juntarMarcados]"); pg.wait_for_selector(".ig-esc")
     cont = lambda: pg.locator("#ig-esc-cont").inner_text()
-    chk("abre a escolha (26 mídias passam do limite) com contador 8/8 e 1/1", "Fotos 20/20" in cont() and "Vídeo 1/1" in cont(), cont())
+    chk("abre a escolha (26 mídias passam do limite) com contador 20/20 e 1/1", "Fotos 20/20" in cont() and "Vídeo 1/1" in cont(), cont())
     chk("mostra todas as mídias dos 3 posts", pg.locator(".ig-esc").count() == 26, pg.locator(".ig-esc").count())
     axe(pg, "juntar-escolha")
     pg.locator(".ig-esc:not(:checked)").first.click(); pg.wait_for_timeout(300)
