@@ -27,7 +27,13 @@ with sync_playwright() as p:
   held[0].fulfill(json={'ok':True,'admin':True,'pedidos':[{'id':99,'fornecedor':'Lote atualizado','status':'rascunho','itens':0}]})
   pg.wait_for_timeout(100);assert pg.locator('#painel-listas').is_visible();assert not pg.get_by_text('Lote atualizado',exact=True).count()
   pg.click('[data-aba=pedidos]');pg.wait_for_selector('text=Lote atualizado');c.unroute('**/esteira/pedidos')
-  pg.click('[data-aba=config]');pg.wait_for_selector('#cfg-funcoes');pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
+  pg.click('[data-aba=config]')
+  try: pg.wait_for_selector('#cfg-funcoes')
+  except Exception:
+   print('CONFIG_DIAGNOSTICO',w,'aba=',pg.locator('[data-aba=config]').get_attribute('aria-selected'),'texto=',pg.locator('main').inner_text()[:1500],'erros=',erros,flush=True)
+   pg.screenshot(path=str(OUT/f'config-falha-{w}.png'))
+   raise
+  pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
   pg.click('[data-aba=hoje]');pg.click('[data-aba=config]');assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
   st['equipe'].append({'whats':'88999990004','nome':'Nova pessoa','confere':1,'rodizio':1,'atendente':1,'aceitar':0,'ativo':1})
   print('ATUALIZANDO',flush=True)
