@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.7 — Menu da Esteira enquanto a lista de Hoje carrega
+
+- A Esteira confirma em paralelo o acesso ao menu. Depois da confirmação, as abas permitidas ficam disponíveis enquanto as listas de Hoje terminam de carregar.
+
+
 ## 7.78.5 — Caixa de fotos com paginação no servidor
 
 - A Caixa abre com as primeiras 24 fotos e permite carregar as anteriores sem perder as fotos já selecionadas. O servidor mantém contagens por situação e o mesmo controle de acesso.

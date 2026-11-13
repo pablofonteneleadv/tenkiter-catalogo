@@ -61,5 +61,25 @@ with sync_playwright() as p:
  pg.wait_for_function("performance.getEntriesByName('esteira:hoje:util','mark').length===1")
  pg.click('[data-aba=pedidos]')
  pg.wait_for_function("performance.getEntriesByName('esteira:pedidos:util','mark').length===1")
- c.close();b.close()
+ c.close()
+ for admin in (False, True):
+  c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
+  ns['instalar'](c,admin=admin)
+  pendentes=[]
+  c.route('**/esteira/hoje',lambda r:pendentes.append(r))
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.wait_for_selector('[data-aba=pedidos]')
+  assert pg.locator('[data-aba=painel]').count()==int(admin)
+  assert pg.get_by_text('Montando a sua lista de hoje…',exact=True).is_visible()
+  pg.screenshot(path=str(OUT/('menu-antes-de-hoje-admin.png' if admin else 'menu-antes-de-hoje-equipe.png')))
+  pg.locator('[data-aba=pedidos]').click()
+  pg.wait_for_selector('text='+('Pedidos ao fornecedor' if admin else 'Chegou mercadoria'))
+  assert len(pendentes)==1,pendentes
+  pendentes[0].fallback()
+  pg.wait_for_timeout(200)
+  assert pg.locator('[data-aba=pedidos]').get_attribute('aria-selected')=='true'
+  assert not pg.get_by_text('Minha conferência',exact=True).is_visible()
+  c.close()
+ b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')

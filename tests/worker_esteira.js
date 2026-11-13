@@ -61,6 +61,19 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('equipe gravada (55 do país é tirado do número)', eq.j.ok && eq.j.equipe.length === 2 && eq.j.equipe.some((e) => e.whats === IARA), eq.j);
   chk('configuração inválida é recusada', (await A(PABLO, 'POST', '/esteira/config', { config: { porPessoa: 0, diasSemRepetir: 21 } })).r.status === 400);
 
+  const antesCatalogoMenu = listas;
+  const menuEquipe = await A(IARA, 'GET', '/esteira/menu');
+  chk('menu da equipe legada exige vínculo e não consulta o catálogo', menuEquipe.j.ok && menuEquipe.j.eu.nome === 'Iara' && menuEquipe.j.eu.admin === false && listas === antesCatalogoMenu, menuEquipe.j);
+  chk('sessão legada sem vínculo não abre o menu', (await A(VISITA, 'GET', '/esteira/menu')).r.status === 403);
+  const menuAdmin = await A(PABLO, 'GET', '/esteira/menu');
+  chk('menu do Admin vem da sessão e não inicializa a Esteira', menuAdmin.j.ok && menuAdmin.j.eu.admin && !/(inicializacao|catalogo|equipe);dur=/.test(menuAdmin.r.headers.get('Server-Timing') || ''), menuAdmin.j);
+  const antesMenu = usuarios[VISITA];
+  usuarios[VISITA] = { nome:'Pessoa', permissoes:['esteira'], acessosConfiguraveis:true };
+  chk('menu configurável vem da permissão Esteira', (await A(VISITA, 'GET', '/esteira/menu')).j.eu?.admin === false);
+  usuarios[VISITA] = { nome:'Pessoa', permissoes:['catalogo_cadastrar'], acessosConfiguraveis:true };
+  chk('acesso exclusivo da Caixa não abre o menu da Esteira', (await A(VISITA, 'GET', '/esteira/menu')).r.status === 403);
+  usuarios[VISITA] = antesMenu;
+
   // lista do dia
   const h1 = await A(IARA, 'GET', '/esteira/hoje');
   const temposHoje = h1.r.headers.get('Server-Timing') || '';

@@ -7457,7 +7457,7 @@ const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString()
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
 const estFone_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 13);
-const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config']);
+const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config']);
 const EST_INICIALIZACOES_ = new WeakMap();
 function estIniciar_(env) {
   let inicializacao = EST_INICIALIZACOES_.get(env.DB);
@@ -8025,7 +8025,24 @@ async function esteiraComando_(env,req,url,J,perms,ctx,medir){
   const trabalho=(async()=>{try{const res=await rotasEsteira_(env,req,url,J,perms),texto=await res.clone().text();if(res.status>=500||new TextEncoder().encode(texto).length>1500000){await env.DB.prepare("UPDATE est_comando SET estado='incerto',atualizado_em=? WHERE dono=? AND op=?").bind(agora(),dono,op).run();return J({ok:false,incerto:true,erro:'O servidor não confirmou a conclusão. Confira o processo antes de repetir.'},409)}await env.DB.prepare("UPDATE est_comando SET estado='concluido',resultado=?,http=?,atualizado_em=? WHERE dono=? AND op=?").bind(texto,res.status,agora(),dono,op).run();return res}catch(_){await env.DB.prepare("UPDATE est_comando SET estado='incerto',atualizado_em=? WHERE dono=? AND op=?").bind(agora(),dono,op).run();return J({ok:false,incerto:true,erro:'Não recebi a confirmação. O processo foi guardado para conferência.'},409)}})();
   if(typeof ctx?.waitUntil==='function')ctx.waitUntil(trabalho.then(()=>{},()=>{}));return await trabalho;
 }
+async function estMenu_(env, req, J, perms, medir) {
+  const admin = perms.includes('gerir_acessos');
+  const whats = estFone_(req.headers.get('X-TK-Whats'));
+  let nome = String(perms.msgNome || '').trim();
+  if (!admin && !perms.acessosConfiguraveis) {
+    const membro = await medir('equipe', async () => {
+      await estIniciar_(env);
+      return env.DB.prepare('SELECT nome FROM est_equipe WHERE whats=? AND ativo=1').bind(whats).first();
+    });
+    if (!membro) return J({ ok:false, erro:'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
+    nome = membro.nome || nome;
+  }
+  // No modo configurável, a sessão já confirmou a permissão na entrada da rota.
+  // Escala, nome da equipe e direito de aceitar continuam nas rotas de trabalho.
+  return J({ ok:true, eu:{ admin, nome } });
+}
 async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => executar()) {
+  if (url.pathname === '/esteira/menu' && req.method === 'GET') return estMenu_(env, req, J, perms, medir);
   await medir('inicializacao', async () => { await iniciar(env); await estIniciar_(env); });
   if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
