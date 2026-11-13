@@ -19,10 +19,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## 7.78.11 — Configurações da Esteira com categorias em separado
+## 7.78.14 — Configurações da Esteira com categorias em separado
 
 - Funções, escala, regras e modelos abrem sem consultar o catálogo. A lista de categorias carrega em separado, com nova tentativa em caso de falha.
 - O gestor pode salvar a reativação com as categorias indisponíveis. A categoria fixa cadastrada continua visível e só é enviada se houver edição nesse campo.
+
+## 7.78.13 — Prazo de resposta da Esteira
+
+- Permite que Hoje e as demais abas recebam respostas que levam mais de 20 segundos. Distingue espera esgotada, servidor inacessível e dispositivo offline.
 
 ## 7.78.10 — Pedidos, catálogo sob demanda e listas da Esteira
 
