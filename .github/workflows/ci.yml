@@ -112,6 +112,8 @@ jobs:
           python3 tests/indicador_agenda_card.py
           python3 tests/worker_credenciais.py
           node tests/estoque_opcional.js
+          # Observabilidade 500/503 sem PII: testes do Worker real sem rede.
+          node tests/worker_5xx_diagnostico.js
           node tests/manual_fidelidade.js
           python3 tests/saude_publica.py
           python3 tests/distribuicao_cache.py
