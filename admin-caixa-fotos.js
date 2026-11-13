@@ -92,7 +92,7 @@
         } else {
           window.tkAceitarRascunho({ id: 'caixa:' + itens.slice(0, 20).map(function (x) { return x.id; }).join('.'), legenda: '', midias: itens.slice(0, 20).map(function (x, k) { return { tipo: 'foto', url: x.url, capa: k === 0 }; }) });
           var t2 = document.getElementById('titulo-form'); if (t2) t2.textContent = 'Produto novo com fotos da caixa';
-          var al2 = document.getElementById('aviso-lote'); if (al2) { al2.hidden = false; al2.textContent = txt + (itens.length > 8 ? ' Só as 8 primeiras entraram (limite por produto).' : ''); }
+          var al2 = document.getElementById('aviso-lote'); if (al2) { al2.hidden = false; al2.textContent = txt + (itens.length > 20 ? ' Só as 20 primeiras entraram (limite por produto).' : ''); }
         }
         fim('');
       })
