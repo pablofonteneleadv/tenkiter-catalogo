@@ -3677,23 +3677,35 @@ async function guardarMidiaMsg_(env, bytes, mime, prefixo) {
 }
 /** Baixa uma mídia de um endereço https e guarda no R2. Devolve { chave, mime, bytes } ou null (nunca derruba a gravação da mensagem). */
 async function copiarMidiaRemota_(env, url, dica, documento=false) {
-  if (!/^https:\/\//i.test(String(url || ''))) return null;
+  // Apenas classe e status controlado; nunca registrar URL, nome, numero, token ou erro bruto.
+  // Um complemento pode permanecer retentando por dias: manter a causa observavel sem alterar o processamento.
+  const falha = (tipo, status=0) => {
+    try {
+      const s=Number(status)||0;
+      const cod=[401,403,404,408,410,413,429,500,502,503,504].includes(s)?s:(s>=400&&s<500?400:(s>=500&&s<600?500:0));
+      console.warn(JSON.stringify({evento:'tk_midia_remota_falha',tipo,codigo:cod}));
+    } catch (_) { /* diagnostico nunca interrompe o recebimento */ }
+    return null;
+  };
+  if (!/^https:\/\//i.test(String(url || ''))) return falha('url');
+  let fase='rede';
   try {
     const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(12000), headers: { 'User-Agent': UA } });
-    if (!r.ok) return null;
-    if (Number(r.headers.get('Content-Length') || 0) > MSG_MIDIA_MAX_) return null;
-    if(!r.body)return null;
+    if (!r.ok) return falha('http',r.status);
+    if (Number(r.headers.get('Content-Length') || 0) > MSG_MIDIA_MAX_) return falha('tamanho');
+    if(!r.body)return falha('corpo');
     const reader=r.body.getReader(),chunks=[];let length=0;
-    try{for(;;){const x=await reader.read();if(x.done)break;length+=x.value.byteLength;if(length>MSG_MIDIA_MAX_){await reader.cancel();return null;}chunks.push(x.value);}}finally{reader.releaseLock();}
-    if(!length)return null;const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}const buf=bytes.buffer;
+    try{for(;;){const x=await reader.read();if(x.done)break;length+=x.value.byteLength;if(length>MSG_MIDIA_MAX_){await reader.cancel();return falha('tamanho');}chunks.push(x.value);}}finally{reader.releaseLock();}
+    if(!length)return falha('corpo');const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}const buf=bytes.buffer;
     let mime = mimeLimpo_(r.headers.get('Content-Type'));
-    if (!documento && /^text\//.test(mime)) return null;   // página/link em vez de mídia: nunca gravar HTML como foto
+    if (!documento && /^text\//.test(mime)) return falha('formato');   // nunca gravar HTML como foto
     if (mime === 'application/octet-stream' && MSG_MIME_EXT_[mimeLimpo_(dica)]) mime = mimeLimpo_(dica);
     if (!MSG_MIME_EXT_[mime]) mime = mimeLimpo_(dica);
     if (!MSG_MIME_EXT_[mime]&&documento)mime="application/octet-stream";
-    if (!MSG_MIME_EXT_[mime]) return null;
+    if (!MSG_MIME_EXT_[mime]) return falha('formato');
+    fase='armazenamento';
     return { chave: await guardarMidiaMsg_(env, buf, mime), mime: mime, bytes: buf.byteLength };
-  } catch (e) { return null; }
+  } catch (_) { return falha(fase); }
 }
 /** Antes de gravar: copia a mídia (e a imagem do story respondido, no Instagram). Se não for possível, guarda o endereço para tentar de novo quando alguém abrir. */
 async function prepararMidia_(env, canal, m) {
