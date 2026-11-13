@@ -14,7 +14,10 @@ from pathlib import Path
 
 def sqlite_fixture_needed(root, suites):
     """Usa a lista única da CI de impacto para selecionar o Worker SQLite de teste."""
-    manifest = json.loads((root / 'scripts/ci/testes_impacto_manifesto.json').read_text(encoding='utf8'))
+    # O manifesto pertence ao runner versionado, não ao root sintético de preflight.
+    # Falhar se o manifesto oficial sumir: nunca desabilitar a fixture silenciosamente.
+    manifest_path = Path(__file__).resolve().parents[1] / 'scripts/ci/testes_impacto_manifesto.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf8'))
     requires = set(manifest['sql_fixture'])
     return any('tests/' + name in requires for name, _ in suites)
 
