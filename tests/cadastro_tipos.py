@@ -1,4 +1,4 @@
-"""v7.23: menu Cadastrar com "Cadastrar UM produto" (até 8 fotos e 3 vídeos no mesmo produto) e "Cadastrar vários produtos"
+"""v7.23: menu Cadastrar com "Cadastrar UM produto" (até 20 fotos e 3 vídeos no mesmo produto) e "Cadastrar vários produtos"
 (cada foto vira um produto com os mesmos dados), com o desenho fotos → produtos. Serviços simulados (mock.py)."""
 import sys, os, base64
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
@@ -26,7 +26,7 @@ with sync_playwright() as p:
         ctx, pg, erros = abre(b, w, h, mob)
         um = pg.locator("#menu-cad-nova"); varios = pg.locator("#menu-cad-varias")
         if w == 390:
-            chk("cartão 1: 'Cadastrar UM produto' com 'até 8 fotos e 3 vídeos, tudo no mesmo produto'", "Cadastrar UM produto" in um.inner_text() and "Até 8 fotos e 3 vídeos, tudo no mesmo produto" in um.inner_text(), um.inner_text())
+            chk("cartão 1: 'Cadastrar UM produto' com 'até 20 fotos e 3 vídeos, tudo no mesmo produto'", "Cadastrar UM produto" in um.inner_text() and "Até 20 fotos e 3 vídeos, tudo no mesmo produto" in um.inner_text(), um.inner_text())
             chk("cartão 2: 'Cadastrar vários produtos' explica que cada foto vira um produto com o mesmo título, valor, tamanho e cor", "Cadastrar vários produtos" in varios.inner_text() and "Cada foto vira um produto, com o mesmo título, valor, tamanho e cor" in varios.inner_text(), varios.inner_text())
             chk("desenho: 3 fotos → 1 produto no primeiro e 3 fotos → 3 produtos no segundo", um.locator(".mc-prods i").count() == 1 and varios.locator(".mc-prods i").count() == 3 and um.locator(".mc-fotos i").count() == 3)
             chk("o desenho fica fora do leitor de tela (o texto já explica)", um.locator(".mc-eq").get_attribute("aria-hidden") == "true")
@@ -48,7 +48,7 @@ with sync_playwright() as p:
             if EVID: pg.locator("[data-passo=fotos]").screenshot(path=os.path.join(EVID, "varios-passo1-390.png"))
             if not pg.locator("#card-menu-cadastro").evaluate("e => e.open"): pg.click("#card-menu-cadastro > summary")
             pg.click("#menu-cad-nova"); pg.wait_for_timeout(600)
-            chk("voltar para UM produto: passo 1 'Fotos do produto (0 de 8)' sem a explicação do lote", pg.locator("#galeria-box .dica-midia-expansivel").is_visible() and pg.locator("#passo-fotos-nome").inner_text() == "Fotos do produto" and not pg.locator("#passo-fotos-varias").is_visible() and pg.locator("#galeria-contador").inner_text() == "(0 de 8)", pg.locator("#galeria-contador").inner_text())
+            chk("voltar para UM produto: passo 1 'Fotos do produto (0 de 20)' sem a explicação do lote", pg.locator("#galeria-box .dica-midia-expansivel").is_visible() and pg.locator("#passo-fotos-nome").inner_text() == "Fotos do produto" and not pg.locator("#passo-fotos-varias").is_visible() and pg.locator("#galeria-contador").inner_text() == "(0 de 20)", pg.locator("#galeria-contador").inner_text())
         chk("sem erros de JavaScript", not erros, erros)
         ctx.close()
     b.close()
