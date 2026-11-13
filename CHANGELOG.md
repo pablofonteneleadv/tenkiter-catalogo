@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.13 — Prazo de resposta da Esteira
+
+- Permite que Hoje e as demais abas recebam respostas que levam mais de 20 segundos. Distingue espera esgotada, servidor inacessível e dispositivo offline.
+
 ## 7.78.10 — Pedidos, catálogo sob demanda e listas da Esteira
 
 - O editor de Pedidos abre com dados do pedido e do fornecedor. Detalhes do catálogo entram conforme chegam, sem remontar os campos.
