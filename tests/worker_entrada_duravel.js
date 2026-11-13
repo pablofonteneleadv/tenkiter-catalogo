@@ -1,5 +1,6 @@
 /* Falhas reais de transação SQLite e concorrência R2 simulada. Nenhum serviço externo. */
 const fs=require('fs'),path=require('path'),os=require('os'),assert=require('node:assert/strict');
+const {createHash}=require('node:crypto');
 const {DatabaseSync}=require('node:sqlite');
 const PREFIX='privado/mensagens/entrada/';
 function banco(){
@@ -12,6 +13,15 @@ const r2=require('./helpers/r2_condicional.js');
 (async()=>{
  const tmp=path.join(os.tmpdir(),'tk-worker-entrada.mjs');fs.writeFileSync(tmp,fs.readFileSync('instagram-worker/worker.js','utf8')+'\nexport {processarEntradas_,guardarEntrada_,processarEntrada_,corpoWebhook_,copiarMidiaRemota_};');const W=await import(tmp);
  const b=banco(),MIDIA=r2(),kv=new Map(),cache=new Map();
+ // R2 calcula o ETag a partir do conteúdo, mesmo que mudem os metadados.
+ const put=MIDIA.put.bind(MIDIA);
+ MIDIA.put=async(key,body,options)=>{
+   const saved=await put(key,body,options);
+   if(!saved)return null;
+   const value=MIDIA.mem.get(key);
+   value.etag=createHash('md5').update(value.body).digest('hex');
+   return {etag:value.etag};
+ };
  const CACHE={async get(k,t){const v=kv.get(k);return t==='json'&&v?JSON.parse(v):v||null},async put(k,v){kv.set(k,String(v))},async delete(k){kv.delete(k)}};
  global.caches={default:{async match(r){const s=cache.get(r.url);return s?new Response(s):undefined},async put(r,v){cache.set(r.url,await v.text())},async delete(r){return cache.delete(r.url)}}};
  const env={DB:b.DB,MIDIA,CACHE,API_URL:'https://backend.test',MIDIA_URL:'https://midia.test'};
@@ -109,8 +119,104 @@ const r2=require('./helpers/r2_condicional.js');
  const mk=await W.guardarEntrada_(env,'midia','instagram',{extId:'ig-lento',midiaUrl:'https://cdn.test/foto.jpg',midiaMime:'image/jpeg'});
  b.sqlite.exec("CREATE TRIGGER falha_midia BEFORE UPDATE OF midia_chave ON msg_mensagem BEGIN SELECT RAISE(ABORT,'falha depois da copia'); END;");
  const antes=downloads;await W.processarEntrada_(env,mk);assert(MIDIA.mem.has(mk));assert.equal(downloads,antes+1);b.sqlite.exec('DROP TRIGGER falha_midia');await W.processarEntrada_(env,mk,true);assert.equal(downloads,antes+1,'Retentativa não copia arquivo outra vez');assert(!MIDIA.mem.has(mk));
+ // Complemento com origem indisponível por dias sai da fila, preservando o histórico.
+ const falhasPrefixo=PREFIX+'falhas-midia/';
+ await wh(msg('anexo-esgotado'));
+ await wh(msg('anexo-recuperavel'));
+ const media=(id)=>W.guardarEntrada_(env,'midia','whatsapp1',{
+   extId:id,tipo:'imagem',midiaUrl:'https://cdn.test/'+id+'.jpg',midiaMime:'image/jpeg'
+ });
+ const envelhecer=(key)=>{
+   Object.assign(MIDIA.mem.get(key).customMetadata,{em:new Date(Date.now()-25*3600000).toISOString(),tentativas:'105',tentativasMidia:'7'});
+ };
+ const esgotada=await media('anexo-esgotado'), recuperavel=await media('anexo-recuperavel');
+ const entradaOriginal=MIDIA.mem.get(esgotada).body.toString();
+ const chaveFalha=falhasPrefixo+esgotada.split('/').at(-1);
+ envelhecer(esgotada);
+ global.fetch=async(u,opt)=>String(u).includes('/anexo-esgotado.jpg')?new Response('',{status:404}):baixarOriginal(u,opt);
+ try {
+   await W.processarEntradas_(env,true);
+   assert(!MIDIA.mem.has(esgotada),'Download esgotado deve sair da fila ativa');
+   assert(MIDIA.mem.has(chaveFalha),'Complemento deve ser preservado no arquivo privado');
+   assert.equal(MIDIA.mem.get(chaveFalha).customMetadata.codigo,'404');
+   assert.equal(get("SELECT texto FROM msg_mensagem WHERE ext_id='anexo-esgotado'").texto,'Olá');
+   assert(get("SELECT midia_chave FROM msg_mensagem WHERE ext_id='anexo-recuperavel'").midia_chave);
+   assert.equal(fila('complementos').length,0);
+   cache.clear();
+   const saude=await(await api('/msg/novidades?cont=1')).json();
+   assert.equal(saude.saude.alerta,false,'Complemento arquivado não gera aviso de espera ou de webhook');
+   const original=JSON.parse(entradaOriginal);
+   await W.guardarEntrada_(env,original.tipo,original.canal,original.dados);
+   assert(!MIDIA.mem.has(esgotada),'Reentrega idêntica não reabre download esgotado');
+   await MIDIA.put(esgotada,entradaOriginal);
+   assert.equal((await W.processarEntrada_(env,esgotada,true)).arquivada,true);
+   assert(!MIDIA.mem.has(esgotada),'Uma reentrega concorrente que já gravou é reconciliada');
+ } finally { global.fetch=baixarOriginal; }
+ // Uma origem que oscila continua tentando e pode se recuperar, mesmo com várias falhas.
+ await wh(msg('anexo-temporario'));
+ const temporaria=await media('anexo-temporario');
+ const antesTemporaria=MIDIA.mem.get(temporaria).customMetadata;
+ Object.assign(antesTemporaria,{tentativas:'12',tentativasMidia:'7'});
+ const indisponivel=async()=>new Response('',{status:503});
+ try {
+   global.fetch=indisponivel;
+   assert.equal((await W.processarEntrada_(env,temporaria,true)).pendente,true);
+   assert.equal(MIDIA.mem.get(temporaria).customMetadata.tentativasMidia,'8');
+ } finally {global.fetch=baixarOriginal;}
+ assert.equal((await W.processarEntrada_(env,temporaria,true)).ok,true);
+ assert(get("SELECT midia_chave FROM msg_mensagem WHERE ext_id='anexo-temporario'").midia_chave);
+
+ // Legado com muitas tentativas: falha ao arquivar conserva a entrada ativa.
+ await wh(msg('anexo-legado'));
+ const antiga=await media('anexo-legado');
+ const arquivoAntiga=falhasPrefixo+antiga.split('/').at(-1);
+ Object.assign(MIDIA.mem.get(antiga).customMetadata,{
+   em:new Date(Date.now()-52*3600000).toISOString(),motivo:'midia',tentativas:'105'
+ });
+ const gravar=MIDIA.put;
+ try {
+   global.fetch=async()=>new Response('',{status:410});
+   MIDIA.put=async(key,...args)=>{
+     if(key===arquivoAntiga)throw Error('Falha simulada no arquivo');
+     return gravar(key,...args);
+   };
+   assert.equal((await W.processarEntrada_(env,antiga,true)).pendente,true);
+   assert(MIDIA.mem.has(antiga)&&!MIDIA.mem.has(arquivoAntiga));
+ } finally { MIDIA.put=gravar; global.fetch=baixarOriginal; }
+
+ assert.equal(MIDIA.mem.get(antiga).customMetadata.tentativasMidia,'1');
+ // Falha no R2 da mídia não é contada como falha da origem, mesmo depois do prazo.
+ await wh(msg('anexo-r2-temporario'));
+ const armazenamento=await media('anexo-r2-temporario');
+ envelhecer(armazenamento);
+ try {
+   MIDIA.put=async(key,...args)=>{
+     if(key.startsWith('msg/'))throw Error('R2 de mídia indisponível');
+     return gravar(key,...args);
+   };
+   assert.equal((await W.processarEntrada_(env,armazenamento,true)).pendente,true);
+   assert.equal(MIDIA.mem.get(armazenamento).customMetadata.tentativasMidia,'7');
+   assert.equal(MIDIA.mem.get(armazenamento).customMetadata.motivo,'armazenamento');
+ } finally { MIDIA.put=gravar; }
+ assert.equal((await W.processarEntrada_(env,armazenamento,true)).ok,true);
+
+ // Um link obsoleto não impede persistir outro arquivo disponível do mesmo complemento.
+ await wh(msg('dois-anexos'));
+ const dois=await W.guardarEntrada_(env,'midia','whatsapp1',{
+   extId:'dois-anexos',tipo:'imagem',midiaUrl:'https://cdn.test/origem-expirada.jpg',
+   midiaMime:'image/jpeg',ctxUrl:'https://cdn.test/story-ok.jpg',ctxMime:'image/jpeg',ctxTipo:'story'
+ });
+ try {
+   global.fetch=async(u,opt)=>String(u).includes('/origem-expirada.jpg')?new Response('',{status:410}):baixarOriginal(u,opt);
+   const antes=downloads;
+   assert.equal((await W.processarEntrada_(env,dois,true)).pendente,true);
+   assert(get("SELECT ctx_chave FROM msg_mensagem WHERE ext_id='dois-anexos'").ctx_chave);
+   await W.processarEntrada_(env,dois,true);
+   assert.equal(downloads,antes+1,'A prévia disponível é copiada uma vez');
+ } finally {global.fetch=baixarOriginal;}
  // Prefixo do journal nunca é servido no endpoint público de mídia, nem com chave conhecida.
  const mf=path.join(os.tmpdir(),'tk-midia-entrada.mjs');fs.writeFileSync(mf,fs.readFileSync('midia-worker/worker.js'));const MW=await import(mf);await MIDIA.put(pk,'{"privado":"não expor"}',{httpMetadata:{contentType:'application/json'}});assert.equal((await MW.default.fetch(new Request('https://midia.test/m/'+pk),env,{})).status,404);
+ assert.equal((await MW.default.fetch(new Request('https://midia.test/m/'+chaveFalha),env,{})).status,404);
  const grande=new Request('https://wh.test',{method:'POST',body:new Uint8Array(300000)});assert.equal(await W.corpoWebhook_(grande,262144),null,'Leitura do corpo é limitada antes de JSON/HMAC');
  console.log('Entrada durável: autenticação, persistência independente, cota, transação, deduplicação, lease, pausa, story lento, retomada de mídia e privacidade aprovados.');
 })().catch(e=>{console.error(e);process.exitCode=1});

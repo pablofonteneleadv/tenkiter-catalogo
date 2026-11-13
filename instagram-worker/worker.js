@@ -3676,15 +3676,13 @@ async function guardarMidiaMsg_(env, bytes, mime, prefixo) {
   return chave;
 }
 /** Baixa uma mídia de um endereço https e guarda no R2. Devolve { chave, mime, bytes } ou null (nunca derruba a gravação da mensagem). */
-async function copiarMidiaRemota_(env, url, dica, documento=false) {
-  // Apenas classe e status controlado; nunca registrar URL, nome, numero, token ou erro bruto.
-  // Um complemento pode permanecer retentando por dias: manter a causa observavel sem alterar o processamento.
+async function copiarMidiaRemota_(env, url, dica, documento=false, aoFalhar) {
+  // Logs contêm apenas classe e código conhecidos, sem URL ou erro bruto.
   const falha = (tipo, status=0) => {
-    try {
-      const s=Number(status)||0;
-      const cod=[401,403,404,408,410,413,429,500,502,503,504].includes(s)?s:(s>=400&&s<500?400:(s>=500&&s<600?500:0));
-      console.warn(JSON.stringify({evento:'tk_midia_remota_falha',tipo,codigo:cod}));
-    } catch (_) { /* diagnostico nunca interrompe o recebimento */ }
+    const codigo = [401,403,404,408,410,413,429,500,502,503,504].includes(status)
+      ? status : status >= 400 && status < 500 ? 400 : status >= 500 && status < 600 ? 500 : 0;
+    if (aoFalhar) aoFalhar({tipo,codigo});
+    try { console.warn(JSON.stringify({evento:'tk_midia_remota_falha',tipo,codigo})); } catch (_) {}
     return null;
   };
   if (!/^https:\/\//i.test(String(url || ''))) return falha('url');
@@ -3833,6 +3831,12 @@ async function gravarMensagem_(env, canal, m) {
  * R2 conditional puts: lease entre execuções e at-least-once; D1 deduplica IDs.
  */
 const MSG_ENTRADA_PREFIXO_='privado/mensagens/entrada/';
+const MSG_FALHAS_MIDIA_PREFIXO_=MSG_ENTRADA_PREFIXO_+'falhas-midia/';
+const MSG_MIDIA_PRAZO_=24*60*60*1000;
+const MSG_MIDIA_MIN_TENTATIVAS_=8;
+const chaveFalhaMidia_=(chave)=>MSG_FALHAS_MIDIA_PREFIXO_+chave.split('/').at(-1);
+const complementoEntrada_=(chave)=>chave.startsWith(MSG_ENTRADA_PREFIXO_+'complementos/');
+
 async function corpoWebhook_(req,maximo) {
   if(Number(req.headers.get('Content-Length')||0)>maximo)return null;
   if(!req.body)return '';
@@ -3846,6 +3850,7 @@ async function guardarEntrada_(env,tipo,canal,dados) {
   if(new TextEncoder().encode(corpo).byteLength>1100000)throw Error('Evento grande demais.');
   const classe=['midia','zernio-contexto','status-publicado'].includes(tipo)?'complementos/':tipo==='status-wafly'?'atualizacoes/':'recebidas/';
   const chave=MSG_ENTRADA_PREFIXO_+classe+await sha(corpo)+'.json';
+  if(complementoEntrada_(chave)&&await env.MIDIA.head(chaveFalhaMidia_(chave)))return chave;
   await env.MIDIA.put(chave,corpo,{onlyIf:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'},customMetadata:{em:agora(),tentativas:'0',proxima:'0',trava:'0'}});
   return chave;
 }
@@ -3869,11 +3874,22 @@ async function processarEntrada_(env,chave,forcar=false) {
   if(obj.size>1100000)throw Error('Registro de entrada inválido.');
   const corpo=await new Response(obj.body).text();
   const md={...meta,trava:String(now+120000)};
-  const lock=await env.MIDIA.put(chave,corpo,{onlyIf:{etagMatches:obj.etag},httpMetadata:{contentType:'application/json'},customMetadata:md});
-  if(!lock)return {ocupada:true};
   let j;
+  try { j=JSON.parse(corpo); } catch (_) { /* o tratamento da fila mantém a entrada inválida */ }
+  // R2 pode manter o mesmo ETag quando só mudam metadados. Cada aquisição grava
+  // um identificador no corpo para invalidar leitores que chegaram antes da trava.
+  if(j)j._trava=crypto.randomUUID();
+  const corpoTravado=j?JSON.stringify(j):corpo;
+  const lock=await env.MIDIA.put(chave,corpoTravado,{onlyIf:{etagMatches:obj.etag},httpMetadata:{contentType:'application/json'},customMetadata:md});
+  if(!lock)return {ocupada:true};
   try {
-    j=JSON.parse(corpo);if(await msgPausado_(env,j.canal))throw Error('Canal pausado.');await iniciar(env);
+    if(complementoEntrada_(chave)&&await env.MIDIA.head(chaveFalhaMidia_(chave))){
+      await env.MIDIA.delete(chave);
+      return {ok:true,arquivada:true};
+    }
+    if(!j)throw Error('Registro de entrada inválido.');
+    if(await msgPausado_(env,j.canal))throw Error('Canal pausado.');
+    await iniciar(env);
     let resultado={};
     if(j.tipo==='mensagens'){
       let novas=0;const novidades=[];
@@ -3905,11 +3921,33 @@ async function processarEntrada_(env,chave,forcar=false) {
     return {ok:true,...resultado};
   }catch(erro){
     const tentativas=Number(meta.tentativas||0)+1;
-    const motivo=erro.esperaReferencia?'referencia':/quota|cota|exceeded.*daily|daily.*limit/i.test(String(erro.message||''))?'cota':/Mídia aguardando|Story aguardando/i.test(String(erro.message||''))?'midia':/pausado/i.test(String(erro.message||''))?'pausa':'armazenamento';
-    // Não descarta eventos em erro. Recuo evita insistir quando há cota/serviço indisponível.
-    await env.MIDIA.put(chave,j?JSON.stringify(j):corpo,{onlyIf:{etagMatches:lock.etag},httpMetadata:{contentType:'application/json'},customMetadata:{...md,motivo,tentativas:String(tentativas),proxima:String(Date.now()+Math.min(1800000,15000*2**Math.min(tentativas,7))),trava:'0'}});
-    if(!erro.esperaReferencia){console.warn(JSON.stringify({evento:'entrada_pendente',canal:j?.canal||'',motivo,tentativas}));}
-    if(!erro.esperaReferencia)await anotarFalha_(env,'/wh/'+(j?.canal||''),503);
+    const falhaMidia=erro.falhaMidia;
+    const motivo=erro.esperaReferencia?'referencia':falhaMidia?'midia':/quota|cota|exceeded.*daily|daily.*limit/i.test(String(erro.message||''))?'cota':/pausado/i.test(String(erro.message||''))?'pausa':'armazenamento';
+    const tentativasMidia=Number(meta.tentativasMidia||0)+(falhaMidia?1:0);
+    const dados=j?JSON.stringify(j):corpo;
+    const idade=Date.now()-Date.parse(meta.em);
+    const expirou=falhaMidia&&[404,410].includes(falhaMidia.codigo);
+    // Registros antigos só têm contador geral. Exige que a origem confirme 404 ou 410.
+    const legado=meta.tentativasMidia==null&&meta.motivo==='midia'&&tentativas>=MSG_MIDIA_MIN_TENTATIVAS_&&expirou;
+    if(falhaMidia&&complementoEntrada_(chave)&&idade>=MSG_MIDIA_PRAZO_&&(tentativasMidia>=MSG_MIDIA_MIN_TENTATIVAS_||legado)){
+      const falhaChave=chaveFalhaMidia_(chave);
+      try {
+        const salva=await env.MIDIA.put(falhaChave,dados,{
+          onlyIf:{etagDoesNotMatch:'*'},
+          httpMetadata:{contentType:'application/json'},
+          customMetadata:{em:meta.em,encerradoEm:agora(),motivo:falhaMidia.tipo,codigo:String(falhaMidia.codigo),tentativas:String(tentativas)}
+        });
+        if(salva||await env.MIDIA.head(falhaChave)){
+          await env.MIDIA.delete(chave);
+          try { console.warn(JSON.stringify({evento:'tk_midia_arquivada',motivo:falhaMidia.tipo,codigo:falhaMidia.codigo,tentativas})); } catch (_) {}
+          return {ok:true,arquivada:true};
+        }
+      } catch (_) { /* se o arquivo privado falhar, mantém a entrada para a próxima tentativa */ }
+    }
+    // Cota, pausa e falhas de armazenamento continuam na fila com recuo.
+    await env.MIDIA.put(chave,dados,{onlyIf:{etagMatches:lock.etag},httpMetadata:{contentType:'application/json'},customMetadata:{...md,motivo,tentativas:String(tentativas),...(falhaMidia&&{tentativasMidia:String(tentativasMidia)}),proxima:String(Date.now()+Math.min(1800000,15000*2**Math.min(tentativas,7))),trava:'0'}});
+    if(!erro.esperaReferencia)console.warn(JSON.stringify({evento:'entrada_pendente',canal:j?.canal||'',motivo,tentativas}));
+    if(!erro.esperaReferencia&&!falhaMidia)await anotarFalha_(env,'/wh/'+(j?.canal||''),503);
     return {ok:false,pendente:true};
   }
 }
@@ -3930,11 +3968,37 @@ async function completarMidiaEntrada_(env,canal,m) {
   const atual=await env.DB.prepare('SELECT id,conversa_id,midia_chave,ctx_chave,ctx_post,ctx_tipo,ctx_aprox FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();
   if(!atual)return;
   const alteracoes=[];
-  if(m.midiaUrl&&!atual.midia_chave){const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}:await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento');if(!x){if(m.tipo==='compartilhamento'){alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_url='',midia_mime='' WHERE id=? AND midia_chave=''").bind(atual.id));m.midiaUrl='';}else throw Error('Mídia aguardando cópia.');}else{m.midiaChave=x.chave;m.midiaMime=x.mime;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id));}}
-  if(m.ctxUrl&&!atual.ctx_chave){const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'');if(!x)throw Error('Story aguardando cópia.');m.ctxChave=x.chave;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=?,ctx_post=CASE WHEN ctx_aprox=1 THEN 0 ELSE ctx_post END,ctx_aprox=0 WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id));}
+  let falhaMidia;
+  const registrarFalha=(falha)=>{
+    if(!falhaMidia||falha.tipo==='armazenamento')falhaMidia=falha;
+  };
+  if(m.midiaUrl&&!atual.midia_chave){
+    const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}
+      :await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento',m.tipo==='compartilhamento'?undefined:registrarFalha);
+    if(x){
+      m.midiaChave=x.chave;
+      m.midiaMime=x.mime;
+      alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id));
+    }else if(m.tipo==='compartilhamento'){
+      alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_url='',midia_mime='' WHERE id=? AND midia_chave=''").bind(atual.id));
+      m.midiaUrl='';
+    }
+  }
+  if(m.ctxUrl&&!atual.ctx_chave){
+    const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'',false,registrarFalha);
+    if(x){
+      m.ctxChave=x.chave;
+      alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=?,ctx_post=CASE WHEN ctx_aprox=1 THEN 0 ELSE ctx_post END,ctx_aprox=0 WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id));
+    }
+  }
   if(m.ctxPost&&!atual.ctx_post)alteracoes.push(env.DB.prepare('UPDATE msg_mensagem SET ctx_post=?,ctx_aprox=0 WHERE id=? AND ctx_post=0').bind(m.ctxPost,atual.id));
   if(m.ctxTipo==='story'&&atual.ctx_tipo!=='story')alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='story' WHERE id=? AND ctx_tipo<> 'story'").bind(atual.id));
   if(alteracoes.length){const em=agora();alteracoes.push(env.DB.prepare('UPDATE msg_mensagem SET status_em=? WHERE id=?').bind(em,atual.id),env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em,atual.conversa_id));await env.DB.batch(alteracoes);await notificarNovidade_(env,canal);}
+  if(falhaMidia){
+    const erro=Error(falhaMidia.tipo==='armazenamento'?'Armazenamento de mídia indisponível.':'Mídia aguardando cópia.');
+    if(falhaMidia.tipo!=='armazenamento')erro.falhaMidia=falhaMidia;
+    throw erro;
+  }
 }
 
 /* Android: fila persistente e entrega pelo OneSignal. Nunca contém texto de conversa. */
