@@ -10,7 +10,7 @@ function banco(){
 const r2=require('./helpers/r2_condicional.js');
 
 (async()=>{
- const tmp=path.join(os.tmpdir(),'tk-worker-entrada.mjs');fs.writeFileSync(tmp,fs.readFileSync('instagram-worker/worker.js','utf8')+'\nexport {processarEntradas_,guardarEntrada_,processarEntrada_,corpoWebhook_};');const W=await import(tmp);
+ const tmp=path.join(os.tmpdir(),'tk-worker-entrada.mjs');fs.writeFileSync(tmp,fs.readFileSync('instagram-worker/worker.js','utf8')+'\nexport {processarEntradas_,guardarEntrada_,processarEntrada_,corpoWebhook_,copiarMidiaRemota_};');const W=await import(tmp);
  const b=banco(),MIDIA=r2(),kv=new Map(),cache=new Map();
  const CACHE={async get(k,t){const v=kv.get(k);return t==='json'&&v?JSON.parse(v):v||null},async put(k,v){kv.set(k,String(v))},async delete(k){kv.delete(k)}};
  global.caches={default:{async match(r){const s=cache.get(r.url);return s?new Response(s):undefined},async put(r,v){cache.set(r.url,await v.text())},async delete(r){return cache.delete(r.url)}}};
@@ -22,6 +22,23 @@ const r2=require('./helpers/r2_condicional.js');
    if(u.startsWith('https://cdn.test/')){downloads++;return new Response(new Uint8Array([255,216,255,1]),{headers:{'Content-Type':'image/jpeg'}})}
    throw Error('Rede não simulada: '+u);
  };
+ // A falha de anexo remoto e classificada sem alterar o resultado nem vazar dados do webhook.
+ const baixarOriginal=global.fetch,avisoOriginal=console.warn,avisos=[];
+ try {
+   console.warn=(x)=>avisos.push(String(x));
+   global.fetch=async()=>new Response('proibido',{status:403});
+   assert.equal(await W.copiarMidiaRemota_(env,'https://cdn.test/segredo-ficticio?token=nao-logar','image/jpeg'),null);
+   assert.deepEqual(JSON.parse(avisos.pop()),{evento:'tk_midia_remota_falha',tipo:'http',codigo:403},'403 remoto deve ficar distinguivel sem URL');
+   global.fetch=async()=>new Response('<html>login</html>',{headers:{'Content-Type':'text/html'}});
+   assert.equal(await W.copiarMidiaRemota_(env,'https://cdn.test/segredo-ficticio','image/jpeg'),null);
+   assert.equal(JSON.parse(avisos.pop()).tipo,'formato','pagina HTML nunca e aceita como foto');
+   global.fetch=async()=>{throw Error('falha de rede: SEGREDO-FICTICIO');};
+   assert.equal(await W.copiarMidiaRemota_(env,'https://cdn.test/segredo-ficticio','image/jpeg'),null);
+   assert.equal(JSON.parse(avisos.pop()).tipo,'rede','falha de fetch nao revela detalhes privados');
+   assert.equal(await W.copiarMidiaRemota_(env,'http://inseguro.test/segredo','image/jpeg'),null);
+   assert.equal(JSON.parse(avisos.pop()).tipo,'url','URL insegura continua recusada');
+   assert.equal(avisos.length,0,'cada falha gera um unico evento seguro');
+ } finally { global.fetch=baixarOriginal; console.warn=avisoOriginal; }
  const wh=(body,ctx={})=>W.default.fetch(new Request('https://worker.test/wh/wafly/1/'+seg,{method:'POST',body:JSON.stringify(body)}),env,ctx);
  const msg=id=>({type:'ReceivedCallback',messageId:id,phone:'5588991234567',senderName:'Cliente teste',text:{message:'Olá'},momment:Date.now()});
  const fila=classe=>[...MIDIA.mem.keys()].filter(k=>k.startsWith(PREFIX+(classe?classe+'/':'')));
