@@ -8,6 +8,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -33,6 +34,13 @@ check("ambas suítes afetadas precisam do Worker SQLite",
       sqlite_fixture_needed(ROOT, SQL_SUITES))
 check("suíte sem SQLite não liga servidor desnecessário",
       not sqlite_fixture_needed(ROOT, NO_SQL))
+
+# O preflight usa raizes temporarias sem scripts/ci; a decisao continua
+# vindo do manifesto oficial, sem ignorar suites SQL.
+with TemporaryDirectory() as temporary_root:
+    check("manifesto oficial vale em root temporario sem scripts/ci",
+          sqlite_fixture_needed(Path(temporary_root), SQL_SUITES) and
+          not sqlite_fixture_needed(Path(temporary_root), NO_SQL))
 
 saved = os.environ.pop("TK_QA_PORT", None)
 try:
