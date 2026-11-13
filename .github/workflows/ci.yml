@@ -111,6 +111,8 @@ jobs:
           # QA: nao perder indicador de agendamento nos cards.
           python3 tests/indicador_agenda_card.py
           python3 tests/worker_credenciais.py
+          # Runner completo precisa do Worker SQLite local (BUG-15), sem acesso a produção.
+          python3 tests/runner_sql_fixture_teste.py
           node tests/estoque_opcional.js
           # Observabilidade 500/503 sem PII: testes do Worker real sem rede.
           node tests/worker_5xx_diagnostico.js

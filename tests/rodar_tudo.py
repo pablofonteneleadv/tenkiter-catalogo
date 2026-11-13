@@ -232,7 +232,7 @@ PRECISA_GS = {"recuperacao_whatsapp.js": ("catalogo", (4, 27)), "assinatura_uplo
 PROPRIO_SERVIDOR = {"service_worker.py"}   # no teste local, esta bateria cuida do próprio servidor (precisa desligá-lo)
 def main():
     import argparse
-    from run_support import preflight, backend_available, write_report
+    from run_support import preflight, backend_available, write_report, sqlite_fixture_server
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--suite', action='append', help='Arquivo de uma suíte; pode repetir. Sem opção, roda a bateria completa.')
     parser.add_argument('--list', action='store_true', help='Lista as suítes sem executá-las.')
@@ -270,30 +270,33 @@ def main():
                 return 2
             Thread(target=server.serve_forever, daemon=True).start()
             base = 'http://127.0.0.1:%d/' % server.server_port
-        for name, passed in selected:
-            env = dict(os.environ)
-            if base: env['TK_BASE'] = base
-            if name in PRECISA_GS and not backend_available(Path(RAIZ), *PRECISA_GS[name]):
-                results.append({'suite': name, 'status': 'skipped', 'reason': 'Backend privado ausente; configure TK_COFRE_DIR.'})
-                print('↷ ' + name + ' — backend privado ausente')
-                continue
-            if name in PROPRIO_SERVIDOR and not os.environ.get('TK_BASE'):
-                env.pop('TK_BASE', None)
-            command = ['node' if name.endswith(('.js', '.cjs')) else sys.executable, os.path.join(AQUI, name)]
-            started = time.monotonic()
-            try:
-                run = subprocess.run(command, capture_output=True, text=True, timeout=900, env=env)
-                output = run.stdout + run.stderr
-                ok = run.returncode == 0 and passed(run.stdout)
-                code = run.returncode
-            except subprocess.TimeoutExpired:
-                output = 'TEMPO ESGOTADO (900 s) em ' + name
-                ok, code = False, None
-            results.append({'suite': name, 'status': 'passed' if ok else 'failed',
-                            'exit_code': code, 'seconds': round(time.monotonic() - started, 3)})
-            print(('✔ ' if ok else '✘ ') + name)
-            if not ok:
-                print('\n'.join('    ' + line for line in output.strip().splitlines()[-25:]))
+        # Só estas suites exigem Worker/SQLite falso; porta exclusiva e cleanup automático.
+        with sqlite_fixture_server(Path(RAIZ), selected) as fixture_port:
+            for name, passed in selected:
+                env = dict(os.environ)
+                if fixture_port is not None: env['TK_QA_PORT'] = fixture_port
+                if base: env['TK_BASE'] = base
+                if name in PRECISA_GS and not backend_available(Path(RAIZ), *PRECISA_GS[name]):
+                    results.append({'suite': name, 'status': 'skipped', 'reason': 'Backend privado ausente; configure TK_COFRE_DIR.'})
+                    print('↷ ' + name + ' — backend privado ausente')
+                    continue
+                if name in PROPRIO_SERVIDOR and not os.environ.get('TK_BASE'):
+                    env.pop('TK_BASE', None)
+                command = ['node' if name.endswith(('.js', '.cjs')) else sys.executable, os.path.join(AQUI, name)]
+                started = time.monotonic()
+                try:
+                    run = subprocess.run(command, capture_output=True, text=True, timeout=900, env=env)
+                    output = run.stdout + run.stderr
+                    ok = run.returncode == 0 and passed(run.stdout)
+                    code = run.returncode
+                except subprocess.TimeoutExpired:
+                    output = 'TEMPO ESGOTADO (900 s) em ' + name
+                    ok, code = False, None
+                results.append({'suite': name, 'status': 'passed' if ok else 'failed',
+                                'exit_code': code, 'seconds': round(time.monotonic() - started, 3)})
+                print(('✔ ' if ok else '✘ ') + name)
+                if not ok:
+                    print('\n'.join('    ' + line for line in output.strip().splitlines()[-25:]))
     finally:
         if server:
             server.shutdown()
