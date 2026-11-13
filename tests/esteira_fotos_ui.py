@@ -229,7 +229,7 @@ with sync_playwright() as p:
         chk(f"{w}: escolher marca a foto e mostra a barra", pg.get_attribute('.cx-item[data-caixa="104"] .cx-sel', "aria-pressed") == "true" and pg.is_visible(".cx-barra") and "1 foto escolhida" in pg.inner_text(".cx-barra"))
         shot(pg, f"caixa-gestor-{w}")
         pg.click(".cx-barra .cx-colocar"); pg.wait_for_selector(".folha .peca-escolhida", timeout=6000)
-        chk(f"{w}: 'Colocar num produto' já sugere o produto indicada por quem enviou", "Vestido Longo Floral" in pg.inner_text(".folha .peca-escolhida") and "Tem 1 foto; cabem mais 7." in pg.inner_text(".folha"))
+        chk(f"{w}: 'Colocar num produto' já sugere o produto indicada por quem enviou", "Vestido Longo Floral" in pg.inner_text(".folha .peca-escolhida") and "Tem 1 foto; cabem mais 19." in pg.inner_text(".folha"))
         pg.click('.folha .cx-capa button:has-text("Capa: foto 1")')
         shot(pg, f"caixa-colocar-folha-{w}")
         n_up = len(st["updates"]); pg.click("#cx-colocar-ok"); pg.wait_for_selector(".folha", state="detached", timeout=8000)
