@@ -55,6 +55,44 @@ const cenarios=String.raw`
   chk('perfil configurado no RH prevalece sobre regra antiga de Mensagens',W.msgDireitos_(perms,IARA,regras).responder);
   perms.msgModelos['Produção'].configurado=false;chk('perfil ainda não configurado preserva exceção antiga de Mensagens',!W.msgDireitos_(perms,IARA,regras).responder);
   perms.msgModelos['Produção'].configurado=true;regras.pessoas['558899990002']={responder:false};chk('exceção pessoal do Mensageiro continua prevalecendo',!W.msgDireitos_(perms,IARA,regras).responder);
+  // Incidente P0 #442: se as regras do Mensageiro falharem no D1, nenhum
+  // perfil pode ganhar acesso por fallback permissivo. Tudo ocorre no SQLite de teste.
+  usuarios[IARA].permissoes=['msg_acessar','msg_responder'];cacheMem.clear();
+  r=await A(IARA,'GET','/msg/acesso');
+  chk('acesso Mensagens retorna permissões normais antes da queda',
+    r.r.status===200&&r.j.ok&&r.j.permitido===true&&r.j.direitos.responder===true,r.j);
+  const d1PrepareOriginal=env.DB.prepare;
+  let leituraRegrasIndisponivel=true;
+  env.DB.prepare=function(sql){
+    const statement=d1PrepareOriginal(sql);
+    if (sql==='SELECT valor FROM cfg WHERE chave=?') {
+      const bindingOriginal=statement.bind;
+      statement.bind=function(...args){
+        bindingOriginal(...args);
+        if (args[0]==='msg_acessos_v1'&&leituraRegrasIndisponivel) {
+          statement.first=async()=>{throw Error('Falha simulada D1: indisponibilidade transitória');};
+        }
+        return statement;
+      };
+    }
+    return statement;
+  };
+  r=await A(IARA,'GET','/msg/acesso');
+  chk('queda D1 no ACL retorna erro 5xx, jamais permitido true',
+    r.r.status>=500&&r.j.ok===false&&r.j.permitido!==true&&!r.j.direitos,r.j);
+  chk('erro D1 na ACL não expõe consulta nem detalhes internos',
+    !JSON.stringify(r.j).includes('indisponibilidade transitória')&&
+    !JSON.stringify(r.j).includes('SELECT valor FROM cfg'),r.j);
+  r=await A(IARA,'GET','/msg/conversas');
+  chk('falha no ACL impede inclusive leitura de conversas',r.r.status>=500&&r.j.ok===false,r.j);
+  leituraRegrasIndisponivel=false;env.DB.prepare=d1PrepareOriginal;cacheMem.clear();
+  r=await A(IARA,'GET','/msg/acesso');
+  chk('D1 recuperado: acesso e permissões legítimos voltam automaticamente',
+    r.r.status===200&&r.j.ok&&r.j.permitido===true&&r.j.direitos.responder===true,r.j);
+  usuarios[IARA].permissoes=[];cacheMem.clear();
+  r=await A(IARA,'GET','/msg/acesso');
+  chk('revogação de acesso é respeitada depois da recuperação',
+    r.r.status===200&&r.j.ok&&r.j.permitido===false&&r.j.direitos.responder===false,r.j);
   console.log(ok+' ok, '+falhas.length+' falhas');if(falhas.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});
 `;
