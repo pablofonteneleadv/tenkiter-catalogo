@@ -7687,22 +7687,46 @@ async function estFocoContexto_(env, data, excluir) {
   return { tomadas, historico };
 }
 async function estGarantirListas_(env, data, cfg, equipeAcessos, lerCatalogo = () => estCatalogo_(env)) {
-  const equipe = (equipeAcessos || await estEquipe_(env)).filter((e) => e.confere);
-  const existentes = (await env.DB.prepare('SELECT whats, produto FROM est_lista WHERE data=?').bind(data).all()).results || [];
-  const tem = new Set(existentes.map((r) => r.whats)), faltam = equipe.map((e) => e.whats).filter((w) => !tem.has(w));
-  if (!faltam.length) return;
-  const trava = 'est:montando:' + data; if (await env.CACHE.get(trava)) return; await env.CACHE.put(trava, '1', { expirationTtl: 60 });
-  try {
-    let familias = {}; try { familias = await famMapa_(env); } catch (e) { familias = {}; }   // v7.44.0: sem famílias, a lista sai como antes
-    const foco = await estFocoContexto_(env, data, faltam);
-    const listas = estMontarListas_(await lerCatalogo(), await estInfo_(env), cfg, faltam, existentes.map((r) => r.produto), Date.now(), familias, foco);
-    const ins = [], agora = new Date().toISOString();
+  const equipe = (equipeAcessos || await estEquipe_(env)).filter(e => e.confere);
+  if (!equipe.length) return;
+  // A escrita só vale enquanto as atribuições do dia forem as mesmas lidas
+  // no início. O D1 avalia a condição e aplica lista e foco na mesma transação.
+  const mesmoDia = `(SELECT COUNT(*) FROM est_lista WHERE data=?)=?
+    AND NOT EXISTS (SELECT 1 FROM json_each(?) j WHERE NOT EXISTS (
+      SELECT 1 FROM est_lista WHERE data=? AND whats=json_extract(j.value,'$[0]') AND produto=json_extract(j.value,'$[1]')
+    ))`;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const existentes = (await env.DB.prepare('SELECT whats, produto FROM est_lista WHERE data=?').bind(data).all()).results || [];
+    const tem = new Set(existentes.map(r => r.whats));
+    const faltam = equipe.map(e => e.whats).filter(w => !tem.has(w));
+    if (!faltam.length) return;
+    const [catalogo, info, familias, foco] = await Promise.all([
+      lerCatalogo(), estInfo_(env), famMapa_(env).catch(() => ({})), estFocoContexto_(env, data, faltam),
+    ]);
+    const listas = estMontarListas_(catalogo, info, cfg, faltam, existentes.map(r => r.produto), Date.now(), familias, foco);
+    const entradas = [], focos = [];
     for (const w of faltam) {
-      (listas[w] || []).forEach((x, pos) => ins.push(env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, w, x.p.id, pos, x.grupo, x.familia || '')));
-      if (cfg.focoCategoria !== false) ins.push(env.DB.prepare("INSERT INTO est_foco (data, whats, categoria, por, em) VALUES (?, ?, ?, 'sistema', ?) ON CONFLICT(data, whats) DO UPDATE SET categoria=excluded.categoria, por=excluded.por, em=excluded.em").bind(data, w, listas._foco[w] || '', agora));
+      (listas[w] || []).forEach((x, pos) => entradas.push([w, x.p.id, pos, x.grupo, x.familia || '']));
+      if (cfg.focoCategoria !== false) focos.push([w, listas._foco[w] || '']);
     }
-    for (let k = 0; k < ins.length; k += 50) await env.DB.batch(ins.slice(k, k + 50));
-  } finally { await env.CACHE.delete(trava); }
+    const estado = [data, existentes.length, JSON.stringify(existentes.map(r => [r.whats, r.produto])), data];
+    const inserir = env.DB.prepare(`WITH estado AS MATERIALIZED (SELECT ${mesmoDia} AS ok)
+      INSERT INTO est_lista (data, whats, produto, pos, grupo, familia)
+      SELECT ?, json_extract(value,'$[0]'), json_extract(value,'$[1]'), json_extract(value,'$[2]'), json_extract(value,'$[3]'), json_extract(value,'$[4]')
+      FROM json_each(?) WHERE (SELECT ok FROM estado)`).bind(...estado, data, JSON.stringify(entradas));
+    const operacoes = [inserir];
+    if (focos.length) {
+      const condicao = entradas.length ? 'changes()=?' : mesmoDia;
+      operacoes.push(env.DB.prepare(`INSERT INTO est_foco (data, whats, categoria, por, em)
+        SELECT ?, json_extract(value,'$[0]'), json_extract(value,'$[1]'), 'sistema', ?
+        FROM json_each(?) WHERE ${condicao}
+        ON CONFLICT(data, whats) DO UPDATE SET categoria=excluded.categoria, por=excluded.por, em=excluded.em`)
+        .bind(data, new Date().toISOString(), JSON.stringify(focos), ...(entradas.length ? [entradas.length] : estado)));
+    }
+    const [gravacao, focoGravado] = await env.DB.batch(operacoes);
+    if (entradas.length ? gravacao.meta?.changes === entradas.length : !focos.length || focoGravado?.meta?.changes === focos.length) return;
+  }
+  throw new Error('As listas de hoje mudaram enquanto eram preparadas. Tente de novo.');
 }
 /** v7.45.0 (gestor): monta de novo só os itens NÃO feitos de uma pessoa. `categoria` vazia = escolhe pelo rodízio (respeita a fixa).
  * Itens já conferidos ficam; a pessoa recebe o que falta para chegar a `porPessoa` itens. */
@@ -7966,8 +7990,10 @@ async function estPedirFotos_(env, cfg, produto, d, eu, agora, de, meuNome) {
 }
 function estDetalhe_(t) { let d = {}; try { d = JSON.parse(t.detalhe || '{}') || {}; } catch (e) { d = {}; } return d; }
 /** Pedidos de fotos abertos, um cartão por peça (vários pedidos da mesma peça ficam juntos). */
-async function estPedidosFotos_(env, porId, nomeDe) {
+async function estPedidosFotos_(env, lerCatalogo, nomeDe) {
   const rows = (await env.DB.prepare("SELECT t.*, p.ref_nome, p.ref_codigo, p.ref_foto FROM est_tarefa t LEFT JOIN est_produto p ON p.id=t.produto WHERE t.origem='pedido_fotos' AND t.status='pendente' ORDER BY t.id LIMIT 300").all()).results || [];
+  if (!rows.length) return [];
+  const porId = new Map((await lerCatalogo().catch(() => [])).map(x => [x.id, x]));
   const grupos = new Map();
   for (const t of rows) {
     const c = porId.get(t.produto) || {}, d = estDetalhe_(t);
@@ -8201,22 +8227,22 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   }
   // ---- v7.42.0: preparação (tarefas e "Aceitar para o site") ----
   if (p === '/esteira/preparacao' && req.method === 'GET') {
-    const [cfg, produtosCatalogo, escala, [preparados, tarefasDb, fq]] = await Promise.all([
-      lerConfig(),
-      lerCatalogo().catch(() => []),  // sem catálogo, mostra o nome guardado
-      escalaHoje(),
+    const [[preparados, tarefasDb, fq], cfg, escala] = await Promise.all([
       medir('d1', () => Promise.all([
         env.DB.prepare("SELECT * FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all(),
         env.DB.prepare("SELECT * FROM est_tarefa WHERE origem<>'pedido_fotos' AND (status='pendente' OR (status='feita' AND produto IN (SELECT id FROM est_produto WHERE etapa='preparacao'))) ORDER BY id").all(),
         env.DB.prepare("SELECT COUNT(DISTINCT produto) AS n FROM est_tarefa WHERE origem='pedido_fotos' AND status='pendente'").first(),
       ])),
+      lerConfig(),
+      escalaHoje(),
     ]);
-    const porId = new Map(produtosCatalogo.map(x => [x.id, x]));
-    const prods = preparados.results || [], ids = new Set(prods.map(x => x.id));
+    const prods = preparados.results || [], tarefas = tarefasDb.results || [];
+    const produtosCatalogo = prods.length || tarefas.length ? await lerCatalogo().catch(() => []) : [];
+    const porId = new Map(produtosCatalogo.map(x => [x.id, x])), ids = new Set(prods.map(x => x.id));
     const porProduto = new Map(), outras = [];
     const vestir = (t) => estVestirTarefa_(t, escala, eu, podeAceitar, nomeDe);
     // Pedidos de fotos ficam em Fotos. Duplicatas antigas continuam ocultas.
-    for (const t of estSemRepetidas_(tarefasDb.results || [])) {
+    for (const t of estSemRepetidas_(tarefas)) {
       if (ids.has(t.produto)) {
         if (!porProduto.has(t.produto)) porProduto.set(t.produto, []);
         porProduto.get(t.produto).push(vestir(t));
@@ -8291,12 +8317,10 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   }
   // ---- v7.52.0: aba Fotos — pedidos de fotos (qualquer pessoa da equipe pede e faz) e caixa de fotos da equipe ----
   if (p === '/esteira/fotos' && req.method === 'GET') {
-    const [catalogoFotos, n] = await Promise.all([
-      lerCatalogo().catch(() => []),  // sem catálogo, mostra o nome guardado
+    const [pedidos, n] = await Promise.all([
+      medir('tarefas', () => estPedidosFotos_(env, lerCatalogo, nomeDe)),
       gestorFotos ? medir('d1', () => env.DB.prepare("SELECT COUNT(*) AS n FROM est_caixa WHERE status='nova'").first()) : null,
     ]);
-    const porId = new Map(catalogoFotos.map(x => [x.id, x]));
-    const pedidos = await medir('tarefas', () => estPedidosFotos_(env, porId, nomeDe));
     return J({ ok: true, eu: Object.assign(quemSou(), { gestorFotos }), opcoes: EST_OPCOES_FOTO_, pedidos, caixaNovas: n?.n || 0 });
   }
   if (p === '/esteira/fotos/pedir' && req.method === 'POST') {
@@ -8405,12 +8429,22 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
     const umItem = (cond) => env.DB.prepare('SELECT * FROM est_pedido_item WHERE id=? AND pedido=?' + (cond || '')).bind(Number(d.item) || 0, pid).first();
     const semItem = () => J({ ok: false, erro: 'Este item não está no pedido. Atualize a tela.' }, 404);
     if (p === '/esteira/pedidos' && req.method === 'GET') {
-      if (!admin) {
-        const rows = (await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS n, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1)) AS contados FROM est_pedido p WHERE p.status='a_caminho' ORDER BY p.previsao, p.id").all()).results || [];
-        return J({ ok: true, admin: false, pedidos: rows.map((x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: x.n, contados: x.contados })) });
-      }
-      const rows = (await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS n, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1)) AS contados, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) AS falta_aplicar FROM est_pedido p WHERE p.status<>'cancelado' OR p.criado_em>=? ORDER BY p.id DESC LIMIT 80").bind(new Date(Date.now() - 30 * 864e5).toISOString()).all()).results || [];
-      return J({ ok: true, admin: true, pedidos: rows.map((x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: x.n, contados: x.contados, faltaAplicar: x.falta_aplicar || 0, criado_em: x.criado_em || '' })) });
+      const campos = 'id, fornecedor, previsao, status, enviado_em, conferido_em, conferido_por, criado_em';
+      const selecao = admin
+        ? 'SELECT ' + campos + " FROM est_pedido WHERE status<>'cancelado' OR criado_em>=? ORDER BY id DESC LIMIT 80"
+        : 'SELECT ' + campos + " FROM est_pedido WHERE status='a_caminho' ORDER BY previsao, id";
+      const resumo = admin ? ', SUM(CASE WHEN i.qtd_aceita>0 AND i.aplicado_em IS NULL THEN 1 ELSE 0 END) AS falta_aplicar' : '';
+      const ordem = admin ? 'p.id DESC' : 'p.previsao, p.id';
+      const sql = 'WITH pedidos AS MATERIALIZED (' + selecao + ') SELECT p.*, ' +
+        "SUM(CASE WHEN i.tipo<>'extra' THEN 1 ELSE 0 END) AS n, " +
+        "SUM(CASE WHEN i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1) THEN 1 ELSE 0 END) AS contados" +
+        resumo + ' FROM pedidos p LEFT JOIN est_pedido_item i ON i.pedido=p.id GROUP BY p.id ORDER BY ' + ordem;
+      const consulta = env.DB.prepare(sql);
+      const rows = (await medir('d1', () => (admin ? consulta.bind(new Date(Date.now() - 30 * 864e5).toISOString()) : consulta).all())).results || [];
+      return J({ ok: true, admin, pedidos: rows.map(x => Object.assign(estPedidoBase_(x, nomeDe), {
+        itens: x.n, contados: x.contados,
+        ...(admin ? { faltaAplicar: x.falta_aplicar || 0, criado_em: x.criado_em || '' } : {}),
+      })) });
     }
     if (p === '/esteira/pedidos/abrir' && req.method === 'GET') {
       if (!ped) return semPedido();
