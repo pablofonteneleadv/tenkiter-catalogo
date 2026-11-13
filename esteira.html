@@ -313,14 +313,28 @@
   async function workerProcesso(rota,corpo,op){let r=await srvRede(rota,corpo,op);for(let i=0;r.aguardando&&i<20;i++){await new Promise(ok=>setTimeout(ok,1000));r=await srvRede('/esteira/operacoes/status?op='+encodeURIComponent(op))}if(r.aguardando)return{ok:false,incerto:true,erro:'O processo ainda está em confirmação. Pode continuar trabalhando e conferir em Processos.'};return r;}
   async function srvRede(rota, corpo, op) {
     const s = getSessao(); if (!s) return { ok: false, erro: 'Entre na sua conta para continuar.', exigeLogin: true };
+    const controle = corpo ? null : new AbortController();
+    // Uma leitura pode passar por sessão, RH e catálogo. O prazo do navegador
+    // precisa dar tempo para o Worker responder inclusive em caso de falha.
+    const prazo = controle ? setTimeout(() => controle.abort(), 90000) : null;
     try {
-      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal:corpo ? undefined : AbortSignal.timeout(20000), headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, ...(op?{'X-TK-Operacao':op}:{}) }, body: corpo ? JSON.stringify(corpo) : undefined });
-      const j = await r.json().catch(() => ({ ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' }));
+      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal: controle?.signal, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, ...(op?{'X-TK-Operacao':op}:{}) }, body: corpo ? JSON.stringify(corpo) : undefined });
+      const j = await r.json().catch(e => {
+        if (controle?.signal.aborted) throw e;
+        return { ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' };
+      });
       if (r.status === 401) j.exigeLogin = true;
       if (r.status === 403 && rota === '/esteira/hoje') j.acessoRevogado = true;
       if (j && j.ok === false && window.TKPadrao) j.erro = TKPadrao.erro(j, 'Não consegui agora. Tente de novo.');   // v7.57.0: nunca JSON nem código na tela
       return j;
-    } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
+    } catch (e) {
+      if (controle?.signal.aborted) return { ok: false, erro: 'A Esteira demorou para responder.' };
+      return { ok: false, erro: navigator.onLine === false
+        ? 'Sem conexão. Verifique a internet e tente de novo.'
+        : 'Não foi possível falar com o servidor da Esteira.', semRede: true };
+    } finally {
+      if (prazo !== null) clearTimeout(prazo);
+    }
   }
   const dataBR = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return '—'; const d = new Date(t); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getFullYear()).slice(2); };
   const haDias = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return null; return Math.floor((Date.now() - t) / 864e5); };

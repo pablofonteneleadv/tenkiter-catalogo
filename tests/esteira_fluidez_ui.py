@@ -1,5 +1,6 @@
 """Troca de abas e revalidação lenta; rede simulada, sem escrita real."""
 import os
+import re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 p=Path(__file__).with_name('esteira_ui.py');ns={'__file__':str(p),'__name__':'esteira_base'}
@@ -27,7 +28,13 @@ with sync_playwright() as p:
   held[0].fulfill(json={'ok':True,'admin':True,'pedidos':[{'id':99,'fornecedor':'Lote atualizado','status':'rascunho','itens':0}]})
   pg.wait_for_timeout(100);assert pg.locator('#painel-listas').is_visible();assert not pg.get_by_text('Lote atualizado',exact=True).count()
   pg.click('[data-aba=pedidos]');pg.wait_for_selector('text=Lote atualizado');c.unroute('**/esteira/pedidos')
-  pg.click('[data-aba=config]');pg.wait_for_selector('#cfg-funcoes');pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
+  pg.click('[data-aba=config]')
+  try: pg.wait_for_selector('#cfg-funcoes')
+  except Exception:
+   print('CONFIG_DIAGNOSTICO',w,'aba=',pg.locator('[data-aba=config]').get_attribute('aria-selected'),'texto=',pg.locator('main').inner_text()[:1500],'erros=',erros,flush=True)
+   pg.screenshot(path=str(OUT/f'config-falha-{w}.png'))
+   raise
+  pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
   pg.click('[data-aba=hoje]');pg.click('[data-aba=config]');assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
   st['equipe'].append({'whats':'88999990004','nome':'Nova pessoa','confere':1,'rodizio':1,'atendente':1,'aceitar':0,'ativo':1})
   print('ATUALIZANDO',flush=True)
@@ -62,6 +69,31 @@ with sync_playwright() as p:
  pg.click('[data-aba=pedidos]')
  pg.wait_for_function("performance.getEntriesByName('esteira:pedidos:util','mark').length===1")
  c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',is_mobile=w<600,has_touch=w<600)
+  st=ns['instalar'](c)
+  st['pedidos'][9]={'id':9,'fornecedor':'Fornecedor Antigo Ltda','previsao':'','status':'rascunho',
+                    'obs':'','fotos':[],'itens':[{'id':31,'tipo':'reposicao','produto':'1001','nome':'Vestido Midi Linho',
+                                                'fotos':[],'qtd_pedida':2,'custo':30,'qtd_contada':None}]}
+  retido=[]
+  c.route(re.compile(r'/exec\?action=list&todos=true$'),lambda r:retido.append(r))
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=pedidos]')
+  pg.click('.peca.pedido[data-pedido="9"]')
+  pg.wait_for_selector('#ped-fornecedor')
+  item=pg.locator('.item-ped[data-item="31"]')
+  assert pg.input_value('#ped-fornecedor')=='texto'
+  pg.wait_for_timeout(100)
+  assert len(retido)==1,[r.request.url for r in retido]
+  assert item.get_by_text('Reposição',exact=True).is_visible(),item.inner_text()
+  pg.fill('#ped-obs','Manter o texto ao carregar o catálogo')
+  pg.screenshot(path=str(OUT/f'pedidos-editor-catalogo-atrasado-{w}.png'))
+  retido[0].fallback()
+  item.get_by_text('Reposição · TK-1001 · estoque hoje: 4',exact=True).wait_for()
+  assert pg.input_value('#ped-obs')=='Manter o texto ao carregar o catálogo'
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  c.close()
  for admin in (False, True):
   c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
   ns['instalar'](c,admin=admin)
@@ -86,16 +118,20 @@ with sync_playwright() as p:
   st=ns['instalar'](c)
   config_base={
    'ok':True,'fonteEquipe':'acessos','equipe':st['equipe'],'escalaPadrao':[],'hoje':'2026-11-01','escalaHoje':{},
-   'config':{'porPessoa':20,'diasSemRepetir':21,'funcoes':['Fotos'],'pesos':{},
+   'config':{'porPessoa':20,'diasSemRepetir':21,'funcoes':['Fotos'],'instrucoes':{},'modelosPreparacao':[],'pesos':{},
              'categoriasFixas':{'88999999999':'Categoria antiga'},'reativacao':[30,60,90],'retratoHora':6}
   }
   c.route('**/esteira/config?basico=1',lambda r:r.fulfill(json=config_base))
   cats=[]
   c.route('**/esteira/config/categorias',lambda r:cats.append(r))
-  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg=c.new_page();erros_config=[];pg.on('pageerror',lambda e:erros_config.append(str(e)));pg.goto(BASE+'esteira.html')
   pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
   pg.click('[data-aba=config]')
-  pg.wait_for_selector('#cfg-funcoes')
+  try: pg.wait_for_selector('#cfg-funcoes')
+  except Exception:
+   print('CONFIG_CATEGORIAS_DIAGNOSTICO',w,'texto=',pg.locator('main').inner_text()[:1500],flush=True)
+   pg.screenshot(path=str(OUT/f'config-categorias-falha-{w}.png'))
+   raise
   pg.wait_for_function("document.querySelector('#cfg-foco [role=status]')?.textContent==='Carregando categorias…'")
   cat=pg.locator('#cfg-foco select[data-whats="88999999999"]')
   assert cat.is_disabled() and cat.input_value()=='Categoria antiga'
@@ -126,6 +162,60 @@ with sync_playwright() as p:
   ns['aguardar_processos'](pg)
   assert st['cfg']['config']['categoriasFixas']=={'88999999999':'Blusas'}
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  assert not erros_config,erros_config
+  c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',is_mobile=w<600,has_touch=w<600)
+  ns['instalar'](c)
+  consultas=[]
+  c.route('**/esteira/hoje',lambda r:consultas.append(r))
+  pg=c.new_page();erros=[];pg.on('pageerror',lambda e:erros.append(str(e)))
+  # O prazo nativo de AbortSignal.timeout não usa o relógio do Playwright.
+  pg.add_init_script("""AbortSignal.timeout = ms => {
+    const controle = new AbortController();
+    setTimeout(() => controle.abort(new DOMException('Prazo esgotado', 'TimeoutError')), ms);
+    return controle.signal;
+  }""")
+  pg.clock.install();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.wait_for_selector('[data-aba=fotos]')
+  pg.clock.fast_forward(22000)
+  assert len(consultas)==1
+  assert pg.get_by_text('Montando a sua lista de hoje…',exact=True).is_visible()
+  consultas[0].fallback()
+  pg.wait_for_selector('.peca')
+
+  consultas.clear()
+  c.route('**/esteira/fotos',lambda r:consultas.append(r))
+  aba=pg.locator('[data-aba=fotos]')
+  if w<600: aba.tap()
+  else: aba.focus();pg.keyboard.press('Enter')
+  pg.wait_for_timeout(150)
+  assert len(consultas)==1
+  pg.clock.fast_forward(91000)
+  aviso=pg.locator('.esteira-vista > .card')
+  aviso.filter(has_text='A Esteira demorou para responder.').wait_for()
+  botao=pg.get_by_role('button',name='Tentar de novo',exact=True)
+  assert botao.bounding_box()['height']>=44
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  pg.screenshot(path=str(OUT/f'esteira-servidor-demorou-{w}.png'))
+
+  c.unroute('**/esteira/fotos')
+  c.route('**/esteira/fotos',lambda r:r.abort())
+  botao.click()
+  aviso.filter(has_text='Não foi possível falar com o servidor da Esteira.').wait_for()
+  c.set_offline(True)
+  botao.click()
+  aviso.filter(has_text='Sem conexão. Verifique a internet e tente de novo.').wait_for()
+  c.unroute('**/esteira/fotos')
+  c.route('**/esteira/fotos',lambda r:r.fulfill(json={'ok':True,'pedidos':[],'caixaNovas':0}))
+  c.route('**/esteira/caixa?*',lambda r:r.fulfill(json={'ok':True,'itens':[],'total':0}))
+  c.set_offline(False)
+  if w<600: botao.tap()
+  else: botao.focus();pg.keyboard.press('Enter')
+  pg.wait_for_selector('#fotos-pedidas')
+  assert aba.get_attribute('aria-selected')=='true'
+  assert not erros,erros
   c.close()
  for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
   c=b.new_context(viewport={'width':w,'height':h},service_workers='block')
