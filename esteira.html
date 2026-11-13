@@ -561,7 +561,6 @@
       linha.append(p.sumiu ? el('div', 'semfoto') : fotoPeca(p.id, p.foto, p.nome, '', true), b);
       app.append(linha);
     });
-    catalogoFundo();                                   // v7.48.0: galeria pronta quando a pessoa tocar numa foto
     } finally {fluidez.concluir(vista);}
   }
   /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todas as peças conferidas (igual ao servidor). */
@@ -771,7 +770,7 @@
     const r = await srv('/esteira/preparacao'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren();
-    catalogoFundo();                                  // dados e fotos de cada produto chegam logo depois
+    if (r.produtos.length || r.outras.length) void catalogoFundo();
     const topo = el('div', 'card'); topo.id = 'prep-topo'; topo.append(el('h2', '', 'Preparação'));   // v7.52.0: sem o bloco de instruções (pedido do Pablo)
     if (r.podeAceitar) topo.append(...blocoColocar(r));
     app.append(topo);
@@ -1152,7 +1151,7 @@
     const filaLocal = cxTodos().catch(() => []);
     const r = await srv('/esteira/fotos'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
-    app.replaceChildren(); catalogoFundo();
+    app.replaceChildren();
     const topo = el('div', 'card'); topo.id = 'fotos-topo'; topo.append(el('h2', '', 'Fotos'));
     const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (AVISO_FOTOS) stTopo.diga(AVISO_FOTOS, 'ok');
     topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de um produto', '', () => abrirPedirFotos(null, (m) => telaFotos(m))), bt('Atualizar fotos', 'leve', () => {fluidez.invalidar();telaFotos();}), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros())), stTopo);

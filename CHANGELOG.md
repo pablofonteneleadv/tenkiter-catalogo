@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.8 — Catálogo carregado sob demanda na Esteira
+
+- Preparação e Fotos vazias deixam de consultar a lista completa do catálogo. Hoje abre com os dados das tarefas, e o navegador consulta o catálogo quando a pessoa abre detalhes ou precisa escolher um produto.
+
+
 ## 7.78.5 — Caixa de fotos com paginação no servidor
 
 - A Caixa abre com as primeiras 24 fotos e permite carregar as anteriores sem perder as fotos já selecionadas. O servidor mantém contagens por situação e o mesmo controle de acesso.

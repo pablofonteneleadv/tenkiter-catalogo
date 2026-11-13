@@ -20,11 +20,12 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const produtos = [];
   for (let i = 0; i < 12; i++) produtos.push({ ID: String(1000 + i), Nome: 'Peça ' + i, Codigo: 'TK-' + i, Categoria: 'Vestidos', Genero: 'Feminino Adulto', Estoque: '2', Tamanhos: 'P, M', Cores: 'Preto', Foto_URL: 'https://midia.fake/m/' + i + '.jpg', Status: 'Ativo', Data_Cadastro: dia(10 + i) });
   const usuarios = { '88999990001': { nome: 'Pablo', permissoes: ['gerir_acessos', 'catalogo_admin'] }, '88999990002': { nome: 'Iara', permissoes: ['catalogo_cadastrar'] }, '88999990003': { nome: 'Clarice', permissoes: ['catalogo_cadastrar'] }, '88999990005': { nome: 'Bia', permissoes: [] }, '88999990006': { nome: 'Gestora', permissoes: ['catalogo_cadastrar'] } };
+  let consultasCatalogo = 0;
   globalThis.fetch = async (u, init) => {
     u = String(u);
     if (u.startsWith('https://api.fake/')) {
       if (init && init.method === 'POST') { const b = JSON.parse(init.body); if (b.action === 'sessao') { const x = usuarios[b.whatsapp]; return new Response(JSON.stringify(x ? { ok: true, usuario: { ...x, perfis: [] } } : { ok: false })); } }
-      if (u.includes('action=list')) return new Response(JSON.stringify({ ok: true, produtos }));
+      if (u.includes('action=list')) { consultasCatalogo++; return new Response(JSON.stringify({ ok: true, produtos })); }
       return new Response('{"ok":false}', { status: 500 });
     }
     return new Response('{}', { status: 404 });
@@ -38,6 +39,8 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   await A(PABLO, 'POST', '/esteira/escala', { tipo: 'dia', funcao: 'Fotos', whats: IARA });
   const tarefasDe = async (id) => (await env.DB.prepare('SELECT * FROM est_tarefa WHERE produto=? ORDER BY id').bind(id).all()).results;
 
+  const [prepVazia, fotosVazias] = await Promise.all([A(IARA, 'GET', '/esteira/preparacao'), A(PABLO, 'GET', '/esteira/fotos')]);
+  chk('Preparação e Fotos vazias não acionam listagem do catálogo', prepVazia.j.ok && fotosVazias.j.ok && prepVazia.j.produtos.length === 0 && fotosVazias.j.pedidos.length === 0 && consultasCatalogo === 0);
   console.log('— 4. preparação sem tarefa duplicada');
   let pr = await A(CLARICE, 'POST', '/esteira/preparar', { id: '1001', nome: 'Peça 1' });
   chk('primeira preparação cria as 5 tarefas do modelo', pr.j.ok && pr.j.criadas === 5, pr.j);

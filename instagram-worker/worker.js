@@ -7966,8 +7966,10 @@ async function estPedirFotos_(env, cfg, produto, d, eu, agora, de, meuNome) {
 }
 function estDetalhe_(t) { let d = {}; try { d = JSON.parse(t.detalhe || '{}') || {}; } catch (e) { d = {}; } return d; }
 /** Pedidos de fotos abertos, um cartão por peça (vários pedidos da mesma peça ficam juntos). */
-async function estPedidosFotos_(env, porId, nomeDe) {
+async function estPedidosFotos_(env, lerCatalogo, nomeDe) {
   const rows = (await env.DB.prepare("SELECT t.*, p.ref_nome, p.ref_codigo, p.ref_foto FROM est_tarefa t LEFT JOIN est_produto p ON p.id=t.produto WHERE t.origem='pedido_fotos' AND t.status='pendente' ORDER BY t.id LIMIT 300").all()).results || [];
+  if (!rows.length) return [];
+  const porId = new Map((await lerCatalogo().catch(() => [])).map(x => [x.id, x]));
   const grupos = new Map();
   for (const t of rows) {
     const c = porId.get(t.produto) || {}, d = estDetalhe_(t);
@@ -8184,22 +8186,22 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   }
   // ---- v7.42.0: preparação (tarefas e "Aceitar para o site") ----
   if (p === '/esteira/preparacao' && req.method === 'GET') {
-    const [cfg, produtosCatalogo, escala, [preparados, tarefasDb, fq]] = await Promise.all([
-      lerConfig(),
-      lerCatalogo().catch(() => []),  // sem catálogo, mostra o nome guardado
-      escalaHoje(),
+    const [[preparados, tarefasDb, fq], cfg, escala] = await Promise.all([
       medir('d1', () => Promise.all([
         env.DB.prepare("SELECT * FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all(),
         env.DB.prepare("SELECT * FROM est_tarefa WHERE origem<>'pedido_fotos' AND (status='pendente' OR (status='feita' AND produto IN (SELECT id FROM est_produto WHERE etapa='preparacao'))) ORDER BY id").all(),
         env.DB.prepare("SELECT COUNT(DISTINCT produto) AS n FROM est_tarefa WHERE origem='pedido_fotos' AND status='pendente'").first(),
       ])),
+      lerConfig(),
+      escalaHoje(),
     ]);
-    const porId = new Map(produtosCatalogo.map(x => [x.id, x]));
-    const prods = preparados.results || [], ids = new Set(prods.map(x => x.id));
+    const prods = preparados.results || [], tarefas = tarefasDb.results || [];
+    const produtosCatalogo = prods.length || tarefas.length ? await lerCatalogo().catch(() => []) : [];
+    const porId = new Map(produtosCatalogo.map(x => [x.id, x])), ids = new Set(prods.map(x => x.id));
     const porProduto = new Map(), outras = [];
     const vestir = (t) => estVestirTarefa_(t, escala, eu, podeAceitar, nomeDe);
     // Pedidos de fotos ficam em Fotos. Duplicatas antigas continuam ocultas.
-    for (const t of estSemRepetidas_(tarefasDb.results || [])) {
+    for (const t of estSemRepetidas_(tarefas)) {
       if (ids.has(t.produto)) {
         if (!porProduto.has(t.produto)) porProduto.set(t.produto, []);
         porProduto.get(t.produto).push(vestir(t));
@@ -8274,12 +8276,10 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   }
   // ---- v7.52.0: aba Fotos — pedidos de fotos (qualquer pessoa da equipe pede e faz) e caixa de fotos da equipe ----
   if (p === '/esteira/fotos' && req.method === 'GET') {
-    const [catalogoFotos, n] = await Promise.all([
-      lerCatalogo().catch(() => []),  // sem catálogo, mostra o nome guardado
+    const [pedidos, n] = await Promise.all([
+      medir('tarefas', () => estPedidosFotos_(env, lerCatalogo, nomeDe)),
       gestorFotos ? medir('d1', () => env.DB.prepare("SELECT COUNT(*) AS n FROM est_caixa WHERE status='nova'").first()) : null,
     ]);
-    const porId = new Map(catalogoFotos.map(x => [x.id, x]));
-    const pedidos = await medir('tarefas', () => estPedidosFotos_(env, porId, nomeDe));
     return J({ ok: true, eu: Object.assign(quemSou(), { gestorFotos }), opcoes: EST_OPCOES_FOTO_, pedidos, caixaNovas: n?.n || 0 });
   }
   if (p === '/esteira/fotos/pedir' && req.method === 'POST') {
