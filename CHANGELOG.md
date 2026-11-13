@@ -21,8 +21,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## 7.78.5 — Caixa de fotos com paginação no servidor
 
-- A Esteira pode solicitar as primeiras 24 fotos e carregar as anteriores por ID, com contagens por situação e o mesmo controle de acesso.
+- A Caixa abre com as primeiras 24 fotos e permite carregar as anteriores sem perder as fotos já selecionadas. O servidor mantém contagens por situação e o mesmo controle de acesso.
 - A Caixa consulta somente a referência mais antiga de cada foto repetida, inclusive quando o envio original está em outra página.
+
+
+## 7.78.4 — Navegação e Fotos na Esteira
+
+- O login inicia a Esteira uma vez. A navegação mantém o foco e a revalidação retoma só a aba em uso.
+- Fotos começa a carregar a Caixa sem esperar pela fila local. Respostas atrasadas de outro filtro ou outra sessão deixam de substituir a tela.
+- O navegador registra marcos de abertura e retorno às abas, disponíveis para medir no Android.
 
 
 ## 7.78.3 — Primeira etapa de desempenho da Esteira
