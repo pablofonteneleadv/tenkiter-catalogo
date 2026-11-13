@@ -1,7 +1,10 @@
 /* Mesmo D1 SQLite da regressão da Esteira; sessões e catálogo simulados. */
 const fs=require('fs'),path=require('path'),vm=require('vm');
 let harness=fs.readFileSync(path.join(__dirname,'worker_esteira.js'),'utf8').replace(/\r/g,'').split('  // acesso\n')[0];
-harness=harness.replace('tk_ig_esteira.mjs','tk_ig_acessos_modelos.mjs').replace('estFornecedorLimpo_};','estFornecedorLimpo_,msgDireitos_,estEscalaDoDia_};');
+const exportacoes = /(export \{[^{}]+)(\};)/;
+if (!exportacoes.test(harness)) throw new Error('Exportações do Worker de teste não encontradas.');
+harness = harness.replace('tk_ig_esteira.mjs', 'tk_ig_acessos_modelos.mjs')
+  .replace(exportacoes, '$1,msgDireitos_,estEscalaDoDia_$2');
 const cenarios=String.raw`
   let legado=false;let equipe=[{whats:IARA,nome:'Iara',ativo:1,confere:1,rodizio:1,aceitar:0}],fora=false;
   const fetchAntigo=globalThis.fetch;
