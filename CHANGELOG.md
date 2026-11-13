@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.9 — Geração concorrente das listas da Esteira
+
+- Quando duas pessoas abrem Hoje ao mesmo tempo, a geração confirma as atribuições atuais no D1 e grava a lista e o foco na mesma transação. Uma alteração concorrente faz a operação recalcular antes de gravar.
+
+
 ## 7.78.5 — Caixa de fotos com paginação no servidor
 
 - A Caixa abre com as primeiras 24 fotos e permite carregar as anteriores sem perder as fotos já selecionadas. O servidor mantém contagens por situação e o mesmo controle de acesso.

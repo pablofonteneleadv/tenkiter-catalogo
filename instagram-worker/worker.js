@@ -7687,22 +7687,46 @@ async function estFocoContexto_(env, data, excluir) {
   return { tomadas, historico };
 }
 async function estGarantirListas_(env, data, cfg, equipeAcessos, lerCatalogo = () => estCatalogo_(env)) {
-  const equipe = (equipeAcessos || await estEquipe_(env)).filter((e) => e.confere);
-  const existentes = (await env.DB.prepare('SELECT whats, produto FROM est_lista WHERE data=?').bind(data).all()).results || [];
-  const tem = new Set(existentes.map((r) => r.whats)), faltam = equipe.map((e) => e.whats).filter((w) => !tem.has(w));
-  if (!faltam.length) return;
-  const trava = 'est:montando:' + data; if (await env.CACHE.get(trava)) return; await env.CACHE.put(trava, '1', { expirationTtl: 60 });
-  try {
-    let familias = {}; try { familias = await famMapa_(env); } catch (e) { familias = {}; }   // v7.44.0: sem famílias, a lista sai como antes
-    const foco = await estFocoContexto_(env, data, faltam);
-    const listas = estMontarListas_(await lerCatalogo(), await estInfo_(env), cfg, faltam, existentes.map((r) => r.produto), Date.now(), familias, foco);
-    const ins = [], agora = new Date().toISOString();
+  const equipe = (equipeAcessos || await estEquipe_(env)).filter(e => e.confere);
+  if (!equipe.length) return;
+  // A escrita só vale enquanto as atribuições do dia forem as mesmas lidas
+  // no início. O D1 avalia a condição e aplica lista e foco na mesma transação.
+  const mesmoDia = `(SELECT COUNT(*) FROM est_lista WHERE data=?)=?
+    AND NOT EXISTS (SELECT 1 FROM json_each(?) j WHERE NOT EXISTS (
+      SELECT 1 FROM est_lista WHERE data=? AND whats=json_extract(j.value,'$[0]') AND produto=json_extract(j.value,'$[1]')
+    ))`;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const existentes = (await env.DB.prepare('SELECT whats, produto FROM est_lista WHERE data=?').bind(data).all()).results || [];
+    const tem = new Set(existentes.map(r => r.whats));
+    const faltam = equipe.map(e => e.whats).filter(w => !tem.has(w));
+    if (!faltam.length) return;
+    const [catalogo, info, familias, foco] = await Promise.all([
+      lerCatalogo(), estInfo_(env), famMapa_(env).catch(() => ({})), estFocoContexto_(env, data, faltam),
+    ]);
+    const listas = estMontarListas_(catalogo, info, cfg, faltam, existentes.map(r => r.produto), Date.now(), familias, foco);
+    const entradas = [], focos = [];
     for (const w of faltam) {
-      (listas[w] || []).forEach((x, pos) => ins.push(env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, w, x.p.id, pos, x.grupo, x.familia || '')));
-      if (cfg.focoCategoria !== false) ins.push(env.DB.prepare("INSERT INTO est_foco (data, whats, categoria, por, em) VALUES (?, ?, ?, 'sistema', ?) ON CONFLICT(data, whats) DO UPDATE SET categoria=excluded.categoria, por=excluded.por, em=excluded.em").bind(data, w, listas._foco[w] || '', agora));
+      (listas[w] || []).forEach((x, pos) => entradas.push([w, x.p.id, pos, x.grupo, x.familia || '']));
+      if (cfg.focoCategoria !== false) focos.push([w, listas._foco[w] || '']);
     }
-    for (let k = 0; k < ins.length; k += 50) await env.DB.batch(ins.slice(k, k + 50));
-  } finally { await env.CACHE.delete(trava); }
+    const estado = [data, existentes.length, JSON.stringify(existentes.map(r => [r.whats, r.produto])), data];
+    const inserir = env.DB.prepare(`WITH estado AS MATERIALIZED (SELECT ${mesmoDia} AS ok)
+      INSERT INTO est_lista (data, whats, produto, pos, grupo, familia)
+      SELECT ?, json_extract(value,'$[0]'), json_extract(value,'$[1]'), json_extract(value,'$[2]'), json_extract(value,'$[3]'), json_extract(value,'$[4]')
+      FROM json_each(?) WHERE (SELECT ok FROM estado)`).bind(...estado, data, JSON.stringify(entradas));
+    const operacoes = [inserir];
+    if (focos.length) {
+      const condicao = entradas.length ? 'changes()=?' : mesmoDia;
+      operacoes.push(env.DB.prepare(`INSERT INTO est_foco (data, whats, categoria, por, em)
+        SELECT ?, json_extract(value,'$[0]'), json_extract(value,'$[1]'), 'sistema', ?
+        FROM json_each(?) WHERE ${condicao}
+        ON CONFLICT(data, whats) DO UPDATE SET categoria=excluded.categoria, por=excluded.por, em=excluded.em`)
+        .bind(data, new Date().toISOString(), JSON.stringify(focos), ...(entradas.length ? [entradas.length] : estado)));
+    }
+    const [gravacao, focoGravado] = await env.DB.batch(operacoes);
+    if (entradas.length ? gravacao.meta?.changes === entradas.length : !focos.length || focoGravado?.meta?.changes === focos.length) return;
+  }
+  throw new Error('As listas de hoje mudaram enquanto eram preparadas. Tente de novo.');
 }
 /** v7.45.0 (gestor): monta de novo só os itens NÃO feitos de uma pessoa. `categoria` vazia = escolhe pelo rodízio (respeita a fixa).
  * Itens já conferidos ficam; a pessoa recebe o que falta para chegar a `porPessoa` itens. */

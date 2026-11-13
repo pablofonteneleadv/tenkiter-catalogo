@@ -62,7 +62,24 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('configuração inválida é recusada', (await A(PABLO, 'POST', '/esteira/config', { config: { porPessoa: 0, diasSemRepetir: 21 } })).r.status === 400);
 
   // lista do dia
-  const h1 = await A(IARA, 'GET', '/esteira/hoje');
+  let abrirCatalogo;
+  const aguardarCatalogo = new Promise(ok => { abrirCatalogo = ok; });
+  const fetchAntesDaLista = globalThis.fetch;
+  let leiturasConcorrentes = 0;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('action=list')) {
+      leiturasConcorrentes++;
+      if (leiturasConcorrentes === 2) abrirCatalogo();
+      await aguardarCatalogo;
+    }
+    return fetchAntesDaLista(url, init);
+  };
+  const temporizadorCatalogo = setTimeout(abrirCatalogo, 1000);
+  const [h1, h2Concorrente] = await Promise.all([A(IARA, 'GET', '/esteira/hoje'), A(CLARICE, 'GET', '/esteira/hoje')]);
+  clearTimeout(temporizadorCatalogo);
+  globalThis.fetch = fetchAntesDaLista;
+  chk('duas aberturas frias simultâneas devolvem listas completas, sem produtos em comum', h1.j.lista?.length === 20 && h2Concorrente.j.lista?.length === 20 && h1.j.lista.every(x => !h2Concorrente.j.lista.some(y => y.id === x.id)));
+
   const temposHoje = h1.r.headers.get('Server-Timing') || '';
   chk('Hoje informa somente duração de etapas para a origem do site', h1.r.headers.get('Timing-Allow-Origin') === 'https://tenkitermodas.com.br' && ['sessao','inicializacao','equipe','config','gerar','catalogo','d1','tarefas','total'].every(nome => temposHoje.includes(nome + ';dur=')) && /^no-store$/.test(h1.r.headers.get('Cache-Control') || ''), temposHoje);
   const caixaMedida = await A(PABLO, 'GET', '/esteira/caixa');
