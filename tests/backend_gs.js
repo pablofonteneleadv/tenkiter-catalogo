@@ -1700,7 +1700,7 @@ function servicosFalsos(amb, est) {
   const aud3 = amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues().filter((x) => x[2] === 'juntar_produtos');
   ok(aud3.length === 1 && /galeriaAntes/.test(aud3[0][4]) && /fotosLevadas/.test(aud3[0][4]) && /reverter/.test(aud3[0][4]), 'auditoria da junção guarda antes/depois e como reverter');
   // ---- limite de fotos
-  sh.getRange(linha('103').i, G).setValue('https://x/a1.jpg,https://x/a2.jpg,https://x/a3.jpg,https://x/a4.jpg,https://x/a5.jpg,https://x/a6.jpg,https://x/a7.jpg,https://x/a8.jpg');
+  sh.getRange(linha('103').i, G).setValue(Array.from({ length: 20 }, (_, i) => 'https://x/a' + (i + 1) + '.jpg').join(','));
   r = amb.post(E({ action: 'juntarProdutos', destinoId: '101', origemIds: ['103'] }));
   ok(r.ok === false && /limite/.test(r.erro) && linha('103').r[6] === 'Ativo', 'passar do limite de fotos recusa e não arquiva ninguém', r.erro);
 })();
