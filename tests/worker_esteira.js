@@ -22,7 +22,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   for (let i = 0; i < 70; i++) produtos.push({ ID: String(1000 + i), Nome: 'Peça ' + i, Codigo: 'TK-' + i, Categoria: i % 3 === 0 ? 'Vestidos' : i % 3 === 1 ? 'Saias' : 'Blusas', Genero: 'Feminino Adulto', Estoque: String(i % 5), Tamanhos: 'P, M, G', Cores: 'Preto', Foto_URL: '', Status: 'Ativo', Data_Cadastro: dia(10 + i) });
   produtos.push({ ID: '9999', Nome: 'Inativa', Status: 'Inativo', Data_Cadastro: dia(400) });
   const usuarios = { '88999990001': { nome: 'Pablo', permissoes: ['gerir_acessos', 'catalogo_admin'] }, '88999990002': { nome: 'Iara', permissoes: ['catalogo_cadastrar'] }, '88999990003': { nome: 'Clarice', permissoes: ['catalogo_cadastrar'] }, '88999990004': { nome: 'Visitante', permissoes: [] } };
-  let listas = 0, LISTAS_ON = false, listasPedidas = 0;   // v7.48.0: listas da Gestão (categorias, públicos, tamanhos e cores) ligadas só nos testes novos
+  let listas = 0, LISTAS_ON = false, listasPedidas = 0, catalogoComErro = false;   // v7.48.0: listas da Gestão (categorias, públicos, tamanhos e cores) ligadas só nos testes novos
   globalThis.fetch = async (u, init) => {
     u = String(u);
     if (u.startsWith('https://api.fake/') && /action=(categorias|generos|opcoes)/.test(u)) {
@@ -34,7 +34,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
     }
     if (u.startsWith('https://api.fake/')) {
       if (init && init.method === 'POST') { const b = JSON.parse(init.body); if (b.action === 'sessao') { const x = usuarios[b.whatsapp]; return new Response(JSON.stringify(x ? { ok: true, usuario: { ...x, perfis: [] } } : { ok: false })); } }
-      if (u.includes('action=list')) { listas++; return new Response(JSON.stringify({ ok: true, produtos })); }
+      if (u.includes('action=list')) { listas++; return catalogoComErro ? new Response('{}', { status: 503 }) : new Response(JSON.stringify({ ok: true, produtos })); }
     }
     return new Response('{}', { status: 404 });
   };
@@ -458,6 +458,19 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('hora do retrato inválida é recusada', (await A(PABLO, 'POST', '/esteira/config', { config: { retratoHora: 25 } })).r.status === 400);
   const cfgN = await A(PABLO, 'POST', '/esteira/config', { config: { retratoHora: 7, categoriasFixas: { ['55' + IARA]: 'Blusas', '123': 'X' } } });
   chk('config salva hora do retrato (também no KV) e categoria fixa (número limpo), sem mexer no resto', cfgN.j.ok && cfgN.j.config.retratoHora === 7 && kv.get('est:retrato:hora') === '7' && JSON.stringify(cfgN.j.config.categoriasFixas) === JSON.stringify({ [IARA]: 'Blusas' }) && cfgN.j.config.focoCategoria === true && cfgN.j.config.reativacao.join() === '30,60,90' && cfgN.j.config.porPessoa === 20, cfgN.j.config);
+  const listasAntesDaConfig = listas;
+  await KV.delete('est:catalogo:v1');
+  catalogoComErro = true;
+  const configBase = await A(PABLO, 'GET', '/esteira/config?basico=1');
+  chk('configuração básica abre sem catálogo mesmo quando ele está indisponível', configBase.j.ok && configBase.j.config.funcoes.length === 4 && configBase.j.escalaHoje && !('categorias' in configBase.j) && listas === listasAntesDaConfig);
+  const catBloqueadas = await A(IARA, 'GET', '/esteira/config/categorias');
+  chk('categorias da configuração são exclusivas de admin total', catBloqueadas.r.status === 403 && listas === listasAntesDaConfig);
+  const catIndisponiveis = await A(PABLO, 'GET', '/esteira/config/categorias');
+  chk('falha no catálogo permite tentativa em separado', catIndisponiveis.r.status === 503 && /categorias/.test(catIndisponiveis.j.erro));
+  catalogoComErro = false;
+  const catConfig = await A(PABLO, 'GET', '/esteira/config/categorias');
+  chk('categorias retornam com contagem de produtos ativos e métricas próprias', catConfig.j.ok && catConfig.j.categorias.reduce((n, c) => n + c.pecas, 0) === 70 && /catalogo;dur=/.test(catConfig.r.headers.get('Server-Timing') || ''));
+
   const cfgG = await A(PABLO, 'GET', '/esteira/config');
   chk('config traz as categorias do catálogo para escolher a fixa', cfgG.j.categorias.map((x) => x.nome).sort().join() === 'Blusas,Saias,Vestidos', cfgG.j.categorias);
   // ---- retrato diário (cron) ----
