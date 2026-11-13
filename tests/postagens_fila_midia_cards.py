@@ -135,7 +135,7 @@ with tempfile.TemporaryDirectory() as temp:
             chk('Falta postar' in cards.nth(5).inner_text(), 'manual pendente aparece como “Falta postar”')
             # Miniaturas reais.
             pg.wait_for_function("[...document.querySelectorAll('.po-midia-grupo .po-mini img')].every(i=>i.complete)", timeout=8000)
-            foto_ok = pg.evaluate("(()=>{const i=document.querySelector('.po-midia-grupo .po-mini img');return i&&i.src.endsWith('a0000000000000000001.jpg')&&i.naturalWidth>0})()")
+            foto_ok = pg.evaluate("(()=>{const i=document.querySelector('.po-midia-grupo .po-mini img');return i&&new URL(i.src).pathname.endsWith('/m/202611/a0000000000000000001.jpg')&&new URL(i.src).searchParams.get('w')==='240'&&i.complete&&i.naturalWidth>0})()")
             chk(foto_ok, 'miniatura da foto tem src válido e carregou')
             poster = pg.evaluate("(()=>{const i=document.querySelectorAll('.po-midia-grupo')[1].querySelector('.po-mini img');return i&&i.src.endsWith('b0000000000000000001.jpg')&&i.naturalWidth>0})()")
             chk(poster, 'vídeo com pôster .jpg mostra o pôster')
