@@ -28,7 +28,13 @@ with sync_playwright() as p:
   held[0].fulfill(json={'ok':True,'admin':True,'pedidos':[{'id':99,'fornecedor':'Lote atualizado','status':'rascunho','itens':0}]})
   pg.wait_for_timeout(100);assert pg.locator('#painel-listas').is_visible();assert not pg.get_by_text('Lote atualizado',exact=True).count()
   pg.click('[data-aba=pedidos]');pg.wait_for_selector('text=Lote atualizado');c.unroute('**/esteira/pedidos')
-  pg.click('[data-aba=config]');pg.wait_for_selector('#cfg-funcoes');pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
+  pg.click('[data-aba=config]')
+  try: pg.wait_for_selector('#cfg-funcoes')
+  except Exception:
+   print('CONFIG_DIAGNOSTICO',w,'aba=',pg.locator('[data-aba=config]').get_attribute('aria-selected'),'texto=',pg.locator('main').inner_text()[:1500],'erros=',erros,flush=True)
+   pg.screenshot(path=str(OUT/f'config-falha-{w}.png'))
+   raise
+  pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
   pg.click('[data-aba=hoje]');pg.click('[data-aba=config]');assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
   st['equipe'].append({'whats':'88999990004','nome':'Nova pessoa','confere':1,'rodizio':1,'atendente':1,'aceitar':0,'ativo':1})
   print('ATUALIZANDO',flush=True)
@@ -43,7 +49,7 @@ with sync_playwright() as p:
   pg.fill('#cfg-funcoes','Fotos, Rascunho mais novo');escritos.pop(0).fallback();pg.wait_for_selector('text=Salvo. As novas regras')
   c.unroute('**/esteira/config',reter_escrita);pg.clock.fast_forward(31000)
   assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Rascunho mais novo'
-  c.route('**/esteira/config',lambda r:r.abort())
+  c.route('**/esteira/config?basico=1',lambda r:r.abort())
   # a mensagem aparece depois da tentativa falhar (assíncrono): avança o relógio simulado e confere até 10 vezes antes de reprovar
   pg.clock.fast_forward(31000);pg.wait_for_selector('.esteira-atualizacao')
   for _ in range(10):
@@ -108,6 +114,57 @@ with sync_playwright() as p:
   assert not pg.get_by_text('Minha conferência',exact=True).is_visible()
   c.close()
  for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block')
+  st=ns['instalar'](c)
+  config_base={
+   'ok':True,'fonteEquipe':'acessos','equipe':st['equipe'],'escalaPadrao':[],'hoje':'2026-11-01','escalaHoje':{},
+   'config':{'porPessoa':20,'diasSemRepetir':21,'funcoes':['Fotos'],'instrucoes':{},'modelosPreparacao':[],'pesos':{},
+             'categoriasFixas':{'88999999999':'Categoria antiga'},'reativacao':[30,60,90],'retratoHora':6}
+  }
+  c.route('**/esteira/config?basico=1',lambda r:r.fulfill(json=config_base))
+  cats=[]
+  c.route('**/esteira/config/categorias',lambda r:cats.append(r))
+  pg=c.new_page();erros_config=[];pg.on('pageerror',lambda e:erros_config.append(str(e)));pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=config]')
+  try: pg.wait_for_selector('#cfg-funcoes')
+  except Exception:
+   print('CONFIG_CATEGORIAS_DIAGNOSTICO',w,'texto=',pg.locator('main').inner_text()[:1500],flush=True)
+   pg.screenshot(path=str(OUT/f'config-categorias-falha-{w}.png'))
+   raise
+  pg.wait_for_function("document.querySelector('#cfg-foco [role=status]')?.textContent==='Carregando categorias…'")
+  cat=pg.locator('#cfg-foco select[data-whats="88999999999"]')
+  assert cat.is_disabled() and cat.input_value()=='Categoria antiga'
+  pg.fill('#cfg-funcoes','Fotos, Meu rascunho')
+  pg.screenshot(path=str(OUT/f'config-antes-de-categorias-{w}.png'))
+  pg.wait_for_timeout(100)
+  assert len(cats)==1
+  cats[0].fulfill(status=503,json={'ok':False,'erro':'Categorias indisponíveis.'})
+  retry=pg.get_by_role('button',name='Tentar carregar categorias')
+  retry.wait_for()
+  retry.scroll_into_view_if_needed()
+  pg.screenshot(path=str(OUT/f'config-categorias-indisponiveis-{w}.png'))
+  pg.locator('#cfg-reat-1').fill('20')
+  pg.get_by_role('button',name='Salvar foco e reativação').click()
+  pg.wait_for_selector('#cfg-foco >> text=Salvo.')
+  assert 'categoriasFixas' not in st['cfg']['config']
+  retry.click()
+  pg.wait_for_timeout(100)
+  assert len(cats)==2
+  cats[1].fulfill(json={'ok':True,'categorias':[{'nome':'Blusas','pecas':20}]})
+  pg.wait_for_function("!document.querySelector('#cfg-foco select').disabled")
+  assert cat.input_value()=='Categoria antiga'
+  assert pg.locator('#cfg-funcoes').input_value()=='Fotos, Meu rascunho'
+  assert pg.locator('#cfg-reat-1').input_value()=='20'
+  cat.select_option('Blusas')
+  pg.get_by_role('button',name='Salvar foco e reativação').click()
+  pg.wait_for_function("!document.documentElement.dataset.esteiraGuardando")
+  ns['aguardar_processos'](pg)
+  assert st['cfg']['config']['categoriasFixas']=={'88999999999':'Blusas'}
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  assert not erros_config,erros_config
+  c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
   c=b.new_context(viewport={'width':w,'height':h},service_workers='block',is_mobile=w<600,has_touch=w<600)
   ns['instalar'](c)
   consultas=[]
@@ -159,6 +216,37 @@ with sync_playwright() as p:
   pg.wait_for_selector('#fotos-pedidas')
   assert aba.get_attribute('aria-selected')=='true'
   assert not erros,erros
+  c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block')
+  ns['instalar'](c)
+  pendentes=[]
+  resumo={'ok':True,'detalhesPendentes':True,'focoCategoria':True,
+          'listas':[{'whats':'88999999999','nome':'Iara','total':0,'feitas':0}],
+          'pedidos':{'aCaminho':[{'fornecedor':'Fornecedor do resumo','itens':2}],'aprovar':[]},
+          'divergencia30':{'conferencias':12,'divergentes':1}}
+  c.route('**/esteira/painel?resumo=1',lambda r:r.fulfill(json=resumo))
+  c.route('**/esteira/painel',lambda r:pendentes.append(r))
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=painel]')
+  pg.wait_for_selector('text=Fornecedor do resumo')
+  assert pg.get_by_text('Aguardando lista de hoje').is_visible()
+  assert not pg.get_by_role('button',name='Ver e alterar a lista de Iara').count()
+  pg.wait_for_timeout(100)
+  assert len(pendentes)==1
+  pg.screenshot(path=str(OUT/f'painel-resumo-com-catalogo-pendente-{w}.png'))
+  pendentes[0].fulfill(status=503,json={'ok':False,'erro':'Detalhes indisponíveis.'})
+  retry=pg.get_by_role('button',name='Tentar carregar detalhes')
+  retry.wait_for()
+  assert pg.get_by_text('Fornecedor do resumo').is_visible()
+  retry.click()
+  pg.wait_for_timeout(100)
+  assert len(pendentes)==2
+  pendentes[1].fallback()
+  pg.get_by_role('button',name='Ver e alterar a lista de Iara').wait_for()
+  assert not pg.get_by_text('Aguardando lista de hoje').count()
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')

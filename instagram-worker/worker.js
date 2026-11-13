@@ -7457,7 +7457,7 @@ const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString()
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
 const estFone_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 13);
-const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config']);
+const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
 const EST_INICIALIZACOES_ = new WeakMap();
 function estIniciar_(env) {
   let inicializacao = EST_INICIALIZACOES_.get(env.DB);
@@ -7938,15 +7938,26 @@ async function estFamInfo_(env) {
 }
 /** Lista do dia de cada pessoa que confere, como o gestor vê no Painel. */
 async function estListasPainel_(env, data, equipe, porId, fi) {
-  const rows = (await env.DB.prepare('SELECT whats, produto, pos, grupo, familia, feito_em FROM est_lista WHERE data=? ORDER BY whats, pos').bind(data).all()).results || [];
-  const focos = {}; ((await env.DB.prepare('SELECT whats, categoria, por FROM est_foco WHERE data=?').bind(data).all()).results || []).forEach((r) => { focos[r.whats] = r; });
-  return equipe.filter((e) => e.confere).map((e) => {
-    const minhas = rows.filter((r) => r.whats === e.whats);
-    const itens = minhas.map((r) => { const x = porId.get(r.produto); return { id: r.produto, nome: x ? x.nome : 'Peça arquivada ou fora do site', codigo: x ? x.codigo : '', foto: x ? x.foto : '', categoria: x ? x.categoria : '', grupo: r.grupo || '', familia: r.familia || '', familiaNome: r.familia ? fi.nomes[r.familia] || '' : '', rotulo: fi.rotulos[r.produto] || '', feito: !!r.feito_em, sumiu: !x }; });
-    const pr = estProgresso_(itens.map((x) => ({ produto: x.id, familia: x.familia, feito: x.feito })));
-    const f = focos[e.whats] || {};
-    return { whats: e.whats, nome: e.nome, categoria: f.categoria || '', categoriaPor: f.por && f.por !== 'sistema' ? 'gestor' : 'sistema', total: pr.total, feitas: pr.feitas, pecas: itens.length, itens };
+  const [listas, focos] = await Promise.all([
+    env.DB.prepare('SELECT whats, produto, pos, grupo, familia, feito_em FROM est_lista WHERE data=? ORDER BY whats, pos').bind(data).all(),
+    env.DB.prepare('SELECT whats, categoria, por FROM est_foco WHERE data=?').bind(data).all(),
+  ]);
+  const porPessoa = new Map(), focoPorPessoa = new Map((focos.results || []).map(r => [r.whats, r]));
+  for (const row of listas.results || []) {
+    if (!porPessoa.has(row.whats)) porPessoa.set(row.whats, []);
+    porPessoa.get(row.whats).push(row);
+  }
+  const progressoPorPessoa = new Map([...porPessoa].map(([whats, linhas]) => [whats, estProgresso_(linhas.map(x => ({ produto: x.produto, familia: x.familia, feito: !!x.feito_em })))]));
+  const porConferente = equipe.filter(e => e.confere).map(e => {
+    const minhas = porPessoa.get(e.whats) || [];
+    const pr = progressoPorPessoa.get(e.whats) || { total: 0, feitas: 0 };
+    const f = focoPorPessoa.get(e.whats);
+    const resumo = { whats: e.whats, nome: e.nome, categoria: f?.categoria || '', categoriaPor: f?.por && f.por !== 'sistema' ? 'gestor' : 'sistema', total: pr.total, feitas: pr.feitas, pecas: minhas.length };
+    if (!porId) return resumo;
+    const itens = minhas.map(r => { const x = porId.get(r.produto); return { id: r.produto, nome: x ? x.nome : 'Peça arquivada ou fora do site', codigo: x ? x.codigo : '', foto: x ? x.foto : '', categoria: x ? x.categoria : '', grupo: r.grupo || '', familia: r.familia || '', familiaNome: r.familia ? fi.nomes[r.familia] || '' : '', rotulo: fi.rotulos[r.produto] || '', feito: !!r.feito_em, sumiu: !x }; });
+    return { ...resumo, itens };
   });
+  return { listas: porConferente, progressoPorPessoa };
 }
 /* ---- v7.52.0: tarefas da preparação sem repetição ----
  * Causa da "Cadastro conferido" duplicada: ao colocar de novo em preparação uma peça que já tinha passado por ela (aceita e recolocada, ou
@@ -8654,11 +8665,21 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
     } else novoId = (await env.DB.prepare('INSERT INTO est_fornecedor (nome, endereco, fone1, fone2, fone3, ativo, criado_em, criado_por, atualizado_em) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)').bind(f.nome, f.endereco, f.fone1, f.fone2, f.fone3, agora, eu, agora).run()).meta.last_row_id;
     return J({ ok: true, fornecedor: estFornecedorSaida_(await env.DB.prepare('SELECT * FROM est_fornecedor WHERE id=?').bind(novoId).first()) });
   }
+  if (p === '/esteira/config/categorias' && req.method === 'GET') {
+    try { return J({ ok: true, categorias: estCategorias_(await lerCatalogo()) }); }
+    catch (e) { return J({ ok: false, erro: 'Não consegui carregar as categorias do catálogo. Tente de novo.' }, 503); }
+  }
   if (p === '/esteira/config' && req.method === 'GET') {
-    const cfg = await lerConfig();
-    const padrao = (await env.DB.prepare('SELECT dia, funcao, whats FROM est_escala_padrao').all()).results || [];
-    let categorias = []; try { categorias = estCategorias_(await lerCatalogo()); } catch (e) { categorias = []; }   // v7.45.0: para a categoria fixa
-    return J({ ok: true, config: cfg, padrao: EST_CFG_PADRAO_, fonteEquipe: perms.acessosConfiguraveis ? 'acessos' : 'manual', equipe: perms.acessosConfiguraveis ? equipe : (await env.DB.prepare('SELECT * FROM est_equipe ORDER BY ativo DESC, nome').all()).results || [], escalaPadrao: padrao, hoje: data, escalaHoje: await estEscalaDoDia_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined), categorias });
+    const basico = url.searchParams.get('basico') === '1';
+    const acessos = perms.acessosConfiguraveis;
+    const [cfg, padrao, equipeConfig, escala, categorias] = await Promise.all([
+      lerConfig(),
+      basico && acessos ? null : env.DB.prepare('SELECT dia, funcao, whats FROM est_escala_padrao').all(),
+      acessos ? equipe : env.DB.prepare('SELECT * FROM est_equipe ORDER BY ativo DESC, nome').all().then(r => r.results || []),
+      escalaHoje(),
+      basico ? null : lerCatalogo().then(estCategorias_).catch(() => []),
+    ]);
+    return J({ ok: true, config: cfg, padrao: EST_CFG_PADRAO_, fonteEquipe: acessos ? 'acessos' : 'manual', equipe: equipeConfig, escalaPadrao: padrao?.results || [], hoje: data, escalaHoje: escala, ...(basico ? {} : { categorias }) });
   }
   if (p === '/esteira/config' && req.method === 'POST') {
     const cfg = await lerConfig();
@@ -8703,29 +8724,37 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
     return J({ ok: true, escalaHoje: await estEscalaDoDia_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined) });
   }
   if (p === '/esteira/painel' && req.method === 'GET') {
-    const cfg = await lerConfig();
-    try { await estGarantirListas_(env, data, cfg, equipe, lerCatalogo); } catch (e) { /* painel mostra o que houver */ }
-    const linhasP = (await env.DB.prepare('SELECT whats, produto, familia, feito_em FROM est_lista WHERE data=?').bind(data).all()).results || [], porW = {};
-    linhasP.forEach((r) => { (porW[r.whats] = porW[r.whats] || []).push({ produto: r.produto, familia: r.familia || '', feito: !!r.feito_em }); });
-    const prog = Object.keys(porW).map((w) => Object.assign({ whats: w }, estProgresso_(porW[w])));   // v7.44.0: família conta como 1
-    const desde = estHoje_(Date.now() - 30 * 864e5), div = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(divergiu) AS d FROM est_conf WHERE data>=?').bind(desde).first();
-    const ag = Date.now();
-    let catalogo = null; try { catalogo = await lerCatalogo(); } catch (e) { catalogo = null; }
+    const resumo = url.searchParams.get('resumo') === '1';
+    const cfg = await lerConfig(), ag = Date.now(), desde = estHoje_(ag - 30 * 864e5);
+    const detalhes = resumo ? null : (async () => {
+      let listasIndisponiveis = false;
+      try { await medir('gerar', () => estGarantirListas_(env, data, cfg, equipe, lerCatalogo)); }
+      catch (e) { listasIndisponiveis = true; }
+      const catalogo = await lerCatalogo().catch(() => null);
+      const [fi, info] = await Promise.all([estFamInfo_(env), catalogo ? estInfo_(env) : null]);
+      return { catalogo, fi, info, listasIndisponiveis };
+    })();
+    const [div, prepDados, contDados, pedidosDados, fornecedoresDados, dadosDetalhados] = await Promise.all([
+      medir('d1', () => env.DB.prepare('SELECT COUNT(*) AS n, SUM(divergiu) AS d FROM est_conf WHERE data>=?').bind(desde).first()),
+      env.DB.prepare("SELECT id, preparado_em, ref_nome, ref_codigo, ref_foto FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all(),
+      env.DB.prepare("SELECT t.produto, COUNT(*) AS total, SUM(CASE WHEN t.status='feita' THEN 1 ELSE 0 END) AS feitas FROM est_tarefa t JOIN est_produto p ON p.id=t.produto WHERE p.etapa='preparacao' AND t.status IN ('pendente', 'feita') GROUP BY t.produto").all(),
+      env.DB.prepare("SELECT p.id, p.fornecedor, p.previsao, p.status, p.conferido_em, p.conferido_por, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS itens FROM est_pedido p WHERE p.status IN ('a_caminho', 'conferido') ORDER BY p.previsao, p.id").all(),
+      env.DB.prepare("SELECT p.fornecedor, COUNT(DISTINCT p.id) AS pedidos, SUM(CASE WHEN i.tipo<>'extra' THEN 1 ELSE 0 END) AS itens, SUM(CASE WHEN i.tipo<>'extra' AND (i.nao_veio=1 OR i.qtd_contada<>i.qtd_pedida) THEN 1 ELSE 0 END) AS diferentes, SUM(CASE WHEN i.tipo<>'extra' THEN i.qtd_pedida ELSE 0 END) AS pedidas, SUM(CASE WHEN i.tipo<>'extra' THEN COALESCE(i.qtd_contada, 0) ELSE 0 END) AS chegaram, SUM(CASE WHEN i.tipo='extra' THEN 1 ELSE 0 END) AS extras FROM est_pedido p JOIN est_pedido_item i ON i.pedido=p.id WHERE p.status IN ('conferido', 'aprovado') AND p.conferido_em>=? GROUP BY p.fornecedor ORDER BY diferentes DESC, p.fornecedor").bind(new Date(ag - 180 * 864e5).toISOString()).all(),
+      detalhes,
+    ]);
+    const { catalogo, fi, info, listasIndisponiveis } = dadosDetalhados || {};
     let faixas = null; if (catalogo) { faixas = { ate30: 0, ate60: 0, ate90: 0, mais90: 0, semData: 0 }; catalogo.forEach((x) => { const dd = estDias_(x.cadastro, ag); if (dd == null) faixas.semData++; else if (dd <= 30) faixas.ate30++; else if (dd <= 60) faixas.ate60++; else if (dd <= 90) faixas.ate90++; else faixas.mais90++; }); }
-    // v7.45.0: listas por pessoa (gestor vê e altera)
-    const porId = new Map((catalogo || []).map((x) => [x.id, x])), fi = await estFamInfo_(env), info = await estInfo_(env);
-    const listas = await estListasPainel_(env, data, equipe, porId, fi);
-    // chegaram e não foram para o site / esperando "Aceitar"
-    const prep = (await env.DB.prepare("SELECT id, preparado_em, ref_nome, ref_codigo, ref_foto FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all()).results || [];
-    const contT = {}; ((await env.DB.prepare("SELECT t.produto, COUNT(*) AS total, SUM(CASE WHEN t.status='feita' THEN 1 ELSE 0 END) AS feitas FROM est_tarefa t JOIN est_produto p ON p.id=t.produto WHERE p.etapa='preparacao' AND t.status IN ('pendente', 'feita') GROUP BY t.produto").all()).results || []).forEach((r) => { contT[r.produto] = r; });
+    const porId = new Map((catalogo || []).map(x => [x.id, x]));
+    const { listas, progressoPorPessoa } = await estListasPainel_(env, data, equipe, resumo ? null : porId, fi);
+    const contT = Object.fromEntries((contDados.results || []).map(r => [r.produto, r]));
     const vestirPrep = (x) => { const c = porId.get(x.id) || {}, t = contT[x.id] || {}; const dd = estDias_(x.preparado_em, ag); return { id: x.id, nome: c.nome || x.ref_nome || 'Peça ' + x.id, codigo: c.codigo || x.ref_codigo || '', foto: c.foto || x.ref_foto || '', dias: dd == null ? null : Math.floor(dd), total: Number(t.total) || 0, feitas: Number(t.feitas) || 0 }; };
-    const prepV = prep.map(vestirPrep);
+    const prepV = (prepDados.results || []).map(vestirPrep);
     const semSite = prepV.filter((x) => x.dias != null && x.dias > 3), esperandoAceitar = prepV.filter((x) => x.total > 0 && x.feitas >= x.total);
     // pedidos a caminho / esperando aprovação
-    const peds = (await env.DB.prepare("SELECT p.id, p.fornecedor, p.previsao, p.status, p.conferido_em, p.conferido_por, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS itens FROM est_pedido p WHERE p.status IN ('a_caminho', 'conferido') ORDER BY p.previsao, p.id").all()).results || [];
+    const peds = pedidosDados.results || [];
     const pedidos = { aCaminho: peds.filter((x) => x.status === 'a_caminho').map((x) => ({ id: x.id, fornecedor: x.fornecedor, previsao: x.previsao || '', itens: x.itens, atrasado: !!x.previsao && x.previsao < data })), aprovar: peds.filter((x) => x.status === 'conferido').map((x) => ({ id: x.id, fornecedor: x.fornecedor, conferido_em: x.conferido_em || '', conferido_por: nomeDe(x.conferido_por || ''), itens: x.itens })) };
     // divergência por fornecedor (chegadas conferidas nos últimos 180 dias)
-    const fornecedores = ((await env.DB.prepare("SELECT p.fornecedor, COUNT(DISTINCT p.id) AS pedidos, SUM(CASE WHEN i.tipo<>'extra' THEN 1 ELSE 0 END) AS itens, SUM(CASE WHEN i.tipo<>'extra' AND (i.nao_veio=1 OR i.qtd_contada<>i.qtd_pedida) THEN 1 ELSE 0 END) AS diferentes, SUM(CASE WHEN i.tipo<>'extra' THEN i.qtd_pedida ELSE 0 END) AS pedidas, SUM(CASE WHEN i.tipo<>'extra' THEN COALESCE(i.qtd_contada, 0) ELSE 0 END) AS chegaram, SUM(CASE WHEN i.tipo='extra' THEN 1 ELSE 0 END) AS extras FROM est_pedido p JOIN est_pedido_item i ON i.pedido=p.id WHERE p.status IN ('conferido', 'aprovado') AND p.conferido_em>=? GROUP BY p.fornecedor ORDER BY diferentes DESC, p.fornecedor").bind(new Date(ag - 180 * 864e5).toISOString()).all()).results || []).map((r) => ({ fornecedor: r.fornecedor, pedidos: r.pedidos || 0, itens: r.itens || 0, diferentes: r.diferentes || 0, pedidas: r.pedidas || 0, chegaram: r.chegaram || 0, extras: r.extras || 0 }));
+    const fornecedores = (fornecedoresDados.results || []).map((r) => ({ fornecedor: r.fornecedor, pedidos: r.pedidos || 0, itens: r.itens || 0, diferentes: r.diferentes || 0, pedidas: r.pedidas || 0, chegaram: r.chegaram || 0, extras: r.extras || 0 }));
     // reativação: peças paradas por degrau, sugestões e tarefas abertas
     let reativacao = null;
     if (catalogo) {
@@ -8743,8 +8772,9 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
         dispensadas: paradas.filter(dispensada).length, tarefas: tarefasR,
       };
     }
-    return J({ ok: true, data, progresso: prog.map((r) => ({ whats: r.whats, nome: nomeDe(r.whats), total: r.total, feitas: r.feitas || 0 })), divergencia30: { conferencias: div ? div.n : 0, divergentes: div ? (div.d || 0) : 0 }, idade: faixas,
-      focoCategoria: cfg.focoCategoria, listas, categorias: catalogo ? estCategorias_(catalogo) : [], semSite, esperandoAceitar, pedidos, fornecedores, reativacao });
+    const progresso = [...progressoPorPessoa].map(([whats, contagem]) => ({ whats, nome: nomeDe(whats), ...contagem }));
+    return J({ ok: true, data, progresso, divergencia30: { conferencias: div ? div.n : 0, divergentes: div ? (div.d || 0) : 0 }, idade: faixas,
+      focoCategoria: cfg.focoCategoria, listas, categorias: catalogo ? estCategorias_(catalogo) : [], semSite, esperandoAceitar, pedidos, fornecedores, reativacao, ...(resumo ? { detalhesPendentes: true } : {}), ...(listasIndisponiveis ? { listasIndisponiveis } : {}) });
   }
   // ---- v7.45.0: o gestor altera a lista do dia de uma pessoa (item já conferido não sai) ----
   if (p.startsWith('/esteira/lista/') && req.method === 'POST') {
