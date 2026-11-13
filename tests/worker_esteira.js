@@ -41,13 +41,14 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const env = { DB: d1(), CACHE: KV, API_URL: 'https://api.fake/exec' };
   const ctx = { waitUntil() {} };
   const respostasEquipe = [];   // v7.43.0: tudo o que a equipe recebeu de /esteira/* (para provar que custo e quantidade pedida nunca vazam)
-  const A = async (whats, metodo, rota, corpo) => { const r = await w.fetch(new Request('https://ig.fake' + rota, { method: metodo, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': whats, 'X-TK-Sessao': 'tk3.sessao-' + whats }, body: corpo ? JSON.stringify(corpo) : undefined }), env, ctx); const j = await r.json(); if (whats !== '88999990001') respostasEquipe.push({ rota, j }); return { r, j }; };
+  const A = async (whats, metodo, rota, corpo) => { const r = await w.fetch(new Request('https://ig.fake' + rota, { method: metodo, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': whats, 'X-TK-Sessao': 'tk3.sessao-' + whats, 'Origin': 'https://tenkitermodas.com.br' }, body: corpo ? JSON.stringify(corpo) : undefined }), env, ctx); const j = await r.json(); if (whats !== '88999990001') respostasEquipe.push({ rota, j }); return { r, j }; };
   const PABLO = '88999990001', IARA = '88999990002', CLARICE = '88999990003', VISITA = '88999990004';
 
   // acesso
   chk('sem sessão é recusado', (await w.fetch(new Request('https://ig.fake/esteira/hoje'), env, ctx)).status === 401);
   const v = await A(VISITA, 'GET', '/esteira/hoje');
   chk('quem não está na equipe recebe aviso em português', v.r.status === 403 && /Esteira/.test(v.j.erro), v.j);
+  chk('recusa de acesso não expõe métricas', !v.r.headers.has('Server-Timing') && !v.r.headers.has('Timing-Allow-Origin'));
   chk('funcionária não abre configurações', (await A(IARA, 'GET', '/esteira/config')).r.status === 403);
 
   // configurações (Admin total)
@@ -62,6 +63,12 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
 
   // lista do dia
   const h1 = await A(IARA, 'GET', '/esteira/hoje');
+  const temposHoje = h1.r.headers.get('Server-Timing') || '';
+  chk('Hoje informa somente duração de etapas para a origem do site', h1.r.headers.get('Timing-Allow-Origin') === 'https://tenkitermodas.com.br' && ['sessao','inicializacao','equipe','config','gerar','catalogo','d1','tarefas','total'].every(nome => temposHoje.includes(nome + ';dur=')) && /^no-store$/.test(h1.r.headers.get('Cache-Control') || ''), temposHoje);
+  const caixaMedida = await A(PABLO, 'GET', '/esteira/caixa');
+  chk('Caixa mantém autorização e pula configuração e catálogo', caixaMedida.j.ok && /equipe;dur=/.test(caixaMedida.r.headers.get('Server-Timing') || '') && !/(config|catalogo);dur=/.test(caixaMedida.r.headers.get('Server-Timing') || ''));
+  const origemEstranha = await w.fetch(new Request('https://ig.fake/esteira/caixa', {headers: {'Origin': 'https://externo.fake', 'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO}}), env, ctx);
+  chk('outra origem não recebe métricas da Esteira', origemEstranha.ok && !origemEstranha.headers.has('Server-Timing') && !origemEstranha.headers.has('Timing-Allow-Origin'));
   chk('Iara recebe 20 peças', h1.j.ok && h1.j.total === 20 && h1.j.lista.length === 20, { t: h1.j.total, e: h1.j.erro });
   const h2 = await A(CLARICE, 'GET', '/esteira/hoje');
   const idsI = new Set(h1.j.lista.map((x) => x.id)), idsC = h2.j.lista.map((x) => x.id);
