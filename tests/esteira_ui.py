@@ -5,7 +5,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get('TK_BASE', 'http://127.0.0.1:8777/')
-OUT = Path(os.environ.get('TK_OUT', Path(__file__).parent / 'saida')); OUT.mkdir(parents=True, exist_ok=True)
+OUT = Path(os.environ.get('TK_OUT', Path(__file__).parent / 'saida' / 'esteira-fluidez')); OUT.mkdir(parents=True, exist_ok=True)
 ok, falhas = 0, []
 def chk(nome, cond, det=None):
     global ok
@@ -724,6 +724,7 @@ with sync_playwright() as p:
                 rota.fallback()
         ctx.route("**/exec?*", reter_catalogo)
         pg.click('.peca.pedido[data-pedido="9"]'); pg.wait_for_selector("#ped-fornecedor", timeout=6000)
+        pg.screenshot(path=str(OUT / f"pedidos-editor-catalogo-atrasado-{w}.png"))
         for rota in catalogo_pendente:
             rota.fallback()
         ctx.unroute("**/exec?*", reter_catalogo)
