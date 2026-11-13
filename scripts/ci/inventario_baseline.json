@@ -247,6 +247,7 @@
     "tests/worker_esteira.js",
     "tests/worker_eventos_runtime.cjs",
     "tests/worker_familias.js",
+    "tests/worker_google_nome_prioridade.js",
     "tests/worker_grupos_busca.js",
     "tests/worker_mensagens.js",
     "tests/worker_mensagens_conversa.js",

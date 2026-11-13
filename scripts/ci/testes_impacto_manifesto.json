@@ -392,6 +392,10 @@
       "esteira",
       "mensagens"
     ],
+    "tests/worker_google_nome_prioridade.js": [
+      "mensagens",
+      "ci"
+    ],
     "tests/worker_grupo.js": [
       "mensagens",
       "postagens"
