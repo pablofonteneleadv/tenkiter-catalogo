@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_esteira.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js')) + '\nexport {estMontarListas_, estRetratoCron_, estParadas_, estValidarCampos_, estFornecedorLimpo_};');
+fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js')) + '\nexport {estMontarListas_, estRetratoCron_, estParadas_, estValidarCampos_, estFornecedorLimpo_, estGarantirListas_};');
 let ok = 0; const falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 function d1() {
@@ -97,6 +97,28 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const h1b = await A(IARA, 'GET', '/esteira/hoje');
   chk('abrir de novo não muda a lista do dia', h1b.j.lista.map((x) => x.id).join() === h1.j.lista.map((x) => x.id).join());
   chk('catálogo vem do cache (uma consulta só)', listas === 1, listas);
+
+  const dataTeste = '2040-01-01';
+  const grupoTeste = [{ whats:IARA, confere:1 }, { whats:CLARICE, confere:1 }];
+  const cfgTeste = { ...c0.j.config, porPessoa:1 };
+  const itensTeste = [{ id:'manual', estoque:'2', categoria:'Blusas' }, { id:'livre', estoque:'2', categoria:'Vestidos' }];
+  let insereManual = true;
+  await W.estGarantirListas_(env, dataTeste, cfgTeste, grupoTeste, async () => {
+    if (insereManual) {
+      insereManual = false;
+      await env.DB.prepare('INSERT INTO est_lista(data,whats,produto,pos) VALUES(?,?,?,0)').bind(dataTeste,IARA,'manual').run();
+    }
+    return itensTeste;
+  });
+  const manual = (await env.DB.prepare('SELECT whats,produto FROM est_lista WHERE data=? ORDER BY whats').bind(dataTeste).all()).results;
+  chk('geração relê atribuição feita enquanto carregava catálogo e não duplica o item', JSON.stringify(manual) === JSON.stringify([{whats:IARA,produto:'manual'},{whats:CLARICE,produto:'livre'}]),manual);
+  const semProdutos = '2040-01-02';
+  await W.estGarantirListas_(env, semProdutos, cfgTeste, grupoTeste, async () => []);
+  const semItens = await env.DB.prepare('SELECT COUNT(*) AS n FROM est_lista WHERE data=?').bind(semProdutos).first();
+  const focoVazio = await env.DB.prepare('SELECT COUNT(*) AS n FROM est_foco WHERE data=? AND categoria=?').bind(semProdutos,'').first();
+  chk('catálogo sem produtos mantém lista vazia confirmada e foco vazio de cada pessoa', semItens.n===0 && focoVazio.n===2,{semItens,focoVazio});
+  await env.DB.prepare('DELETE FROM est_foco WHERE data IN (?,?)').bind(dataTeste,semProdutos).run();
+  await env.DB.prepare('DELETE FROM est_lista WHERE data=?').bind(dataTeste).run();
 
   // conferência
   const alvo = h1.j.lista[0];
