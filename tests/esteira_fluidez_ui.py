@@ -136,7 +136,8 @@ with sync_playwright() as p:
   pg.wait_for_timeout(150)
   assert len(consultas)==1
   pg.clock.fast_forward(91000)
-  pg.get_by_text('A Esteira demorou para responder.',exact=True).wait_for()
+  aviso=pg.locator('.esteira-vista > .card')
+  aviso.filter(has_text='A Esteira demorou para responder.').wait_for()
   botao=pg.get_by_role('button',name='Tentar de novo',exact=True)
   assert botao.bounding_box()['height']>=44
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
@@ -145,10 +146,10 @@ with sync_playwright() as p:
   c.unroute('**/esteira/fotos')
   c.route('**/esteira/fotos',lambda r:r.abort())
   botao.click()
-  pg.get_by_text('Não foi possível falar com o servidor da Esteira.',exact=True).wait_for()
+  aviso.filter(has_text='Não foi possível falar com o servidor da Esteira.').wait_for()
   c.set_offline(True)
   botao.click()
-  pg.get_by_text('Sem conexão. Verifique a internet e tente de novo.',exact=True).wait_for()
+  aviso.filter(has_text='Sem conexão. Verifique a internet e tente de novo.').wait_for()
   c.unroute('**/esteira/fotos')
   c.route('**/esteira/fotos',lambda r:r.fulfill(json={'ok':True,'pedidos':[],'caixaNovas':0}))
   c.route('**/esteira/caixa?*',lambda r:r.fulfill(json={'ok':True,'itens':[],'total':0}))
