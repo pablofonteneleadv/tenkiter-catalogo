@@ -23,6 +23,8 @@ EVID = Path(__file__).resolve().parent.parent / 'docs' / 'ux' / 'postagens-fila-
 EVID.mkdir(parents=True, exist_ok=True)
 R2 = 'https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/'
 FALHAS = []
+# A fila e o navegador compartilham uma data estável, longe da virada do dia.
+AGORA = datetime(2026, 11, 13, 15, tzinfo=timezone.utc)
 
 
 def chk(cond, nome):
@@ -102,16 +104,17 @@ with tempfile.TemporaryDirectory() as temp:
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-sandbox'])
         for largura, altura in [(390, 844), (1440, 900)]:
-            ctx = browser.new_context(viewport={'width': largura, 'height': altura}, device_scale_factor=1)
+            ctx = browser.new_context(viewport={'width': largura, 'height': altura}, device_scale_factor=1, timezone_id='America/Fortaleza')
             ctx.add_init_script(SESSION)
             ctx.add_init_script('window.TK_POSTAGENS_POLL_MS=700;')
             st = install(ctx, perms=PERMS_ALL, versao='7.40.42')
             ctx.route('**/m/202611/**', r2)
             ctx.route('https://res.cloudinary.com/demo/**', cloud)
-            g = st['ig']; g['regras'] = True; g['posts'] = fila_ficticia(datetime.now(timezone.utc))
+            g = st['ig']; g['regras'] = True; g['posts'] = fila_ficticia(AGORA)
             ctx.on('dialog', lambda d: d.accept())
             pg = ctx.new_page(); erros = []
             pg.on('pageerror', lambda e: erros.append(str(e)))
+            pg.clock.set_fixed_time(AGORA)
             pg.goto(BASE + 'admin.html'); pg.wait_for_timeout(1600)
             pg.click('#details-ferramentas > summary'); pg.click('#btn-abrir-postagens'); pg.wait_for_timeout(400)
             pg.locator('#po-abas [data-aba=fila]').click(); pg.wait_for_timeout(900)
