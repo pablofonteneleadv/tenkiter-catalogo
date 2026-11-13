@@ -107,5 +107,57 @@ with sync_playwright() as p:
   assert pg.locator('[data-aba=pedidos]').get_attribute('aria-selected')=='true'
   assert not pg.get_by_text('Minha conferência',exact=True).is_visible()
   c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',is_mobile=w<600,has_touch=w<600)
+  ns['instalar'](c)
+  consultas=[]
+  c.route('**/esteira/hoje',lambda r:consultas.append(r))
+  pg=c.new_page();erros=[];pg.on('pageerror',lambda e:erros.append(str(e)))
+  # O prazo nativo de AbortSignal.timeout não usa o relógio do Playwright.
+  pg.add_init_script("""AbortSignal.timeout = ms => {
+    const controle = new AbortController();
+    setTimeout(() => controle.abort(new DOMException('Prazo esgotado', 'TimeoutError')), ms);
+    return controle.signal;
+  }""")
+  pg.clock.install();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.wait_for_selector('[data-aba=fotos]')
+  pg.clock.fast_forward(22000)
+  assert len(consultas)==1
+  assert pg.get_by_text('Montando a sua lista de hoje…',exact=True).is_visible()
+  consultas[0].fallback()
+  pg.wait_for_selector('.peca')
+
+  consultas.clear()
+  c.route('**/esteira/fotos',lambda r:consultas.append(r))
+  aba=pg.locator('[data-aba=fotos]')
+  if w<600: aba.tap()
+  else: aba.focus();pg.keyboard.press('Enter')
+  pg.wait_for_timeout(150)
+  assert len(consultas)==1
+  pg.clock.fast_forward(91000)
+  pg.get_by_text('A Esteira demorou para responder.',exact=True).wait_for()
+  botao=pg.get_by_role('button',name='Tentar de novo',exact=True)
+  assert botao.bounding_box()['height']>=44
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  pg.screenshot(path=str(OUT/f'esteira-servidor-demorou-{w}.png'))
+
+  c.unroute('**/esteira/fotos')
+  c.route('**/esteira/fotos',lambda r:r.abort())
+  botao.click()
+  pg.get_by_text('Não foi possível falar com o servidor da Esteira.',exact=True).wait_for()
+  c.set_offline(True)
+  botao.click()
+  pg.get_by_text('Sem conexão. Verifique a internet e tente de novo.',exact=True).wait_for()
+  c.unroute('**/esteira/fotos')
+  c.route('**/esteira/fotos',lambda r:r.fulfill(json={'ok':True,'pedidos':[],'caixaNovas':0}))
+  c.route('**/esteira/caixa?*',lambda r:r.fulfill(json={'ok':True,'itens':[],'total':0}))
+  c.set_offline(False)
+  if w<600: botao.tap()
+  else: botao.focus();pg.keyboard.press('Enter')
+  pg.wait_for_selector('#fotos-pedidas')
+  assert aba.get_attribute('aria-selected')=='true'
+  assert not erros,erros
+  c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
