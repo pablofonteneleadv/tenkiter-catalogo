@@ -92,7 +92,7 @@ with sync_playwright() as p:
   st=ns['instalar'](c)
   config_base={
    'ok':True,'fonteEquipe':'acessos','equipe':st['equipe'],'escalaPadrao':[],'hoje':'2026-11-01','escalaHoje':{},
-   'config':{'porPessoa':20,'diasSemRepetir':21,'funcoes':['Fotos'],'pesos':{},
+   'config':{'porPessoa':20,'diasSemRepetir':21,'funcoes':['Fotos'],'instrucoes':{},'modelosPreparacao':[],'pesos':{},
              'categoriasFixas':{'88999999999':'Categoria antiga'},'reativacao':[30,60,90],'retratoHora':6}
   }
   c.route('**/esteira/config?basico=1',lambda r:r.fulfill(json=config_base))
@@ -101,7 +101,11 @@ with sync_playwright() as p:
   pg=c.new_page();pg.goto(BASE+'esteira.html')
   pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
   pg.click('[data-aba=config]')
-  pg.wait_for_selector('#cfg-funcoes')
+  try: pg.wait_for_selector('#cfg-funcoes')
+  except Exception:
+   print('CONFIG_CATEGORIAS_DIAGNOSTICO',w,'texto=',pg.locator('main').inner_text()[:1500],flush=True)
+   pg.screenshot(path=str(OUT/f'config-categorias-falha-{w}.png'))
+   raise
   pg.wait_for_function("document.querySelector('#cfg-foco [role=status]')?.textContent==='Carregando categorias…'")
   cat=pg.locator('#cfg-foco select[data-whats="88999999999"]')
   assert cat.is_disabled() and cat.input_value()=='Categoria antiga'
