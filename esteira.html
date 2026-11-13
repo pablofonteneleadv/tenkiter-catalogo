@@ -1096,13 +1096,13 @@
   function abrirCadastroNovo(itens, aoTerminar) {
     abrirFolha('esteira-caixa-cadastro', 'Cadastrar produto novo', ({ corpo, pe, fechar }) => {
       const urls = itens.map((i) => i.url), ids = itens.map((i) => i.id).join(',');
-      let modo = itens.length > 8 ? 'varias' : 'um';
+      let modo = itens.length > 20 ? 'varias' : 'um';
       const opc = el('div', 'cx-modos'); opc.setAttribute('role', 'group'); opc.setAttribute('aria-label', 'Como cadastrar');
       const a = el('a', 'bt laranja', 'Abrir o cadastro'); a.id = 'cx-abrir-cadastro'; a.target = '_blank'; a.rel = 'noopener';
       const pintar = () => {
         opc.replaceChildren();
         [['um', 'Um produto com estas fotos', itens.length > 20 ? 'Cabem até 20 fotos num produto.' : (itens.length === 1 ? 'A foto vira a capa.' : 'A primeira vira a capa.')], ['varias', 'Vários produtos', 'Cada foto vira um produto, com os mesmos dados.']].forEach(([v, t, d]) => {
-          const b = el('button', 'cx-modo'); b.type = 'button'; b.dataset.modo = v; b.setAttribute('aria-pressed', String(modo === v)); b.disabled = (v === 'um' && itens.length > 8) || (v === 'varias' && itens.length < 2);
+          const b = el('button', 'cx-modo'); b.type = 'button'; b.dataset.modo = v; b.setAttribute('aria-pressed', String(modo === v)); b.disabled = (v === 'um' && itens.length > 20) || (v === 'varias' && itens.length < 2);
           b.append(el('b', '', t), el('small', '', d)); b.onclick = () => { modo = v; pintar(); }; opc.append(b);
         });
         a.href = 'admin.html?caixaFotos=' + ids + '&modo=' + modo;
@@ -1387,7 +1387,7 @@
   }
   /** Fotos pela câmera ou galeria: mesmo envio da preparação (reduz e sobe ao servidor de fotos); o endereço entra em `urls`. */
   function campoFotos(urls, rotulo, max) {
-    const box = el('div', 'campo-fotos'), st = linhaStatus(), lim = max || 8;
+    const box = el('div', 'campo-fotos'), st = linhaStatus(), lim = max || 20;
     const arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
     const b = bt(rotulo || 'Adicionar fotos', '', () => arq.click()); b.title = 'Câmera ou galeria';
     const pintar = () => { box.replaceChildren(miniFotos(urls, (k) => { urls.splice(k, 1); pintar(); }), b, arq, st); b.hidden = urls.length >= lim; };
