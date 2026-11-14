@@ -6588,7 +6588,7 @@ export default {
       }
       return resposta;
     };
-    if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao, X-TK-Operacao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
+    if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao, X-TK-Operacao, X-TK-Esteira-Revisao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if(url.pathname==='/internal/video'){try{return await videoRunner_(env,req,url,J);}catch(_){return J({ok:false,erro:'Processador indisponível.'},503);}}
     if(url.pathname==='/msg/tempo-real'){try{return await conectarEventos_(env,req);}catch(_){return new Response(null,{status:503,headers:{'Cache-Control':'no-store'}});}}
     if(url.pathname==='/catalogo/tecidos'){try{return await rotaTecidos_(env,req,J);}catch(_){return J({ok:false,erro:'Não foi possível atualizar os tecidos. Tente de novo.'},503);}}
@@ -7463,7 +7463,7 @@ const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString()
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
 const estFone_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 13);
-const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
+const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/sincronizar', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
 const EST_INICIALIZACOES_ = new WeakMap();
 function estIniciar_(env) {
   let inicializacao = EST_INICIALIZACOES_.get(env.DB);
@@ -7484,6 +7484,51 @@ async function estGarantirColunas_(env, tabela, colunas) {
     try { await env.DB.prepare('ALTER TABLE ' + tabela + ' ADD COLUMN ' + nome + ' ' + tipo).run(); }
     catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
   }
+}
+// Revisões por fonte. Os gatilhos acompanham a gravação no mesmo commit D1,
+// inclusive nos fluxos legados, nas ações administrativas e no cron.
+const EST_FONTES_ = {
+  lista: ['est_lista', 'est_foco'], tarefas: ['est_tarefa'], produtos: ['est_produto'],
+  pedidos: ['est_pedido', 'est_pedido_item', 'est_fornecedor'], caixa: ['est_caixa'],
+  equipe: ['est_equipe', 'est_escala_dia', 'est_escala_padrao'], regras: ['cfg'],
+  familias: ['fam_familia', 'fam_membro'], conferencias: ['est_conf'],
+};
+const EST_FONTES_ABA_ = {
+  hoje: ['lista','tarefas','produtos','pedidos','caixa','equipe','regras','familias'],
+  prep: ['tarefas','produtos','equipe','regras'],
+  fotos: ['tarefas','caixa','produtos','equipe'],
+  pedidos: ['pedidos','equipe'],
+  painel: Object.keys(EST_FONTES_).filter(f => f !== 'caixa'),
+  config: ['regras','equipe'],
+};
+const EST_ABA_ROTA_ = new Map([
+  ['/esteira/hoje','hoje'], ['/esteira/preparacao','prep'], ['/esteira/fotos','fotos'], ['/esteira/caixa','fotos'],
+  ['/esteira/pedidos','pedidos'], ['/esteira/painel','painel'], ['/esteira/config','config'],
+]);
+async function estInstalarRevisoes_(env) {
+  const existe = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='est_revisao_v1'").first();
+  if (existe) return;
+  const ddl = [env.DB.prepare("CREATE TABLE IF NOT EXISTS est_revisao_v1 (fonte TEXT PRIMARY KEY, versao TEXT NOT NULL)")];
+  ddl.push(env.DB.prepare("INSERT OR IGNORE INTO est_revisao_v1 VALUES ('base', ?)").bind(crypto.randomUUID()));
+  for (const [fonte, tabelas] of Object.entries(EST_FONTES_)) {
+    for (const tabela of tabelas) {
+      for (const operacao of ['INSERT','UPDATE','DELETE']) {
+        const linha = operacao === 'DELETE' ? 'OLD' : 'NEW';
+        const filtro = tabela === 'cfg' ? " WHEN " + linha + ".chave='est_cfg_v1'" : '';
+        ddl.push(env.DB.prepare("CREATE TRIGGER IF NOT EXISTS est_rev_" + tabela + "_" + operacao + " AFTER " + operacao + " ON " + tabela + filtro +
+          " BEGIN INSERT INTO est_revisao_v1 VALUES ('" + fonte + "', '1') ON CONFLICT(fonte) DO UPDATE SET versao=CAST(versao AS INTEGER)+1; END"));
+      }
+    }
+  }
+  await env.DB.batch(ddl);
+}
+async function estRevisaoAba_(env, aba, data) {
+  const fontes = Object.hasOwn(EST_FONTES_ABA_, aba) && EST_FONTES_ABA_[aba];
+  if (!fontes) return null;
+  const rows = (await env.DB.prepare('SELECT fonte, versao FROM est_revisao_v1').all()).results || [];
+  const versoes = new Map(rows.map(x => [x.fonte, x.versao]));
+  if (!versoes.has('base')) return null;
+  return data + ':' + versoes.get('base') + ':' + fontes.map(f => versoes.get(f) || '0').join('.');
 }
 async function estCriarEsquema_(env) {
   await env.DB.batch([
@@ -7529,6 +7574,15 @@ async function estCriarEsquema_(env) {
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_caixa_hash_ativo ON est_caixa (hash, id) WHERE status<>'descartada'"),
   ]);
   await famIniciar_(env);
+}
+const EST_REVISOES_PRONTAS_ = new WeakMap();
+function estPrepararRevisoes_(env) {
+  let pronta = EST_REVISOES_PRONTAS_.get(env.DB);
+  if (!pronta) {
+    pronta = estInstalarRevisoes_(env).catch(e => { EST_REVISOES_PRONTAS_.delete(env.DB); throw e; });
+    EST_REVISOES_PRONTAS_.set(env.DB, pronta);
+  }
+  return pronta;
 }
 async function estCfg_(env) {
   let c = {}; try { c = JSON.parse((await cfgGet(env, 'est_cfg_v1')) || '{}') || {}; } catch (e) { c = {}; }
@@ -8058,7 +8112,19 @@ async function estCaixaRepetidas_(env, itens) {
 async function esteiraComando_(env,req,url,J,perms,ctx,medir){
   if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,acessoRevogado:true,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const op=req.headers.get('X-TK-Operacao')||url.searchParams.get('op')||'',consulta=url.pathname==='/esteira/operacoes/status';
-  if(!consulta&&(req.method!=='POST'||!op))return rotasEsteira_(env,req,url,J,perms,medir);
+  if (!consulta && (req.method !== 'POST' || !op)) {
+    const aba = EST_ABA_ROTA_.get(url.pathname);
+    if (req.method !== 'GET' || !aba || (aba === 'painel' || aba === 'config') && !perms.includes('gerir_acessos') || req.headers.get('X-TK-Esteira-Revisao') !== '1') return rotasEsteira_(env,req,url,J,perms,medir);
+    // Amostrar ANTES da leitura. Uma gravação concorrente pode causar um refresh
+    // adicional, jamais marcar como atual um retrato lido antes da gravação.
+    const leitura = medir('revisao', async () => {
+      await iniciar(env); await estIniciar_(env); await estPrepararRevisoes_(env);
+      const data = estHoje_();
+      const [revisao, acesso] = await Promise.all([estRevisaoAba_(env, aba, data), estChaveAcesso_(env, req, perms)]);
+      return {revisao, acesso, diaRevisao:data};
+    }).catch(() => null);
+    return rotasEsteira_(env, req, url, J, perms, medir, leitura);
+  }
   if(!/^[A-Za-z0-9:_-]{10,180}$/.test(op))return J({ok:false,erro:'Identificação do processo inválida.'},400);
   await iniciar(env);
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS est_comando(dono TEXT NOT NULL,op TEXT NOT NULL,rota TEXT NOT NULL,hash TEXT NOT NULL,estado TEXT NOT NULL,resultado TEXT NOT NULL DEFAULT '',http INTEGER NOT NULL DEFAULT 200,autorizacao TEXT NOT NULL,criado_em TEXT NOT NULL,atualizado_em TEXT NOT NULL,PRIMARY KEY(dono,op))").run();
@@ -8083,17 +8149,39 @@ async function estPedidosHoje_(env, data, admin) {
   const pc = await env.DB.prepare("SELECT SUM(CASE WHEN status='a_caminho' AND (previsao IS NULL OR previsao='' OR previsao<=?) THEN 1 ELSE 0 END) AS conferir, SUM(CASE WHEN status='conferido' THEN 1 ELSE 0 END) AS aprovar, SUM(CASE WHEN status='aprovado' AND EXISTS (SELECT 1 FROM est_pedido_item i WHERE i.pedido=est_pedido.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) THEN 1 ELSE 0 END) AS aplicar FROM est_pedido").bind(data).first();
   return admin ? { conferir: pc?.conferir || 0, aprovar: pc?.aprovar || 0, aplicar: pc?.aplicar || 0 } : { conferir: pc?.conferir || 0 };
 }
-async function estMenu_(env, req, J, perms, medir, incluirResumo) {
+function estAssinaturaAcesso_(perms, membro) {
+  return sha(JSON.stringify([perms.slice().sort(), !!perms.acessosConfiguraveis, membro ? [membro.aceitar,membro.confere] : null]));
+}
+async function estMembroMenu_(env, whats) {
+  return env.DB.prepare('SELECT nome, aceitar, confere FROM est_equipe WHERE whats=? AND ativo=1').bind(whats).first();
+}
+async function estChaveAcesso_(env, req, perms) {
+  const membro = !perms.acessosConfiguraveis && !perms.includes('gerir_acessos') ?
+    await estMembroMenu_(env, estFone_(req.headers.get('X-TK-Whats'))) : null;
+  return estAssinaturaAcesso_(perms, membro);
+}
+async function estMenu_(env, req, J, perms, medir, incluirResumo, aba) {
   const admin = perms.includes('gerir_acessos');
   const whats = estFone_(req.headers.get('X-TK-Whats'));
-  let nome = String(perms.msgNome || '').trim();
+  let nome = String(perms.msgNome || '').trim(), membroLegado;
   if (!admin && !perms.acessosConfiguraveis) {
     const membro = await medir('equipe', async () => {
       await estIniciar_(env);
-      return env.DB.prepare('SELECT nome FROM est_equipe WHERE whats=? AND ativo=1').bind(whats).first();
+      return estMembroMenu_(env, whats);
     });
     if (!membro) return J({ ok:false, acessoRevogado:true, erro:'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
     nome = membro.nome || nome;
+    membroLegado = membro;
+  }
+  if (aba !== undefined) {
+    if (!Object.hasOwn(EST_FONTES_ABA_, aba)) return J({ok:false, erro:'Área da Esteira inválida.'},400);
+    const data = estHoje_();
+    const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');
+    const [acesso, revisao] = await Promise.all([
+      estAssinaturaAcesso_(perms, membroLegado),
+      medir('revisao', () => estRevisaoAba_(env, aba, data)).catch(() => null),
+    ]);
+    return J({ok:true, eu:{admin, nome, gestorFotos}, acesso, data, revisao});
   }
   // No modo configurável, a sessão já confirmou a permissão na entrada da rota.
   // Escala, nome da equipe e direito de aceitar continuam nas rotas de trabalho.
@@ -8112,10 +8200,12 @@ async function estMenu_(env, req, J, perms, medir, incluirResumo) {
     resumoHoje = await Promise.race([resumo, new Promise(resolve => { prazo = setTimeout(resolve, 350); })]);
     clearTimeout(prazo);
   }
-  return J({ ok:true, eu:{ admin, nome }, ...(resumoHoje ? { resumoHoje } : {}) });
+  const acesso = await estAssinaturaAcesso_(perms, membroLegado);
+  return J({ ok:true, eu:{ admin, nome }, acesso, data:estHoje_(), ...(resumoHoje ? { resumoHoje } : {}) });
 }
-async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => executar()) {
+async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => executar(), marcasLeitura) {
   if (url.pathname === '/esteira/menu' && req.method === 'GET') return estMenu_(env, req, J, perms, medir, url.searchParams.get('resumo') === '1');
+  if (url.pathname === '/esteira/sincronizar' && req.method === 'GET') return estMenu_(env, req, J, perms, medir, false, url.searchParams.get('aba'));
   if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,acessoRevogado:true,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
   const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');   // permissão já conferida na sessão
@@ -8124,10 +8214,15 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   const bancoPronto = medir('inicializacao', async () => { await iniciar(env); await estIniciar_(env); });
   const lerEquipe = () => medir('equipe', () => estEquipe_(env, req, perms));
   // O RH remoto independe do D1. A equipe legada mora no D1 e aguarda o esquema.
-  const [, equipe] = await Promise.all([
+  const [, equipe, marcas] = await Promise.all([
     bancoPronto,
     caixaConfirmacao ? [] : perms.acessosConfiguraveis ? lerEquipe() : bancoPronto.then(lerEquipe),
+    marcasLeitura,
   ]);
+  if (marcas) {
+    const responder = J;
+    J = (dados, status) => responder(dados?.ok ? {...dados,...marcas} : dados, status);
+  }
   let config, catalogo;
   const lerConfig = () => config ||= medir('config', () => estCfg_(env));
   const lerCatalogo = () => catalogo ||= medir('catalogo', () => estCatalogo_(env));
@@ -8208,6 +8303,12 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
     return J({ok:true,registro:registroSaida(d.tipo,{...r,...novos})});
   }
 
+  if (p === '/esteira/hoje/tarefas' && req.method === 'GET') {
+    const escala = await escalaHoje();
+    const funcoes = Object.keys(escala).filter(f => estFone_(escala[f].whats) === eu);
+    const tarefas = await estTarefasPendentes_(env, funcoes);
+    return J({ ok:true, tarefas:estApresentarTarefasHoje_(tarefas, new Map(), nomeDe) });
+  }
   if (p === '/esteira/hoje' && req.method === 'GET') {
     const cfg = lerConfig();
     let catalogoHoje;

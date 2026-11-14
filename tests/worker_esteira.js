@@ -103,6 +103,37 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('acesso exclusivo da Caixa não abre o menu da Esteira', (await A(VISITA, 'GET', '/esteira/menu')).r.status === 403);
   usuarios[VISITA] = antesMenu;
 
+  { // Revisões do D1, inclusive para exclusões e rollback.
+    const consulta = async (whats, rota, revisar = false) => {
+      const r = await w.fetch(new Request('https://ig.fake'+rota,{headers:{
+        'X-TK-Whats':whats,'X-TK-Sessao':'tk3.sessao-'+whats,
+        ...(revisar?{'X-TK-Esteira-Revisao':'1'}:{}),
+      }}),env,ctx);
+      return {r,j:await r.json()};
+    };
+    const consultasAntes = listas;
+    const leitura = await consulta(IARA,'/esteira/pedidos',true);
+    const inicial = await consulta(IARA,'/esteira/sincronizar?aba=pedidos');
+    chk('Leitura e retomada compartilham revisão e assinatura de acesso da equipe',
+      leitura.j.revisao && leitura.j.revisao===inicial.j.revisao && leitura.j.acesso===inicial.j.acesso && !inicial.j.eu.admin);
+    const fotosAntes = await consulta(IARA,'/esteira/sincronizar?aba=fotos');
+    const pedido = await env.DB.prepare("INSERT INTO est_pedido(fornecedor,status) VALUES('Simulado','a_caminho')").run();
+    const apos = await consulta(IARA,'/esteira/sincronizar?aba=pedidos');
+    const fotosDepois = await consulta(IARA,'/esteira/sincronizar?aba=fotos');
+    chk('Pedido muda só a revisão das áreas que dependem dele', apos.j.revisao!==inicial.j.revisao && fotosAntes.j.revisao===fotosDepois.j.revisao);
+    await env.DB.prepare("DELETE FROM est_pedido WHERE id=?").bind(pedido.meta.last_row_id).run();
+    const removido = await consulta(IARA,'/esteira/sincronizar?aba=pedidos');
+    chk('Exclusão altera a revisão mesmo quando os totais voltam ao estado original', removido.j.revisao!==apos.j.revisao && removido.j.revisao!==inicial.j.revisao);
+    try {await env.DB.batch([env.DB.prepare("INSERT INTO est_pedido(fornecedor,status) VALUES('Simulado','a_caminho')"), env.DB.prepare('SELECT * FROM tabela_que_nao_existe')]);}catch(_){}
+    chk('Revisão não muda quando o lote é revertido', (await consulta(IARA,'/esteira/sincronizar?aba=pedidos')).j.revisao===removido.j.revisao);
+    const privado = await consulta(VISITA,'/esteira/sincronizar?aba=pedidos');
+    chk('Retomada de sessão sem vínculo retorna 403 e não expõe revisão',privado.r.status===403 && !privado.j.revisao);
+    const admin = await consulta(PABLO,'/esteira/sincronizar?aba=pedidos');
+    chk('Mudança de perfil muda assinatura e sincronização não toca o catálogo',
+      admin.j.acesso!==inicial.j.acesso && listas===consultasAntes);
+    chk('Área inválida é recusada',(await consulta(IARA,'/esteira/sincronizar?aba=toString')).r.status===400);
+  }
+
   // lista do dia
   let abrirCatalogo;
   const aguardarCatalogo = new Promise(ok => { abrirCatalogo = ok; });

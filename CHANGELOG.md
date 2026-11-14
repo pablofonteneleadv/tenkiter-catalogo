@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.25 — Retomada e atualização seletiva na Esteira
+
+- Voltar ao aplicativo conserva a tela enquanto o servidor confirma o acesso e consulta a revisão da aba ativa. Sem mudanças, a tela continua no mesmo ponto.
+- Quando o navegador recria a página, a última aba e os dados recentes podem ser restaurados no mesmo aparelho após confirmação de acesso. A conferência em edição e os campos preparados para retomada continuam como rascunho.
+- A primeira abertura mantém o resumo disponível enquanto busca a lista de Hoje. Busca de produtos e recuperação de senha passam a carregar seus scripts ao serem usadas.
+
+
 ## 7.78.24 — Informações de Hoje antes da lista completa da Esteira
 
 - A abertura mostra o progresso já registrado e os avisos de pedidos enquanto a lista completa termina de carregar. Se a lista falhar, o resumo continua disponível com opção de tentar novamente.
