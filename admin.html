@@ -1244,7 +1244,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
     <div class="menu-cad">
       <div id="ig-faixa" hidden></div>
       <!-- v7.23: o desenho mostra a diferença sem texto longo: várias fotos → 1 produto, ou várias fotos → 1 produto para cada foto -->
-      <button type="button" class="menu-cad-item" id="menu-cad-nova"><span class="mc-eq" aria-hidden="true"><span class="mc-fotos"><i></i><i></i><i></i></span><span class="mc-seta">→</span><span class="mc-prods"><i>1</i></span></span><span><b>Cadastrar UM produto</b><small>Até 8 fotos e 3 vídeos, tudo no mesmo produto</small></span></button>
+      <button type="button" class="menu-cad-item" id="menu-cad-nova"><span class="mc-eq" aria-hidden="true"><span class="mc-fotos"><i></i><i></i><i></i></span><span class="mc-seta">→</span><span class="mc-prods"><i>1</i></span></span><span><b>Cadastrar UM produto</b><small>Até 20 fotos e 3 vídeos, tudo no mesmo produto</small></span></button>
       <button type="button" class="menu-cad-item" id="menu-cad-varias"><span class="mc-eq" aria-hidden="true"><span class="mc-fotos"><i></i><i></i><i></i></span><span class="mc-seta">→</span><span class="mc-prods"><i>1</i><i>2</i><i>3</i></span></span><span><b>Cadastrar vários produtos</b><small>Cada foto vira um produto, com o mesmo título, valor, tamanho e cor</small></span></button>
     </div>
   </details>
@@ -1267,7 +1267,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       <input type="hidden" id="produto-id">
 
       <section class="passo" data-passo="fotos">
-        <div class="passo-tit"><span class="num">1</span><span id="passo-fotos-nome">Fotos do produto</span> <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 8)</span></div>
+        <div class="passo-tit"><span class="num">1</span><span id="passo-fotos-nome">Fotos do produto</span> <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 20)</span></div>
         <p class="passo-sub" id="passo-fotos-varias" hidden>Cada foto vira um produto separado, com os dados que você preencher abaixo.</p>
         <div class="unioes" id="unioes" role="group" aria-label="Uniões de fotos" hidden></div>
         <div class="foto-box" id="galeria-box">
@@ -2065,8 +2065,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   let opIdemp_ = false;              // v7.50.0: servidor 4.19+ reconhece reenvio (opId) — exigido para o Separar em segundo plano
   let updateLoteLiberado_ = false;   // v7.18: servidor 4.28 salva várias edições de dados numa chamada só
 
-  /* ===================== v2.3: fotos unificadas (até 8, com capa e ordem) e vídeo (1) ===================== */
-  const MAX_GALERIA = 8, MAX_VIDEO_MB = 20;
+  /* ===================== v2.3: fotos unificadas (até 20, com capa e ordem) e vídeo (1) ===================== */
+  const MAX_GALERIA = 20, MAX_VIDEO_MB = 20;
   // fotosItens: { url } já salva  |  { b64, prev } nova -- uma delas tem .capa = true (a foto principal).
   let fotosItens = [];
   // v4.18: até 3 vídeos por peça (backend 4.17+ com a bandeira videosMultiplos; sem ela, 1 só como sempre foi).
@@ -2478,7 +2478,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   document.getElementById('galeria-input').addEventListener('change', async (e) => {
     const arquivos = Array.from(e.target.files || []);
     e.target.value = '';
-    // v4.17: no modo "várias peças" o limite de 8 vale por peça, não pelo lote: cada foto vira uma peça.
+    // v4.17: no modo "várias peças" o limite de 20 vale por peça, não pelo lote: cada foto vira uma peça.
     const varias = modoFormulario === 'varias';
     const vagas = varias ? arquivos.length : MAX_GALERIA - fotosItens.length;
     if (!varias && arquivos.length > vagas) TKAviso.aviso('Cabem só mais ' + tkPlural(vagas, 'foto', 'fotos') + ' (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
@@ -3701,7 +3701,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function dadosDoPostSeparado_(base, r2) {
     const fotos = (r2.midias || []).filter(m => m.tipo === 'foto'), video = (r2.midias || []).find(m => m.tipo === 'video');
     const capa = fotos.find(m => m.capa) || fotos[0] || null;
-    const resto = fotos.filter(m => m !== capa).map(m => m.url).slice(0, MAX_GALERIA - 1);   // no máximo 8 fotos por produto
+    const resto = fotos.filter(m => m !== capa).map(m => m.url).slice(0, MAX_GALERIA - 1);   // no máximo 20 fotos por produto
     const d = Object.assign({}, base, { fotoUrlExistente: capa ? capa.url : '', fotosGaleriaExistentes: resto.join(',') });
     delete d.videoUrlExistente; if (video) d.videoUrlExistente = video.url;
     d.notificarPush = false;   // um aviso só (o do primeiro), não um por produto
@@ -3942,7 +3942,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!p) return '';
     // d.fotosGaleriaExistentes já inclui as fotos novas (suas URLs já subidas foram coladas
     // nele em enviarItem, antes do POST final), então não precisa somar nenhuma lista separada.
-    const esperadas = Math.min(8, String(d.fotosGaleriaExistentes || '').split(',').filter(Boolean).length);
+    const esperadas = Math.min(MAX_GALERIA - 1, String(d.fotosGaleriaExistentes || '').split(',').filter(Boolean).length);
     const tem = String(p.Fotos_Galeria || '').split(',').filter(Boolean).length;
     if (tem < esperadas) return 'foi salvo, mas as fotos extras não voltaram na lista (' + tem + ' de ' + esperadas + '). Confira se o script do catálogo é a versão mais nova.';
     const novos = it.urlsVideosNovos || [];
@@ -4840,7 +4840,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     container.querySelectorAll('[data-ampliar-id]').forEach(btn => btn.addEventListener('click', () => {
       const p = produtos.find(x => String(x.ID) === String(btn.dataset.ampliarId)); if (!p || !p.Foto_URL) return;
       const itens = [{ url: p.Foto_URL, tipo: 'foto' }];
-      String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(x => /^https?:\/\//.test(x) && x !== p.Foto_URL).slice(0, 8).forEach(u => itens.push({ url: u, tipo: 'foto' }));
+      String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(x => /^https?:\/\//.test(x) && x !== p.Foto_URL).slice(0, MAX_GALERIA - 1).forEach(u => itens.push({ url: u, tipo: 'foto' }));
       if (window.TKFotoGrande) TKFotoGrande.abrir({ itens, indice: 0 });
     }));
     container.querySelectorAll('[data-duplicar-id]').forEach(btn => btn.addEventListener('click', () => duplicarProduto(btn.dataset.duplicarId)));
@@ -6552,8 +6552,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-registros.js?v=7.64.0"></script>
 <script src="mensagens-fila.js?v=7.70.0"></script>
 <script src="admin-mensagens.js?v=7.78.2"></script>
-<script src="admin-instagram.js?v=7.63.0"></script>
-<script src="admin-caixa-fotos.js?v=7.52.1"></script>
+<script src="admin-instagram.js?v=7.63.1"></script>
+<script src="admin-caixa-fotos.js?v=7.52.2"></script>
 <link rel="stylesheet" href="pedir-fotos.css?v=7.61.0">
 <script src="pedir-fotos.js?v=7.58.1"></script>
 <script src="video-validation.js?v=7.58.1"></script>

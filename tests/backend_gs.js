@@ -1700,7 +1700,7 @@ function servicosFalsos(amb, est) {
   const aud3 = amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues().filter((x) => x[2] === 'juntar_produtos');
   ok(aud3.length === 1 && /galeriaAntes/.test(aud3[0][4]) && /fotosLevadas/.test(aud3[0][4]) && /reverter/.test(aud3[0][4]), 'auditoria da junção guarda antes/depois e como reverter');
   // ---- limite de fotos
-  sh.getRange(linha('103').i, G).setValue('https://x/a1.jpg,https://x/a2.jpg,https://x/a3.jpg,https://x/a4.jpg,https://x/a5.jpg,https://x/a6.jpg,https://x/a7.jpg,https://x/a8.jpg');
+  sh.getRange(linha('103').i, G).setValue(Array.from({ length: 20 }, (_, i) => 'https://x/a' + (i + 1) + '.jpg').join(','));
   r = amb.post(E({ action: 'juntarProdutos', destinoId: '101', origemIds: ['103'] }));
   ok(r.ok === false && /limite/.test(r.erro) && linha('103').r[6] === 'Ativo', 'passar do limite de fotos recusa e não arquiva ninguém', r.erro);
 })();
@@ -2072,6 +2072,16 @@ function servicosFalsos(amb, est) {
   ok(!conflict.ok && !conflict.codigo, 'chave reaproveitada com conteúdo diferente é recusada sem revelar o pedido');
   const other = durable.post(Object.assign({}, intent, { whatsapp: '88988887777' }));
   ok(!other.ok && !other.codigo, 'outro telefone não recupera pedido por opId');
+})();
+
+// Regressão do limite de 20 fotos: uma capa separada e até 19 URLs adicionais.
+(function limiteVinteFotos() {
+  const amb = criarAmbiente(); semear(amb);
+  const urls = Array.from({ length: 21 }, (_, i) => 'https://midia.fake/foto-' + i + '.jpg');
+  const resposta = amb.run('limitarGaleria_(' + JSON.stringify(urls.join(',')) + ')');
+  const lista = String(resposta).split(',').filter(Boolean);
+  ok(lista.length === 19 && lista[0] === urls[0] && lista[18] === urls[18], 'backend preserva 19 fotos extras e limita excedente, total 20 com a capa');
+  ok(amb.run('MAX_FOTOS_GALERIA') === 19, 'limite interno de galeria é 19 além da capa');
 })();
 
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
