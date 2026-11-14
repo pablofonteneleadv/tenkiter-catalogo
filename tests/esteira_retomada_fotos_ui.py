@@ -361,9 +361,51 @@ def limites_e_revisao(chromium):
             ctx.close()
 
 
+def navegar_enquanto_o_cache_abre(chromium, largura, altura):
+    mobile = largura < 600
+    with TemporaryDirectory() as perfil:
+        estado = novo_estado(admin=largura != 412)
+        ctx, pg, _, _ = contexto(chromium, perfil, largura, altura, estado)
+        login(pg)
+        acionar(pg.locator("[data-aba=fotos]"), mobile)
+        pg.locator("[data-caixa]").first.wait_for()
+        esperar_snapshot(pg, "salvo?.aba === 'fotos' && salvo.leituras.length === 2")
+        ctx.close()
+
+        estado["gets"].clear()
+        estado["reter_sync"] = True
+        ctx, pg, _, _ = contexto(chromium, perfil, largura, altura, estado, atraso=2600)
+        pg.goto(BASE + "esteira.html", wait_until="domcontentloaded")
+        sync = esperar_rota(pg, estado)
+        assert not pg.locator("[data-aba=pedidos]").is_visible()
+        assert not pg.locator("[data-caixa], #fotos-pedidas").count()
+        sync.fulfill(json={
+            "ok": True, "eu": {"admin": estado["admin"], "gestorFotos": estado["admin"], "nome": "Iara"},
+            "acesso": ACESSO, "data": DIA, "revisao": "r1",
+        })
+        pg.locator("[data-aba=pedidos]").wait_for()
+        assert not pg.evaluate("performance.getEntriesByName('teste:idb:aberto').length")
+        assert pg.locator("[data-aba=fotos]").get_attribute("aria-selected") == "true"
+        assert pg.locator("[data-aba=config]").count() == int(estado["admin"])
+        capturar(pg, f"abas-antes-do-cache-{largura}")
+        acionar(pg.locator("[data-aba=fotos]"), mobile)
+        acionar(pg.locator("[data-aba=pedidos]"), mobile)
+        pg.locator("main[data-tela=pedidos] h2").first.wait_for()
+        assert not pg.evaluate("performance.getEntriesByName('teste:idb:aberto').length")
+        pg.wait_for_function("performance.getEntriesByName('teste:idb:aberto').length > 0")
+        pg.wait_for_timeout(260)
+        assert pg.locator("[data-aba=pedidos]").get_attribute("aria-selected") == "true"
+        assert pg.locator("main[data-tela=pedidos] h2").first.is_visible()
+        assert estado["gets"] == [("sincronizar", "aba=fotos"), ("pedidos", "")], estado["gets"]
+        assert not estado["escritas"] and not estado["erros"], estado
+        capturar(pg, f"pedidos-durante-retomada-{largura}")
+        ctx.close()
+
+
 with sync_playwright() as p:
     for largura, altura in VISTAS:
         jornada(p.chromium, largura, altura)
+        navegar_enquanto_o_cache_abre(p.chromium, largura, altura)
     limites_e_revisao(p.chromium)
     copia_legada_da_equipe(p.chromium)
     sessao_expirada_durante_leituras(p.chromium)
