@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.27 — Fotos e Caixa carregam em paralelo
+
+- A primeira entrada em Fotos busca pedidos e Caixa ao mesmo tempo. O filtro, a paginação e a retomada local continuam disponíveis.
+
 ## 7.78.26 — Retomada de Fotos e Caixa na Esteira
 
 - Confirma o acesso e a revisão enquanto abre o cache do aparelho. Com a mesma revisão, recupera Fotos, Caixa, páginas abertas, seleção e posição sem baixar as listas de novo.

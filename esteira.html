@@ -1466,6 +1466,8 @@
   }
   /* ---- tela da aba Fotos ---- */
   let CAIXA_VER = 'novas', AVISO_FOTOS = '';
+  // O servidor aplica o escopo da sessão. Para a equipe, ignora o filtro.
+  const rotaCaixa = filtro => '/esteira/caixa?pagina=1&ver=' + filtro;
   async function telaFotos(aviso) {
     versaoTela++;
     const vista=fluidez.preparar('fotos','Carregando as fotos…'),app=vista.app;
@@ -1475,7 +1477,11 @@
     try {
 
     const filaLocal = cxTodos().catch(() => []);
-    const r = await srv('/esteira/fotos'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
+    const fotos = srv('/esteira/fotos');
+    const rota = rotaCaixa(CAIXA_VER);
+    // No retorno pelo cache, desenharCaixa lê apenas o snapshot já validado.
+    const caixa = contextoRecuperado ? null : {rota, leitura:srv(rota)};
+    const r = await fotos; if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren();
     const topo = el('div', 'card'); topo.id = 'fotos-topo'; topo.append(el('h2', '', 'Fotos'));
@@ -1488,7 +1494,7 @@
     else cp.append(...r.pedidos.map((g) => cartaoPedidoFotos(g, () => telaFotos())));
     app.append(cp);
     const cx = el('div', 'card'); cx.id = 'caixa'; app.append(cx);
-    if (contextoRecuperado) await desenharCaixa(cx); else void desenharCaixa(cx);
+    if (contextoRecuperado) await desenharCaixa(cx); else void desenharCaixa(cx, null, caixa);
     void filaLocal.then((pendentes) => {
       const topoAtual = $('fotos-topo');
       if (!pendentes.length || !vista.valida() || ABA !== 'fotos' || !topoAtual || $('caixa-pendente')) return;
@@ -1505,7 +1511,7 @@
     } finally {fluidez.concluir(vista);marcarRetomada();}
   }
   const leiturasCaixa = new WeakMap(), caixaRenderizada = new WeakMap();
-  async function desenharCaixa(cx, pagina) {
+  async function desenharCaixa(cx, pagina, antecipada) {
     const gestor = !!(EU && EU.gestorFotos), filtroAtual = CAIXA_VER, sessao = sessaoAtual;
     const tentativa = {};
     leiturasCaixa.set(cx, tentativa);
@@ -1514,9 +1520,9 @@
       caixaRenderizada.delete(cx);
       cx.replaceChildren(el('h2', '', titulo), el('p', 'muted', 'Carregando…'));
     }
-    const rota = '/esteira/caixa?pagina=1' + (gestor ? '&ver=' + filtroAtual : '');
+    const rota = rotaCaixa(filtroAtual);
     const chave = rota + (pagina ? '&antes=' + pagina.cursor : '');
-    let resposta = await srv(chave);
+    let resposta = await (antecipada?.rota === chave ? antecipada.leitura : srv(chave));
     const chaves = pagina ? [...(caixaRenderizada.get(cx) || []), chave] : [chave];
     if (!pagina && resposta.ok && contextoRecuperado?.aba === 'fotos') {
       resposta = { ...resposta, itens:[...resposta.itens] };
@@ -2700,7 +2706,16 @@
         const dados = new Map(autorizado ? local.leituras.filter(([rota, d]) =>
           rotaDaAba(rota,aba) && d?.ok && d.acesso===r.acesso && d.diaRevisao===r.data) : []);
         if (aba === 'fotos') {
-          const caixa = '/esteira/caixa?pagina=1' + (EU.gestorFotos ? '&ver='+CAIXA_VER : '');
+          const caixa = rotaCaixa(CAIXA_VER);
+          // A equipe podia ter páginas gravadas sem o parâmetro ver.
+          if (!EU.gestorFotos) {
+            for (const [rota, dadosCaixa] of dados) {
+              const legado = rota.match(/^\/esteira\/caixa\?pagina=1(&antes=\d+)?$/);
+              if (!legado) continue;
+              dados.delete(rota);
+              dados.set(caixa + (legado[1] || ''), dadosCaixa);
+            }
+          }
           const completa = dados.has(baseLeitura.fotos) && dados.has(caixa);
           const mudou = !r.revisao || [...dados.values()].some(d => d.revisao !== r.revisao);
           if (!completa || mudou && !local?.selecao?.length) return abrirAba();

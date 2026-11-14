@@ -297,6 +297,7 @@ with sync_playwright() as p:
 
   consultas.clear()
   c.route('**/esteira/fotos',lambda r:consultas.append(r))
+  c.route('**/esteira/caixa?*',lambda r:r.fulfill(json={'ok':True,'itens':[],'total':0}))
   aba=pg.locator('[data-aba=fotos]')
   if w<600: aba.tap()
   else: aba.focus();pg.keyboard.press('Enter')
@@ -319,11 +320,11 @@ with sync_playwright() as p:
   aviso.filter(has_text='Sem conexão. Verifique a internet e tente de novo.').wait_for()
   c.unroute('**/esteira/fotos')
   c.route('**/esteira/fotos',lambda r:r.fulfill(json={'ok':True,'pedidos':[],'caixaNovas':0}))
-  c.route('**/esteira/caixa?*',lambda r:r.fulfill(json={'ok':True,'itens':[],'total':0}))
   c.set_offline(False)
   if w<600: botao.tap()
   else: botao.focus();pg.keyboard.press('Enter')
   pg.wait_for_selector('#fotos-pedidas')
+  pg.get_by_text('Você ainda não enviou fotos para a caixa.',exact=True).wait_for()
   assert aba.get_attribute('aria-selected')=='true'
   assert not erros,erros
   c.close()
