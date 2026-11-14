@@ -471,10 +471,45 @@ with sync_playwright() as p:
   estado['rev']='r2'
   pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
   pg.get_by_text('Fornecedor atualizado',exact=True).wait_for()
+  pg.wait_for_timeout(400)
   assert estado['pedidos']==antes+1 and estado['hoje']==hoje,(w,estado)
   estado['auth']=False
   pg.reload();pg.locator('#login-w').wait_for()
   assert not pg.locator('[data-pedido]').count() and estado['escritas']==0
   c.close()
+ # O rascunho de uma conferência sobrevive à recarga, mas não registra nada sozinho.
+ c=b.new_context(viewport={'width':390,'height':844},service_workers='block',has_touch=True)
+ ns['instalar'](c)
+ rascunho_dia=dia
+ acessos={'rev':'r1','envios':0}
+ def conferencia_rota(r):
+  url=r.request.url
+  if r.request.method=='POST':
+   acessos['envios']+=1
+   return r.fulfill(status=503,json={'ok':False})
+  base={'ok':True,'acesso':'acesso-simulado','data':rascunho_dia,'revisao':acessos['rev'],
+        'eu':{'admin':True,'nome':'Iara','confere':True}}
+  if '/menu?' in url or '/sincronizar?' in url:return r.fulfill(json=base)
+  if url.endswith('/hoje'):
+   return r.fulfill(json={**base,'diaRevisao':rascunho_dia,'total':1,'feitas':0,'pecas':1,'escala':[],'funcoes':[],
+        'lista':[{'id':'1001','nome':'Vestido para conferir','estoque':'4','tamanhos':'P, M','cores':'Verde','grupo':'Vestidos'}]})
+  return r.fallback()
+ c.route('**/esteira/**',conferencia_rota)
+ pg=c.new_page();pg.goto(BASE+'esteira.html')
+ pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+ pg.get_by_role('button',name='Vestido para conferir, abrir conferência').tap()
+ pg.locator('#conf-estoque').fill('7')
+ pg.get_by_role('button',name='P',exact=True).tap()
+ pg.wait_for_timeout(650)
+ pg.reload()
+ pg.get_by_text('Conferência recuperada. Revise antes de salvar.',exact=True).wait_for()
+ assert pg.locator('#conf-estoque').input_value()=='7'
+ assert pg.get_by_role('button',name='P',exact=True).get_attribute('aria-pressed')=='false'
+ pg.screenshot(path=str(OUT/'esteira-retomada-conferencia-390.png'))
+ acessos['rev']='r2'
+ pg.get_by_role('button',name='Salvar conferência',exact=True).tap()
+ pg.get_by_text('A lista mudou ou ainda não pôde ser confirmada.',exact=False).wait_for()
+ assert pg.locator('#conf-estoque').input_value()=='7' and acessos['envios']==0
+ c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')

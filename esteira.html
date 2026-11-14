@@ -319,6 +319,7 @@
     pedidos:'/esteira/pedidos', painel:'/esteira/painel', config:'/esteira/config',
   };
   const rotasTela = new Set([...Object.values(baseLeitura), '/esteira/caixa']);
+  const leituraEm = new WeakMap();
   let acessoTela, diaTela, leiturasTela = new Map(), contextoRecuperado, sincronizando, aberturaEmCurso, conferenciaAberta;
   let agendarSincronia, agendaSalvar, ultimaSincronia = 0, ultimaLeitura = new Map(), abrirEmCurso = null;
   const diaLoja = () => new Date(Date.now()-10800000).toISOString().slice(0,10);
@@ -359,10 +360,12 @@
     const caixaPrefixo = '/esteira/caixa?pagina=1' + (EU.gestorFotos ? '&ver='+CAIXA_VER : '');
     const caixaPaginas = leituras.filter(([rota]) => rota.startsWith(caixaPrefixo+'&antes=')).length + 1;
     const rolagem = Math.round(window.scrollY);
-    const item = { aba, em:Date.now(), dia:diaTela, acesso:acessoTela, admin:!!EU.admin, conferencia:conferenciaAberta?.ler(),
+    const em = Math.min(...leituras.map(([,dados])=>leituraEm.get(dados)||0));
+    if(!em || Date.now()-em>=1200000)return;
+    const item = { aba, em, dia:diaTela, acesso:acessoTela, admin:!!EU.admin, conferencia:conferenciaAberta?.ler(),
       filtro:CAIXA_VER, rolagem, campos, selecao, aberto, porPagina, caixaPaginas, leituras:[] };
-    // Só grava dados operacionais. Credenciais, links de arquivos locais e números de contato
-    // não fazem parte da cópia. Caixa precisa dos endereços das miniaturas já autorizadas.
+    // Limita a cópia à aba autorizada. Exclui credenciais e referências a arquivos
+    // locais. Os identificadores operacionais da equipe e as miniaturas permanecem.
     const json = JSON.stringify(leituras, (k,v) =>
       /^(sessao|token|pin|senha|whatsapp|telefone|fone[123]?)$/i.test(k) ||
       typeof v === 'string' && /^(blob:|data:)/.test(v) ? undefined : v);
@@ -438,7 +441,8 @@
       if (r.ok && rotasTela.has(base) && rotaDaAba(rota, ABA)) {
         leiturasTela.set(rota, r);
         if(leiturasTela.size>50)leiturasTela.delete(leiturasTela.keys().next().value);
-        ultimaLeitura.set(ABA, Date.now());
+        if(!leituraEm.has(r))leituraEm.set(r,Date.now());
+        ultimaLeitura.set(ABA,leituraEm.get(r));
       }
       return r;
     }
@@ -652,7 +656,7 @@
     const tarefa = renderizar();
     abrirEmCurso = tarefa;
     try {await tarefa;} finally {if(abrirEmCurso===tarefa)abrirEmCurso=null;}
-    if (aba === ABA && mesmaConta(sessao) && !contextoRecuperado) salvarRetomada();
+    if (aba === ABA && mesmaConta(sessao) && !contextoRecuperado) marcarRetomada();
   }
 
   /* ---------- Hoje ---------- */
@@ -1837,6 +1841,7 @@
   /* ----- chegada: contagem cega (equipe; o Admin também pode contar por aqui) ----- */
   async function telaContagem(id) {
     versaoTela++;
+    app.dataset.tela = 'contagem';
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status !== 'a_caminho') return telaPedidos();
@@ -2127,6 +2132,7 @@
   /* ----- Admin total: aprovar a chegada (só as diferenças) ----- */
   async function telaAprovacao(id) {
     versaoTela++;
+    app.dataset.tela = 'aprovacao';
     app.replaceChildren(el('div', 'card', 'Abrindo a chegada…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status === 'aprovado') return telaAplicacao(id); if (ped.status !== 'conferido') return telaEditor(id);
@@ -2248,6 +2254,7 @@
   }
   async function telaAplicacao(id, auto, avisos=[]) {
     versaoTela++;
+    app.dataset.tela = 'aplicacao';
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status !== 'aprovado') return ped.status === 'conferido' ? telaAprovacao(id) : telaEditor(id);
@@ -2605,7 +2612,7 @@
     app.append(cEq, cHoje, cPad, cReg, cMod, cFoco);
     } finally {
       fluidez.concluir(vista);
-      if(!contextoRecuperado)carregarCategorias?.();
+      carregarCategorias?.();
       marcarRetomada();
     }
   }
@@ -2664,6 +2671,7 @@
         confirmarAcesso(r);
         const dados = new Map(salvo.leituras.filter(([rota])=>rotaDaAba(rota,ABA)));
         leiturasTela = new Map(dados);
+        for(const r of dados.values())leituraEm.set(r,salvo.em);
         const restaurada = {aba:ABA,dados,estado:salvo};
         contextoRecuperado = restaurada;
         try {
