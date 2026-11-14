@@ -274,37 +274,43 @@ async function cfgSet(env, k, v) { if (v === null || v === undefined) await env.
 const PERMS_MEMO_ = new WeakMap();
 const RH_TOKEN_ = 'tenkiter2026';   // token compartilhado já público no site (curriculos.html); só identifica o site no Apps Script do RH
 const MSG_ROTINA_POST_ = new Set(['/msg/enviar', '/msg/lida', '/msg/encerrar', '/msg/dono', '/msg/presenca', '/msg/iniciar', '/msg/rotular', '/msg/notas', '/msg/ficha', '/msg/pessoa', '/msg/contexto', '/msg/anexo', '/msg/agendar', '/msg/acompanhamento']);
-function permissoes(env, req) {
+function permissoes(env, req, medir) {
   let m = PERMS_MEMO_.get(req);
-  if (!m) { m = permissoesConferir_(env, req); PERMS_MEMO_.set(req, m); }
+  if (!m) { m = permissoesConferir_(env, req, medir); PERMS_MEMO_.set(req, m); }
   return m;
 }
-async function permissoesConferir_(env, req) {
+async function permissoesConferir_(env, req, medir = (_, executar) => executar()) {
   const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
   const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
   if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
-  const chave = new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
   let caminho = ''; try { caminho = new URL(req.url).pathname; } catch (e) { /* sem caminho: confere na hora */ }
-  const podeCache = !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
-  const cache = caches.default, g = podeCache ? await cache.match(chave) : null;
+  const esteira = caminho.startsWith('/esteira/');
+  const chave = esteira ? null : new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
+  const podeCache = !esteira && !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
+  const cache = chave ? caches.default : null, g = podeCache ? await cache.match(chave) : null;
   if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; v.permissoes.acessosConfiguraveis = v.configuraveis === true;v.permissoes.msgModelos=v.msgModelos||{}; return v.permissoes; }
   let lista = null, perfis = [], nome = '', configuraveis = false, msgModelos = {};
   try {
     // Backend indisponível: falha fechada (503), sem confundir com sessão inválida (401).
-    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
-    const j = await r.json();
+    const j = await medir('sessao_catalogo', async () => {
+      const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
+      return r.json();
+    });
     if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { lista = j.usuario.permissoes; configuraveis = j.usuario.acessosConfiguraveis === true; msgModelos=j.usuario.msgModelos||{}; nome = String(j.usuario.nome || j.usuario.name || '').trim().slice(0,120); perfis = Array.isArray(j.usuario.perfis) ? j.usuario.perfis : String(j.usuario.perfil || '').split(','); }
     /* v7.77.1: o Apps Script do catálogo publicado pode ser mais antigo que o RH (sem Acessos configuráveis: não devolve Esteira, Postador, Fotos com IA nem Mensageiro).
      * Nesse caso a sessão é conferida também no RH (mesma sessão compartilhada), que é a fonte oficial dos acessos. Falha do RH não derruba: fica o resultado do catálogo. */
     if (lista && !configuraveis && env.RH_URL) {
       try {
-        const r2 = await fetch(env.RH_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ token: RH_TOKEN_, action: 'sessao', whatsapp: whats, sessao: sessao }) });
-        const j2 = await r2.json(), u2 = j2 && j2.ok && j2.usuario;
+        const j2 = await medir('sessao_rh', async () => {
+          const r = await fetch(env.RH_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ token: RH_TOKEN_, action: 'sessao', whatsapp: whats, sessao: sessao }) });
+          return r.json();
+        });
+        const u2 = j2 && j2.ok && j2.usuario;
         if (u2 && Array.isArray(u2.permissoes) && u2.acessosConfiguraveis === true) { lista = u2.permissoes; configuraveis = true; msgModelos = u2.msgModelos || {}; nome = String(u2.nome || u2.name || nome || '').trim().slice(0,120); perfis = Array.isArray(u2.perfis) ? u2.perfis : String(u2.perfil || '').split(','); }
       } catch (e) { /* mantém a resposta do catálogo */ }
     }
   } catch (e) { return 'indisponivel'; }         // backend fora do ar != "faca login"
-  if (lista) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis, nome, configuraveis, msgModelos }), { headers: { 'Cache-Control': 'max-age=120' } }));
+  if (lista && chave) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis, nome, configuraveis, msgModelos }), { headers: { 'Cache-Control': 'max-age=120' } }));
   if (lista) { lista.msgPerfis = perfis; lista.msgNome = nome; lista.acessosConfiguraveis = configuraveis; lista.msgModelos=msgModelos; }
   return lista || 'sem_sessao';                  // sessao que o backend nao reconhece
 }
@@ -6601,7 +6607,7 @@ export default {
       if (resposta.status >= 500) await anotarFalha_(env, url.pathname, resposta.status);
       return resposta;
     } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
-    const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req)) : await permissoes(env, req);
+    const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req, medirEsteira)) : await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
@@ -7470,6 +7476,15 @@ function estIniciar_(env) {
   }
   return inicializacao;
 }
+async function estGarantirColunas_(env, tabela, colunas) {
+  const info = await env.DB.prepare('PRAGMA table_info(' + tabela + ')').all();
+  const existentes = new Set((info.results || []).map(x => x.name));
+  for (const [nome, tipo] of colunas) {
+    if (existentes.has(nome)) continue;
+    try { await env.DB.prepare('ALTER TABLE ' + tabela + ' ADD COLUMN ' + nome + ' ' + tipo).run(); }
+    catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
+  }
+}
 async function estCriarEsquema_(env) {
   await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_equipe (whats TEXT PRIMARY KEY, nome TEXT NOT NULL DEFAULT '', confere INTEGER NOT NULL DEFAULT 1, rodizio INTEGER NOT NULL DEFAULT 1, atendente INTEGER NOT NULL DEFAULT 0, aceitar INTEGER NOT NULL DEFAULT 0, ativo INTEGER NOT NULL DEFAULT 1, em TEXT)"),
@@ -7490,24 +7505,23 @@ async function estCriarEsquema_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_foco (data TEXT NOT NULL, whats TEXT NOT NULL, categoria TEXT NOT NULL DEFAULT '', por TEXT DEFAULT '', em TEXT, PRIMARY KEY (data, whats))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_estoque (produto TEXT NOT NULL, data TEXT NOT NULL, estoque INTEGER NOT NULL, PRIMARY KEY (produto, data))"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_estoque_data ON est_estoque (data)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_fornecedor (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, endereco TEXT DEFAULT '', fone1 TEXT DEFAULT '', fone2 TEXT DEFAULT '', fone3 TEXT DEFAULT '', ativo INTEGER NOT NULL DEFAULT 1, criado_em TEXT, criado_por TEXT, atualizado_em TEXT)"),
   ]);
-  // v7.42.0: colunas novas da preparação. ALTER falha quando a coluna já existe — por isso um por um, sem derrubar nada.
-  for (const col of ["etapa TEXT DEFAULT ''", 'aceito_em TEXT', 'aceito_por TEXT', 'preparado_em TEXT', 'preparado_por TEXT', "ref_nome TEXT DEFAULT ''", "ref_codigo TEXT DEFAULT ''", "ref_foto TEXT DEFAULT ''"]) {
-    try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
-  }
-  await env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_produto_preparacao ON est_produto (preparado_em, id) WHERE etapa='preparacao'").run();
-  try { await env.DB.prepare("ALTER TABLE est_lista ADD COLUMN familia TEXT DEFAULT ''").run(); } catch (e) { /* v7.44.0: já existe */ }
-  // v7.45.0: último estoque visto no retrato, última queda (venda) e controle dos degraus da reativação
-  for (const col of ['ult_estoque INTEGER', 'ult_estoque_em TEXT', 'ult_queda_em TEXT', "reat_base TEXT DEFAULT ''", 'reat_degrau INTEGER NOT NULL DEFAULT 0', 'reat_dispensa_ate TEXT']) {
-    try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
-  }
-  // v7.48.0: cadastro de fornecedores (o pedido guarda o id e continua com o nome; pedido antigo em texto livre segue igual) e tecido do produto novo
-  await env.DB.prepare("CREATE TABLE IF NOT EXISTS est_fornecedor (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, endereco TEXT DEFAULT '', fone1 TEXT DEFAULT '', fone2 TEXT DEFAULT '', fone3 TEXT DEFAULT '', ativo INTEGER NOT NULL DEFAULT 1, criado_em TEXT, criado_por TEXT, atualizado_em TEXT)").run();
-  try { await env.DB.prepare('ALTER TABLE est_pedido ADD COLUMN fornecedor_id INTEGER').run(); } catch (e) { /* já existe */ }
-  try { await env.DB.prepare("ALTER TABLE est_pedido_item ADD COLUMN tecido TEXT DEFAULT ''").run(); } catch (e) { /* já existe */ }
-  // v7.52.0: pedido de fotos (como a pessoa quer as fotos, em JSON) com id do aparelho (op) contra toque duplo; caixa de fotos da equipe
-  for (const col of ["detalhe TEXT DEFAULT ''", "op TEXT DEFAULT ''"]) { try { await env.DB.prepare('ALTER TABLE est_tarefa ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  // Instâncias novas leem o esquema existente. Apenas bancos antigos precisam de ALTER.
+  await Promise.all([
+    estGarantirColunas_(env, 'est_produto', [
+      ['etapa', "TEXT DEFAULT ''"], ['aceito_em', 'TEXT'], ['aceito_por', 'TEXT'], ['preparado_em', 'TEXT'], ['preparado_por', 'TEXT'],
+      ['ref_nome', "TEXT DEFAULT ''"], ['ref_codigo', "TEXT DEFAULT ''"], ['ref_foto', "TEXT DEFAULT ''"],
+      ['ult_estoque', 'INTEGER'], ['ult_estoque_em', 'TEXT'], ['ult_queda_em', 'TEXT'], ['reat_base', "TEXT DEFAULT ''"],
+      ['reat_degrau', 'INTEGER NOT NULL DEFAULT 0'], ['reat_dispensa_ate', 'TEXT'],
+    ]),
+    estGarantirColunas_(env, 'est_lista', [['familia', "TEXT DEFAULT ''"]]),
+    estGarantirColunas_(env, 'est_pedido', [['fornecedor_id', 'INTEGER']]),
+    estGarantirColunas_(env, 'est_pedido_item', [['tecido', "TEXT DEFAULT ''"]]),
+    estGarantirColunas_(env, 'est_tarefa', [['detalhe', "TEXT DEFAULT ''"], ['op', "TEXT DEFAULT ''"]]),
+  ]);
   await env.DB.batch([
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_produto_preparacao ON est_produto (preparado_em, id) WHERE etapa='preparacao'"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_caixa (id INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT NOT NULL, lote TEXT DEFAULT '', url TEXT NOT NULL, descricao TEXT DEFAULT '', descricao_lote TEXT DEFAULT '', produto TEXT DEFAULT '', produto_nome TEXT DEFAULT '', hash TEXT DEFAULT '', enviada_por TEXT DEFAULT '', enviada_nome TEXT DEFAULT '', enviada_em TEXT, status TEXT NOT NULL DEFAULT 'nova', uso_produto TEXT DEFAULT '', uso_nome TEXT DEFAULT '', usada_por TEXT DEFAULT '', usada_nome TEXT DEFAULT '', usada_em TEXT)"),
     env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ux_est_caixa_op ON est_caixa (op)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_est_caixa_status ON est_caixa (status, id)'),
@@ -8040,7 +8054,7 @@ async function estCaixaRepetidas_(env, itens) {
 /** Recibos por conta/operação: perder a resposta não repete uma criação.
  * Não retoma mutação de resultado incerto. O cliente consulta o mesmo recibo. */
 async function esteiraComando_(env,req,url,J,perms,ctx,medir){
-  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,erro:'Seu acesso não permite entrar na Esteira.'},403);
+  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,acessoRevogado:true,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const op=req.headers.get('X-TK-Operacao')||url.searchParams.get('op')||'',consulta=url.pathname==='/esteira/operacoes/status';
   if(!consulta&&(req.method!=='POST'||!op))return rotasEsteira_(env,req,url,J,perms,medir);
   if(!/^[A-Za-z0-9:_-]{10,180}$/.test(op))return J({ok:false,erro:'Identificação do processo inválida.'},400);
@@ -8072,7 +8086,7 @@ async function estMenu_(env, req, J, perms, medir) {
       await estIniciar_(env);
       return env.DB.prepare('SELECT nome FROM est_equipe WHERE whats=? AND ativo=1').bind(whats).first();
     });
-    if (!membro) return J({ ok:false, erro:'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
+    if (!membro) return J({ ok:false, acessoRevogado:true, erro:'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
     nome = membro.nome || nome;
   }
   // No modo configurável, a sessão já confirmou a permissão na entrada da rota.
@@ -8081,7 +8095,7 @@ async function estMenu_(env, req, J, perms, medir) {
 }
 async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => executar()) {
   if (url.pathname === '/esteira/menu' && req.method === 'GET') return estMenu_(env, req, J, perms, medir);
-  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,erro:'Seu acesso não permite entrar na Esteira.'},403);
+  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,acessoRevogado:true,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
   const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');   // permissão já conferida na sessão
   // A marcação da caixa pode continuar quando a lista RH estiver indisponível; demais rotas continuam consultando RH.
@@ -8107,7 +8121,7 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   const meuNome = membro ? membro.nome : String(perms.msgNome || '').trim().slice(0, 60);   // v7.52.0: guardado junto (Admin total pode não estar na equipe)
   const quemSou = () => ({ whats: eu, nome: membro ? membro.nome : (perms.msgNome || ''), admin, membro: !!membro, confere: !!(membro && membro.confere), aceitar: admin || !!(membro && membro.aceitar) });
 
-  if (!admin && !membro && !(gestorFotos && p.startsWith('/esteira/caixa'))) return J({ ok: false, erro: 'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
+  if (!admin && !membro && !(gestorFotos && p.startsWith('/esteira/caixa'))) return J({ ok: false, acessoRevogado: true, erro: 'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
   const podeAceitar = admin || !!(membro && membro.aceitar);
   let escalaHojeCache;
   const escalaHoje = () => escalaHojeCache ||= lerConfig().then(cfg => estEscalaDoDia_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined));

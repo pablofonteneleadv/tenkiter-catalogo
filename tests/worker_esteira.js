@@ -47,9 +47,34 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   // acesso
   chk('sem sessão é recusado', (await w.fetch(new Request('https://ig.fake/esteira/hoje'), env, ctx)).status === 401);
   const v = await A(VISITA, 'GET', '/esteira/hoje');
-  chk('quem não está na equipe recebe aviso em português', v.r.status === 403 && /Esteira/.test(v.j.erro), v.j);
+  chk('quem não está na equipe recebe aviso em português e sinal de revogação', v.r.status === 403 && v.j.acessoRevogado && /Esteira/.test(v.j.erro), v.j);
   chk('recusa de acesso não expõe métricas', !v.r.headers.has('Server-Timing') && !v.r.headers.has('Timing-Allow-Origin'));
-  chk('funcionária não abre configurações', (await A(IARA, 'GET', '/esteira/config')).r.status === 403);
+  chk('funcionária sem vínculo não abre configurações', (await A(IARA, 'GET', '/esteira/config')).r.status === 403);
+
+  { // A Esteira confirma cada requisição sem tocar no cache de autorização.
+    const cacheAnterior = globalThis.caches, fetchAnterior = globalThis.fetch;
+    const consultar = (envio = env) => w.fetch(new Request('https://ig.fake/esteira/menu', { headers: {
+      'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO, 'Origin': 'https://tenkitermodas.com.br',
+    } }), envio, ctx);
+    let toques = 0, catalogo = 0, rh = 0;
+    try {
+      globalThis.caches = { default: { async match() { toques++; throw Error('cache indisponível'); }, async put() { toques++; throw Error('cache indisponível'); } } };
+      globalThis.fetch = async (url, init) => {
+        if (String(url) === 'https://rh.fake/exec') {
+          rh++;
+          return new Response(JSON.stringify({ ok: true, usuario: { permissoes: rh === 1 ? ['gerir_acessos'] : [], acessosConfiguraveis: true } }));
+        }
+        catalogo++;
+        return fetchAnterior(url, init);
+      };
+      const direta = await consultar();
+      chk('Menu funciona sem Cache API e mede a sessão no catálogo', direta.ok && /sessao_catalogo;dur=/.test(direta.headers.get('Server-Timing')) && !/sessao_rh;dur=/.test(direta.headers.get('Server-Timing')));
+      const comRH = { ...env, RH_URL: 'https://rh.fake/exec' };
+      const permitida = await consultar(comRH), negada = await consultar(comRH);
+      chk('Fallback do RH é medido separadamente e revogação vale na requisição seguinte', permitida.ok && /sessao_rh;dur=/.test(permitida.headers.get('Server-Timing')) && negada.status === 403);
+      chk('Cada chamada consulta a origem e nenhuma lê ou grava permissões na borda', catalogo === 3 && rh === 2 && toques === 0, { catalogo, rh, toques });
+    } finally { globalThis.caches = cacheAnterior; globalThis.fetch = fetchAnterior; }
+  }
 
   // configurações (Admin total)
   const c0 = await A(PABLO, 'GET', '/esteira/config');
@@ -57,6 +82,8 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('v7.46.1: cada função já vem com instruções iniciais', ['Limpeza', 'Caixa', 'Fotos', 'Atendimento online'].every((f) => String(c0.j.config.instrucoes[f] || '').length > 40), c0.j.config.instrucoes);
   chk('WhatsApp curto é recusado', (await A(PABLO, 'POST', '/esteira/equipe', { whats: '123', nome: 'X' })).r.status === 400);
   await A(PABLO, 'POST', '/esteira/equipe', { whats: '55' + IARA, nome: 'Iara', confere: true, rodizio: true, atendente: true });
+  const restrita = await A(IARA, 'GET', '/esteira/config');
+  chk('403 de uma aba administrativa preserva acesso da equipe à Esteira', restrita.r.status === 403 && !restrita.j.acessoRevogado);
   const eq = await A(PABLO, 'POST', '/esteira/equipe', { whats: CLARICE, nome: 'Clarice', confere: true, rodizio: true, atendente: true, aceitar: true });
   chk('equipe gravada (55 do país é tirado do número)', eq.j.ok && eq.j.equipe.length === 2 && eq.j.equipe.some((e) => e.whats === IARA), eq.j);
   chk('configuração inválida é recusada', (await A(PABLO, 'POST', '/esteira/config', { config: { porPessoa: 0, diasSemRepetir: 21 } })).r.status === 400);
@@ -66,7 +93,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('menu da equipe legada exige vínculo e não consulta o catálogo', menuEquipe.j.ok && menuEquipe.j.eu.nome === 'Iara' && menuEquipe.j.eu.admin === false && listas === antesCatalogoMenu, menuEquipe.j);
   chk('sessão legada sem vínculo não abre o menu', (await A(VISITA, 'GET', '/esteira/menu')).r.status === 403);
   const menuAdmin = await A(PABLO, 'GET', '/esteira/menu');
-  chk('menu do Admin vem da sessão e não inicializa a Esteira', menuAdmin.j.ok && menuAdmin.j.eu.admin && !/(inicializacao|catalogo|equipe);dur=/.test(menuAdmin.r.headers.get('Server-Timing') || ''), menuAdmin.j);
+  chk('menu do Admin vem da sessão e não inicializa a Esteira', menuAdmin.j.ok && menuAdmin.j.eu.admin && !/(?:^|, )(inicializacao|catalogo|equipe);dur=/.test(menuAdmin.r.headers.get('Server-Timing') || ''), menuAdmin.j);
   const antesMenu = usuarios[VISITA];
   usuarios[VISITA] = { nome:'Pessoa', permissoes:['esteira'], acessosConfiguraveis:true };
   chk('menu configurável vem da permissão Esteira', (await A(VISITA, 'GET', '/esteira/menu')).j.eu?.admin === false);
@@ -96,7 +123,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const temposHoje = h1.r.headers.get('Server-Timing') || '';
   chk('Hoje informa somente duração de etapas para a origem do site', h1.r.headers.get('Timing-Allow-Origin') === 'https://tenkitermodas.com.br' && ['sessao','inicializacao','equipe','config','gerar','catalogo','d1','tarefas','total'].every(nome => temposHoje.includes(nome + ';dur=')) && /^no-store$/.test(h1.r.headers.get('Cache-Control') || ''), temposHoje);
   const caixaMedida = await A(PABLO, 'GET', '/esteira/caixa');
-  chk('Caixa mantém autorização e pula configuração e catálogo', caixaMedida.j.ok && /equipe;dur=/.test(caixaMedida.r.headers.get('Server-Timing') || '') && !/(config|catalogo);dur=/.test(caixaMedida.r.headers.get('Server-Timing') || ''));
+  chk('Caixa mantém autorização e pula configuração e catálogo', caixaMedida.j.ok && /equipe;dur=/.test(caixaMedida.r.headers.get('Server-Timing') || '') && !/(?:^|, )(config|catalogo);dur=/.test(caixaMedida.r.headers.get('Server-Timing') || ''));
   const origemEstranha = await w.fetch(new Request('https://ig.fake/esteira/caixa', {headers: {'Origin': 'https://externo.fake', 'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO}}), env, ctx);
   chk('outra origem não recebe métricas da Esteira', origemEstranha.ok && !origemEstranha.headers.has('Server-Timing') && !origemEstranha.headers.has('Timing-Allow-Origin'));
   chk('Iara recebe 20 peças', h1.j.ok && h1.j.total === 20 && h1.j.lista.length === 20, { t: h1.j.total, e: h1.j.erro });
@@ -749,6 +776,34 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
       globalThis.fetch = fetchOriginal;
       usuarios[PABLO] = usuarioOriginal;
     }
+  }
+  { // D1 já migrado: uma instância fria não repete ALTER, e a recuperação cria o índice.
+    const consultas = [];
+    let falharIndice = false;
+    const banco = d1();
+    const DB = { ...banco, prepare(sql) {
+      consultas.push(sql);
+      if (falharIndice && sql.startsWith('CREATE INDEX IF NOT EXISTS ix_est_produto_preparacao')) throw Error('D1_ERROR: indisponível');
+      return banco.prepare(sql);
+    } };
+    const adminAnterior = usuarios[PABLO];
+    usuarios[PABLO] = { nome: 'Admin Teste', permissoes: ['gerir_acessos'] };
+    const ler = bancoEsteira => w.fetch(new Request('https://ig.fake/esteira/preparacao?pagina=1', { headers: {
+      'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO,
+    } }), { ...env, DB: bancoEsteira }, ctx);
+    try {
+      chk('Banco novo instala as colunas e permite a Preparação paginada', (await ler(banco)).status === 200);
+      await banco.prepare('DROP INDEX ix_est_produto_preparacao').run();
+      await banco.prepare("INSERT INTO est_produto(id,etapa,ref_nome) VALUES('ANTIGA','preparacao','Peça simulada antiga')").run();
+      falharIndice = true;
+      chk('Falha real na inicialização mantém a leitura indisponível até retentar', (await ler(DB)).status === 500);
+      falharIndice = false;
+      const [r1, r2] = await Promise.all([ler(DB), ler(DB)]);
+      const produtos = (await r1.json()).produtos;
+      const indice = await banco.prepare("SELECT name FROM sqlite_master WHERE name='ix_est_produto_preparacao'").first();
+      chk('Retentativa concorrente instala o índice e preserva a peça existente', r1.ok && r2.ok && indice && produtos[0]?.nome === 'Peça simulada antiga');
+      chk('Banco migrado faz cinco leituras de metadados por tentativa, sem ALTER duplicado', consultas.filter(s => s.startsWith('PRAGMA table_info(est_')).length === 10 && !consultas.some(s => s.startsWith('ALTER TABLE est_')));
+    } finally { usuarios[PABLO] = adminAnterior; }
   }
   { // Páginas de Preparação usam dados SQLite isolados e mantêm o contrato anterior.
     const DB = d1(), teste = { ...env, DB };
