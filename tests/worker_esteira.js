@@ -47,9 +47,9 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   // acesso
   chk('sem sessão é recusado', (await w.fetch(new Request('https://ig.fake/esteira/hoje'), env, ctx)).status === 401);
   const v = await A(VISITA, 'GET', '/esteira/hoje');
-  chk('quem não está na equipe recebe aviso em português', v.r.status === 403 && /Esteira/.test(v.j.erro), v.j);
+  chk('quem não está na equipe recebe aviso em português e sinal de revogação', v.r.status === 403 && v.j.acessoRevogado && /Esteira/.test(v.j.erro), v.j);
   chk('recusa de acesso não expõe métricas', !v.r.headers.has('Server-Timing') && !v.r.headers.has('Timing-Allow-Origin'));
-  chk('funcionária não abre configurações', (await A(IARA, 'GET', '/esteira/config')).r.status === 403);
+  chk('funcionária sem vínculo não abre configurações', (await A(IARA, 'GET', '/esteira/config')).r.status === 403);
 
   { // A Esteira confirma cada requisição sem tocar no cache de autorização.
     const cacheAnterior = globalThis.caches, fetchAnterior = globalThis.fetch;
@@ -82,6 +82,8 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('v7.46.1: cada função já vem com instruções iniciais', ['Limpeza', 'Caixa', 'Fotos', 'Atendimento online'].every((f) => String(c0.j.config.instrucoes[f] || '').length > 40), c0.j.config.instrucoes);
   chk('WhatsApp curto é recusado', (await A(PABLO, 'POST', '/esteira/equipe', { whats: '123', nome: 'X' })).r.status === 400);
   await A(PABLO, 'POST', '/esteira/equipe', { whats: '55' + IARA, nome: 'Iara', confere: true, rodizio: true, atendente: true });
+  const restrita = await A(IARA, 'GET', '/esteira/config');
+  chk('403 de uma aba administrativa preserva acesso da equipe à Esteira', restrita.r.status === 403 && !restrita.j.acessoRevogado);
   const eq = await A(PABLO, 'POST', '/esteira/equipe', { whats: CLARICE, nome: 'Clarice', confere: true, rodizio: true, atendente: true, aceitar: true });
   chk('equipe gravada (55 do país é tirado do número)', eq.j.ok && eq.j.equipe.length === 2 && eq.j.equipe.some((e) => e.whats === IARA), eq.j);
   chk('configuração inválida é recusada', (await A(PABLO, 'POST', '/esteira/config', { config: { porPessoa: 0, diasSemRepetir: 21 } })).r.status === 400);

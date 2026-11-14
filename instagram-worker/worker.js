@@ -8054,7 +8054,7 @@ async function estCaixaRepetidas_(env, itens) {
 /** Recibos por conta/operação: perder a resposta não repete uma criação.
  * Não retoma mutação de resultado incerto. O cliente consulta o mesmo recibo. */
 async function esteiraComando_(env,req,url,J,perms,ctx,medir){
-  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,erro:'Seu acesso não permite entrar na Esteira.'},403);
+  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,acessoRevogado:true,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const op=req.headers.get('X-TK-Operacao')||url.searchParams.get('op')||'',consulta=url.pathname==='/esteira/operacoes/status';
   if(!consulta&&(req.method!=='POST'||!op))return rotasEsteira_(env,req,url,J,perms,medir);
   if(!/^[A-Za-z0-9:_-]{10,180}$/.test(op))return J({ok:false,erro:'Identificação do processo inválida.'},400);
@@ -8086,7 +8086,7 @@ async function estMenu_(env, req, J, perms, medir) {
       await estIniciar_(env);
       return env.DB.prepare('SELECT nome FROM est_equipe WHERE whats=? AND ativo=1').bind(whats).first();
     });
-    if (!membro) return J({ ok:false, erro:'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
+    if (!membro) return J({ ok:false, acessoRevogado:true, erro:'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
     nome = membro.nome || nome;
   }
   // No modo configurável, a sessão já confirmou a permissão na entrada da rota.
@@ -8095,7 +8095,7 @@ async function estMenu_(env, req, J, perms, medir) {
 }
 async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => executar()) {
   if (url.pathname === '/esteira/menu' && req.method === 'GET') return estMenu_(env, req, J, perms, medir);
-  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,erro:'Seu acesso não permite entrar na Esteira.'},403);
+  if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,acessoRevogado:true,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
   const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');   // permissão já conferida na sessão
   // A marcação da caixa pode continuar quando a lista RH estiver indisponível; demais rotas continuam consultando RH.
@@ -8121,7 +8121,7 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   const meuNome = membro ? membro.nome : String(perms.msgNome || '').trim().slice(0, 60);   // v7.52.0: guardado junto (Admin total pode não estar na equipe)
   const quemSou = () => ({ whats: eu, nome: membro ? membro.nome : (perms.msgNome || ''), admin, membro: !!membro, confere: !!(membro && membro.confere), aceitar: admin || !!(membro && membro.aceitar) });
 
-  if (!admin && !membro && !(gestorFotos && p.startsWith('/esteira/caixa'))) return J({ ok: false, erro: 'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
+  if (!admin && !membro && !(gestorFotos && p.startsWith('/esteira/caixa'))) return J({ ok: false, acessoRevogado: true, erro: 'Seu acesso não permite entrar na Esteira. Peça à administração para ativar Esteira em RH > Acessos.' }, 403);
   const podeAceitar = admin || !!(membro && membro.aceitar);
   let escalaHojeCache;
   const escalaHoje = () => escalaHojeCache ||= lerConfig().then(cfg => estEscalaDoDia_(env, data, cfg, perms.acessosConfiguraveis ? equipe : undefined));

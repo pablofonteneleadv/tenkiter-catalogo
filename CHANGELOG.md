@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.23 — Revogação da Esteira reflete na aba aberta
+
+- Quando uma leitura confirma a perda de acesso à Esteira, a aba deixa de exibir os dados anteriores e volta ao login com o aviso recebido. Restrições de ações específicas seguem exibindo o aviso da própria ação.
+
 ## 7.78.22 — Sessão da Esteira sem espera pelo cache de permissões
 
 - A Esteira consulta as fontes de autorização a cada requisição e deixa de gravar no cache de permissões. A resposta informa separadamente o tempo da sessão no catálogo e, quando acionado, no RH.

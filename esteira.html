@@ -312,7 +312,13 @@
   let ultimoClique=null,interacao=0;document.addEventListener('click',e=>{interacao++;ultimoClique=e.target.closest('button')},true);document.addEventListener('input',()=>{interacao++;},true);document.addEventListener('change',()=>{interacao++;},true);
   const processos=TKEsteiraProcessos({dono:()=>getSessao()?.whatsapp,worker:workerProcesso,executores:{acao:executarAcao,conferir:executarConferencia,aceitar:executarAceite,fotos:executarFotos,caixa:executarCaixa,colocar:executarColocar,pedido:executarPedido,aplicar:executarAplicacao},aoConcluir:j=>{if(j.tipo==='acao'){invalidarAcao(j.dados.rota);return;}if(j.tipo==='fotos'&&j.dados.tarefas?.length){fluidez.invalidar($('fotos-pedidas'));fluidez.invalidar($('fotos-pedidas-hoje'));document.querySelectorAll('.pedido-fotos[data-produto="'+CSS.escape(j.dados.produto)+'"] [role=status]').forEach(st=>{st.hidden=false;st.textContent=j.resultado.fotos+' fotos adicionadas ao produto. Pedido concluído.'})}if(j.tipo==='colocar'){AVISO_FOTOS=j.dados.urls.length+' foto'+(j.dados.urls.length===1?' colocada':'s colocadas')+' em '+j.dados.produtoNome+'.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}if(j.tipo==='caixa'){AVISO_FOTOS=j.dados.fotos.length+(j.dados.fotos.length===1?' foto enviada':' fotos enviadas')+' para a caixa.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}refrescarDepois();},aoErro:m=>{const e=$('esteira-processos-abrir');if(e)e.title=m}});
   const camposDoBloco=b=>b?JSON.stringify([...b.querySelectorAll('input,textarea,select')].map(e=>[e.id,e.value,e.checked])):'';
-  async function srv(rota,corpo){if(!corpo)return fluidez.ler(rota,()=>srvRede(rota));const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,acionador=ultimoClique,campos=camposDoBloco(bloco),toques=interacao;let id;try{id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));}catch(e){return{ok:false,erro:e.message||'Não consegui guardar o processo. Tente de novo.'}}
+  async function srv(rota,corpo){
+    if(!corpo){
+      const r = await fluidez.ler(rota, () => srvRede(rota));
+      if (r.acessoRevogado && sessaoAtual) telaLogin(r.erro);
+      return r;
+    }
+    const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,acionador=ultimoClique,campos=camposDoBloco(bloco),toques=interacao;let id;try{id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));}catch(e){return{ok:false,erro:e.message||'Não consegui guardar o processo. Tente de novo.'}}
     const fundo=acionador?.closest('.fundo');if(fundo&&acionador.closest('.pe')&&fundo.esteiraFechar)fundo.esteiraFechar();
     const r=await processos.aguardar(id);if(r.ok&&campos===camposDoBloco(bloco))fluidez.liberar(bloco);return Object.assign({},r,{foraDaTela:origem!==ABA||tela!==app.dataset.tela||versao!==versaoTela||(origem==='fotos'&&toques!==interacao)});}
   async function workerProcesso(rota,corpo,op){let r=await srvRede(rota,corpo,op);for(let i=0;r.aguardando&&i<20;i++){await new Promise(ok=>setTimeout(ok,1000));r=await srvRede('/esteira/operacoes/status?op='+encodeURIComponent(op))}if(r.aguardando)return{ok:false,incerto:true,erro:'O processo ainda está em confirmação. Pode continuar trabalhando e conferir em Processos.'};return r;}
@@ -449,6 +455,7 @@
   function telaLogin(msg) {
     sessaoAtual = null;
     EU = null; HOJE = null; ABA = 'hoje'; fluidez.limpar();
+    document.querySelectorAll('.fundo').forEach(f => f.esteiraFechar?.());
     $('abas').hidden = true; $('quem').textContent = '';
     app.replaceChildren();
     const c = el('div', 'card'); c.append(el('h2', '', 'Entrar'), el('p', 'muted', 'Use o mesmo e-mail, WhatsApp ou CPF e a mesma senha do painel e do Mensageiro.'));
@@ -507,7 +514,7 @@
     const vista=fluidez.preparar('hoje','Montando a sua lista de hoje…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
-    if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (r.exigeLogin || r.acessoRevogado) return telaLogin(r.acessoRevogado ? r.erro : ''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
+    if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
     app.replaceChildren();
     const r = HOJE;
     const pd = r.pedidos || {}, irPedidos = () => { ABA = 'pedidos'; desenharAbas(); telaPedidos(); };   // v7.43.0: pendências de pedido

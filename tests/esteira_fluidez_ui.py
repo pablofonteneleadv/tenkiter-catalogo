@@ -375,5 +375,20 @@ with sync_playwright() as p:
  }''')
  assert estado==['novo','novo',2,True],estado
  c.close()
+ # A revalidação que confirma perda de acesso remove os dados da aba ativa.
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',has_touch=w<600)
+  ns['instalar'](c)
+  pg=c.new_page();pg.clock.install();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=pedidos]');pg.wait_for_selector('text=Pedidos ao fornecedor')
+  c.route('**/esteira/pedidos',lambda r:r.fulfill(status=403,json={'ok':False,'acessoRevogado':True,'erro':'Seu acesso não permite entrar na Esteira.'}))
+  pg.clock.fast_forward(31000);pg.locator('#login-w').wait_for()
+  assert not pg.get_by_text('Pedidos ao fornecedor',exact=True).count()
+  assert pg.locator('#abas').is_hidden()
+  assert pg.get_by_text('Seu acesso não permite entrar na Esteira.',exact=True).is_visible()
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  pg.screenshot(path=str(OUT/f'esteira-acesso-revogado-{w}.png'))
+  c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
