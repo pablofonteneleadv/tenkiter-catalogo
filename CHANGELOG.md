@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.24 — Informações de Hoje antes da lista completa da Esteira
+
+- A abertura mostra o progresso já registrado e os avisos de pedidos enquanto a lista completa termina de carregar. Se a lista falhar, o resumo continua disponível com opção de tentar novamente.
+- A carga completa sobrepõe consultas independentes e dispensa a listagem do catálogo quando nenhuma peça ou tarefa precisa dela.
+
 ## 7.78.23 — Inicialização, sessão e acesso da Esteira
 
 - A Esteira consulta as colunas existentes e aplica apenas as que faltam. O índice de Preparação é instalado pelo mesmo fluxo e falhas do banco podem ser retentadas.

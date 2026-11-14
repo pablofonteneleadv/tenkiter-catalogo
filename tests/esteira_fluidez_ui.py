@@ -182,6 +182,28 @@ with sync_playwright() as p:
   assert cartoes.count()==25 and rascunho.input_value()=='Manter tarefa em edição'
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',has_touch=w<600)
+  ns['instalar'](c)
+  pendentes=[]
+  c.route('**/esteira/hoje',lambda r:pendentes.append(r))
+  c.route(re.compile(r'/esteira/menu\?resumo=1$'),lambda r:r.fulfill(json={'ok':True,'eu':{'admin':True,'nome':'Iara'},'resumoHoje':{'total':3,'feitas':2,'pedidos':{'aprovar':1}}}))
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.get_by_text('2 de 3 conferências registradas hoje.').wait_for()
+  assert pg.get_by_text('Chegada esperando aprovação',exact=True).is_visible()
+  assert pg.get_by_text('Montando a sua lista de hoje…',exact=True).is_visible()
+  assert len(pendentes)==1
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  pg.screenshot(path=str(OUT/f'hoje-resumo-antes-da-lista-{w}.png'))
+  pendentes.pop().fulfill(status=503,json={'ok':False,'erro':'O catálogo não respondeu agora.'})
+  pg.get_by_role('button',name='Tentar de novo',exact=True).wait_for()
+  assert pg.get_by_text('2 de 3 conferências registradas hoje.').is_visible()
+  pg.get_by_role('button',name='Tentar de novo',exact=True).click()
+  pg.wait_for_timeout(150);assert len(pendentes)==1
+  pendentes.pop().fallback()
+  pg.wait_for_selector('.peca');assert not pg.locator('#hoje-resumo-abertura').count()
+  c.close()
  for admin in (False, True):
   c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
   ns['instalar'](c,admin=admin)
