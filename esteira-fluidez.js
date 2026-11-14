@@ -35,13 +35,19 @@
    if(ativa===ctx.chave)marcarUtil(ctx.chave);
   }
   function liberar(bloco){if(bloco)sujas.delete(bloco)}
+  function restaurar(dados, em){
+   conferir();
+   for(const [rota, resposta] of dados){
+    if(!leituras.has(rota))leituras.set(rota,{dados:resposta,em,promessa:null});
+   }
+  }
   function invalidar(bloco,rotas){
    conferir();
    if(rotas){for(const rota of leituras.keys())if(rotas.has(rota.split('?')[0]))leituras.delete(rota)}
    else leituras.clear();
    liberar(bloco);
   }
-  return{ler,preparar,concluir,invalidar,liberar,
+  return{ler,preparar,concluir,restaurar,invalidar,liberar,
    semRede(chave, texto) {
     const v=vistas.get(chave);
     if (!v?.pronta || !v.painel.isConnected) return;

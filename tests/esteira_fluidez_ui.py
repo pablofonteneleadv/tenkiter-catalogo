@@ -397,6 +397,22 @@ with sync_playwright() as p:
    return [nova.dado,tardia.dado,chamadas,(await anterior).sessaoMudou];
  }''')
  assert estado==['novo','novo',2,True],estado
+ estado=pg.evaluate('''async () => {
+   const tela=TKEsteiraFluidez(document.createElement('div'),()=>({whatsapp:'simulado',sessao:'simulada'}));
+   let chamadas=0;
+   const rede=()=>({ok:true,dado:++chamadas});
+   const atual={ok:true,dado:'validado'}, antigo={ok:true,dado:'antigo'};
+   tela.restaurar([['/recente',atual],['/vencida',antigo]],Date.now()-1000);
+   tela.expirar();
+   tela.restaurar([['/recente',atual]],Date.now());
+   const expirou = await tela.ler('/recente',rede);
+   tela.restaurar([['/agora',atual]],Date.now());
+   tela.restaurar([['/antiga',antigo]],Date.now()-16000);
+   const emMemoria=await tela.ler('/agora',rede);
+   const daRede=await tela.ler('/antiga',rede);
+   return [expirou.dado,emMemoria.dado,daRede.dado,chamadas];
+ }''')
+ assert estado==[1,'validado',2,2],estado
  c.close()
  # A revalidação que confirma perda de acesso remove os dados da aba ativa.
  for w,h in [(320,844),(390,844),(412,915),(1440,900)]:

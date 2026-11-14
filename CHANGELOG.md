@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.29 — Cache após a retomada da Esteira
+
+- A cópia recém-validada passa a servir também para a troca de abas logo após reabrir a Esteira. A validade original das leituras e a atualização manual continuam funcionando.
+
 ## 7.78.28 — Consulta antecipada na aba Hoje
 
 - Quando o dia já tem peças atribuídas, Hoje começa a buscar o catálogo enquanto consulta a equipe. As permissões continuam sendo confirmadas antes de entregar a lista.

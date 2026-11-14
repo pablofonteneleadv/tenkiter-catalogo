@@ -282,7 +282,7 @@
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.72.0"></script>
-<script src="esteira-fluidez.js?v=7.78.26"></script>
+<script src="esteira-fluidez.js?v=7.78.29"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script>
 (function () {
@@ -2721,6 +2721,11 @@
           if (!completa || mudou && !local?.selecao?.length) return abrirAba();
         }
         if (!dados.size) return abrirAba();
+        // A cópia confirmada alimenta também as próximas trocas de aba,
+        // mantendo o horário original da leitura para a expiração em memória.
+        if (r.revisao && [...dados.values()].every(d => d.revisao === r.revisao)) {
+          fluidez.restaurar(dados, local.em);
+        }
         leiturasTela = new Map(dados);
         for (const d of dados.values()) leituraEm.set(d,local.em);
         const restaurada = {aba,dados,estado:local};
