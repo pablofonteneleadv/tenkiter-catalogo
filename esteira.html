@@ -2658,7 +2658,9 @@
     performance.clearMarks('esteira:hoje:util');
     medirTela('abertura', 'hoje');
     const sessao = sessaoAtual;
-    const salvo = await Promise.race([retomada.ler(sessao), new Promise(resolve=>setTimeout(resolve,120))]);
+    // O IndexedDB no Android pode levar mais de 120 ms ao abrir após o Chrome ser encerrado.
+    // Esperar a cópia por até 1,5 s evita descartar um cache válido e refazer a aba inteira.
+    const salvo = await Promise.race([retomada.ler(sessao), new Promise(resolve=>setTimeout(()=>resolve(null),1500))]);
     if (!mesmaConta(sessao)) return;
     if (salvo && Object.hasOwn(baseLeitura,salvo.aba) && salvo.dia===diaLoja()) {
       const r = await srvRede('/esteira/sincronizar?aba='+salvo.aba);
