@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.20 — Diagnóstico de falhas por aba da Esteira
+
+- Registra a rota conhecida e a categoria de falha do servidor para facilitar o acompanhamento por aba. A mensagem apresentada ao usuário continua genérica.
+
 ## 7.78.19 — Atualização de tarefas sem recarregar Pedidos na Esteira
 
 - Concluir ou criar uma tarefa atualiza as telas afetadas e reaproveita as leituras recentes das outras abas. Respostas de uma leitura invalidada cedem lugar ao retrato atualizado.

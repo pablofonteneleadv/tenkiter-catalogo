@@ -241,7 +241,7 @@ const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => 
 /** Somente categorias e rotas allowlist: jamais incluir URL completa, token, telefone ou corpo. */
 function classeFalhaHTTP_(mensagem) {
   const s=String(mensagem==null?'':mensagem).toLowerCase().slice(0,500);
-  if (/(sqlite|database|\bd1\b|no such table|no such column|sql error|banco de dados|coluna inexistente)/.test(s)) return 'banco';
+  if (/(sqlite|database|\bd1(?:_error)?\b|no such table|no such column|sql error|banco de dados|coluna inexistente)/.test(s)) return 'banco';
   if (/(quota|too many requests|rate.?limit|throttl|429)/.test(s)) return 'limite';
   if (/(timeout|timed out|deadline|tempo esgotado|tempo limite)/.test(s)) return 'tempo';
   if (/(network|fetch failed|upstream|gateway|502|503|connection|conex[aã]o|indispon[ií]vel)/.test(s)) return 'externo';
@@ -249,7 +249,7 @@ function classeFalhaHTTP_(mensagem) {
 }
 function rotaErroHTTP_(pathname) {
   const p=String(pathname||'');
-  for (const rota of ['/msg/acesso','/msg/tempo-real','/msg/mobile','/esteira/caixa','/esteira/conferir','/esteira/hoje']) {
+  for (const rota of [...EST_ROTAS_MEDIDAS_, '/esteira/conferir', '/msg/acesso', '/msg/tempo-real', '/msg/mobile']) {
     if (p===rota||p.startsWith(rota+'/')) return rota;
   }
   return '/outras';
@@ -6555,13 +6555,13 @@ export default {
     };
     const acoesAuditadas={'/msg/enviar':'responder','/msg/encerrar':'encerrar','/msg/dono':'responsavel','/msg/notas':'notas','/msg/rotular':'etapa','/msg/ficha':'ficha','/msg/agendar':'agendar','/msg/acompanhamento':'acompanhar','/msg/iniciar':'criar'};
     let auditarAtividade_=req.method==='POST'&&acoesAuditadas[url.pathname]?req.clone().json().catch(()=>({})):null;
-    const J = (c, s) => {
+    const J = (c, s, categoria) => {
       if (Number(s) >= 500) {
         // Diagnostico sem PII, sem cabecalhos e sem a mensagem de erro.
         // Best effort: telemetria NUNCA modifica a resposta nem a permissao.
         try {
           console.error(JSON.stringify({evento:'tk_http5xx',rota:rotaErroHTTP_(url.pathname),
-            codigo:Number(s),tipo:classeFalhaHTTP_(c?.erro)}));
+            codigo:Number(s),tipo:categoria || classeFalhaHTTP_(c?.erro)}));
         } catch (_) { /* nao interferir com o atendimento */ }
       }
       // v7.40.33: trilha da equipe — só ação confirmada, nunca o texto da mensagem.
@@ -6605,7 +6605,7 @@ export default {
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
-    if (url.pathname.startsWith('/esteira/')) { try { return await esteiraComando_(env,req,url,J,perms,ctx,medirEsteira); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500); } }   // v7.41.0
+    if (url.pathname.startsWith('/esteira/')) { try { return await esteiraComando_(env,req,url,J,perms,ctx,medirEsteira); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500, classeFalhaHTTP_(e?.message)); } }   // v7.41.0
     const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0 || url.pathname.indexOf('/fotoia') === 0;
     const ehMsg = url.pathname.startsWith('/msg/');
     const areaPermitida = perms.includes('gerir_acessos') || (ehPost && (perms.acessosConfiguraveis
