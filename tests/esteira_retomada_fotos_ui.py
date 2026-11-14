@@ -387,6 +387,7 @@ def navegar_enquanto_o_cache_abre(chromium, largura, altura):
         assert not pg.evaluate("performance.getEntriesByName('teste:idb:aberto').length")
         assert pg.locator("[data-aba=fotos]").get_attribute("aria-selected") == "true"
         assert pg.locator("[data-aba=config]").count() == int(estado["admin"])
+        assert pg.get_by_text("Carregando a aba…", exact=True).is_visible()
         capturar(pg, f"abas-antes-do-cache-{largura}")
         acionar(pg.locator("[data-aba=fotos]"), mobile)
         acionar(pg.locator("[data-aba=pedidos]"), mobile)

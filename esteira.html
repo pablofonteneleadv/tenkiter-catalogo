@@ -2695,6 +2695,7 @@
       if (!telaAdmin(abaIndicada) || validacao.eu.admin) {
         ABA = abaIndicada;
         app.dataset.tela = abaIndicada;
+        app.replaceChildren(el('div', 'card', 'Carregando a aba…'));
         if (abaIndicada === 'fotos' && validacao.eu.gestorFotos && ['novas','usadas','descartadas'].includes(dica.filtro)) {
           CAIXA_VER = dica.filtro;
         }
