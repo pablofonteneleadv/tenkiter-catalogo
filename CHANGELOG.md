@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.19 — Atualização de tarefas sem recarregar Pedidos na Esteira
+
+- Concluir ou criar uma tarefa atualiza as telas afetadas e reaproveita as leituras recentes das outras abas. Respostas de uma leitura invalidada cedem lugar ao retrato atualizado.
+
 ## 7.78.18 — Preparação em páginas na Esteira
 
 - A aba monta os primeiros 24 produtos e carrega os próximos sob demanda. Tarefas avulsas e o resumo de fotos continuam na primeira leitura.

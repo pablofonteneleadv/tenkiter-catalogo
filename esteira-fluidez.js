@@ -9,7 +9,12 @@
   root.addEventListener('input',e=>{const c=e.target.closest('.card');if(c)sujas.add(c)});
   root.addEventListener('change',e=>{const c=e.target.closest('.card');if(c)sujas.add(c)});
   async function ler(rota,rede){const e=conferir(),ant=leituras.get(rota);if(ant?.promessa)return ant.promessa;if(ant?.dados&&Date.now()-ant.em<15000)return ant.dados;
-   const item={dados:ant?.dados,em:ant?.em||0};item.promessa=Promise.resolve().then(rede).then(r=>{if(e===conferir()&&r.ok){item.dados=r;item.em=Date.now()}else if(e!==epoca)return{ok:false,erro:'A sessão mudou.',sessaoMudou:true};return r}).finally(()=>{item.promessa=null;if(!item.dados&&leituras.get(rota)===item)leituras.delete(rota)});leituras.set(rota,item);return item.promessa;
+   const item={dados:ant?.dados,em:ant?.em||0};item.promessa=Promise.resolve().then(rede).then(r=>{
+    if(e!==conferir())return{ok:false,erro:'A sessão mudou.',sessaoMudou:true};
+    if(leituras.get(rota)!==item)return ler(rota,rede);
+    if(r.ok){item.dados=r;item.em=Date.now()}
+    return r;
+   }).finally(()=>{item.promessa=null;if(!item.dados&&leituras.get(rota)===item)leituras.delete(rota)});leituras.set(rota,item);return item.promessa;
   }
   function marcarUtil(chave){
    const marca='esteira:'+chave+':util';
@@ -29,7 +34,13 @@
    let ref=painel.firstChild;usar.forEach(n=>{if(n===ref)ref=ref.nextSibling;else painel.insertBefore(n,ref)});const manter=new Set(usar);[...painel.childNodes].forEach(n=>{if(!manter.has(n))n.remove()});if(adiados){const p=document.createElement('p');p.className='esteira-atualizacao dica';p.setAttribute('role','status');p.textContent='Há dados novos no bloco em edição. Suas alterações foram mantidas; conclua a edição para atualizar esse bloco.';painel.append(p)}v.pronta=true;
    if(ativa===ctx.chave)marcarUtil(ctx.chave);
   }
-  function invalidar(bloco){conferir();leituras.clear();if(bloco)sujas.delete(bloco)}
-  return{ler,preparar,concluir,invalidar,expirar(){for(const item of leituras.values())item.em=0},alvo:()=>ultimoBloco,ativa:()=>ativa,visivel:()=>!!vistas.get(ativa)&&root.contains(vistas.get(ativa).painel),limpar(){conta='';conferir()}};
+  function liberar(bloco){if(bloco)sujas.delete(bloco)}
+  function invalidar(bloco,rotas){
+   conferir();
+   if(rotas){for(const rota of leituras.keys())if(rotas.has(rota.split('?')[0]))leituras.delete(rota)}
+   else leituras.clear();
+   liberar(bloco);
+  }
+  return{ler,preparar,concluir,invalidar,liberar,expirar(){for(const item of leituras.values())item.em=0},alvo:()=>ultimoBloco,ativa:()=>ativa,visivel:()=>!!vistas.get(ativa)&&root.contains(vistas.get(ativa).painel),limpar(){conta='';conferir()}};
  };
 })();
