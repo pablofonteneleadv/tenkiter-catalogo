@@ -9,6 +9,38 @@ BASE=ns['BASE'];OUT=Path(os.getenv('TK_EVID','tests/saida/esteira-fluidez'));OUT
 with sync_playwright() as p:
  b=p.chromium.launch(args=['--no-sandbox'])
  for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',has_touch=w<600)
+  ns['instalar'](c)
+  fontes=[]
+  c.route('https://fonts.googleapis.com/**',lambda r:fontes.append(r))
+  pg=c.new_page()
+  pg.goto(BASE+'esteira.html',wait_until='commit')
+  pg.locator('#login-w').wait_for(timeout=5000)
+  assert len(fontes)==1 and pg.locator('link[href*="fonts.googleapis.com/css2"]').get_attribute('media')=='print'
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha')
+  entrar=pg.get_by_role('button',name='Entrar',exact=True)
+  if w<600: entrar.tap()
+  else: entrar.press('Enter')
+  pg.locator('.peca').first.wait_for(timeout=5000)
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  pg.screenshot(path=str(OUT/f'hoje-com-fontes-pendentes-{w}.png'))
+  fontes.pop().fulfill(content_type='text/css',body=':root{--teste-folha-fontes:aplicada}')
+  pg.wait_for_function("getComputedStyle(document.documentElement).getPropertyValue('--teste-folha-fontes').trim()==='aplicada'")
+  assert pg.locator('link[href*="fonts.googleapis.com/css2"]').get_attribute('media')=='all'
+  assert pg.locator('.peca').first.is_visible()
+  c.close()
+ c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
+ ns['instalar'](c)
+ c.route('https://fonts.googleapis.com/**',lambda r:r.abort())
+ pg=c.new_page()
+ pg.goto(BASE+'esteira.html')
+ pg.locator('#login-w').wait_for()
+ pg.fill('#login-w','88999999999');pg.fill('#login-s','senha')
+ pg.get_by_role('button',name='Entrar',exact=True).click()
+ pg.locator('.peca').first.wait_for()
+ assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+ c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
   c=b.new_context(viewport={'width':w,'height':h},service_workers='block');st=ns['instalar'](c);pg=c.new_page();pg.set_default_timeout(6000);erros=[];pg.on('pageerror',lambda e:erros.append(str(e)))
   print('INICIO',w,flush=True)
   inicio=[]
