@@ -140,6 +140,48 @@ with sync_playwright() as p:
  cadastro.get_by_text('Tricô macio',exact=True).wait_for()
  assert cadastro.evaluate('e=>e.open')
  c.close()
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',has_touch=w<600)
+  ns['instalar'](c);paginas=[]
+  ids=[str(9000+i) for i in range(24)]+['1003']
+  def simular_pagina(r):
+   depois='&depois=' in r.request.url
+   paginas.append(depois)
+   if depois and paginas.count(True)==1:
+    return r.fulfill(status=503,json={'ok':False,'erro':'Tente de novo.'})
+   itens=ids[-1:] if depois else ids[:-1]
+   return r.fulfill(json={'ok':True,'podeAceitar':True,'funcoes':['Fotos'],
+     'produtos':[{'id':i,'nome':'Peça '+i,'tarefas':[],'feitas':0,'total':0,'noSite':True} for i in itens],
+     'outras':[],'fotosPedidas':2,'proximo':None if depois else 'cursor/+=',
+     **({} if depois else {'emPreparacao':ids})})
+  c.route(re.compile(r'/esteira/preparacao\?pagina=1(?:&depois=.*)?$'),simular_pagina)
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=prep]')
+  pg.wait_for_selector('#prep-produto-9000')
+  cartoes=pg.locator('.card[id^=prep-produto-]')
+  assert cartoes.count()==24 and paginas==[False]
+  pg.get_by_role('button',name='Colocar produto em preparação').click()
+  pg.fill('#prep-busca','saia')
+  pg.get_by_text('Nenhum produto com esse nome ou código.',exact=True).wait_for()
+  primeiro=pg.locator('#prep-produto-9000')
+  primeiro.get_by_role('button',name='Nova tarefa para este produto').click()
+  rascunho=primeiro.get_by_role('textbox',name='Nova tarefa')
+  rascunho.fill('Manter tarefa em edição')
+  mais=pg.get_by_role('button',name='Carregar mais produtos')
+  mais.click();pg.locator('#prep-paginacao .erro').wait_for()
+  assert cartoes.count()==24
+  mais.focus();pg.keyboard.press('Enter')
+  pg.get_by_role('heading',name='Peça 1003').wait_for()
+  assert cartoes.count()==25 and rascunho.input_value()=='Manter tarefa em edição'
+  assert pg.locator('#prep-produto-1003 h3').evaluate('e=>e===document.activeElement')
+  pg.locator('#prep-produto-1003').scroll_into_view_if_needed()
+  pg.screenshot(path=str(OUT/f'preparacao-paginada-{w}.png'))
+  pg.click('[data-aba=hoje]');pg.click('[data-aba=prep]')
+  pg.wait_for_selector('#prep-produto-1003')
+  assert cartoes.count()==25 and rascunho.input_value()=='Manter tarefa em edição'
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  c.close()
  for admin in (False, True):
   c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
   ns['instalar'](c,admin=admin)

@@ -7495,6 +7495,7 @@ async function estCriarEsquema_(env) {
   for (const col of ["etapa TEXT DEFAULT ''", 'aceito_em TEXT', 'aceito_por TEXT', 'preparado_em TEXT', 'preparado_por TEXT', "ref_nome TEXT DEFAULT ''", "ref_codigo TEXT DEFAULT ''", "ref_foto TEXT DEFAULT ''"]) {
     try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
   }
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_produto_preparacao ON est_produto (preparado_em, id) WHERE etapa='preparacao'").run();
   try { await env.DB.prepare("ALTER TABLE est_lista ADD COLUMN familia TEXT DEFAULT ''").run(); } catch (e) { /* v7.44.0: já existe */ }
   // v7.45.0: último estoque visto no retrato, última queda (venda) e controle dos degraus da reativação
   for (const col of ['ult_estoque INTEGER', 'ult_estoque_em TEXT', 'ult_queda_em TEXT', "reat_base TEXT DEFAULT ''", 'reat_degrau INTEGER NOT NULL DEFAULT 0', 'reat_dispensa_ate TEXT']) {
@@ -8243,16 +8244,57 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   }
   // ---- v7.42.0: preparação (tarefas e "Aceitar para o site") ----
   if (p === '/esteira/preparacao' && req.method === 'GET') {
-    const [[preparados, tarefasDb, fq], cfg, escala] = await Promise.all([
+    const paginada = url.searchParams.get('pagina') === '1';
+    const depois = paginada ? url.searchParams.get('depois') : null;
+    let cursor;
+    if (depois !== null) {
+      try {
+        if (!depois || depois.length > 2048) throw Error('cursor');
+        cursor = JSON.parse(new TextDecoder().decode(b64ParaBuf_(depois)));
+        if (!Array.isArray(cursor) || cursor.length !== 2 ||
+            (cursor[0] !== null && (typeof cursor[0] !== 'string' || cursor[0].length > 128)) ||
+            typeof cursor[1] !== 'string' || !cursor[1] || cursor[1].length > 200) throw Error('cursor');
+      } catch (_) {
+        return J({ ok: false, erro: 'A página de Preparação não é válida. Volte à primeira página e tente de novo.' }, 400);
+      }
+    }
+    const limite = 24;
+    const lerTarefas = async () => {
+      if (!paginada) {
+        const [pagina, tarefas] = await Promise.all([
+          env.DB.prepare("SELECT * FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all(),
+          env.DB.prepare("SELECT * FROM est_tarefa WHERE origem<>'pedido_fotos' AND (status='pendente' OR (status='feita' AND produto IN (SELECT id FROM est_produto WHERE etapa='preparacao'))) ORDER BY id").all(),
+        ]);
+        return { prods: pagina.results || [], tarefas: tarefas.results || [] };
+      }
+      const filtros = cursor ? (cursor[0] === null
+        ? ' AND ((preparado_em IS NULL AND id>?) OR preparado_em IS NOT NULL)'
+        : ' AND (preparado_em,id)>(?,?)') : '';
+      const params = cursor ? (cursor[0] === null ? [cursor[1]] : cursor) : [];
+      const selecao = " FROM est_produto WHERE etapa='preparacao'" + filtros + ' ORDER BY preparado_em,id LIMIT ?';
+      // O lote usa a mesma visão do D1 para os cartões, as tarefas e as exclusões da busca.
+      const consultas = [
+        env.DB.prepare('SELECT *' + selecao).bind(...params, limite + 1),
+        env.DB.prepare("SELECT * FROM est_tarefa WHERE origem<>'pedido_fotos' AND status IN ('pendente','feita') AND produto IN (SELECT id" + selecao + ') ORDER BY id').bind(...params, limite),
+      ];
+      if (depois === null) {
+        consultas.push(env.DB.prepare("SELECT * FROM est_tarefa t WHERE t.origem<>'pedido_fotos' AND t.status='pendente' AND NOT EXISTS (SELECT 1 FROM est_produto p WHERE p.id=t.produto AND p.etapa='preparacao') ORDER BY t.id"));
+        if (podeAceitar) consultas.push(env.DB.prepare("SELECT id FROM est_produto WHERE etapa='preparacao'"));
+      }
+      const [pagina, tarefas, outras, emPreparacao] = await env.DB.batch(consultas);
+      const prods = (pagina.results || []).slice(0, limite);
+      const ultimo = prods.at(-1);
+      const proximo = pagina.results?.length > limite ? bytesParaBase64_(new TextEncoder().encode(JSON.stringify([ultimo.preparado_em, ultimo.id]))) : null;
+      return { prods, tarefas: (tarefas.results || []).concat(outras?.results || []), proximo, emPreparacao: emPreparacao?.results.map(x => x.id) };
+    };
+    const [[{ prods, tarefas, proximo, emPreparacao }, fq], cfg, escala] = await Promise.all([
       medir('d1', () => Promise.all([
-        env.DB.prepare("SELECT * FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all(),
-        env.DB.prepare("SELECT * FROM est_tarefa WHERE origem<>'pedido_fotos' AND (status='pendente' OR (status='feita' AND produto IN (SELECT id FROM est_produto WHERE etapa='preparacao'))) ORDER BY id").all(),
+        lerTarefas(),
         env.DB.prepare("SELECT COUNT(DISTINCT produto) AS n FROM est_tarefa WHERE origem='pedido_fotos' AND status='pendente'").first(),
       ])),
       lerConfig(),
       escalaHoje(),
     ]);
-    const prods = preparados.results || [], tarefas = tarefasDb.results || [];
     const produtosCatalogo = prods.length || tarefas.length ? await lerCatalogo().catch(() => []) : [];
     const porId = new Map(produtosCatalogo.map(x => [x.id, x])), ids = new Set(prods.map(x => x.id));
     const porProduto = new Map(), outras = [];
@@ -8271,7 +8313,7 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
       const c = porId.get(x.id) || {}, tarefas = porProduto.get(x.id) || [];
       return { id: x.id, nome: c.nome || x.ref_nome || 'Peça ' + x.id, codigo: c.codigo || x.ref_codigo || '', foto: c.foto || x.ref_foto || '', noSite: !!c.id, preparado_em: x.preparado_em || '', preparado_por: nomeDe(x.preparado_por), tarefas, feitas: tarefas.filter((t) => t.status === 'feita').length, total: tarefas.length };
     });
-    return J({ ok: true, data, eu: quemSou(), podeAceitar, funcoes: cfg.funcoes, produtos, outras, fotosPedidas: fq?.n || 0 });
+    return J({ ok: true, data, eu: quemSou(), podeAceitar, funcoes: cfg.funcoes, produtos, outras, fotosPedidas: fq?.n || 0, ...(paginada ? { proximo, emPreparacao } : {}) });
   }
   if (p === '/esteira/tarefa' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), id = Number(d.id);
