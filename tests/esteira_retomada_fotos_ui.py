@@ -218,6 +218,21 @@ def jornada(chromium, largura, altura):
         util = pg.evaluate("performance.getEntriesByName('esteira:fotos:retomada')[0].startTime")
         print(f"{largura}px: retomada em {util:.0f} ms, GETs completos=0", flush=True)
         capturar(pg, f"retomada-{largura}")
+        acionar(pg.locator("[data-aba=hoje]"), mobile)
+        pg.locator("main[data-tela=hoje] .peca").first.wait_for()
+        acionar(pg.locator("[data-aba=fotos]"), mobile)
+        pg.locator('[data-caixa="101"] .cx-sel[aria-pressed=true]').wait_for()
+        pg.wait_for_timeout(300)
+        assert not foto_gets(estado), estado["gets"]
+        capturar(pg, f"troca-apos-retomada-{largura}")
+        if largura == 390:
+            acionar(pg.get_by_role("button", name="Atualizar fotos", exact=True), mobile)
+            for _ in range(30):
+                if len(foto_gets(estado)) >= 2:
+                    break
+                pg.wait_for_timeout(50)
+            assert sorted(foto_gets(estado)) == ["caixa", "fotos"], estado["gets"]
+            assert pg.locator('[data-caixa="101"] .cx-sel[aria-pressed=true]').is_visible()
         assert not estado["escritas"] and not estado["erros"], estado
         ctx.close()
 
