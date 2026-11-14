@@ -785,7 +785,6 @@
     const r = await srv('/esteira/preparacao'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren();
-    if (r.produtos.length || r.outras.length) void catalogoFundo();
     const topo = el('div', 'card'); topo.id = 'prep-topo'; topo.append(el('h2', '', 'Preparação'));   // v7.52.0: sem o bloco de instruções (pedido do Pablo)
     if (r.podeAceitar) topo.append(...blocoColocar(r));
     app.append(topo);
@@ -815,15 +814,21 @@
       if (sCat.options.length === 1) vals('Categoria').forEach((v) => { const op = el('option', '', v); op.value = v; sCat.append(op); });
       if (sGen.options.length === 1) vals('Genero').forEach((v) => { const op = el('option', '', v); op.value = v; sGen.append(op); });
     };
-    let faceta=()=>true;
-    catalogoFundo().then((c) => { if(c){encher(c);faceta=TKProdutosBusca.filtros(box,[...c.values()],buscar,{precos:true});box.insertBefore(box.lastElementChild,st);buscar();} });
-    TKFotosNovas.carregar(()=>buscar());
+    let faceta;
     const temCat = (x, v) => !v || String(x.Categoria || '').split(',').map((t) => t.trim()).includes(v), temGen = (x, v) => !v || String(x.Genero || '').split(',').map((t) => t.trim()).includes(v);
     let espera = null, vez = 0, limite=40;
     const buscar = async () => {
       const minha = ++vez, q = semAcento(inp.value.trim()); marcar(); res.replaceChildren(); st.diga('');
-      let cat = CATALOGO; if (!cat) { st.diga('Buscando…'); try { cat = await catalogoCompleto(); } catch (e) { return st.diga(e.message, 'erro'); } encher(cat); }
+      if (!CATALOGO) st.diga('Buscando…');
+      const cat = await catalogoFundo();
       if (minha !== vez) return;
+      if (!cat) return st.diga('Não consegui ler o catálogo agora. Tente de novo.', 'erro');
+      if (!faceta) {
+        encher(cat);
+        faceta = TKProdutosBusca.filtros(box, [...cat.values()], buscar, { precos: true });
+        box.insertBefore(box.lastElementChild, st);
+      }
+      st.diga('');
       const casa = (x) => TKProdutosBusca.casa(x,q) && faceta(x) && temCat(x, sCat.value) && temGen(x, sGen.value) && !(o.fora && o.fora(x));
       const todos = TKProdutosBusca.ordenar([...cat.values()]).filter(casa), achados = todos.filter((x) => naSituacao(x, sSit.value)), max = limite;
       if (!achados.length) {
@@ -839,6 +844,7 @@
     [sSit, sCat, sGen].forEach((s) => { s.onchange = buscar; });
     box.focar = () => inp.focus();
     void buscar();
+    TKFotosNovas.carregar(buscar);
     return box;
   }
   const situacaoTxt = (x) => (ehInativo(x) ? 'arquivada (fora do site)' : typeof estaEsgotado === 'function' && estaEsgotado(x) ? 'esgotada' : 'no site');
@@ -846,7 +852,8 @@
     const b = el('button', 'bt prim', 'Colocar produto em preparação'); b.type = 'button'; b.setAttribute('aria-expanded', 'false');
     const caixa = el('div'); caixa.hidden = true; caixa.style.cssText = 'display:grid;gap:8px';
     const ja = new Set(r.produtos.map((x) => x.id));
-    const busca = buscaCatalogo({ id: 'prep-busca', rotulo: 'Qual produto vai ser preparado?', padrao: 'ativas', fora: (x) => ja.has(String(x.ID)), linha: (x, st) => {
+    let busca;
+    const criarBusca = () => buscaCatalogo({ id: 'prep-busca', rotulo: 'Qual produto vai ser preparado?', padrao: 'ativas', fora: (x) => ja.has(String(x.ID)), linha: (x, st) => {
       const it = el('button', 'peca'); it.type = 'button';
       const t = el('div', 't'); t.append(el('b', '', x.Nome || 'Produto ' + x.ID), el('small', 'muted', [x.Codigo, x.Categoria, situacaoTxt(x)].filter(Boolean).join(' · ')));
       it.append(foto(x.Foto_URL), t, el('span', 'chip al', 'Preparar')); it.setAttribute('aria-label', 'Colocar ' + (x.Nome || 'produto') + ' em preparação');
@@ -858,8 +865,14 @@
       };
       return it;
     } });
-    caixa.append(el('p', 'muted', 'Arquivada fica fora do site até ser aceita.'), busca);
-    b.onclick = () => { caixa.hidden = !caixa.hidden; b.setAttribute('aria-expanded', String(!caixa.hidden)); if (!caixa.hidden) busca.focar(); };
+    caixa.append(el('p', 'muted', 'Arquivada fica fora do site até ser aceita.'));
+    b.onclick = () => {
+      caixa.hidden = !caixa.hidden;
+      b.setAttribute('aria-expanded', String(!caixa.hidden));
+      if (caixa.hidden) return;
+      if (!busca) { busca = criarBusca(); caixa.append(busca); }
+      busca.focar();
+    };
     return [b, caixa];
   }
   function cartaoPrep(pr, r) {
@@ -869,8 +882,15 @@
     topo.append(fotoPeca(pr.id, pr.foto, pr.nome, 'media', pr.noSite), t);
     // v7.48.0: os dados do cadastro ficam aqui (a tarefa "Cadastro conferido" pede para conferir o que está neste quadro)
     const dados = el('details', 'dados'), sm = el('summary', '', 'Dados do cadastro');
-    dados.append(sm, fichaPeca(pr.id, { reserva: { nome: pr.nome, codigo: pr.codigo, foto: pr.foto } }));
+    dados.append(sm);
+    const carregarDados = () => {
+      if (!dados.open) return;
+      dados.append(fichaPeca(pr.id, { reserva: { nome: pr.nome, codigo: pr.codigo, foto: pr.foto } }));
+      dados.removeEventListener('toggle', carregarDados);
+    };
     dados.open = pr.tarefas.some((x) => (x.tipo === 'cadastro' || x.tipo === 'cores_tamanhos') && x.status !== 'feita');
+    if (dados.open) carregarDados();
+    else dados.addEventListener('toggle', carregarDados);
     const pl = el('div', 'progresso'); pl.append(el('b', 'num', pr.feitas + '/' + pr.total), el('span', 'muted', pr.total && pr.feitas >= pr.total ? 'tudo feito' : 'tarefas feitas'));
     const bar = el('div', 'barra'), i = el('i'); i.style.width = (pr.total ? Math.round(pr.feitas / pr.total * 100) : 0) + '%'; bar.append(i);
     c.append(topo, dados, pl, bar);

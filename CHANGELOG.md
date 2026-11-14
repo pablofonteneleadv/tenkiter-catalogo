@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.17 — Catálogo sob demanda na Preparação da Esteira
+
+- A busca para colocar um produto em preparação e as fichas de cadastro fechadas passam a carregar quando abertas. A ficha continua abrindo automaticamente quando há conferência de cadastro pendente.
+- As buscas que começam enquanto a mesma listagem está carregando compartilham a resposta.
+
 ## 7.78.16 — Inicialização da Esteira em paralelo com o RH
 
 - Após confirmar o acesso, a consulta da equipe ao RH pode começar enquanto o D1 inicializa. A equipe legada continua a ser consultada depois de o banco estar pronto.

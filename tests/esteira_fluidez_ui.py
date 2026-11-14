@@ -94,6 +94,52 @@ with sync_playwright() as p:
   assert pg.input_value('#ped-obs')=='Manter o texto ao carregar o catálogo'
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   c.close()
+ # A preparação deixa as leituras do catálogo para quando há um controle aberto.
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',has_touch=w<600)
+  st=ns['instalar'](c)
+  st['outras'].clear()
+  st['feitas'].extend([11,12,13,14,15])
+  catalogo=[]
+  c.route(re.compile(r'/exec\?action=list&todos=true$'),lambda r:catalogo.append(r))
+  pg=c.new_page();erros=[];pg.on('pageerror',lambda e:erros.append(str(e)))
+  pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=prep]')
+  cartao=pg.locator('.card[data-produto="2001"]')
+  cartao.get_by_role('heading',name='Blusa Nova Tricô').wait_for()
+  assert not pg.locator('#prep-busca').count()
+  assert not cartao.locator('details.dados').evaluate('e=>e.open')
+  pg.wait_for_timeout(100)
+  assert not catalogo,[r.request.url for r in catalogo]
+  pg.screenshot(path=str(OUT/f'preparacao-antes-do-catalogo-{w}.png'))
+  colocar=pg.get_by_role('button',name='Colocar produto em preparação')
+  if w<600: colocar.tap()
+  else: colocar.focus();pg.keyboard.press('Enter')
+  busca=pg.locator('#prep-busca')
+  busca.fill('saia')
+  dados=cartao.locator('details.dados > summary')
+  dados.click()
+  cartao.get_by_text('Carregando os dados do cadastro…').wait_for()
+  assert len(catalogo)==1,[r.request.url for r in catalogo]
+  catalogo[0].fallback()
+  cartao.get_by_text('Tricô macio',exact=True).wait_for()
+  pg.get_by_role('button',name='Colocar Saia Plissada Midi em preparação').wait_for()
+  assert busca.input_value()=='saia'
+  assert len(catalogo)==1
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  assert not erros,erros
+  c.close()
+ # Uma conferência de cadastro pendente mantém os detalhes abertos por padrão.
+ c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
+ ns['instalar'](c)
+ pg=c.new_page();pg.goto(BASE+'esteira.html')
+ pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+ pg.click('[data-aba=prep]')
+ cadastro=pg.locator('.card[data-produto="2001"] details.dados')
+ cadastro.get_by_text('Tricô macio',exact=True).wait_for()
+ assert cadastro.evaluate('e=>e.open')
+ c.close()
  for admin in (False, True):
   c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
   ns['instalar'](c,admin=admin)
