@@ -7470,6 +7470,15 @@ function estIniciar_(env) {
   }
   return inicializacao;
 }
+async function estGarantirColunas_(env, tabela, colunas) {
+  const info = await env.DB.prepare('PRAGMA table_info(' + tabela + ')').all();
+  const existentes = new Set((info.results || []).map(x => x.name));
+  for (const [nome, tipo] of colunas) {
+    if (existentes.has(nome)) continue;
+    try { await env.DB.prepare('ALTER TABLE ' + tabela + ' ADD COLUMN ' + nome + ' ' + tipo).run(); }
+    catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
+  }
+}
 async function estCriarEsquema_(env) {
   await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_equipe (whats TEXT PRIMARY KEY, nome TEXT NOT NULL DEFAULT '', confere INTEGER NOT NULL DEFAULT 1, rodizio INTEGER NOT NULL DEFAULT 1, atendente INTEGER NOT NULL DEFAULT 0, aceitar INTEGER NOT NULL DEFAULT 0, ativo INTEGER NOT NULL DEFAULT 1, em TEXT)"),
@@ -7490,24 +7499,23 @@ async function estCriarEsquema_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_foco (data TEXT NOT NULL, whats TEXT NOT NULL, categoria TEXT NOT NULL DEFAULT '', por TEXT DEFAULT '', em TEXT, PRIMARY KEY (data, whats))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_estoque (produto TEXT NOT NULL, data TEXT NOT NULL, estoque INTEGER NOT NULL, PRIMARY KEY (produto, data))"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_estoque_data ON est_estoque (data)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_fornecedor (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, endereco TEXT DEFAULT '', fone1 TEXT DEFAULT '', fone2 TEXT DEFAULT '', fone3 TEXT DEFAULT '', ativo INTEGER NOT NULL DEFAULT 1, criado_em TEXT, criado_por TEXT, atualizado_em TEXT)"),
   ]);
-  // v7.42.0: colunas novas da preparação. ALTER falha quando a coluna já existe — por isso um por um, sem derrubar nada.
-  for (const col of ["etapa TEXT DEFAULT ''", 'aceito_em TEXT', 'aceito_por TEXT', 'preparado_em TEXT', 'preparado_por TEXT', "ref_nome TEXT DEFAULT ''", "ref_codigo TEXT DEFAULT ''", "ref_foto TEXT DEFAULT ''"]) {
-    try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
-  }
-  await env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_produto_preparacao ON est_produto (preparado_em, id) WHERE etapa='preparacao'").run();
-  try { await env.DB.prepare("ALTER TABLE est_lista ADD COLUMN familia TEXT DEFAULT ''").run(); } catch (e) { /* v7.44.0: já existe */ }
-  // v7.45.0: último estoque visto no retrato, última queda (venda) e controle dos degraus da reativação
-  for (const col of ['ult_estoque INTEGER', 'ult_estoque_em TEXT', 'ult_queda_em TEXT', "reat_base TEXT DEFAULT ''", 'reat_degrau INTEGER NOT NULL DEFAULT 0', 'reat_dispensa_ate TEXT']) {
-    try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
-  }
-  // v7.48.0: cadastro de fornecedores (o pedido guarda o id e continua com o nome; pedido antigo em texto livre segue igual) e tecido do produto novo
-  await env.DB.prepare("CREATE TABLE IF NOT EXISTS est_fornecedor (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, endereco TEXT DEFAULT '', fone1 TEXT DEFAULT '', fone2 TEXT DEFAULT '', fone3 TEXT DEFAULT '', ativo INTEGER NOT NULL DEFAULT 1, criado_em TEXT, criado_por TEXT, atualizado_em TEXT)").run();
-  try { await env.DB.prepare('ALTER TABLE est_pedido ADD COLUMN fornecedor_id INTEGER').run(); } catch (e) { /* já existe */ }
-  try { await env.DB.prepare("ALTER TABLE est_pedido_item ADD COLUMN tecido TEXT DEFAULT ''").run(); } catch (e) { /* já existe */ }
-  // v7.52.0: pedido de fotos (como a pessoa quer as fotos, em JSON) com id do aparelho (op) contra toque duplo; caixa de fotos da equipe
-  for (const col of ["detalhe TEXT DEFAULT ''", "op TEXT DEFAULT ''"]) { try { await env.DB.prepare('ALTER TABLE est_tarefa ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  // Instâncias novas leem o esquema existente. Apenas bancos antigos precisam de ALTER.
+  await Promise.all([
+    estGarantirColunas_(env, 'est_produto', [
+      ['etapa', "TEXT DEFAULT ''"], ['aceito_em', 'TEXT'], ['aceito_por', 'TEXT'], ['preparado_em', 'TEXT'], ['preparado_por', 'TEXT'],
+      ['ref_nome', "TEXT DEFAULT ''"], ['ref_codigo', "TEXT DEFAULT ''"], ['ref_foto', "TEXT DEFAULT ''"],
+      ['ult_estoque', 'INTEGER'], ['ult_estoque_em', 'TEXT'], ['ult_queda_em', 'TEXT'], ['reat_base', "TEXT DEFAULT ''"],
+      ['reat_degrau', 'INTEGER NOT NULL DEFAULT 0'], ['reat_dispensa_ate', 'TEXT'],
+    ]),
+    estGarantirColunas_(env, 'est_lista', [['familia', "TEXT DEFAULT ''"]]),
+    estGarantirColunas_(env, 'est_pedido', [['fornecedor_id', 'INTEGER']]),
+    estGarantirColunas_(env, 'est_pedido_item', [['tecido', "TEXT DEFAULT ''"]]),
+    estGarantirColunas_(env, 'est_tarefa', [['detalhe', "TEXT DEFAULT ''"], ['op', "TEXT DEFAULT ''"]]),
+  ]);
   await env.DB.batch([
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_produto_preparacao ON est_produto (preparado_em, id) WHERE etapa='preparacao'"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_caixa (id INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT NOT NULL, lote TEXT DEFAULT '', url TEXT NOT NULL, descricao TEXT DEFAULT '', descricao_lote TEXT DEFAULT '', produto TEXT DEFAULT '', produto_nome TEXT DEFAULT '', hash TEXT DEFAULT '', enviada_por TEXT DEFAULT '', enviada_nome TEXT DEFAULT '', enviada_em TEXT, status TEXT NOT NULL DEFAULT 'nova', uso_produto TEXT DEFAULT '', uso_nome TEXT DEFAULT '', usada_por TEXT DEFAULT '', usada_nome TEXT DEFAULT '', usada_em TEXT)"),
     env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ux_est_caixa_op ON est_caixa (op)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_est_caixa_status ON est_caixa (status, id)'),

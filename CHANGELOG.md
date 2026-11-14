@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.21 — Inicialização D1 da Esteira com menos consultas
+
+- A Esteira consulta as colunas existentes e aplica apenas as que faltam. O índice de Preparação é instalado pelo mesmo fluxo e falhas do banco podem ser retentadas.
+
 ## 7.78.20 — Diagnóstico de falhas por aba da Esteira
 
 - Registra a rota conhecida e a categoria de falha do servidor para facilitar o acompanhamento por aba. A mensagem apresentada ao usuário continua genérica.

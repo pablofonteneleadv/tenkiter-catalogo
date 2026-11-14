@@ -750,6 +750,34 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
       usuarios[PABLO] = usuarioOriginal;
     }
   }
+  { // D1 já migrado: uma instância fria não repete ALTER, e a recuperação cria o índice.
+    const consultas = [];
+    let falharIndice = false;
+    const banco = d1();
+    const DB = { ...banco, prepare(sql) {
+      consultas.push(sql);
+      if (falharIndice && sql.startsWith('CREATE INDEX IF NOT EXISTS ix_est_produto_preparacao')) throw Error('D1_ERROR: indisponível');
+      return banco.prepare(sql);
+    } };
+    const adminAnterior = usuarios[PABLO];
+    usuarios[PABLO] = { nome: 'Admin Teste', permissoes: ['gerir_acessos'] };
+    const ler = bancoEsteira => w.fetch(new Request('https://ig.fake/esteira/preparacao?pagina=1', { headers: {
+      'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO,
+    } }), { ...env, DB: bancoEsteira }, ctx);
+    try {
+      chk('Banco novo instala as colunas e permite a Preparação paginada', (await ler(banco)).status === 200);
+      await banco.prepare('DROP INDEX ix_est_produto_preparacao').run();
+      await banco.prepare("INSERT INTO est_produto(id,etapa,ref_nome) VALUES('ANTIGA','preparacao','Peça simulada antiga')").run();
+      falharIndice = true;
+      chk('Falha real na inicialização mantém a leitura indisponível até retentar', (await ler(DB)).status === 500);
+      falharIndice = false;
+      const [r1, r2] = await Promise.all([ler(DB), ler(DB)]);
+      const produtos = (await r1.json()).produtos;
+      const indice = await banco.prepare("SELECT name FROM sqlite_master WHERE name='ix_est_produto_preparacao'").first();
+      chk('Retentativa concorrente instala o índice e preserva a peça existente', r1.ok && r2.ok && indice && produtos[0]?.nome === 'Peça simulada antiga');
+      chk('Banco migrado faz cinco leituras de metadados por tentativa, sem ALTER duplicado', consultas.filter(s => s.startsWith('PRAGMA table_info(est_')).length === 10 && !consultas.some(s => s.startsWith('ALTER TABLE est_')));
+    } finally { usuarios[PABLO] = adminAnterior; }
+  }
   { // Páginas de Preparação usam dados SQLite isolados e mantêm o contrato anterior.
     const DB = d1(), teste = { ...env, DB };
     usuarios[PABLO] = { nome: 'Admin Teste', permissoes: ['gerir_acessos'] };
