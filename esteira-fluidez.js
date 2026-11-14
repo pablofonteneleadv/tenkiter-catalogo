@@ -57,7 +57,7 @@
  // A cópia nunca autoriza acesso. Só o chamador, após confirmação do servidor,
  // pode entregá-la aos renderizadores. Nenhum token ou HTML entra neste banco.
  window.TKEsteiraRetomada=function(){
-  const loja='telas', maxIdade=20*60*1000;
+  const loja='telas', maxIdade=20*60*1000, chaveAba='tk-esteira-ultima-aba-v1';
   let banco;
   const abrir=()=>banco||=(new Promise((ok,erro)=>{
    const req=indexedDB.open('tk-esteira-retomada-v1',1);
@@ -82,6 +82,16 @@
     return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
    } catch (_) {return '';}
   }
+  function dica(k) {
+   try {
+    const item = JSON.parse(localStorage.getItem(chaveAba));
+    return item?.chave === k ? item : null;
+   } catch (_) {return null;}
+  }
+  async function ultimaAba(s) {
+   const k = await chave(s), item = k && dica(k);
+   return item?.em > Date.now()-maxIdade ? item : null;
+  }
   async function ler(s){
    const k=await chave(s);
    if (!k) return null;
@@ -91,6 +101,9 @@
   async function gravar(s, item, valida){
    const k=await chave(s);
    if (!k || !valida()) return;
+   // Apenas o identificador derivado e a aba ficam fora do IndexedDB.
+   // Isso permite validar a sessão enquanto o banco está abrindo.
+   try {localStorage.setItem(chaveAba, JSON.stringify({chave:k, aba:item.aba, em:item.em, filtro:item.filtro}));} catch (_) {}
    await transacao('readwrite',st=>{
     if (!valida()) return;
     st.put(item,k);
@@ -105,8 +118,10 @@
   }
   async function limpar(s){
    const k=await chave(s);
-   if (k) await transacao('readwrite',st=>st.delete(k));
+   if (!k) return;
+   try {if (dica(k)) localStorage.removeItem(chaveAba);} catch (_) {}
+   await transacao('readwrite',st=>st.delete(k));
   }
-  return {ler,gravar,limpar};
+  return {ler,gravar,limpar,ultimaAba};
  };
 })();
