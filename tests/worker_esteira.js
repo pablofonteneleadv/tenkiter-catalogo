@@ -117,6 +117,12 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
     chk('Leitura e retomada compartilham revisão e assinatura de acesso da equipe',
       leitura.j.revisao && leitura.j.revisao===inicial.j.revisao && leitura.j.acesso===inicial.j.acesso && !inicial.j.eu.admin);
     const fotosAntes = await consulta(IARA,'/esteira/sincronizar?aba=fotos');
+    for (const rota of ['/esteira/fotos', '/esteira/caixa?pagina=1']) {
+      const {r,j} = await consulta(IARA,rota,true);
+      chk(rota+' fornece os metadados de retomada da aba Fotos', r.ok && j.ok &&
+        j.acesso===fotosAntes.j.acesso && j.diaRevisao===fotosAntes.j.data &&
+        !!j.revisao && j.revisao===fotosAntes.j.revisao);
+    }
     const pedido = await env.DB.prepare("INSERT INTO est_pedido(fornecedor,status) VALUES('Simulado','a_caminho')").run();
     const apos = await consulta(IARA,'/esteira/sincronizar?aba=pedidos');
     const fotosDepois = await consulta(IARA,'/esteira/sincronizar?aba=fotos');

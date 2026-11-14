@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.26 — Retomada de Fotos e Caixa na Esteira
+
+- Confirma o acesso e a revisão enquanto abre o cache do aparelho. Com a mesma revisão, recupera Fotos, Caixa, páginas abertas, seleção e posição sem baixar as listas de novo.
+- Persiste a Caixa depois de receber a resposta. Se a cópia estiver ausente ou ultrapassar o limite, usa a aba e o filtro guardados para buscar os dados atuais.
+
 ## 7.78.25 — Retomada e atualização seletiva na Esteira
 
 - Voltar ao aplicativo conserva a tela enquanto o servidor confirma o acesso e consulta a revisão da aba ativa. Sem mudanças, a tela continua no mesmo ponto.

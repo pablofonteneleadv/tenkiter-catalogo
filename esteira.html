@@ -282,7 +282,7 @@
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.72.0"></script>
-<script src="esteira-fluidez.js?v=7.78.25"></script>
+<script src="esteira-fluidez.js?v=7.78.26"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script>
 (function () {
@@ -345,8 +345,12 @@
   function salvarRetomada() {
     const sessao = sessaoAtual, aba = ABA;
     if (contextoRecuperado || app.dataset.tela!==aba || !acessoTela || diaTela !== diaLoja() || !mesmaConta(sessao) || !EU || !fluidez.pronta(aba) || !fluidez.visivel()) return;
-    const leituras = [...leiturasTela].filter(([rota, dados]) => rotaDaAba(rota, aba) && dados.ok && dados.acesso===acessoTela && dados.diaRevisao===diaTela);
-    if (!leituras.length) return;
+    const paginasCaixa = aba === 'fotos' ? caixaRenderizada.get($('caixa')) : null;
+    if (aba === 'fotos' && !paginasCaixa) return;
+    const leituras = [...leiturasTela].filter(([rota, dados]) => rotaDaAba(rota, aba) &&
+      (aba !== 'fotos' || rota === baseLeitura.fotos || paginasCaixa.includes(rota)) &&
+      dados.ok && dados.acesso === acessoTela && dados.diaRevisao === diaTela);
+    if (!leituras.length || aba === 'fotos' && leituras.length !== 1 + paginasCaixa.length) return;
     const campos = [];
     for (const campo of app.querySelectorAll('[data-retomar-campo]')) {
       const id = campo.dataset.retomarCampo;
@@ -357,25 +361,23 @@
     const selecao = [...app.querySelectorAll('.cx-sel[aria-pressed=true]')].map(x => Number(x.closest('[data-caixa]').dataset.caixa));
     const aberto = [...app.querySelectorAll('[data-produto] details[open]')].map(x => x.closest('[data-produto]').dataset.produto);
     const porPagina = aba === 'prep' ? leituras.filter(([rota]) => rota.includes('&depois=')).length + 1 : 1;
-    const caixaPrefixo = '/esteira/caixa?pagina=1' + (EU.gestorFotos ? '&ver='+CAIXA_VER : '');
-    const caixaPaginas = leituras.filter(([rota]) => rota.startsWith(caixaPrefixo+'&antes=')).length + 1;
+    const caixaPaginas = paginasCaixa?.length || 1;
     const rolagem = Math.round(window.scrollY);
     const em = Math.min(...leituras.map(([,dados])=>leituraEm.get(dados)||0));
     if(!em || Date.now()-em>=1200000)return;
     const item = { aba, em, dia:diaTela, acesso:acessoTela, admin:!!EU.admin, conferencia:conferenciaAberta?.ler(),
-      filtro:CAIXA_VER, rolagem, campos, selecao, aberto, porPagina, caixaPaginas, leituras:[] };
+      filtro:CAIXA_VER, rolagem, campos, selecao, aberto, porPagina, caixaPaginas, leituras };
     // Limita a cópia à aba autorizada. Exclui credenciais e referências a arquivos
     // locais. Os identificadores operacionais da equipe e as miniaturas permanecem.
-    const json = JSON.stringify(leituras, (k,v) =>
+    const json = JSON.stringify(item, (k,v) =>
       /^(sessao|token|pin|senha|whatsapp|telefone|fone[123]?)$/i.test(k) ||
       typeof v === 'string' && /^(blob:|data:)/.test(v) ? undefined : v);
-    // Fotos pode conter dezenas de miniaturas/itens; 450 kB descartava a cópia inteira.
-    // IndexedDB armazena JSON estruturado; manter limite conservador de 2 MB
-    // para evitar crescimento ilimitado no Android, sem salvar fotos em base64.
-    if (json.length > 2000000) return;
-    item.leituras = JSON.parse(json);
+    // Mesmo acima do limite, preserve a aba e o filtro para abrir com dados novos.
+    const cabe = new TextEncoder().encode(json).length <= 2000000;
+    const copia = cabe ? JSON.parse(json) : {aba, em, dia:diaTela, acesso:acessoTela,
+      admin:!!EU.admin, filtro:CAIXA_VER, leituras:[]};
     const vigente = acessoTela;
-    void retomada.gravar(sessao, item, () => mesmaConta(sessao) && acessoTela === vigente && ABA === aba);
+    void retomada.gravar(sessao, copia, () => mesmaConta(sessao) && acessoTela === vigente && ABA === aba);
   }
   function marcarRetomada() {
     clearTimeout(agendaSalvar);
@@ -1486,7 +1488,7 @@
     else cp.append(...r.pedidos.map((g) => cartaoPedidoFotos(g, () => telaFotos())));
     app.append(cp);
     const cx = el('div', 'card'); cx.id = 'caixa'; app.append(cx);
-    if (contextoRecuperado) await desenharCaixa(cx); else void desenharCaixa(cx).then(salvarRetomada);
+    if (contextoRecuperado) await desenharCaixa(cx); else void desenharCaixa(cx);
     void filaLocal.then((pendentes) => {
       const topoAtual = $('fotos-topo');
       if (!pendentes.length || !vista.valida() || ABA !== 'fotos' || !topoAtual || $('caixa-pendente')) return;
@@ -1502,21 +1504,27 @@
     });
     } finally {fluidez.concluir(vista);marcarRetomada();}
   }
-  const leiturasCaixa = new WeakMap();
+  const leiturasCaixa = new WeakMap(), caixaRenderizada = new WeakMap();
   async function desenharCaixa(cx, pagina) {
     const gestor = !!(EU && EU.gestorFotos), filtroAtual = CAIXA_VER, sessao = sessaoAtual;
     const tentativa = {};
     leiturasCaixa.set(cx, tentativa);
     const titulo = gestor ? 'Fotos recebidas' : 'Suas fotos enviadas';
-    if (!pagina) cx.replaceChildren(el('h2', '', titulo), el('p', 'muted', 'Carregando…'));
+    if (!pagina) {
+      caixaRenderizada.delete(cx);
+      cx.replaceChildren(el('h2', '', titulo), el('p', 'muted', 'Carregando…'));
+    }
     const rota = '/esteira/caixa?pagina=1' + (gestor ? '&ver=' + filtroAtual : '');
     const chave = rota + (pagina ? '&antes=' + pagina.cursor : '');
     let resposta = await srv(chave);
+    const chaves = pagina ? [...(caixaRenderizada.get(cx) || []), chave] : [chave];
     if (!pagina && resposta.ok && contextoRecuperado?.aba === 'fotos') {
       resposta = { ...resposta, itens:[...resposta.itens] };
       for(let n=1; n<contextoRecuperado.estado.caixaPaginas && resposta.proximo; n++){
-        const mais = contextoRecuperado.dados.get(rota+'&antes='+resposta.proximo);
+        const proxima = rota+'&antes='+resposta.proximo;
+        const mais = contextoRecuperado.dados.get(proxima);
         if (!mais?.ok) break;
+        chaves.push(proxima);
         resposta.itens.push(...mais.itens);
         resposta.proximo = mais.proximo;
       }
@@ -1544,10 +1552,11 @@
     const sel = pagina?.sel || new Set(), barra = el('div', 'cx-barra'); barra.hidden = true; const stB = linhaStatus();
     if (gestor) {
       const filtro = el('div', 'cx-filtro'); filtro.setAttribute('role', 'group'); filtro.setAttribute('aria-label', 'Quais fotos mostrar');
-      [['novas', 'Novas'], ['usadas', 'Usadas'], ['descartadas', 'Descartadas']].forEach(([v, t]) => { const b = el('button', '', t + ' (' + (r.contagem[v] || 0) + ')'); b.type = 'button'; b.dataset.ver = v; b.setAttribute('aria-pressed', String(CAIXA_VER === v)); b.onclick = () => { CAIXA_VER = v; void desenharCaixa(cx).then(salvarRetomada); }; filtro.append(b); });
+      [['novas', 'Novas'], ['usadas', 'Usadas'], ['descartadas', 'Descartadas']].forEach(([v, t]) => { const b = el('button', '', t + ' (' + (r.contagem[v] || 0) + ')'); b.type = 'button'; b.dataset.ver = v; b.setAttribute('aria-pressed', String(CAIXA_VER === v)); b.onclick = () => { CAIXA_VER = v; void desenharCaixa(cx); }; filtro.append(b); });
       cx.append(filtro);
     }
-    if (!r.itens.length) { if(cx.isConnected)marcarRetomada();cx.append(el('p', 'muted vazio-cx', gestor ? (CAIXA_VER === 'novas' ? 'Nenhuma foto nova na caixa.' : CAIXA_VER === 'usadas' ? 'Nenhuma foto usada ainda.' : 'Nenhuma foto descartada.') : 'Você ainda não enviou fotos para a caixa.')); return; }
+    caixaRenderizada.set(cx, chaves);
+    if (!r.itens.length) { if(cx.isConnected && !contextoRecuperado) salvarRetomada();cx.append(el('p', 'muted vazio-cx', gestor ? (CAIXA_VER === 'novas' ? 'Nenhuma foto nova na caixa.' : CAIXA_VER === 'usadas' ? 'Nenhuma foto usada ainda.' : 'Nenhuma foto descartada.') : 'Você ainda não enviou fotos para a caixa.')); return; }
     const todas = r.itens.map((i) => ({ url: i.url, tipo: 'foto' }));
     const lotes = new Map(); r.itens.forEach((i) => { const k = i.lote || 'x' + i.id; if (!lotes.has(k)) lotes.set(k, []); lotes.get(k).push(i); });
     const atualizarBarra = () => {
@@ -1621,13 +1630,13 @@
       });
       cx.append(acoes(mais), status);
     }
-    if(cx.isConnected && !contextoRecuperado) marcarRetomada();
     if (rolagem !== null) {
       const primeira = itensDaPagina[0];
       const alvo = primeira && cx.querySelector('[data-caixa="' + primeira.id + '"] button');
       (alvo || mais)?.focus({ preventScroll:true });
       window.scrollTo(0, rolagem);
     }
+    if (cx.isConnected && !contextoRecuperado) salvarRetomada();
   }
 
   /* ---------- v7.43.0: Pedidos ao fornecedor (Admin total), chegada com contagem cega (equipe) e aprovação ----------
@@ -2661,50 +2670,63 @@
     performance.clearMarks('esteira:hoje:util');
     medirTela('abertura', 'hoje');
     const sessao = sessaoAtual;
-    // O IndexedDB no Android pode levar mais de 120 ms ao abrir após o Chrome ser encerrado.
-    // Esperar a cópia por até 1,5 s evita descartar um cache válido e refazer a aba inteira.
-    const salvo = await Promise.race([retomada.ler(sessao), new Promise(resolve=>setTimeout(()=>resolve(null),1500))]);
+    const leitura = retomada.ler(sessao);
+    const dica = await retomada.ultimaAba(sessao);
     if (!mesmaConta(sessao)) return;
-    if (salvo && Object.hasOwn(baseLeitura,salvo.aba) && salvo.dia===diaLoja()) {
-      const r = await srvRede('/esteira/sincronizar?aba='+salvo.aba);
+    const validar = async aba => {
+      const r = await srvRede('/esteira/sincronizar?aba='+aba);
+      if (mesmaConta(sessao) && (r.exigeLogin || r.acessoRevogado)) telaLogin(r.erro);
+      return r;
+    };
+    const consulta = Object.hasOwn(baseLeitura,dica?.aba) ? validar(dica.aba) : null;
+    // Snapshots antigos continuam legíveis, inclusive antes da primeira gravação da dica.
+    const salvo = await naHora(leitura, consulta ? 5000 : 1500);
+    if (!mesmaConta(sessao)) return;
+    const local = salvo && Object.hasOwn(baseLeitura,salvo.aba) && salvo.dia===diaLoja() &&
+      Array.isArray(salvo.leituras) && (!consulta || salvo.aba===dica.aba) ? salvo : null;
+    const aba = consulta ? dica.aba : local?.aba;
+    if (aba) {
+      const r = await (consulta || validar(aba));
       if (!mesmaConta(sessao)) return;
-      if (r.exigeLogin || r.acessoRevogado) return telaLogin(r.erro);
-      if (r.ok && r.acesso && r.acesso===salvo.acesso && r.data===salvo.dia &&
-          r.eu.admin===salvo.admin && (!telaAdmin(salvo.aba) || r.eu.admin)) {
-        ABA = salvo.aba;
-        CAIXA_VER = ['novas','usadas','descartadas'].includes(salvo.filtro)?salvo.filtro:'novas';
+      if (!r.ok || !r.eu) return falha('Não consegui confirmar seu acesso à Esteira agora.', iniciarComSessao);
+      const autorizado = local && r.acesso && r.acesso===local.acesso && r.data===local.dia &&
+        r.eu.admin===local.admin;
+      const filtro = autorizado ? local.filtro : !local ? dica?.filtro : null;
+      CAIXA_VER = r.eu.gestorFotos && ['novas','usadas','descartadas'].includes(filtro) ? filtro : 'novas';
+      if (local && !autorizado) void retomada.limpar(sessao);
+      if (!telaAdmin(aba) || r.eu.admin) {
+        ABA = aba;
         confirmarAcesso(r);
-        const dados = new Map(salvo.leituras.filter(([rota])=>rotaDaAba(rota,ABA)));
+        const dados = new Map(autorizado ? local.leituras.filter(([rota, d]) =>
+          rotaDaAba(rota,aba) && d?.ok && d.acesso===r.acesso && d.diaRevisao===r.data) : []);
+        if (aba === 'fotos') {
+          const caixa = '/esteira/caixa?pagina=1' + (EU.gestorFotos ? '&ver='+CAIXA_VER : '');
+          const completa = dados.has(baseLeitura.fotos) && dados.has(caixa);
+          const mudou = !r.revisao || [...dados.values()].some(d => d.revisao !== r.revisao);
+          if (!completa || mudou && !local?.selecao?.length) return abrirAba();
+        }
+        if (!dados.size) return abrirAba();
         leiturasTela = new Map(dados);
-        for(const r of dados.values())leituraEm.set(r,salvo.em);
-        const restaurada = {aba:ABA,dados,estado:salvo};
+        for (const d of dados.values()) leituraEm.set(d,local.em);
+        const restaurada = {aba,dados,estado:local};
         contextoRecuperado = restaurada;
         try {
           await abrirAba();
-          if (mesmaConta(sessao) && ABA===salvo.aba && fluidez.pronta(ABA)) {
-            recuperarCampos(salvo);
-            medirTela('retomada',ABA);
+          if (mesmaConta(sessao) && ABA===aba && fluidez.pronta(aba)) {
+            recuperarCampos(local);
+            medirTela('retomada',aba);
           }
-        } finally { if(contextoRecuperado===restaurada)contextoRecuperado=null; }
-        if (!mesmaConta(sessao)) return;
-        ultimaLeitura.set(ABA,salvo.em);
-        salvarRetomada();
-        if (mudouRevisao(ABA,r.revisao) && !conferenciaAberta) {
-          for (const [rota] of leiturasTela) if(rotaDaAba(rota,ABA)) leiturasTela.delete(rota);
-          if(ABA==='fotos' && app.querySelector('.cx-sel[aria-pressed=true]')) {
-            fluidez.semRede(ABA,'Há fotos novas ou alteradas. Termine sua seleção para atualizar.');
+        } finally { if (contextoRecuperado===restaurada) contextoRecuperado=null; }
+        if (!mesmaConta(sessao) || ABA!==aba) return;
+        ultimaLeitura.set(aba,local.em);
+        if (mudouRevisao(aba,r.revisao) && !conferenciaAberta) {
+          for (const [rota] of leiturasTela) if (rotaDaAba(rota,aba)) leiturasTela.delete(rota);
+          fluidez.invalidar(null,rotasDaAba(aba));
+          if (aba==='fotos' && app.querySelector('.cx-sel[aria-pressed=true]')) {
+            fluidez.semRede(aba,'Há fotos novas ou alteradas. Termine sua seleção para atualizar.');
           } else await abrirAba();
-        }
+        } else salvarRetomada();
         return;
-      }
-      if(r.ok)void retomada.limpar(sessao);
-      if (r.ok && r.eu && (!telaAdmin(salvo.aba) || r.eu.admin)) {
-        ABA = salvo.aba;
-        confirmarAcesso(r);
-        return abrirAba();
-      }
-      if (!r.ok) {
-        return falha('Não consegui confirmar seu acesso à Esteira agora.', iniciarComSessao);
       }
     }
     // O menu dá a primeira informação enquanto Hoje monta a lista em paralelo.
