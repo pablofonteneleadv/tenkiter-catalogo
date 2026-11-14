@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.22 — Sessão da Esteira sem espera pelo cache de permissões
+
+- A Esteira consulta as fontes de autorização a cada requisição e deixa de gravar no cache de permissões. A resposta informa separadamente o tempo da sessão no catálogo e, quando acionado, no RH.
+
 ## 7.78.21 — Inicialização D1 da Esteira com menos consultas
 
 - A Esteira consulta as colunas existentes e aplica apenas as que faltam. O índice de Preparação é instalado pelo mesmo fluxo e falhas do banco podem ser retentadas.

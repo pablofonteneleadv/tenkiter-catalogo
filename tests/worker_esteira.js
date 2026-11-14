@@ -51,6 +51,31 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('recusa de acesso não expõe métricas', !v.r.headers.has('Server-Timing') && !v.r.headers.has('Timing-Allow-Origin'));
   chk('funcionária não abre configurações', (await A(IARA, 'GET', '/esteira/config')).r.status === 403);
 
+  { // A Esteira confirma cada requisição sem tocar no cache de autorização.
+    const cacheAnterior = globalThis.caches, fetchAnterior = globalThis.fetch;
+    const consultar = (envio = env) => w.fetch(new Request('https://ig.fake/esteira/menu', { headers: {
+      'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO, 'Origin': 'https://tenkitermodas.com.br',
+    } }), envio, ctx);
+    let toques = 0, catalogo = 0, rh = 0;
+    try {
+      globalThis.caches = { default: { async match() { toques++; throw Error('cache indisponível'); }, async put() { toques++; throw Error('cache indisponível'); } } };
+      globalThis.fetch = async (url, init) => {
+        if (String(url) === 'https://rh.fake/exec') {
+          rh++;
+          return new Response(JSON.stringify({ ok: true, usuario: { permissoes: rh === 1 ? ['gerir_acessos'] : [], acessosConfiguraveis: true } }));
+        }
+        catalogo++;
+        return fetchAnterior(url, init);
+      };
+      const direta = await consultar();
+      chk('Menu funciona sem Cache API e mede a sessão no catálogo', direta.ok && /sessao_catalogo;dur=/.test(direta.headers.get('Server-Timing')) && !/sessao_rh;dur=/.test(direta.headers.get('Server-Timing')));
+      const comRH = { ...env, RH_URL: 'https://rh.fake/exec' };
+      const permitida = await consultar(comRH), negada = await consultar(comRH);
+      chk('Fallback do RH é medido separadamente e revogação vale na requisição seguinte', permitida.ok && /sessao_rh;dur=/.test(permitida.headers.get('Server-Timing')) && negada.status === 403);
+      chk('Cada chamada consulta a origem e nenhuma lê ou grava permissões na borda', catalogo === 3 && rh === 2 && toques === 0, { catalogo, rh, toques });
+    } finally { globalThis.caches = cacheAnterior; globalThis.fetch = fetchAnterior; }
+  }
+
   // configurações (Admin total)
   const c0 = await A(PABLO, 'GET', '/esteira/config');
   chk('config padrão: 20 por pessoa, 21 dias, 4 funções', c0.j.ok && c0.j.config.porPessoa === 20 && c0.j.config.diasSemRepetir === 21 && c0.j.config.funcoes.join() === 'Limpeza,Caixa,Fotos,Atendimento online', c0.j.config);
@@ -66,7 +91,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('menu da equipe legada exige vínculo e não consulta o catálogo', menuEquipe.j.ok && menuEquipe.j.eu.nome === 'Iara' && menuEquipe.j.eu.admin === false && listas === antesCatalogoMenu, menuEquipe.j);
   chk('sessão legada sem vínculo não abre o menu', (await A(VISITA, 'GET', '/esteira/menu')).r.status === 403);
   const menuAdmin = await A(PABLO, 'GET', '/esteira/menu');
-  chk('menu do Admin vem da sessão e não inicializa a Esteira', menuAdmin.j.ok && menuAdmin.j.eu.admin && !/(inicializacao|catalogo|equipe);dur=/.test(menuAdmin.r.headers.get('Server-Timing') || ''), menuAdmin.j);
+  chk('menu do Admin vem da sessão e não inicializa a Esteira', menuAdmin.j.ok && menuAdmin.j.eu.admin && !/(?:^|, )(inicializacao|catalogo|equipe);dur=/.test(menuAdmin.r.headers.get('Server-Timing') || ''), menuAdmin.j);
   const antesMenu = usuarios[VISITA];
   usuarios[VISITA] = { nome:'Pessoa', permissoes:['esteira'], acessosConfiguraveis:true };
   chk('menu configurável vem da permissão Esteira', (await A(VISITA, 'GET', '/esteira/menu')).j.eu?.admin === false);
@@ -96,7 +121,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const temposHoje = h1.r.headers.get('Server-Timing') || '';
   chk('Hoje informa somente duração de etapas para a origem do site', h1.r.headers.get('Timing-Allow-Origin') === 'https://tenkitermodas.com.br' && ['sessao','inicializacao','equipe','config','gerar','catalogo','d1','tarefas','total'].every(nome => temposHoje.includes(nome + ';dur=')) && /^no-store$/.test(h1.r.headers.get('Cache-Control') || ''), temposHoje);
   const caixaMedida = await A(PABLO, 'GET', '/esteira/caixa');
-  chk('Caixa mantém autorização e pula configuração e catálogo', caixaMedida.j.ok && /equipe;dur=/.test(caixaMedida.r.headers.get('Server-Timing') || '') && !/(config|catalogo);dur=/.test(caixaMedida.r.headers.get('Server-Timing') || ''));
+  chk('Caixa mantém autorização e pula configuração e catálogo', caixaMedida.j.ok && /equipe;dur=/.test(caixaMedida.r.headers.get('Server-Timing') || '') && !/(?:^|, )(config|catalogo);dur=/.test(caixaMedida.r.headers.get('Server-Timing') || ''));
   const origemEstranha = await w.fetch(new Request('https://ig.fake/esteira/caixa', {headers: {'Origin': 'https://externo.fake', 'X-TK-Whats': PABLO, 'X-TK-Sessao': 'tk3.sessao-' + PABLO}}), env, ctx);
   chk('outra origem não recebe métricas da Esteira', origemEstranha.ok && !origemEstranha.headers.has('Server-Timing') && !origemEstranha.headers.has('Timing-Allow-Origin'));
   chk('Iara recebe 20 peças', h1.j.ok && h1.j.total === 20 && h1.j.lista.length === 20, { t: h1.j.total, e: h1.j.erro });

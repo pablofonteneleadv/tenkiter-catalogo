@@ -274,37 +274,43 @@ async function cfgSet(env, k, v) { if (v === null || v === undefined) await env.
 const PERMS_MEMO_ = new WeakMap();
 const RH_TOKEN_ = 'tenkiter2026';   // token compartilhado já público no site (curriculos.html); só identifica o site no Apps Script do RH
 const MSG_ROTINA_POST_ = new Set(['/msg/enviar', '/msg/lida', '/msg/encerrar', '/msg/dono', '/msg/presenca', '/msg/iniciar', '/msg/rotular', '/msg/notas', '/msg/ficha', '/msg/pessoa', '/msg/contexto', '/msg/anexo', '/msg/agendar', '/msg/acompanhamento']);
-function permissoes(env, req) {
+function permissoes(env, req, medir) {
   let m = PERMS_MEMO_.get(req);
-  if (!m) { m = permissoesConferir_(env, req); PERMS_MEMO_.set(req, m); }
+  if (!m) { m = permissoesConferir_(env, req, medir); PERMS_MEMO_.set(req, m); }
   return m;
 }
-async function permissoesConferir_(env, req) {
+async function permissoesConferir_(env, req, medir = (_, executar) => executar()) {
   const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
   const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
   if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
-  const chave = new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
   let caminho = ''; try { caminho = new URL(req.url).pathname; } catch (e) { /* sem caminho: confere na hora */ }
-  const podeCache = !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
-  const cache = caches.default, g = podeCache ? await cache.match(chave) : null;
+  const esteira = caminho.startsWith('/esteira/');
+  const chave = esteira ? null : new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
+  const podeCache = !esteira && !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
+  const cache = chave ? caches.default : null, g = podeCache ? await cache.match(chave) : null;
   if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; v.permissoes.acessosConfiguraveis = v.configuraveis === true;v.permissoes.msgModelos=v.msgModelos||{}; return v.permissoes; }
   let lista = null, perfis = [], nome = '', configuraveis = false, msgModelos = {};
   try {
     // Backend indisponível: falha fechada (503), sem confundir com sessão inválida (401).
-    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
-    const j = await r.json();
+    const j = await medir('sessao_catalogo', async () => {
+      const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
+      return r.json();
+    });
     if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { lista = j.usuario.permissoes; configuraveis = j.usuario.acessosConfiguraveis === true; msgModelos=j.usuario.msgModelos||{}; nome = String(j.usuario.nome || j.usuario.name || '').trim().slice(0,120); perfis = Array.isArray(j.usuario.perfis) ? j.usuario.perfis : String(j.usuario.perfil || '').split(','); }
     /* v7.77.1: o Apps Script do catálogo publicado pode ser mais antigo que o RH (sem Acessos configuráveis: não devolve Esteira, Postador, Fotos com IA nem Mensageiro).
      * Nesse caso a sessão é conferida também no RH (mesma sessão compartilhada), que é a fonte oficial dos acessos. Falha do RH não derruba: fica o resultado do catálogo. */
     if (lista && !configuraveis && env.RH_URL) {
       try {
-        const r2 = await fetch(env.RH_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ token: RH_TOKEN_, action: 'sessao', whatsapp: whats, sessao: sessao }) });
-        const j2 = await r2.json(), u2 = j2 && j2.ok && j2.usuario;
+        const j2 = await medir('sessao_rh', async () => {
+          const r = await fetch(env.RH_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ token: RH_TOKEN_, action: 'sessao', whatsapp: whats, sessao: sessao }) });
+          return r.json();
+        });
+        const u2 = j2 && j2.ok && j2.usuario;
         if (u2 && Array.isArray(u2.permissoes) && u2.acessosConfiguraveis === true) { lista = u2.permissoes; configuraveis = true; msgModelos = u2.msgModelos || {}; nome = String(u2.nome || u2.name || nome || '').trim().slice(0,120); perfis = Array.isArray(u2.perfis) ? u2.perfis : String(u2.perfil || '').split(','); }
       } catch (e) { /* mantém a resposta do catálogo */ }
     }
   } catch (e) { return 'indisponivel'; }         // backend fora do ar != "faca login"
-  if (lista) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis, nome, configuraveis, msgModelos }), { headers: { 'Cache-Control': 'max-age=120' } }));
+  if (lista && chave) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis, nome, configuraveis, msgModelos }), { headers: { 'Cache-Control': 'max-age=120' } }));
   if (lista) { lista.msgPerfis = perfis; lista.msgNome = nome; lista.acessosConfiguraveis = configuraveis; lista.msgModelos=msgModelos; }
   return lista || 'sem_sessao';                  // sessao que o backend nao reconhece
 }
@@ -6601,7 +6607,7 @@ export default {
       if (resposta.status >= 500) await anotarFalha_(env, url.pathname, resposta.status);
       return resposta;
     } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
-    const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req)) : await permissoes(env, req);
+    const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req, medirEsteira)) : await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
