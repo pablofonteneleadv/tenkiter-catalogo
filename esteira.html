@@ -2684,15 +2684,32 @@
       if (mesmaConta(sessao) && (r.exigeLogin || r.acessoRevogado)) telaLogin(r.erro);
       return r;
     };
-    const consulta = Object.hasOwn(baseLeitura,dica?.aba) ? validar(dica.aba) : null;
+    const abaIndicada = Object.hasOwn(baseLeitura,dica?.aba) ? dica.aba : null;
     // Snapshots antigos continuam legíveis, inclusive antes da primeira gravação da dica.
-    const salvo = await naHora(leitura, consulta ? 5000 : 1500);
-    if (!mesmaConta(sessao)) return;
+    const leituraComPrazo = naHora(leitura, abaIndicada ? 5000 : 1500);
+    let validacao, versaoNavegavel;
+    if (abaIndicada) {
+      validacao = await validar(abaIndicada);
+      if (!mesmaConta(sessao)) return;
+      if (!validacao.ok || !validacao.eu) return falha('Não consegui confirmar seu acesso à Esteira agora.', iniciarComSessao);
+      if (!telaAdmin(abaIndicada) || validacao.eu.admin) {
+        ABA = abaIndicada;
+        app.dataset.tela = abaIndicada;
+        app.replaceChildren(el('div', 'card', 'Carregando a aba…'));
+        if (abaIndicada === 'fotos' && validacao.eu.gestorFotos && ['novas','usadas','descartadas'].includes(dica.filtro)) {
+          CAIXA_VER = dica.filtro;
+        }
+        confirmarAcesso(validacao);
+        versaoNavegavel = versaoTela;
+      }
+    }
+    const salvo = await leituraComPrazo;
+    if (!mesmaConta(sessao) || versaoNavegavel !== undefined && versaoNavegavel !== versaoTela) return;
     const local = salvo && Object.hasOwn(baseLeitura,salvo.aba) && salvo.dia===diaLoja() &&
-      Array.isArray(salvo.leituras) && (!consulta || salvo.aba===dica.aba) ? salvo : null;
-    const aba = consulta ? dica.aba : local?.aba;
+      Array.isArray(salvo.leituras) && (!abaIndicada || salvo.aba===abaIndicada) ? salvo : null;
+    const aba = abaIndicada || local?.aba;
     if (aba) {
-      const r = await (consulta || validar(aba));
+      const r = validacao || await validar(aba);
       if (!mesmaConta(sessao)) return;
       if (!r.ok || !r.eu) return falha('Não consegui confirmar seu acesso à Esteira agora.', iniciarComSessao);
       const autorizado = local && r.acesso && r.acesso===local.acesso && r.data===local.dia &&
@@ -2702,7 +2719,7 @@
       if (local && !autorizado) void retomada.limpar(sessao);
       if (!telaAdmin(aba) || r.eu.admin) {
         ABA = aba;
-        confirmarAcesso(r);
+        if (versaoNavegavel === undefined) confirmarAcesso(r);
         const dados = new Map(autorizado ? local.leituras.filter(([rota, d]) =>
           rotaDaAba(rota,aba) && d?.ok && d.acesso===r.acesso && d.diaRevisao===r.data) : []);
         if (aba === 'fotos') {

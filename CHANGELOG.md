@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.31 — Navegação durante a retomada da Esteira
+
+- Depois de confirmar o acesso, a Esteira libera as abas enquanto o cache do aparelho abre. A tela recuperada respeita a aba que a pessoa escolher durante a espera.
+
 ## 7.78.30 — Inicialização da Esteira com fontes em segundo plano
 
 - A Esteira abre e inicia as consultas mesmo enquanto Inter e Poppins carregam. Usa as fontes do aparelho durante a espera e aplica as fontes da loja quando chegam.
