@@ -369,7 +369,10 @@
     const json = JSON.stringify(leituras, (k,v) =>
       /^(sessao|token|pin|senha|whatsapp|telefone|fone[123]?)$/i.test(k) ||
       typeof v === 'string' && /^(blob:|data:)/.test(v) ? undefined : v);
-    if (json.length > 450000) return;
+    // Fotos pode conter dezenas de miniaturas/itens; 450 kB descartava a cópia inteira.
+    // IndexedDB armazena JSON estruturado; manter limite conservador de 2 MB
+    // para evitar crescimento ilimitado no Android, sem salvar fotos em base64.
+    if (json.length > 2000000) return;
     item.leituras = JSON.parse(json);
     const vigente = acessoTela;
     void retomada.gravar(sessao, item, () => mesmaConta(sessao) && acessoTela === vigente && ABA === aba);
