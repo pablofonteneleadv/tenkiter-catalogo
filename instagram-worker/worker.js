@@ -6582,9 +6582,15 @@ export default {
       }
       const resposta = resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
       if (temposEsteira && resposta.ok && c?.ok) {
+        temposEsteira.set('total', performance.now() - inicioEsteira);
         resposta.headers.set('Timing-Allow-Origin', h.get('Access-Control-Allow-Origin'));
-        resposta.headers.set('Server-Timing', [...temposEsteira, ['total', performance.now() - inicioEsteira]]
+        resposta.headers.set('Server-Timing', [...temposEsteira]
           .map(([etapa, ms]) => etapa + ';dur=' + ms.toFixed(1)).join(', '));
+        // A medição em produção precisa de durações, sem identidade ou conteúdo.
+        if (url.pathname === '/esteira/hoje') {
+          try { console.log({ evento: 'tk_esteira_hoje_tempo', ...Object.fromEntries([...temposEsteira].map(([etapa, ms]) => [etapa, Math.round(ms)])) }); }
+          catch (_) { /* telemetria não interfere na resposta */ }
+        }
       }
       return resposta;
     };
@@ -8212,6 +8218,18 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   // A marcação da caixa pode continuar quando a lista RH estiver indisponível; demais rotas continuam consultando RH.
   const caixaConfirmacao=perms.acessosConfiguraveis&&gestorFotos&&p==='/esteira/caixa/usar';
   const bancoPronto = medir('inicializacao', async () => { await iniciar(env); await estIniciar_(env); });
+  let config, catalogo;
+  const lerConfig = () => config ||= medir('config', () => estCfg_(env));
+  const lerCatalogo = () => catalogo ||= medir('catalogo', () => estCatalogo_(env));
+  if (p === '/esteira/hoje' && req.method === 'GET' && (admin || perms.acessosConfiguraveis)) {
+    // Uma atribuição existente já precisa do catálogo público. Antecipe a leitura
+    // enquanto o RH carrega. A consulta definitiva segue depois da autorização.
+    void bancoPronto.then(async () => {
+      const existente = await medir('atribuicao_existente', () =>
+        env.DB.prepare('SELECT 1 FROM est_lista WHERE data=? AND whats=? LIMIT 1').bind(data, eu).first());
+      if (existente) await lerCatalogo();
+    }).catch(() => {});
+  }
   const lerEquipe = () => medir('equipe', () => estEquipe_(env, req, perms));
   // O RH remoto independe do D1. A equipe legada mora no D1 e aguarda o esquema.
   const [, equipe, marcas] = await Promise.all([
@@ -8223,9 +8241,6 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
     const responder = J;
     J = (dados, status) => responder(dados?.ok ? {...dados,...marcas} : dados, status);
   }
-  let config, catalogo;
-  const lerConfig = () => config ||= medir('config', () => estCfg_(env));
-  const lerCatalogo = () => catalogo ||= medir('catalogo', () => estCatalogo_(env));
   let membro = equipe.find((e) => estFone_(e.whats) === eu) || null;
   /* v7.76.0: quem tem o acesso "Esteira" em RH > Acessos participa. Se a lista de equipe do RH não trouxe a pessoa (conta antiga, ajuste individual, linha repetida…),
    * ela não fica barrada nem fora do rodízio: entra nesta consulta como membro padrão (confere e rodízio; aceitar só se o RH marcar). */
