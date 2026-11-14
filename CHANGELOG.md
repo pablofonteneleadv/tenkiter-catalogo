@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.28 — Consulta antecipada na aba Hoje
+
+- Quando o dia já tem peças atribuídas, Hoje começa a buscar o catálogo enquanto consulta a equipe. As permissões continuam sendo confirmadas antes de entregar a lista.
+- A telemetria de Hoje registra apenas a duração das etapas para localizar a origem da espera.
+
 ## 7.78.27 — Fotos e Caixa carregam em paralelo
 
 - A primeira entrada em Fotos busca pedidos e Caixa ao mesmo tempo. O filtro, a paginação e a retomada local continuam disponíveis.

@@ -182,6 +182,73 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   chk('abrir de novo não muda a lista do dia', h1b.j.lista.map((x) => x.id).join() === h1.j.lista.map((x) => x.id).join());
   chk('catálogo vem do cache (uma consulta só)', listas === 1, listas);
 
+  { // O catálogo público pode avançar enquanto a equipe do RH está pendente.
+    const fetchAnterior = globalThis.fetch, logAnterior = console.log, eventos = [];
+    let permitir = true, leuCatalogo = 0, resolveuHoje = false, consulta;
+    let entrouEquipe, liberarEquipe;
+    const equipeIniciada = new Promise(ok => { entrouEquipe = ok; });
+    const equipeRetida = new Promise(ok => { liberarEquipe = ok; });
+    let iniciouCatalogo, liberarCatalogo;
+    const catalogoIniciado = new Promise(ok => { iniciouCatalogo = ok; });
+    const catalogoRetido = new Promise(ok => { liberarCatalogo = ok; });
+    const envTeste = { ...env, RH_URL: 'https://rh.fake/exec', CACHE: {
+      ...KV,
+      async get(chave) {
+        if (chave === 'est:catalogo:v1') {
+          leuCatalogo++;
+          iniciouCatalogo();
+          await catalogoRetido;
+        }
+        return KV.get(chave);
+      },
+    } };
+    const hoje = () => w.fetch(new Request('https://ig.fake/esteira/hoje', { headers: {
+      'X-TK-Whats': IARA, 'X-TK-Sessao': 'tk3.sessao-' + IARA,
+      'X-TK-Esteira-Revisao': '1', 'Origin': 'https://tenkitermodas.com.br',
+    } }), envTeste, ctx);
+    const esperar = async promessa => {
+      let timer;
+      try { return await Promise.race([promessa.then(() => true), new Promise(ok => { timer = setTimeout(() => ok(false), 250); })]); }
+      finally { clearTimeout(timer); }
+    };
+    try {
+      console.log = (...args) => args[0]?.evento === 'tk_esteira_hoje_tempo' ? eventos.push(args[0]) : logAnterior(...args);
+      globalThis.fetch = async (url, init) => {
+        if (String(url) === env.API_URL && JSON.parse(init?.body || '{}').action === 'sessao') {
+          return new Response(JSON.stringify({ ok: true, usuario: { nome: 'Iara', acessosConfiguraveis: true, permissoes: permitir ? ['esteira'] : [] } }));
+        }
+        if (String(url) === envTeste.RH_URL && JSON.parse(init.body).action === 'esteira_equipe') {
+          entrouEquipe();
+          await equipeRetida;
+          const equipe = [IARA, CLARICE].map(whats => ({ whats, nome: 'Equipe de teste', ativo: 1, rodizio: 1, confere: 1 }));
+          return new Response(JSON.stringify({ ok: true, fonte: 'acessos', equipe }));
+        }
+        return fetchAnterior(url, init);
+      };
+      consulta = hoje().then(r => { resolveuHoje = true; return r; });
+      const emParalelo = await esperar(Promise.all([equipeIniciada, catalogoIniciado]));
+      chk('Hoje com atribuição inicia catálogo antes de receber equipe, sem liberar dados', emParalelo && !resolveuHoje);
+      liberarEquipe();
+      liberarCatalogo();
+      const r = await consulta, j = await r.json();
+      chk('A leitura antecipada é reutilizada, com lista e revisão intactas', r.ok && leuCatalogo === 1 &&
+        j.lista?.map(x => x.id).join() === h1.j.lista.map(x => x.id).join() && !!j.revisao);
+      permitir = false;
+      const negada = await hoje();
+      chk('Acesso revogado interrompe antes da leitura antecipada', negada.status === 403 && leuCatalogo === 1);
+      const { evento, ...tempos } = eventos[0] || {};
+      chk('Telemetria de Hoje registra somente durações autorizadas, sem dados da pessoa', eventos.length === 1 &&
+        evento === 'tk_esteira_hoje_tempo' && Number.isInteger(tempos.total) && Number.isInteger(tempos.atribuicao_existente) &&
+        Object.values(tempos).every(x => Number.isInteger(x) && x >= 0));
+    } finally {
+      liberarEquipe();
+      liberarCatalogo();
+      await consulta?.catch(() => {});
+      globalThis.fetch = fetchAnterior;
+      console.log = logAnterior;
+    }
+  }
+
   const dataTeste = '2040-01-01';
   const grupoTeste = [{ whats:IARA, confere:1 }, { whats:CLARICE, confere:1 }];
   const cfgTeste = { ...c0.j.config, porPessoa:1 };
