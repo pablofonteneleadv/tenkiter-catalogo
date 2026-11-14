@@ -27,11 +27,25 @@ fs.writeFileSync(tmp,src+'\nexport {classeFalhaHTTP_,rotaErroHTTP_};\n');
   chk('Rota mobile com path dinamico e anonima',rota('/msg/mobile/'+telefone)==='/msg/mobile');
   chk('Rota de caixa com caminho e anonima',rota('/esteira/caixa/'+telefone)==='/esteira/caixa');
   chk('Conferencia e hoje identificaveis',rota('/esteira/conferir')==='/esteira/conferir'&&rota('/esteira/hoje')==='/esteira/hoje');
+  for(const aba of ['menu','preparacao','fotos','pedidos','painel','config']){
+    const base='/esteira/'+aba;
+    chk('Falha de '+aba+' agrupa o caminho sem expor o sufixo',rota(base+'/'+telefone)===base);
+  }
   chk('Caminho de ficha com telefone e anonimo',rota('/msg/pessoa/'+telefone)==='/outras');
   chk('Prefixo parecido nao vira rota conhecida',rota('/msg/acessos')==='/outras');
   const log=src.slice(src.indexOf("evento:'tk_http5xx'"),src.indexOf("evento:'tk_http5xx'")+170);
   chk('Logger de erros integrado no adaptador de respostas',src.includes('if (Number(s) >= 500)')&&log.includes('rotaErroHTTP_(url.pathname)'));
   chk('Log tem so categoria, status e rota, nao escreve mensagem bruta',log.includes('classeFalhaHTTP_(c?.erro)')&&!log.includes('req.headers')&&!log.includes('req.url'));
+  const origem='https://tenkitermodas.com.br',consoleError=console.error,fetchAntes=globalThis.fetch,cacheAntes=globalThis.caches,logs=[];
+  try{
+    console.error=(s)=>logs.push(JSON.parse(s));
+    globalThis.fetch=async()=>new Response(JSON.stringify({ok:true,usuario:{permissoes:['gerir_acessos']}}));
+    globalThis.caches={default:{async put(){}}};
+    const env={API_URL:'https://catalogo.fake/exec',DB:{prepare(){throw Error('D1_ERROR: '+segredo+' '+telefone)}}};
+    const r=await W.default.fetch(new Request('https://worker.fake/esteira/preparacao?depois='+telefone,{headers:{Origin:origem,'X-TK-Whats':telefone,'X-TK-Sessao':'tk3.simulada'}}),env,{});
+    chk('Erro D1 em Preparação preserva a resposta genérica',r.status===500&&(await r.json()).erro.startsWith('A Esteira não respondeu'));
+    chk('Erro D1 em Preparação registra somente rota, status e categoria',JSON.stringify(logs)===JSON.stringify([{evento:'tk_http5xx',rota:'/esteira/preparacao',codigo:500,tipo:'banco'}]));
+  }finally{globalThis.fetch=fetchAntes;globalThis.caches=cacheAntes;console.error=consoleError;}
   console.log('PASS 5xx seguro:',passed,'verificacoes');
  }catch(e){console.error('FAIL 5xx seguro:',e);process.exitCode=1;}
  finally{fs.rmSync(tmp,{force:true});}
