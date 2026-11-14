@@ -7,7 +7,7 @@ let ok = 0; const falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 function d1() {
   const db = new DatabaseSync(':memory:');
-  const prep = (sql) => { const S = () => db.prepare(sql); let args = []; const o = { bind(...a) { args = a; return o; }, async all() { return { results: S().all(...args).map((x) => ({ ...x })) }; }, async first() { const r = S().get(...args); return r ? { ...r } : null; }, async run() { const r = S().run(...args); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: r.changes } }; }, _run() { const r = S().run(...args); return { meta: { changes: r.changes } }; } }; return o; };
+  const prep = (sql) => { const S = () => db.prepare(sql); let args = []; const o = { bind(...a) { args = a; return o; }, async all() { return { results: S().all(...args).map((x) => ({ ...x })) }; }, async first() { const r = S().get(...args); return r ? { ...r } : null; }, async run() { const r = S().run(...args); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: r.changes } }; }, _run() { const s = S(); if (s.columns().length) return { results: s.all(...args).map(x => ({ ...x })) }; const r = s.run(...args); return { meta: { changes: r.changes } }; } }; return o; };
   return { prepare: prep, async batch(l) { db.exec('BEGIN'); const out = []; try { for (const st of l) out.push(st._run()); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } return out; } };
 }
 const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
@@ -749,6 +749,36 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
       globalThis.fetch = fetchOriginal;
       usuarios[PABLO] = usuarioOriginal;
     }
+  }
+  { // Páginas de Preparação usam dados SQLite isolados e mantêm o contrato anterior.
+    const DB = d1(), teste = { ...env, DB };
+    usuarios[PABLO] = { nome: 'Admin Teste', permissoes: ['gerir_acessos'] };
+    usuarios[VISITA] = { nome: 'Acesso revogado', permissoes: [], acessosConfiguraveis: true };
+    const ler = async (qs = '', quem = PABLO) => {
+      const r = await w.fetch(new Request('https://ig.fake/esteira/preparacao' + qs, { headers: {
+        'X-TK-Whats': quem, 'X-TK-Sessao': 'tk3.sessao-' + quem, 'Origin': 'https://tenkitermodas.com.br',
+      } }), teste, ctx);
+      return { status: r.status, j: await r.json() };
+    };
+    const rota = '?pagina=1', pagina = c => ler(rota + '&depois=' + encodeURIComponent(c));
+    const vazio = await ler(rota);
+    chk('Preparação paginada vazia confirma fim e nenhuma exclusão', vazio.j.ok && !vazio.j.produtos.length && vazio.j.proximo === null && vazio.j.emPreparacao.length === 0, vazio);
+    for (let i = 0; i < 58; i++) {
+      const id = i === 23 ? 'PP-23-é' : 'PP-' + String(i).padStart(2, '0');
+      await DB.prepare("INSERT INTO est_produto(id,etapa,preparado_em,ref_nome) VALUES(?,'preparacao',?,?)").bind(id, i < 28 ? null : i < 36 ? '' : '2026-11-13', 'Simulada ' + id).run();
+      await DB.prepare("INSERT INTO est_tarefa(produto,titulo,status,origem) VALUES(?,'Conferir cor','pendente','preparacao'),(?,'Conferir cor','feita','preparacao'),(?,'Fotografar','pendente','pedido_fotos')").bind(id, id, id).run();
+    }
+    await DB.prepare("INSERT INTO est_tarefa(produto,titulo) VALUES('PP-FORA','Tarefa avulsa')").run();
+    const anterior = (await ler()).j;
+    const p1 = (await ler(rota)).j, p2 = (await pagina(p1.proximo)).j, p3 = (await pagina(p2.proximo)).j;
+    chk('Preparação entrega 24, 24 e 10, inclusive entre data nula, vazia e datas iguais', [p1.produtos?.length, p2.produtos?.length, p3.produtos?.length, p3.proximo].join('|') === '24|24|10|' && p3.proximo === null);
+    const todos = [p1, p2, p3].flatMap(p => p.produtos);
+    chk('Páginas conservam ordem, progresso, fotos e tarefas do contrato anterior', JSON.stringify(todos) === JSON.stringify(anterior.produtos) && p1.fotosPedidas === 58 && todos.every(x => x.tarefas.length === 1 && x.feitas === 1));
+    chk('Exclusões incluem os itens ainda fora da tela e tarefas avulsas só aparecem na primeira página', p1.emPreparacao?.length === 58 && p1.emPreparacao.includes('PP-57') && p2.emPreparacao === undefined && p1.outras.length === 1 && JSON.stringify(p1.outras) === JSON.stringify(anterior.outras) && !p2.outras.length && !p3.outras.length);
+    const saiu = p1.produtos.at(-1).id;
+    await DB.prepare("UPDATE est_produto SET etapa='aceito' WHERE id=?").bind(saiu).run();
+    chk('Cursor continua válido se a última peça da primeira página sair da Preparação', JSON.stringify((await pagina(p1.proximo)).j.produtos) === JSON.stringify(p2.produtos));
+    chk('Cursor inválido retorna 400 e usuário revogado não recebe a página', (await pagina('inválido')).status === 400 && (await ler(rota, VISITA)).status === 403);
   }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

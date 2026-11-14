@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.18 — Preparação em páginas na Esteira
+
+- A aba monta os primeiros 24 produtos e carrega os próximos sob demanda. Tarefas avulsas e o resumo de fotos continuam na primeira leitura.
+- A busca para colocar produtos em preparação considera também as peças das próximas páginas.
+
 ## 7.78.17 — Catálogo sob demanda na Preparação da Esteira
 
 - A busca para colocar um produto em preparação e as fichas de cadastro fechadas passam a carregar quando abertas. A ficha continua abrindo automaticamente quando há conferência de cadastro pendente.

@@ -776,22 +776,65 @@
       return g;
     });
   }
+  const paginasPreparacao = new WeakMap();
+  const rotaPreparacao = '/esteira/preparacao?pagina=1';
+  const lerPaginaPrep = cursor => srv(rotaPreparacao + '&depois=' + encodeURIComponent(cursor));
   async function telaPrep() {
     versaoTela++;
     const vista=fluidez.preparar('prep','Carregando a preparação…'),app=vista.app;
     const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
     try {
 
-    const r = await srv('/esteira/preparacao'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
+    const r = await srv(rotaPreparacao); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
+    const produtos = new Map(r.produtos.map(pr => [pr.id, pr]));
+    let cursor = r.proximo, paginas = 1;
+    const acrescentar = pagina => {
+      const novos = pagina.produtos.filter(pr => !produtos.has(pr.id));
+      novos.forEach(pr => produtos.set(pr.id, pr));
+      cursor = pagina.proximo;
+      paginas++;
+      return novos;
+    };
+    while (cursor && paginas < (paginasPreparacao.get(vista.v) || 1)) {
+      const pagina = await lerPaginaPrep(cursor);
+      if (!vista.valida()) return;
+      if (pagina.exigeLogin) return telaLogin('');
+      if (!pagina.ok) return falha(pagina.erro, telaPrep);
+      acrescentar(pagina);
+    }
+    paginasPreparacao.set(vista.v, paginas);
     app.replaceChildren();
     const topo = el('div', 'card'); topo.id = 'prep-topo'; topo.append(el('h2', '', 'Preparação'));   // v7.52.0: sem o bloco de instruções (pedido do Pablo)
     if (r.podeAceitar) topo.append(...blocoColocar(r));
     app.append(topo);
     if (!r.produtos.length) app.append(el('div', 'card vazio', 'Nenhum produto em preparação agora.'));
-    r.produtos.forEach((pr) => app.append(cartaoPrep(pr, r)));
+    produtos.forEach(pr => app.append(cartaoPrep(pr, r)));
+    if (cursor) {
+      const rodape = el('div', 'card'); rodape.id = 'prep-paginacao'; rodape.dataset.revisao = String(vista.seq);
+      const st = linhaStatus();
+      const mais = bt('Carregar mais produtos', 'leve', async () => {
+        if (mais.getAttribute('aria-disabled') === 'true') return;
+        mais.setAttribute('aria-disabled', 'true');
+        st.diga('Carregando mais produtos…');
+        const pagina = await lerPaginaPrep(cursor);
+        mais.removeAttribute('aria-disabled');
+        if (!rodape.isConnected) return;
+        if (pagina.exigeLogin) return telaLogin('');
+        if (!pagina.ok) return st.diga(pagina.erro || 'Não consegui carregar mais produtos. Tente de novo.', 'erro');
+        const cartoes = acrescentar(pagina).map(pr => cartaoPrep(pr, r));
+        rodape.before(...cartoes);
+        paginasPreparacao.set(vista.v, paginas);
+        const primeiro = cartoes[0]?.querySelector('h3');
+        if (primeiro && document.activeElement === mais) { primeiro.tabIndex = -1; primeiro.focus({ preventScroll: true }); }
+        if (!cursor) mais.remove();
+        st.diga(cursor ? cartoes.length + ' produtos carregados.' : 'Todos os produtos em preparação foram carregados.');
+      });
+      rodape.append(mais, st);
+      app.append(rodape);
+    }
     if (r.outras.length) { const c = el('div', 'card'); c.id = 'outras-tarefas'; c.append(el('h2', '', 'Outras tarefas'), ...tarefasPorPeca(r.outras, telaPrep)); app.append(c); }
-    if (r.fotosPedidas) { const c = el('div', 'card'); c.append(el('p', 'muted', r.fotosPedidas === 1 ? '1 produto com fotos pedidas.' : r.fotosPedidas + ' produtos com fotos pedidas.'), bt('Ver na aba Fotos', 'leve', () => { ABA = 'fotos'; desenharAbas(); abrirAba(); })); app.append(c); }
+    if (r.fotosPedidas) { const c = el('div', 'card'); c.id = 'prep-fotos-pedidas'; c.append(el('p', 'muted', r.fotosPedidas === 1 ? '1 produto com fotos pedidas.' : r.fotosPedidas + ' produtos com fotos pedidas.'), bt('Ver na aba Fotos', 'leve', () => { ABA = 'fotos'; desenharAbas(); abrirAba(); })); app.append(c); }
     } finally {fluidez.concluir(vista);}
   }
   const SITUACOES = { ativas: 'Ativas (no site)', esgotadas: 'Esgotadas', arquivadas: 'Arquivadas', todas: 'Todas as situações' };
@@ -851,7 +894,7 @@
   function blocoColocar(r) {
     const b = el('button', 'bt prim', 'Colocar produto em preparação'); b.type = 'button'; b.setAttribute('aria-expanded', 'false');
     const caixa = el('div'); caixa.hidden = true; caixa.style.cssText = 'display:grid;gap:8px';
-    const ja = new Set(r.produtos.map((x) => x.id));
+    const ja = new Set(r.emPreparacao || r.produtos.map(x => x.id));
     let busca;
     const criarBusca = () => buscaCatalogo({ id: 'prep-busca', rotulo: 'Qual produto vai ser preparado?', padrao: 'ativas', fora: (x) => ja.has(String(x.ID)), linha: (x, st) => {
       const it = el('button', 'peca'); it.type = 'button';
@@ -876,7 +919,7 @@
     return [b, caixa];
   }
   function cartaoPrep(pr, r) {
-    const c = el('div', 'card'); c.dataset.produto = pr.id;
+    const c = el('div', 'card'); c.dataset.produto = pr.id; c.id = 'prep-produto-' + pr.id;
     const topo = el('div', 'prep-topo'), t = el('div', 't');
     t.append(el('h3', '', pr.nome), el('small', 'muted', [pr.codigo, pr.noSite ? 'já aparece no site' : 'fora do site até ser aceita', pr.preparado_em ? 'desde ' + dataBR(pr.preparado_em) : ''].filter(Boolean).join(' · ')));
     topo.append(fotoPeca(pr.id, pr.foto, pr.nome, 'media', pr.noSite), t);
