@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.30 — Inicialização da Esteira com fontes em segundo plano
+
+- A Esteira abre e inicia as consultas mesmo enquanto Inter e Poppins carregam. Usa as fontes do aparelho durante a espera e aplica as fontes da loja quando chegam.
+
 ## 7.78.29 — Cache após a retomada da Esteira
 
 - A cópia recém-validada passa a servir também para a troca de abas logo após reabrir a Esteira. A validade original das leituras e a atualização manual continuam funcionando.
