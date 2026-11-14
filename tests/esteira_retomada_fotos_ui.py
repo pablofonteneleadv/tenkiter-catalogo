@@ -74,19 +74,26 @@ def contexto(chromium, perfil, largura, altura, estado, atraso=0):
         if caminho == "menu":
             return rota.fulfill(json=sync)
         if caminho == "fotos":
-            pedidos = fotos["pedidos"]
-            if estado["rev"] == "r2":
-                pedidos[0]["nome"] = "Vestido atualizado"
-            return rota.fulfill(json={**dados, "eu": eu, "pedidos": pedidos,
-                                      "caixaNovas": len(fotos["caixa"]),
-                                      "volumeTeste": estado["volume"], "token": "remover-teste",
-                                      "arquivoLocal": "blob:remover-teste"})
+            if estado["reter_fotos"]:
+                estado["retidas"].append(rota)
+                return
+            return pedidos_fotos(rota, dados)
         if caminho == "caixa":
             if estado["reter_caixa"]:
                 estado["retidas"].append(rota)
                 return
             return caixa(rota, dados)
         return rota.fallback()
+
+    def pedidos_fotos(rota, dados=None):
+        dados = dados or dict(ok=True, acesso=ACESSO, diaRevisao=DIA, revisao=estado["rev"])
+        pedidos = fotos["pedidos"]
+        if estado["rev"] == "r2":
+            pedidos[0]["nome"] = "Vestido atualizado"
+        return rota.fulfill(json={**dados, "eu": eu, "pedidos": pedidos,
+                                  "caixaNovas": len(fotos["caixa"]),
+                                  "volumeTeste": estado["volume"], "token": "remover-teste",
+                                  "arquivoLocal": "blob:remover-teste"})
 
     def caixa(rota, dados=None):
         query = parse_qs(urlsplit(rota.request.url).query)
@@ -110,11 +117,11 @@ def contexto(chromium, perfil, largura, altura, estado, atraso=0):
     pg.on("pageerror", lambda e: estado["erros"].append(str(e)))
     if atraso:
         pg.add_init_script(f"({ATRASAR_IDB})({atraso})")
-    return ctx, pg, caixa
+    return ctx, pg, caixa, pedidos_fotos
 
 
 def novo_estado(admin=True, volume=""):
-    return dict(admin=admin, rev="r1", volume=volume, reter_caixa=False, reter_sync=False,
+    return dict(admin=admin, rev="r1", volume=volume, reter_caixa=False, reter_fotos=False, reter_sync=False,
                 retidas=[], gets=[], escritas=[], erros=[])
 
 
@@ -164,17 +171,23 @@ def jornada(chromium, largura, altura):
     with TemporaryDirectory() as perfil:
         estado = novo_estado(volume="é" * 260_000)
         estado["reter_caixa"] = True
-        ctx, pg, caixa = contexto(chromium, perfil, largura, altura, estado)
+        estado["reter_fotos"] = True
+        ctx, pg, caixa, pedidos_fotos = contexto(chromium, perfil, largura, altura, estado)
         login(pg)
         if largura == 390:
             capturar(pg, f"hoje-{largura}")
         acionar(pg.locator("[data-aba=fotos]"), mobile)
-        caixa_pendente = esperar_rota(pg, estado)
+        retidas = [esperar_rota(pg, estado), esperar_rota(pg, estado)]
+        por_rota = {urlsplit(r.request.url).path: r for r in retidas}
+        assert set(por_rota) == {"/esteira/fotos", "/esteira/caixa"}
+        assert not pg.locator("#fotos-pedidas, [data-caixa]").count()
+        estado["reter_fotos"] = False
+        pedidos_fotos(por_rota["/esteira/fotos"])
         pg.locator("#fotos-pedidas").wait_for()
         pg.wait_for_timeout(360)
         assert (pg.evaluate(LER) or {}).get("aba") != "fotos"
         estado["reter_caixa"] = False
-        caixa(caixa_pendente)
+        caixa(por_rota["/esteira/caixa"])
         pg.locator('[data-caixa="127"]').wait_for()
         capturar(pg, f"fotos-{largura}")
         acionar(pg.get_by_role("button", name="Carregar mais fotos"), mobile)
@@ -191,7 +204,7 @@ def jornada(chromium, largura, altura):
         ctx.close()
         estado["gets"].clear()
         estado["reter_sync"] = True
-        ctx, pg, _ = contexto(chromium, perfil, largura, altura, estado, atraso=1800)
+        ctx, pg, _, _ = contexto(chromium, perfil, largura, altura, estado, atraso=1800)
         pg.goto(BASE + "esteira.html", wait_until="domcontentloaded")
         sync = esperar_rota(pg, estado)
         assert urlsplit(sync.request.url).query == "aba=fotos"
@@ -212,7 +225,7 @@ def jornada(chromium, largura, altura):
             return
 
         estado["gets"].clear()
-        ctx, pg, _ = contexto(chromium, perfil, largura, altura, estado)
+        ctx, pg, _, _ = contexto(chromium, perfil, largura, altura, estado)
         pg.goto(BASE + "esteira.html", wait_until="domcontentloaded")
         esperar_rota(pg, estado).fulfill(json={
             "ok": True, "eu": {"admin": True, "gestorFotos": True, "nome": "Iara"},
@@ -224,7 +237,7 @@ def jornada(chromium, largura, altura):
         ctx.close()
 
         estado["gets"].clear()
-        ctx, pg, _ = contexto(chromium, perfil, largura, altura, estado)
+        ctx, pg, _, _ = contexto(chromium, perfil, largura, altura, estado)
         pg.goto(BASE + "esteira.html", wait_until="domcontentloaded")
         negado = esperar_rota(pg, estado)
         negado.fulfill(status=403, json={"ok": False, "acessoRevogado": True, "erro": REVOGADO})
@@ -237,11 +250,60 @@ def jornada(chromium, largura, altura):
         ctx.close()
 
 
+def copia_legada_da_equipe(chromium):
+    with TemporaryDirectory() as perfil:
+        estado = novo_estado(admin=False)
+        ctx, pg, _, _ = contexto(chromium, perfil, 390, 844, estado)
+        login(pg)
+        acionar(pg.locator("[data-aba=fotos]"), True)
+        pg.locator("[data-caixa]").first.wait_for()
+        esperar_snapshot(pg, "salvo?.aba === 'fotos'")
+        pg.goto(BASE + "404.html")
+        pg.add_script_tag(url=BASE + "esteira-fluidez.js")
+        pg.evaluate("""async () => {
+          const cache = TKEsteiraRetomada(), sessao = getSessao();
+          const salvo = await cache.ler(sessao);
+          salvo.leituras = salvo.leituras.map(([rota, dados]) => [rota.replace('&ver=novas', ''), dados]);
+          await cache.gravar(sessao, salvo, () => true);
+        }""")
+        assert any(rota == "/esteira/caixa?pagina=1" for rota, _ in pg.evaluate(LER)["leituras"])
+        ctx.close()
+
+        estado["gets"].clear()
+        ctx, pg, _, _ = contexto(chromium, perfil, 390, 844, estado)
+        pg.goto(BASE + "esteira.html")
+        pg.locator("[data-caixa]").first.wait_for()
+        assert pg.get_by_role("heading", name="Suas fotos enviadas").is_visible()
+        assert not pg.locator('[data-caixa="101"]').count()
+        assert estado["gets"] == [("sincronizar", "aba=fotos")], estado["gets"]
+        assert not estado["escritas"] and not estado["erros"], estado
+        ctx.close()
+
+
+def sessao_expirada_durante_leituras(chromium):
+    with TemporaryDirectory() as perfil:
+        estado = novo_estado()
+        estado["reter_fotos"] = estado["reter_caixa"] = True
+        ctx, pg, _, pedidos_fotos = contexto(chromium, perfil, 390, 844, estado)
+        login(pg)
+        acionar(pg.locator("[data-aba=fotos]"), True)
+        retidas = [esperar_rota(pg, estado), esperar_rota(pg, estado)]
+        por_rota = {urlsplit(r.request.url).path: r for r in retidas}
+        por_rota["/esteira/caixa"].fulfill(status=401, json={"ok": False, "erro": "Sessão expirada."})
+        pg.locator("#login-w").wait_for()
+        pedidos_fotos(por_rota["/esteira/fotos"])
+        pg.wait_for_timeout(350)
+        assert not pg.locator("#fotos-pedidas, #caixa").count()
+        esperar_snapshot(pg, "salvo === null")
+        assert not estado["escritas"] and not estado["erros"], estado
+        ctx.close()
+
+
 def limites_e_revisao(chromium):
     for volume, admin, perdida in [("", False, False), ("é" * 1_010_000, True, False), ("", True, True)]:
         with TemporaryDirectory() as perfil:
             estado = novo_estado(admin=admin, volume=volume)
-            ctx, pg, _ = contexto(chromium, perfil, 390, 844, estado)
+            ctx, pg, _, _ = contexto(chromium, perfil, 390, 844, estado)
             login(pg)
             assert foto_gets(estado) == []
             acionar(pg.locator("[data-aba=fotos]"), True)
@@ -272,11 +334,11 @@ def limites_e_revisao(chromium):
 
             estado["rev"] = "r2"
             estado["gets"].clear()
-            ctx, pg, _ = contexto(chromium, perfil, 390, 844, estado)
+            ctx, pg, _, _ = contexto(chromium, perfil, 390, 844, estado)
             pg.goto(BASE + "esteira.html")
             pg.get_by_text("Vestido atualizado", exact=True).wait_for()
             pg.get_by_text("Foto atualizada na caixa", exact=True).wait_for()
-            assert foto_gets(estado) == ["fotos", "caixa"], estado["gets"]
+            assert sorted(foto_gets(estado)) == ["caixa", "fotos"], estado["gets"]
             assert estado["gets"][0] == ("sincronizar", "aba=fotos")
             print(f"Fallback de Fotos: {('registro ausente' if perdida else 'acima de 2 MB' if volume else 'revisão alterada da equipe')}, 2 GETs completos",
                   flush=True)
@@ -288,4 +350,6 @@ with sync_playwright() as p:
     for largura, altura in VISTAS:
         jornada(p.chromium, largura, altura)
     limites_e_revisao(p.chromium)
+    copia_legada_da_equipe(p.chromium)
+    sessao_expirada_durante_leituras(p.chromium)
 print("PASS retomada de Fotos e Caixa")
