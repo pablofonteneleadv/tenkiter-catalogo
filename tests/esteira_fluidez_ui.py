@@ -336,5 +336,44 @@ with sync_playwright() as p:
   assert not pg.get_by_text('Aguardando lista de hoje').count()
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   c.close()
+ # Concluir uma tarefa atualiza a Preparação sem invalidar Pedidos; um GET
+ # iniciado antes da gravação não pode devolver seu retrato antigo.
+ c=b.new_context(viewport={'width':390,'height':844},service_workers='block')
+ ns['instalar'](c); pedidos=[]
+ def contar_pedidos(r):
+  pedidos.append(r.request.url);r.fallback()
+ c.route('**/esteira/pedidos',contar_pedidos)
+ pg=c.new_page();pg.clock.install();pg.goto(BASE+'esteira.html')
+ pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+ pg.click('[data-aba=pedidos]');pg.wait_for_selector('text=Pedidos ao fornecedor')
+ pg.click('[data-aba=prep]')
+ card=pg.locator('.card[data-produto="2001"]')
+ card.get_by_role('button',name='Feito: Cadastro conferido',exact=True).click()
+ card.get_by_role('button',name='Desfazer Cadastro conferido',exact=True).wait_for()
+ pg.click('[data-aba=pedidos]');pg.wait_for_selector('text=Pedidos ao fornecedor')
+ pg.wait_for_timeout(100)
+ assert len(pedidos)==1,pedidos
+ estado=pg.evaluate('''async () => {
+   const raiz=document.createElement('div');
+   let sessao={whatsapp:'conta simulada',sessao:'sessão simulada'};
+   const tela=TKEsteiraFluidez(raiz,()=>sessao);
+   const rota='/esteira/preparacao?pagina=1&depois=simulado';
+   let entregar, chamadas=0;
+   const rede=()=>++chamadas===1?new Promise(r=>{entregar=r}):{ok:true,dado:'novo'};
+   const antiga=tela.ler(rota,rede);
+   await Promise.resolve();
+   tela.invalidar(null,new Set(['/esteira/preparacao']));
+   const nova=await tela.ler(rota,rede);
+   entregar({ok:true,dado:'antigo'});
+   const tardia=await antiga;
+   tela.invalidar();
+   const anterior=tela.ler(rota,()=>new Promise(r=>{entregar=r}));
+   await Promise.resolve();
+   sessao={whatsapp:'outra conta',sessao:'outra sessão'};
+   entregar({ok:true,dado:'outra conta'});
+   return [nova.dado,tardia.dado,chamadas,(await anterior).sessaoMudou];
+ }''')
+ assert estado==['novo','novo',2,True],estado
+ c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
