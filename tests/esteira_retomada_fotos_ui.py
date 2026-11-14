@@ -142,6 +142,14 @@ def esperar_rota(pg, estado):
     raise AssertionError(estado["gets"])
 
 
+def esperar_snapshot(pg, condicao):
+    for _ in range(70):
+        if pg.evaluate(f"async () => {{ const salvo = await ({LER})(); return {condicao}; }}"):
+            return
+        pg.wait_for_timeout(50)
+    raise AssertionError("Snapshot não atingiu o estado esperado: " + condicao)
+
+
 def foto_gets(estado):
     return [nome for nome, _ in estado["gets"] if nome in ("fotos", "caixa")]
 
@@ -171,17 +179,14 @@ def jornada(chromium, largura, altura):
         capturar(pg, f"fotos-{largura}")
         acionar(pg.get_by_role("button", name="Carregar mais fotos"), mobile)
         acionar(pg.locator('[data-caixa="101"] .cx-sel'), mobile)
-        pg.wait_for_function(f"""async () => {{
-          const salvo = await ({LER})();
-          return salvo?.caixaPaginas === 2 && salvo.selecao.includes(101);
-        }}""")
+        esperar_snapshot(pg, "salvo?.caixaPaginas === 2 && salvo.selecao.includes(101)")
         salvo = pg.evaluate(LER)
         assert len(salvo["leituras"]) == 3
         assert "remover-teste" not in json.dumps(salvo)
         assert len(json.dumps(salvo, ensure_ascii=False).encode()) > 450_000
         pg.locator('[data-caixa="101"]').scroll_into_view_if_needed()
         capturar(pg, f"caixa-{largura}")
-        pg.wait_for_function(f"async () => (await ({LER})())?.rolagem === Math.round(scrollY)")
+        esperar_snapshot(pg, "salvo?.rolagem === Math.round(scrollY) && salvo.selecao.includes(101)")
         pos = pg.evaluate("Math.round(scrollY)")
         ctx.close()
         estado["gets"].clear()
@@ -226,7 +231,7 @@ def jornada(chromium, largura, altura):
         pg.locator("#login-w").wait_for()
         assert not pg.locator("#fotos-pedidas, #caixa").count()
         assert not foto_gets(estado)
-        pg.wait_for_function(f"async () => (await ({LER})()) === null")
+        esperar_snapshot(pg, "salvo === null")
         capturar(pg, "acesso-revogado-390")
         assert not estado["escritas"] and not estado["erros"], estado
         ctx.close()
@@ -241,10 +246,10 @@ def limites_e_revisao(chromium):
             assert foto_gets(estado) == []
             acionar(pg.locator("[data-aba=fotos]"), True)
             pg.locator("[data-caixa]").first.wait_for()
-            if not volume:
-                acionar(pg.get_by_role("button", name="Carregar mais fotos"), True)
-                pg.locator('[data-caixa="104"]').wait_for()
-            pg.wait_for_function(f"async () => (await ({LER})())?.aba === 'fotos'")
+            if not admin:
+                assert pg.get_by_role("heading", name="Suas fotos enviadas").is_visible()
+                assert not pg.locator('[data-caixa="101"]').count()
+            esperar_snapshot(pg, "salvo?.aba === 'fotos'")
             salvo = pg.evaluate(LER)
             assert bool(salvo["leituras"]) == (not volume)
             assert not volume or len(json.dumps(salvo).encode()) < 4096
@@ -273,6 +278,8 @@ def limites_e_revisao(chromium):
             pg.get_by_text("Foto atualizada na caixa", exact=True).wait_for()
             assert foto_gets(estado) == ["fotos", "caixa"], estado["gets"]
             assert estado["gets"][0] == ("sincronizar", "aba=fotos")
+            print(f"Fallback de Fotos: {('registro ausente' if perdida else 'acima de 2 MB' if volume else 'revisão alterada da equipe')}, 2 GETs completos",
+                  flush=True)
             assert not estado["escritas"] and not estado["erros"], estado
             ctx.close()
 
