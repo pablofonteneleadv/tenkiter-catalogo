@@ -509,6 +509,31 @@
   function abrirAba() { if (ABA === 'prep') return telaPrep(); if (ABA === 'fotos') return telaFotos(); if (ABA === 'pedidos') return telaPedidos(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
 
   /* ---------- Hoje ---------- */
+  function avisosPedidosHoje(pedidos, admin) {
+    const avisos = [];
+    const pd = pedidos || {}, irPedidos = () => { ABA = 'pedidos'; desenharAbas(); telaPedidos(); };   // v7.43.0: pendências de pedido
+    const avisoPed = (tit, txt, rot) => { const c = el('div', 'card funcao aviso-ped'); c.append(el('h3', '', tit), el('p', 'muted', txt), bt(rot, 'prim', irPedidos)); avisos.push(c); };
+    if (admin) {
+      if (pd.aprovar) avisoPed('Chegada esperando aprovação', pd.aprovar === 1 ? 'A equipe conferiu 1 pedido. Veja as diferenças e aprove.' : 'A equipe conferiu ' + pd.aprovar + ' pedidos. Veja as diferenças e aprove.', 'Ver pedidos');
+      if (pd.aplicar) avisoPed('Pedido aprovado com itens fora do catálogo', 'Falta levar ao catálogo parte do que foi aprovado. Abra o pedido e toque em “Tentar de novo”.', 'Ver pedidos');
+    } else if (pd.conferir) avisoPed('Chegou pedido para conferir', pd.conferir === 1 ? '1 pedido do fornecedor está para chegar ou já chegou. Conte os produtos quando ele estiver na loja.' : pd.conferir + ' pedidos do fornecedor estão para chegar ou já chegaram. Conte os produtos quando estiverem na loja.', 'Conferir chegada');
+    return avisos;
+  }
+  function mostrarResumoAbertura(resumo) {
+    const painel = app.querySelector('.esteira-vista');
+    if (ABA !== 'hoje' || HOJE || !painel || !resumo || $('hoje-resumo-abertura')) return;
+    const avisos = avisosPedidosHoje(resumo.pedidos, EU.admin);
+    if (!avisos.length && !resumo.total) return;
+    const bloco = el('div'); bloco.id = 'hoje-resumo-abertura';
+    bloco.append(...avisos);
+    if (resumo.total) {
+      const progresso = el('div', 'card');
+      progresso.append(el('h2', '', 'Minha conferência'), el('p', '', resumo.feitas + ' de ' + resumo.total + ' conferências registradas hoje.'));
+      bloco.append(progresso);
+    }
+    painel.prepend(bloco);
+    medirTela('resumo', 'hoje');
+  }
   async function telaHoje(recarregar) {
     versaoTela++;
     const vista=fluidez.preparar('hoje','Montando a sua lista de hoje…'),app=vista.app;
@@ -517,12 +542,7 @@
     if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
     app.replaceChildren();
     const r = HOJE;
-    const pd = r.pedidos || {}, irPedidos = () => { ABA = 'pedidos'; desenharAbas(); telaPedidos(); };   // v7.43.0: pendências de pedido
-    const avisoPed = (tit, txt, rot) => { const c = el('div', 'card funcao aviso-ped'); c.append(el('h3', '', tit), el('p', 'muted', txt), bt(rot, 'prim', irPedidos)); app.append(c); };
-    if (EU.admin) {
-      if (pd.aprovar) avisoPed('Chegada esperando aprovação', pd.aprovar === 1 ? 'A equipe conferiu 1 pedido. Veja as diferenças e aprove.' : 'A equipe conferiu ' + pd.aprovar + ' pedidos. Veja as diferenças e aprove.', 'Ver pedidos');
-      if (pd.aplicar) avisoPed('Pedido aprovado com itens fora do catálogo', 'Falta levar ao catálogo parte do que foi aprovado. Abra o pedido e toque em “Tentar de novo”.', 'Ver pedidos');
-    } else if (pd.conferir) avisoPed('Chegou pedido para conferir', pd.conferir === 1 ? '1 pedido do fornecedor está para chegar ou já chegou. Conte os produtos quando ele estiver na loja.' : pd.conferir + ' pedidos do fornecedor estão para chegar ou já chegaram. Conte os produtos quando estiverem na loja.', 'Conferir chegada');
+    app.append(...avisosPedidosHoje(r.pedidos, EU.admin));
     const prog = el('div', 'card'); prog.append(el('h2', '', 'Minha conferência'), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros()));
     if (!r.total) prog.append(el('p', 'muted', EU.confere ? 'Nenhum produto para conferir hoje: tudo foi conferido ou atualizado nos últimos dias.' : 'Você não está marcada para conferir produtos. O Admin total muda isso em Configurações.'));
     else {
@@ -588,7 +608,16 @@
       linha.append(p.sumiu ? el('div', 'semfoto') : fotoPeca(p.id, p.foto, p.nome, '', true), b);
       app.append(linha);
     });
-    } finally {fluidez.concluir(vista);}
+    } finally {
+      const resumo = vista.v.painel.querySelector('#hoje-resumo-abertura');
+      if (vista.valida() && vista.erro && resumo) {
+        const aviso = el('div', 'card');
+        aviso.append(el('p', '', vista.erro), bt('Tentar de novo', 'prim', vista.tentar));
+        vista.stage.append(resumo, aviso);
+        vista.erro = '';
+      }
+      fluidez.concluir(vista);
+    }
   }
   /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todas as peças conferidas (igual ao servidor). */
   function progressoHoje(lista) {
@@ -2399,7 +2428,7 @@
     medirTela('abertura', 'hoje');
     const sessao = sessaoAtual;
     // Hoje ainda carrega quando a autorização do menu já estiver confirmada.
-    const menu = srv('/esteira/menu');
+    const menu = srv('/esteira/menu?resumo=1');
     const hoje = telaHoje();
     void menu.then(r => {
       if (sessao !== sessaoAtual || EU || !r?.ok || !r.eu) return;
@@ -2407,6 +2436,7 @@
       $('quem').textContent = EU.nome || '';
       desenharAbas();
       medirTela('menu', 'hoje');
+      mostrarResumoAbertura(r.resumoHoje);
     });
     await hoje;
   }

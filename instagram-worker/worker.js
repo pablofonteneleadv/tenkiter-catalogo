@@ -7863,11 +7863,13 @@ function estVestirTarefa_(t, escala, eu, podeAceitar, nomeDe) {
   return { id: t.id, produto: t.produto, tipo: t.tipo, titulo: t.titulo, instrucao: t.instrucao || '', funcao: t.funcao || '', status: t.status, origem: t.origem || '', obs: t.obs || '', feita_em: t.feita_em || '', feita_por: nomeDe(t.feita_por || '') || '', quem: resp ? nomeDe(resp) : '', posso };
 }
 /** Tarefas pendentes das funções desta pessoa hoje (aba Hoje). Nome e foto vêm do catálogo; peça fora do site usa o nome guardado na preparação. */
-async function estTarefasPendentes_(env, funcoes, porId, nomeDe) {
+async function estTarefasPendentes_(env, funcoes) {
   if (!funcoes.length) return [];
   const marcas = funcoes.map(() => '?').join(',');
   // v7.52.0: pendente igual a uma tarefa da preparação já feita (ou a outra pendente mais antiga) não aparece (duplicata antiga; nada é apagado)
-  const rows = (await env.DB.prepare("SELECT t.*, p.ref_nome, p.ref_codigo, p.ref_foto, p.etapa FROM est_tarefa t LEFT JOIN est_produto p ON p.id=t.produto WHERE t.status='pendente' AND t.funcao IN (" + marcas + ") AND NOT (t.origem='preparacao' AND EXISTS (SELECT 1 FROM est_tarefa t2 WHERE t2.produto=t.produto AND t2.origem='preparacao' AND t2.id<>t.id AND lower(trim(t2.titulo))=lower(trim(t.titulo)) AND (t2.status='feita' OR (t2.status='pendente' AND t2.id<t.id)))) ORDER BY t.id LIMIT 60").bind(...funcoes).all()).results || [];
+  return (await env.DB.prepare("SELECT t.*, p.ref_nome, p.ref_codigo, p.ref_foto, p.etapa FROM est_tarefa t LEFT JOIN est_produto p ON p.id=t.produto WHERE t.status='pendente' AND t.funcao IN (" + marcas + ") AND NOT (t.origem='preparacao' AND EXISTS (SELECT 1 FROM est_tarefa t2 WHERE t2.produto=t.produto AND t2.origem='preparacao' AND t2.id<>t.id AND lower(trim(t2.titulo))=lower(trim(t.titulo)) AND (t2.status='feita' OR (t2.status='pendente' AND t2.id<t.id)))) ORDER BY t.id LIMIT 60").bind(...funcoes).all()).results || [];
+}
+function estApresentarTarefasHoje_(rows, porId, nomeDe) {
   return rows.map((t) => { const c = porId.get(t.produto) || {}, d = t.origem === 'pedido_fotos' ? estDetalhe_(t) : null; return Object.assign({ id: t.id, produto: t.produto, tipo: t.tipo, titulo: t.titulo, instrucao: t.instrucao || '', funcao: t.funcao, status: t.status, origem: t.origem || '', obs: t.obs || '', posso: true, produtoNome: c.nome || t.ref_nome || 'Peça ' + t.produto, produtoCodigo: c.codigo || t.ref_codigo || '', produtoFoto: c.foto || t.ref_foto || '', noSite: !!c.id, emPreparacao: t.etapa === 'preparacao' }, d ? { rotulos: (d.opcoes || []).map((k) => EST_OPCOES_FOTO_[k]).filter(Boolean).concat(d.outro ? ['Outro: ' + d.outro] : []), pedidoObs: d.obs || '', criada_em: t.criada_em || '', por: (nomeDe ? nomeDe(t.criada_por || '') : '') || d.porNome || 'alguém da equipe' } : {}); });
 }
 /* ---- v7.43.0 (entrega 3): pedido ao fornecedor → chegada (contagem cega) → aprovação ----
@@ -8077,7 +8079,11 @@ async function esteiraComando_(env,req,url,J,perms,ctx,medir){
   const trabalho=(async()=>{try{const res=await rotasEsteira_(env,req,url,J,perms),texto=await res.clone().text();if(res.status>=500||new TextEncoder().encode(texto).length>1500000){await env.DB.prepare("UPDATE est_comando SET estado='incerto',atualizado_em=? WHERE dono=? AND op=?").bind(agora(),dono,op).run();return J({ok:false,incerto:true,erro:'O servidor não confirmou a conclusão. Confira o processo antes de repetir.'},409)}await env.DB.prepare("UPDATE est_comando SET estado='concluido',resultado=?,http=?,atualizado_em=? WHERE dono=? AND op=?").bind(texto,res.status,agora(),dono,op).run();return res}catch(_){await env.DB.prepare("UPDATE est_comando SET estado='incerto',atualizado_em=? WHERE dono=? AND op=?").bind(agora(),dono,op).run();return J({ok:false,incerto:true,erro:'Não recebi a confirmação. O processo foi guardado para conferência.'},409)}})();
   if(typeof ctx?.waitUntil==='function')ctx.waitUntil(trabalho.then(()=>{},()=>{}));return await trabalho;
 }
-async function estMenu_(env, req, J, perms, medir) {
+async function estPedidosHoje_(env, data, admin) {
+  const pc = await env.DB.prepare("SELECT SUM(CASE WHEN status='a_caminho' AND (previsao IS NULL OR previsao='' OR previsao<=?) THEN 1 ELSE 0 END) AS conferir, SUM(CASE WHEN status='conferido' THEN 1 ELSE 0 END) AS aprovar, SUM(CASE WHEN status='aprovado' AND EXISTS (SELECT 1 FROM est_pedido_item i WHERE i.pedido=est_pedido.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) THEN 1 ELSE 0 END) AS aplicar FROM est_pedido").bind(data).first();
+  return admin ? { conferir: pc?.conferir || 0, aprovar: pc?.aprovar || 0, aplicar: pc?.aplicar || 0 } : { conferir: pc?.conferir || 0 };
+}
+async function estMenu_(env, req, J, perms, medir, incluirResumo) {
   const admin = perms.includes('gerir_acessos');
   const whats = estFone_(req.headers.get('X-TK-Whats'));
   let nome = String(perms.msgNome || '').trim();
@@ -8091,10 +8097,25 @@ async function estMenu_(env, req, J, perms, medir) {
   }
   // No modo configurável, a sessão já confirmou a permissão na entrada da rota.
   // Escala, nome da equipe e direito de aceitar continuam nas rotas de trabalho.
-  return J({ ok:true, eu:{ admin, nome } });
+  let resumoHoje;
+  if (incluirResumo) {
+    let prazo;
+    const resumo = medir('resumo_hoje', async () => {
+      const data = estHoje_();
+      const [lista, pedidos] = await Promise.all([
+        env.DB.prepare('SELECT produto, familia, feito_em AS feito FROM est_lista WHERE data=? AND whats=?').bind(data, whats).all(),
+        estPedidosHoje_(env, data, admin),
+      ]);
+      return { ...estProgresso_(lista.results || []), pedidos };
+    }).catch(() => undefined);
+    // Se o D1 estiver lento, o resumo não deve atrasar a navegação.
+    resumoHoje = await Promise.race([resumo, new Promise(resolve => { prazo = setTimeout(resolve, 350); })]);
+    clearTimeout(prazo);
+  }
+  return J({ ok:true, eu:{ admin, nome }, ...(resumoHoje ? { resumoHoje } : {}) });
 }
 async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => executar()) {
-  if (url.pathname === '/esteira/menu' && req.method === 'GET') return estMenu_(env, req, J, perms, medir);
+  if (url.pathname === '/esteira/menu' && req.method === 'GET') return estMenu_(env, req, J, perms, medir, url.searchParams.get('resumo') === '1');
   if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,acessoRevogado:true,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
   const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');   // permissão já conferida na sessão
@@ -8188,30 +8209,46 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
   }
 
   if (p === '/esteira/hoje' && req.method === 'GET') {
-    const cfg = await lerConfig();
-    try { await medir('gerar', () => estGarantirListas_(env, data, cfg, equipe, lerCatalogo)); }
-    catch (e) { return J({ ok: false, erro: e.message || 'Não consegui montar a lista de hoje. Tente de novo.' }, 503); }
-    let produtos;
-    try { produtos = await lerCatalogo(); } catch (e) { return J({ ok: false, erro: e.message }, 503); }
-    const porId = new Map(produtos.map((x) => [x.id, x]));
-    const [registros, escala, pc, fc, fq] = await medir('d1', () => Promise.all([
-      env.DB.prepare('SELECT l.*, p.atualizado_em, p.conferido_em, f.nome AS familia_nome, m.rotulo AS familia_rotulo FROM est_lista l LEFT JOIN est_produto p ON p.id=l.produto LEFT JOIN fam_familia f ON f.id=l.familia AND EXISTS (SELECT 1 FROM fam_membro fm WHERE fm.familia=f.id) LEFT JOIN fam_membro m ON m.produto=l.produto AND EXISTS (SELECT 1 FROM fam_familia fm WHERE fm.id=m.familia) WHERE l.data=? AND l.whats=? ORDER BY l.pos').bind(data, eu).all(),
-      escalaHoje(),
-      env.DB.prepare("SELECT SUM(CASE WHEN status='a_caminho' AND (previsao IS NULL OR previsao='' OR previsao<=?) THEN 1 ELSE 0 END) AS conferir, SUM(CASE WHEN status='conferido' THEN 1 ELSE 0 END) AS aprovar, SUM(CASE WHEN status='aprovado' AND EXISTS (SELECT 1 FROM est_pedido_item i WHERE i.pedido=est_pedido.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) THEN 1 ELSE 0 END) AS aplicar FROM est_pedido").bind(data).first(),
-      env.DB.prepare('SELECT categoria FROM est_foco WHERE data=? AND whats=?').bind(data, eu).first(),
-      env.DB.prepare("SELECT (SELECT COUNT(DISTINCT produto) FROM est_tarefa WHERE origem='pedido_fotos' AND status='pendente') AS pedidas, (SELECT COUNT(*) FROM est_caixa WHERE status='nova') AS caixa").first(),
-    ]));
-    const lista = (registros.results || []).map((l) => {
+    const cfg = lerConfig();
+    let catalogoHoje;
+    const buscarProdutos = () => catalogoHoje ||= lerCatalogo().then(produtos => ({ produtos }), e => ({ erro: e.message || 'O catálogo não respondeu agora. Tente de novo.' }));
+    const atribuicoes = cfg.then(async c => {
+      try { await medir('gerar', () => estGarantirListas_(env, data, c, equipe, lerCatalogo)); }
+      catch (e) { return { erro: e.message || 'Não consegui montar a lista de hoje. Tente de novo.' }; }
+      const [registros, foco] = await medir('lista_d1', () => Promise.all([
+        env.DB.prepare('SELECT l.*, p.atualizado_em, p.conferido_em, f.nome AS familia_nome, m.rotulo AS familia_rotulo FROM est_lista l LEFT JOIN est_produto p ON p.id=l.produto LEFT JOIN fam_familia f ON f.id=l.familia AND EXISTS (SELECT 1 FROM fam_membro fm WHERE fm.familia=f.id) LEFT JOIN fam_membro m ON m.produto=l.produto AND EXISTS (SELECT 1 FROM fam_familia fm WHERE fm.id=m.familia) WHERE l.data=? AND l.whats=? ORDER BY l.pos').bind(data, eu).all(),
+        env.DB.prepare('SELECT categoria FROM est_foco WHERE data=? AND whats=?').bind(data, eu).first(),
+      ]));
+      if (registros.results?.length) buscarProdutos();
+      return { registros, foco };
+    });
+    const funcoes = Promise.all([cfg, escalaHoje()]).then(async ([c, escala]) => {
+      const minhas = Object.keys(escala).filter(f => estFone_(escala[f].whats) === eu).map(f => ({ funcao: f, instrucoes: String(c.instrucoes[f] || '') }));
+      const tarefas = await medir('tarefas', () => estTarefasPendentes_(env, minhas.map(f => f.funcao)));
+      if (tarefas.length) buscarProdutos();
+      return { escala, minhas, tarefas };
+    });
+    const [[listaDia, pedidos, fq], { escala, minhas, tarefas }] = await Promise.all([
+      medir('d1', () => Promise.all([
+        atribuicoes,
+        estPedidosHoje_(env, data, admin),
+        env.DB.prepare("SELECT (SELECT COUNT(DISTINCT produto) FROM est_tarefa WHERE origem='pedido_fotos' AND status='pendente') AS pedidas, (SELECT COUNT(*) FROM est_caixa WHERE status='nova') AS caixa").first(),
+      ])),
+      funcoes,
+    ]);
+    if (listaDia.erro) return J({ ok: false, erro: listaDia.erro }, 503);
+    const linhas = listaDia.registros.results || [];
+    const { produtos = [], erro } = catalogoHoje ? await catalogoHoje : {};
+    if (erro) return J({ ok: false, erro }, 503);
+    const porId = new Map(produtos.map(x => [x.id, x]));
+    const lista = linhas.map((l) => {
       const x = porId.get(l.produto);
       const fam = l.familia ? { familia: l.familia, familiaNome: l.familia_nome || '', rotulo: l.familia_rotulo || '' } : { familia: '' };
       return x ? Object.assign({}, x, { grupo: l.grupo, feito: !!l.feito_em, feito_em: l.feito_em || '', atualizado_em: l.atualizado_em || '', conferido_em: l.conferido_em || '' }, fam) : Object.assign({ id: l.produto, nome: 'Peça arquivada ou fora do site', grupo: l.grupo, feito: !!l.feito_em, sumiu: true }, fam);
     });
     const prog = estProgresso_(lista.map((x) => ({ produto: x.id, familia: x.familia, feito: x.feito })));
-    const minhas = Object.keys(escala).filter((f) => estFone_(escala[f].whats) === eu).map((f) => ({ funcao: f, instrucoes: String(cfg.instrucoes[f] || '') }));
-    const tarefas = await medir('tarefas', () => estTarefasPendentes_(env, minhas.map((f) => f.funcao), porId, nomeDe));
-    const pedidos = admin ? { conferir: pc?.conferir || 0, aprovar: pc?.aprovar || 0, aplicar: pc?.aplicar || 0 } : { conferir: pc?.conferir || 0 };
     const fotos = { pedidas: fq?.pedidas || 0, caixa: gestorFotos ? fq?.caixa || 0 : 0 };
-    return J({ ok: true, data, eu: Object.assign(quemSou(), { gestorFotos }), pedidos, fotos, categoria: (fc && fc.categoria) || '', lista, feitas: prog.feitas, total: prog.total, pecas: lista.length, pecasFeitas: lista.filter((x) => x.feito).length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
+    return J({ ok: true, data, eu: Object.assign(quemSou(), { gestorFotos }), pedidos, fotos, categoria: listaDia.foco?.categoria || '', lista, feitas: prog.feitas, total: prog.total, pecas: lista.length, pecasFeitas: lista.filter((x) => x.feito).length, funcoes: minhas, tarefas: estApresentarTarefasHoje_(tarefas, porId, nomeDe), escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
   }
   if (p === '/esteira/conferir' && req.method === 'POST') {
     const cfg = await lerConfig();
