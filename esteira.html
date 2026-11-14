@@ -7,6 +7,7 @@
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" href="favicon.ico" sizes="any">
+<link rel="preconnect" href="https://tenkiter-ig.distkrpconfeccoes.workers.dev" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
@@ -281,11 +282,8 @@
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.72.0"></script>
-<script src="conta.js"></script>
-<script src="esteira-fluidez.js?v=7.78.19"></script>
+<script src="esteira-fluidez.js?v=7.78.25"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
-<script src="fotos-novas.js"></script>
-<script src="produtos-busca.js?v=7.55.6"></script>
 <script>
 (function () {
   'use strict';
@@ -304,6 +302,125 @@
   async function resolverFotos(v,c,caminho='anexo'){if(v?.fotoLocal&&v.arquivo instanceof Blob){const url=await c.etapa(caminho,async()=>{const blob=await reduzirFoto(v.arquivo);c.assert();return enviarFoto(blob)});if(v.urlLocal){fotosLocais.set(v.urlLocal,url);document.querySelectorAll('img').forEach(i=>{if(i.src===v.urlLocal)i.src=url});URL.revokeObjectURL(v.urlLocal);}return url;}if(Array.isArray(v)){const a=[];for(let i=0;i<v.length;i++)a.push(await resolverFotos(v[i],c,caminho+'-'+i));return a;}if(v&&typeof v==='object'&&!(v instanceof Blob)){const a={};for(const[k,x]of Object.entries(v))a[k]=await resolverFotos(x,c,caminho+'-'+k);return a;}return v;}
 
   const fluidez=TKEsteiraFluidez(app,getSessao);
+  const retomada = TKEsteiraRetomada();
+  const scriptsSobDemanda = new Map();
+  function carregarScript(url) {
+    if (!scriptsSobDemanda.has(url)) scriptsSobDemanda.set(url,new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src=url;script.onload=resolve;script.onerror=()=>{
+        scriptsSobDemanda.delete(url);script.remove();reject(new Error('Não consegui carregar esta ferramenta. Tente de novo.'));
+      };
+      document.head.append(script);
+    }));
+    return scriptsSobDemanda.get(url);
+  }
+  const baseLeitura = {
+    hoje:'/esteira/hoje', prep:'/esteira/preparacao', fotos:'/esteira/fotos',
+    pedidos:'/esteira/pedidos', painel:'/esteira/painel', config:'/esteira/config',
+  };
+  const rotasTela = new Set([...Object.values(baseLeitura), '/esteira/caixa']);
+  const leituraEm = new WeakMap();
+  let acessoTela, diaTela, leiturasTela = new Map(), contextoRecuperado, sincronizando, aberturaEmCurso, conferenciaAberta;
+  let agendarSincronia, agendaSalvar, ultimaSincronia = 0, ultimaLeitura = new Map(), abrirEmCurso = null;
+  const diaLoja = () => new Date(Date.now()-10800000).toISOString().slice(0,10);
+  const mesmaConta = s => !!s && s === sessaoAtual && s.sessao === getSessao()?.sessao && s.whatsapp === getSessao()?.whatsapp;
+  const rotaDaAba = (rota, aba) => rota.split('?')[0] === baseLeitura[aba] || aba === 'fotos' && rota.startsWith('/esteira/caixa?');
+  const telaAdmin = aba => aba === 'painel' || aba === 'config';
+  const rotasDaAba = aba => new Set([baseLeitura[aba], ...(aba === 'fotos' ? ['/esteira/caixa'] : [])]);
+  function apagarDadosDaSessao(s) {
+    limparRetomada(s);
+    document.querySelectorAll('.fundo').forEach(f=>f.esteiraFechar?.());
+    fotosLocais.forEach((_,url)=>URL.revokeObjectURL(url));
+    fotosLocais.clear();
+    CATALOGO=null;catPromessa=null;FORNECEDORES=null;usuario=null;HOJE=null;EU=null;
+    $('abas').hidden=true;$('quem').textContent='';
+    fluidez.limpar();
+  }
+  function limparRetomada(s) {
+    clearTimeout(agendarSincronia); clearTimeout(agendaSalvar); agendarSincronia=null;
+    leiturasTela = new Map(); ultimaLeitura = new Map(); acessoTela = null; diaTela = null;
+    contextoRecuperado = null; rascunhoRecuperado=null; conferenciaAberta=null; ultimaSincronia = 0;
+    if (s) void retomada.limpar(s);
+  }
+  function salvarRetomada() {
+    const sessao = sessaoAtual, aba = ABA;
+    if (contextoRecuperado || app.dataset.tela!==aba || !acessoTela || diaTela !== diaLoja() || !mesmaConta(sessao) || !EU || !fluidez.pronta(aba) || !fluidez.visivel()) return;
+    const leituras = [...leiturasTela].filter(([rota, dados]) => rotaDaAba(rota, aba) && dados.ok && dados.acesso===acessoTela && dados.diaRevisao===diaTela);
+    if (!leituras.length) return;
+    const campos = [];
+    for (const campo of app.querySelectorAll('[data-retomar-campo]')) {
+      const id = campo.dataset.retomarCampo;
+      if (campo.type === 'checkbox' || campo.type === 'file' || campo.closest('[hidden]') ||
+          (campo.tagName === 'SELECT' ? campo.value === ([...campo.options].find(o=>o.defaultSelected)||campo.options[0])?.value : campo.value === campo.defaultValue)) continue;
+      campos.push([id, campo.value.slice(0, 500)]);
+    }
+    const selecao = [...app.querySelectorAll('.cx-sel[aria-pressed=true]')].map(x => Number(x.closest('[data-caixa]').dataset.caixa));
+    const aberto = [...app.querySelectorAll('[data-produto] details[open]')].map(x => x.closest('[data-produto]').dataset.produto);
+    const porPagina = aba === 'prep' ? leituras.filter(([rota]) => rota.includes('&depois=')).length + 1 : 1;
+    const caixaPrefixo = '/esteira/caixa?pagina=1' + (EU.gestorFotos ? '&ver='+CAIXA_VER : '');
+    const caixaPaginas = leituras.filter(([rota]) => rota.startsWith(caixaPrefixo+'&antes=')).length + 1;
+    const rolagem = Math.round(window.scrollY);
+    const em = Math.min(...leituras.map(([,dados])=>leituraEm.get(dados)||0));
+    if(!em || Date.now()-em>=1200000)return;
+    const item = { aba, em, dia:diaTela, acesso:acessoTela, admin:!!EU.admin, conferencia:conferenciaAberta?.ler(),
+      filtro:CAIXA_VER, rolagem, campos, selecao, aberto, porPagina, caixaPaginas, leituras:[] };
+    // Limita a cópia à aba autorizada. Exclui credenciais e referências a arquivos
+    // locais. Os identificadores operacionais da equipe e as miniaturas permanecem.
+    const json = JSON.stringify(leituras, (k,v) =>
+      /^(sessao|token|pin|senha|whatsapp|telefone|fone[123]?)$/i.test(k) ||
+      typeof v === 'string' && /^(blob:|data:)/.test(v) ? undefined : v);
+    if (json.length > 450000) return;
+    item.leituras = JSON.parse(json);
+    const vigente = acessoTela;
+    void retomada.gravar(sessao, item, () => mesmaConta(sessao) && acessoTela === vigente && ABA === aba);
+  }
+  function marcarRetomada() {
+    clearTimeout(agendaSalvar);
+    agendaSalvar=setTimeout(salvarRetomada,220);
+  }
+  app.addEventListener('input',marcarRetomada);
+  app.addEventListener('change',marcarRetomada);
+  app.addEventListener('click',marcarRetomada);
+  window.addEventListener('scroll',marcarRetomada,{passive:true});
+  for(const evento of ['input','click'])document.addEventListener(evento,e=>{
+    if(e.target.closest('[data-rascunho-conferencia]'))marcarRetomada();
+  });
+  let rascunhoRecuperado;
+  function recuperarCampos(estado) {
+    if(estado.campos?.some(([k])=>k==='prep-busca') && !$('prep-busca')) $('prep-topo')?.querySelector('[aria-expanded=false]')?.click();
+    const campos = new Map(estado.campos || []);
+    let rascunho = false;
+    for (const e of app.querySelectorAll('[data-retomar-campo]')) {
+      const v = campos.get(e.dataset.retomarCampo);
+      if (typeof v !== 'string') continue;
+      const nova = e.closest('.nova-t');
+      if (nova?.hidden) {
+        nova.hidden = false;
+        nova.previousElementSibling?.setAttribute('aria-expanded','true');
+      }
+      if (e.tagName === 'SELECT' && ![...e.options].some(o=>o.value===v)) continue;
+      e.value = v;
+      e.dispatchEvent(new Event('input',{bubbles:true}));
+      if (!e.matches('input[type=search]')) rascunho = true;
+    }
+    if (rascunho) {
+      const origem = estado.leituras.find(([rota])=>rota.split('?')[0]===baseLeitura[estado.aba])?.[1]?.revisao;
+      rascunhoRecuperado = {aba:estado.aba,revisao:origem};
+      TKAviso.info('Rascunho recuperado neste aparelho. Confira antes de salvar.');
+    }
+    for (const id of estado.aberto || []) {
+      const e = app.querySelector('[data-produto="'+CSS.escape(id)+'"] details');
+      if (e) e.open = true;
+    }
+    for (const id of estado.selecao || []) {
+      const e = app.querySelector('[data-caixa="'+id+'"] .cx-sel[aria-pressed=false]');
+      if (e && !e.disabled) e.click();
+    }
+    window.scrollTo(0, Number(estado.rolagem)||0);
+    const conf=estado.conferencia;
+    const produto=conf && HOJE?.lista.find(p=>String(p.id)===conf.id&&!p.sumiu);
+    if(produto) abrirConferencia(produto,conf);
+  }
   const leiturasDeTarefa = new Set(['/esteira/hoje','/esteira/preparacao','/esteira/fotos','/esteira/painel','/esteira/registros']);
   function invalidarAcao(rota) {
     const tarefa = rota === '/esteira/tarefa' || rota === '/esteira/tarefa-nova';
@@ -314,9 +431,29 @@
   const camposDoBloco=b=>b?JSON.stringify([...b.querySelectorAll('input,textarea,select')].map(e=>[e.id,e.value,e.checked])):'';
   async function srv(rota,corpo){
     if(!corpo){
+      const sessao = sessaoAtual, base = rota.split('?')[0], acessoNoInicio=acessoTela;
+      if (contextoRecuperado && contextoRecuperado.aba === ABA && contextoRecuperado.dados.has(rota)) {
+        return contextoRecuperado.dados.get(rota);
+      }
       const r = await fluidez.ler(rota, () => srvRede(rota));
-      if (r.acessoRevogado && sessaoAtual) telaLogin(r.erro);
+      if (!mesmaConta(sessao) || acessoNoInicio && acessoNoInicio!==acessoTela) return {ok:false,sessaoMudou:true};
+      if (r.exigeLogin || r.acessoRevogado) telaLogin(r.erro);
+      if (r.ok && rotasTela.has(base) && rotaDaAba(rota, ABA)) {
+        leiturasTela.set(rota, r);
+        if(leiturasTela.size>50)leiturasTela.delete(leiturasTela.keys().next().value);
+        if(!leituraEm.has(r))leituraEm.set(r,Date.now());
+        ultimaLeitura.set(ABA,leituraEm.get(r));
+      }
       return r;
+    }
+    if (rascunhoRecuperado?.aba===ABA && (rota==='/esteira/config' || rota==='/esteira/tarefa-nova')) {
+      const sessao=sessaoAtual, aba=ABA;
+      const atual=await srvRede('/esteira/sincronizar?aba='+aba);
+      if(!mesmaConta(sessao)||ABA!==aba)return {ok:false,foraDaTela:true};
+      if(atual.exigeLogin||atual.acessoRevogado){telaLogin(atual.erro);return {ok:false,foraDaTela:true};}
+      if(!atual.ok || !atual.revisao || atual.acesso!==acessoTela || atual.revisao!==rascunhoRecuperado?.revisao) {
+        return {ok:false,erro:'O rascunho foi preservado. Confira a versão atual desta aba antes de salvar.'};
+      }
     }
     const bloco=fluidez.alvo(),origem=ABA,tela=app.dataset.tela,versao=versaoTela,acionador=ultimoClique,campos=camposDoBloco(bloco),toques=interacao;let id;try{id=await guardarProcesso('acao',{rota,corpo:snapshotEnvio(corpo)},'Salvar '+rota.split('/').pop(),rota+'|'+JSON.stringify(corpo));}catch(e){return{ok:false,erro:e.message||'Não consegui guardar o processo. Tente de novo.'}}
     const fundo=acionador?.closest('.fundo');if(fundo&&acionador.closest('.pe')&&fundo.esteiraFechar)fundo.esteiraFechar();
@@ -329,7 +466,7 @@
     // precisa dar tempo para o Worker responder inclusive em caso de falha.
     const prazo = controle ? setTimeout(() => controle.abort(), 90000) : null;
     try {
-      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal: controle?.signal, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, ...(op?{'X-TK-Operacao':op}:{}) }, body: corpo ? JSON.stringify(corpo) : undefined });
+      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', signal: controle?.signal, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, ...(!corpo && rotasTela.has(rota.split('?')[0])?{'X-TK-Esteira-Revisao':'1'}:{}), ...(op?{'X-TK-Operacao':op}:{}) }, body: corpo ? JSON.stringify(corpo) : undefined });
       const j = await r.json().catch(e => {
         if (controle?.signal.aborted) throw e;
         return { ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' };
@@ -453,9 +590,9 @@
 
   /* ---------- login ---------- */
   function telaLogin(msg) {
+    apagarDadosDaSessao(sessaoAtual);
     sessaoAtual = null;
-    EU = null; HOJE = null; ABA = 'hoje'; fluidez.limpar();
-    document.querySelectorAll('.fundo').forEach(f => f.esteiraFechar?.());
+    ABA = 'hoje';
     $('abas').hidden = true; $('quem').textContent = '';
     app.replaceChildren();
     const c = el('div', 'card'); c.append(el('h2', '', 'Entrar'), el('p', 'muted', 'Use o mesmo e-mail, WhatsApp ou CPF e a mesma senha do painel e do Mensageiro.'));
@@ -466,7 +603,14 @@
     const esq = el('button', 'bt', 'Esqueci a senha'); esq.type = 'button';
     go.onclick = async () => { go.disabled = true; const r = await entrarComSenha(w.value, s.value); go.disabled = false; if (!r || !r.ok || !getSessao()) { er.textContent = (r && r.erro) || 'Não foi possível entrar.'; er.hidden = false; } };
     s.onkeydown = (e) => { if (e.key === 'Enter') go.click(); };
-    esq.onclick = () => { if (window.TKConta) TKConta.abrirRecuperar({ identificador: w.value, chamar: (d) => apiPost(d), aoEntrar: (r) => salvarSessao(r.usuario.whatsapp, r.sessao) }); };
+    esq.onclick = async () => {
+      esq.disabled = true;
+      try {
+        await carregarScript('conta.js');
+        if (esq.isConnected) TKConta.abrirRecuperar({ identificador:w.value, chamar:d=>apiPost(d), aoEntrar:r=>salvarSessao(r.usuario.whatsapp,r.sessao) });
+      } catch (e) {er.hidden=false;er.textContent=e.message;}
+      finally {esq.disabled=false;}
+    };
     c.append(w, s, er, go, esq); app.append(c); w.focus();
   }
   function falha(msg, tentar) {
@@ -491,7 +635,7 @@
         b.onclick = () => {
           if (ABA === id && app.dataset.tela === id) return;
           performance.clearMarks('esteira:' + id + ':util');
-          medirTela('toque', id); ABA = id; desenharAbas(); abrirAba();
+          salvarRetomada(); medirTela('toque', id); ABA = id; desenharAbas(); void abrirAba();
         };
         nav.insertBefore(b, nav.children[indice] || null);
       }
@@ -506,7 +650,14 @@
       b.setAttribute('aria-selected', String(ABA === id));
     });
   }
-  function abrirAba() { if (ABA === 'prep') return telaPrep(); if (ABA === 'fotos') return telaFotos(); if (ABA === 'pedidos') return telaPedidos(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
+  async function abrirAba() {
+    const aba = ABA, sessao = sessaoAtual;
+    const renderizar = {hoje:telaHoje,prep:telaPrep,fotos:telaFotos,pedidos:telaPedidos,painel:telaPainel,config:telaConfig}[aba];
+    const tarefa = renderizar();
+    abrirEmCurso = tarefa;
+    try {await tarefa;} finally {if(abrirEmCurso===tarefa)abrirEmCurso=null;}
+    if (aba === ABA && mesmaConta(sessao) && !contextoRecuperado) marcarRetomada();
+  }
 
   /* ---------- Hoje ---------- */
   function avisosPedidosHoje(pedidos, admin) {
@@ -519,19 +670,28 @@
     } else if (pd.conferir) avisoPed('Chegou pedido para conferir', pd.conferir === 1 ? '1 pedido do fornecedor está para chegar ou já chegou. Conte os produtos quando ele estiver na loja.' : pd.conferir + ' pedidos do fornecedor estão para chegar ou já chegaram. Conte os produtos quando estiverem na loja.', 'Conferir chegada');
     return avisos;
   }
-  function mostrarResumoAbertura(resumo) {
+  function mostrarResumoAbertura(resumo, tarefas=[]) {
     const painel = app.querySelector('.esteira-vista');
-    if (ABA !== 'hoje' || HOJE || !painel || !resumo || $('hoje-resumo-abertura')) return;
-    const avisos = avisosPedidosHoje(resumo.pedidos, EU.admin);
-    if (!avisos.length && !resumo.total) return;
-    const bloco = el('div'); bloco.id = 'hoje-resumo-abertura';
+    if (ABA !== 'hoje' || HOJE || !painel || !EU) return;
+    const anterior = $('hoje-resumo-abertura');
+    if(anterior&&!tarefas.length)return;
+    const avisos = anterior ? [] : avisosPedidosHoje(resumo?.pedidos, EU.admin);
+    if (!anterior && !avisos.length && !resumo?.total && !tarefas.length) return;
+    const bloco = anterior || el('div'); bloco.id = 'hoje-resumo-abertura';
     bloco.append(...avisos);
-    if (resumo.total) {
+    if (!anterior && resumo?.total) {
       const progresso = el('div', 'card');
       progresso.append(el('h2', '', 'Minha conferência'), el('p', '', resumo.feitas + ' de ' + resumo.total + ' conferências registradas hoje.'));
       bloco.append(progresso);
     }
-    painel.prepend(bloco);
+    if (tarefas.length && !bloco.querySelector('#hoje-tarefas-antecipadas')) {
+      const t = el('div','card');t.id='hoje-tarefas-antecipadas';
+      const lista = el('ul');
+      tarefas.slice(0,3).forEach(x=>lista.append(el('li','',x.titulo+' · '+x.produtoNome)));
+      t.append(el('h2','','Tarefas da sua função'),lista);
+      bloco.append(t);
+    }
+    if(!anterior)painel.prepend(bloco);
     medirTela('resumo', 'hoje');
   }
   async function telaHoje(recarregar) {
@@ -577,7 +737,7 @@
       if (p0.grupo && p0.grupo !== grupoAtual) { grupoAtual = p0.grupo; app.append(el('p', 'grupo-tit', p0.grupo)); }
       if (bl.familia && bl.itens.length > 1) {
         const n = bl.itens.length, feitos = bl.itens.filter((x) => x.feito).length, nome = p0.familiaNome || p0.nome;
-        const c = el('section', 'fam' + (feitos === n ? ' feita' : '')); c.dataset.familia = bl.familia; c.setAttribute('aria-label', 'Família ' + nome + ', ' + n + ' produtos');
+        const c = el('section', 'fam' + (feitos === n ? ' feita' : '')); c.id='hoje-familia-'+bl.familia; c.dataset.familia = bl.familia; c.setAttribute('aria-label', 'Família ' + nome + ', ' + n + ' produtos');
         const cab = el('div', 'fam-cab'), t = el('div', 't');
         t.append(el('b', '', nome), el('small', 'muted', n + ' produtos · ' + (feitos === n ? 'todas conferidas' : feitos + ' de ' + n + ' conferidas')));
         const comFoto = bl.itens.filter((x) => urlOk(x.foto));   // v7.48.0: a foto da família abre as fotos de todos os produtos dele
@@ -597,7 +757,7 @@
         app.append(c); return;
       }
       const p = p0;
-      const linha = el('div', 'peca-linha' + (p.feito ? ' feita' : ''));   // v7.48.0: a foto é um botão à parte (abre as fotos); o resto da linha abre a conferência
+      const linha = el('div', 'peca-linha' + (p.feito ? ' feita' : '')); linha.id='hoje-produto-'+p.id;   // v7.48.0: a foto é um botão à parte (abre as fotos); o resto da linha abre a conferência
       const b = el('button', 'peca'); b.type = 'button'; b.dataset.produto = p.id;
       const t = el('div', 't'); t.append(el('b', '', p.nome + (p.familia && p.rotulo && !String(p.nome).endsWith(p.rotulo) ? ' · ' + p.rotulo : '')));
       const dCad = haDias(p.cadastro);
@@ -658,7 +818,7 @@
     const sujo = () => instantaneo(raiz) !== base;
     return { sujo, ok: () => !sujo() || confirm(MSG_DESCARTAR) };
   }
-  function abrirConferencia(p) {
+  function abrirConferencia(p, recuperada) {
     if(processos.pendente('conferir:'+p.id)){processos.abrir();return;}
     const ant = document.activeElement;
     const fundo = el('div', 'fundo'), folha = el('div', 'folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-label', 'Conferir ' + p.nome);
@@ -686,27 +846,49 @@
     const avisoEst = el('div', 'aviso al'); avisoEst.hidden = true;
     iEst.oninput = () => { estado.estoque = iEst.value; const site = p.estoque === '' || p.estoque == null ? null : Number(p.estoque); if (iEst.value !== '' && site != null && Number(iEst.value) !== site) { avisoEst.textContent = 'O site diz ' + site + '. Se você confirmar, o estoque no site passa a ser ' + Number(iEst.value) + '.'; avisoEst.hidden = false; } else avisoEst.hidden = true; };
     lEst.append(iEst, el('small', 'muted', p.estoque !== '' && p.estoque != null ? 'No site: ' + p.estoque + (Number(p.estoque) === 1 ? ' produto.' : ' produtos.') + ' Só mude se contou.' : 'O site não tem estoque informado.'));
-    const blocoChips = (titulo, itens, on) => { const box = el('div'); box.style.cssText = 'display:grid;gap:6px'; if (!itens.length) return box; box.append(el('h3', '', titulo), el('p', 'muted', 'Toque para tirar o que acabou.')); const ch = el('div', 'chips'); itens.forEach((t) => { const b = el('button', '', t); b.type = 'button'; b.setAttribute('aria-pressed', 'true'); b.onclick = () => { if (on.has(t)) on.delete(t); else on.add(t); b.setAttribute('aria-pressed', String(on.has(t))); }; ch.append(b); }); box.append(ch); return box; };
+    const blocoChips = (titulo, itens, on, excluidos) => { const box = el('div'); box.style.cssText = 'display:grid;gap:6px'; if (!itens.length) return box; box.append(el('h3', '', titulo), el('p', 'muted', 'Toque para tirar o que acabou.')); const ch = el('div', 'chips'); itens.forEach((t) => { const b = el('button', '', t); b.type = 'button'; b.setAttribute('aria-pressed', 'true'); b.onclick = () => { if (on.has(t)) on.delete(t); else on.add(t); b.setAttribute('aria-pressed', String(on.has(t))); }; ch.append(b); if(excluidos?.includes(t))b.click(); }); box.append(ch); return box; };
     const tFoto = el('h3', '', 'As fotos estão boas?'), fotos = el('div', 'dois');
     const dFoto = el('p', 'muted', urlOk(p.foto) ? 'Toque na foto lá em cima para ver todas e, se quiser, “Ver no site”.' : 'Este produto ainda não tem foto.');
     const fOk = el('button', 'bt', 'Sim'), fNova = el('button', 'bt', 'Pedir fotos'); fOk.type = fNova.type = 'button'; fNova.id = 'conf-pedir-fotos';
     const escFotos = escolhaFotos('conf');   // v7.52.0: a pessoa diz como quer as fotos (no pano, no manequim, outras cores/estampas ou escreve)
     const marcarFoto = (v) => { estado.fotoNova = v; fOk.setAttribute('aria-pressed', String(!v)); fNova.setAttribute('aria-pressed', String(v)); escFotos.hidden = !v; };
     fOk.onclick = () => marcarFoto(false); fNova.onclick = () => marcarFoto(true); fotos.append(fOk, fNova); marcarFoto(false);
-    detalhes.append(lEst, avisoEst, blocoChips('Tamanhos disponíveis', estado.tamanhos, tamOn), blocoChips('Cores disponíveis', estado.cores, corOn), tFoto, dFoto, fotos, escFotos);
+    detalhes.append(lEst, avisoEst, blocoChips('Tamanhos disponíveis', estado.tamanhos, tamOn, recuperada?.semTamanho), blocoChips('Cores disponíveis', estado.cores, corOn, recuperada?.semCor), tFoto, dFoto, fotos, escFotos);
     const status = el('p', '', ''); status.setAttribute('role', 'status');
     const salvar = el('button', 'bt laranja', 'Salvar conferência'); salvar.type = 'button';
     corpo.append(id, atalhos, datas, tAchou, achou, detalhes, status); pe.append(salvar);
     folha.append(topo, corpo, pe); fundo.append(folha); marcarAchou(true);
+    fundo.dataset.rascunhoConferencia='1';
+    const rascunho = { ler:()=>({
+      id:String(p.id), estoque:iEst.value, achou:estado.achou,
+      semTamanho:estado.tamanhos.filter(x=>!tamOn.has(x)), semCor:estado.cores.filter(x=>!corOn.has(x)),
+      fotoNova:estado.fotoNova, fotos:escFotos.valor(), revisao:recuperada?.revisao || HOJE?.revisao,
+    }) };
+    conferenciaAberta=rascunho;
+    const limparRascunho=()=>{if(conferenciaAberta===rascunho){conferenciaAberta=null;marcarRetomada();}};
     const guarda = guardaAlteracao(corpo);
     const pj = window.TKJanela ? TKJanela.prender(fundo, { papel: false, camada: 'esteira-conferir', fechar: () => tentarFechar(), foco: () => bSim }) : null;
-    const limparTudo = () => { fundo.remove(); if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
-    const fecharTudo = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    const limparTudo = () => { limparRascunho();fundo.remove(); if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    const fecharTudo = () => { limparRascunho();const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
     const tentarFechar = () => { if (guarda.ok()) fecharTudo(); };
     /* Voltar do Android: se há alteração e a pessoa não confirma, a folha volta para a pilha (sem perder nada) */
     const aoVoltar = () => { if (!fundo.isConnected) return; if (guarda.ok()) { limparTudo(); return; } setTimeout(() => { if (fundo.isConnected && window.TKCamadas) TKCamadas.empilhar('esteira-conferir', aoVoltar); }, 0); };
+    fundo.esteiraFechar = fecharTudo;
     fechar.onclick = tentarFechar; fundo.onclick = (e) => { if (e.target === fundo) tentarFechar(); };
     salvar.onclick = async () => {
+      if(recuperada) {
+        const sessao=sessaoAtual;
+        salvar.disabled=true;
+        const atual=await srvRede('/esteira/sincronizar?aba=hoje');
+        salvar.disabled=false;
+        if(!mesmaConta(sessao)||!fundo.isConnected)return;
+        if(atual.exigeLogin||atual.acessoRevogado)return telaLogin(atual.erro);
+        if(!atual.ok||!atual.revisao||atual.acesso!==acessoTela||atual.revisao!==recuperada.revisao){
+          status.className='erro';
+          status.textContent='A lista mudou ou ainda não pôde ser confirmada. Confira os dados atuais antes de registrar a conferência.';
+          return;
+        }
+      }
       // v7.48.0: a contagem é opcional. Em branco: registra a conferência sem mexer no estoque do site.
       const contou = estado.achou && String(iEst.value).trim() !== '';
       if (contou && !(Number.isInteger(Number(iEst.value)) && Number(iEst.value) >= 0)) { status.className = 'erro'; status.textContent = 'Use só números inteiros (pode ser 0) ou deixe em branco para não mudar o estoque.'; iEst.focus(); return; }
@@ -723,7 +905,17 @@
       } catch(e){salvar.disabled=false;status.className='erro';status.textContent=e.message||'Não consegui guardar a conferência.';}
 
     };
-    document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar('esteira-conferir', aoVoltar); bSim.focus({ preventScroll: true });
+    document.body.append(fundo);
+    if(recuperada){
+      marcarAchou(recuperada.achou!==false);
+      iEst.value=recuperada.estoque||'';iEst.oninput();
+      marcarFoto(!!recuperada.fotoNova);
+      if(recuperada.fotoNova)escFotos.preencher(recuperada.fotos);
+      status.textContent='Conferência recuperada. Revise antes de salvar.';
+    }
+    marcarRetomada();
+    if (window.TKCamadas) TKCamadas.empilhar('esteira-conferir', aoVoltar);
+    bSim.focus({ preventScroll: true });
   }
 
   /* ---------- v7.42.0: fotos da tarefa (mesmo caminho do painel: Worker tenkiter-midia /u com a sessão) ---------- */
@@ -837,7 +1029,7 @@
       paginas++;
       return novos;
     };
-    while (cursor && paginas < (paginasPreparacao.get(vista.v) || 1)) {
+    while (cursor && paginas < (contextoRecuperado?.estado.porPagina || paginasPreparacao.get(vista.v) || 1)) {
       const pagina = await lerPaginaPrep(cursor);
       if (!vista.valida()) return;
       if (pagina.exigeLogin) return telaLogin('');
@@ -866,6 +1058,7 @@
         const cartoes = acrescentar(pagina).map(pr => cartaoPrep(pr, r));
         rodape.before(...cartoes);
         paginasPreparacao.set(vista.v, paginas);
+        salvarRetomada();
         const primeiro = cartoes[0]?.querySelector('h3');
         if (primeiro && document.activeElement === mais) { primeiro.tabIndex = -1; primeiro.focus({ preventScroll: true }); }
         if (!cursor) mais.remove();
@@ -876,7 +1069,7 @@
     }
     if (r.outras.length) { const c = el('div', 'card'); c.id = 'outras-tarefas'; c.append(el('h2', '', 'Outras tarefas'), ...tarefasPorPeca(r.outras, telaPrep)); app.append(c); }
     if (r.fotosPedidas) { const c = el('div', 'card'); c.id = 'prep-fotos-pedidas'; c.append(el('p', 'muted', r.fotosPedidas === 1 ? '1 produto com fotos pedidas.' : r.fotosPedidas + ' produtos com fotos pedidas.'), bt('Ver na aba Fotos', 'leve', () => { ABA = 'fotos'; desenharAbas(); abrirAba(); })); app.append(c); }
-    } finally {fluidez.concluir(vista);}
+    } finally {fluidez.concluir(vista);marcarRetomada();}
   }
   const SITUACOES = { ativas: 'Ativas (no site)', esgotadas: 'Esgotadas', arquivadas: 'Arquivadas', todas: 'Todas as situações' };
   const naSituacao = (x, s) => (s === 'todas' ? true : s === 'arquivadas' ? ehInativo(x) : s === 'esgotadas' ? !ehInativo(x) && typeof estaEsgotado === 'function' && estaEsgotado(x) : !ehInativo(x));   // mesmo critério da lista da Gestão
@@ -884,7 +1077,7 @@
    *  o: {id, rotulo, situacoes, padrao, fora(x), linha(x, st) → botão, max} */
   function buscaCatalogo(o) {
     const box = el('div', 'busca-cat'); box.style.cssText = 'display:grid;gap:8px';
-    const [lb, inp] = campoTexto(o.rotulo || 'Buscar no catálogo', '', { id: o.id, ph: 'Nome, código, cor, tecido ou tamanho' }); inp.autocomplete = 'off'; inp.type = 'search';
+    const [lb, inp] = campoTexto(o.rotulo || 'Buscar no catálogo', '', { id: o.id, ph: 'Nome, código, cor, tecido ou tamanho' }); inp.autocomplete = 'off'; inp.type = 'search'; if(o.id==='prep-busca')inp.dataset.retomarCampo=o.id;
     const filtros = el('div', 'filtros'); filtros.setAttribute('role', 'group'); filtros.setAttribute('aria-label', 'Filtros da busca');
     const sel = (cls, rot, opcoes, valor) => { const s = el('select', cls); s.setAttribute('aria-label', rot); opcoes.forEach(([v, t]) => { const op = el('option', '', t); op.value = v; s.append(op); }); s.value = valor; return s; };
     const sits = o.situacoes || ['ativas', 'esgotadas', 'arquivadas', 'todas'], padrao = o.padrao || 'ativas';
@@ -904,7 +1097,10 @@
     const buscar = async () => {
       const minha = ++vez, q = semAcento(inp.value.trim()); marcar(); res.replaceChildren(); st.diga('');
       if (!CATALOGO) st.diga('Buscando…');
-      const cat = await catalogoFundo();
+      let cat;
+      try {
+        [cat] = await Promise.all([catalogoFundo(), carregarScript('produtos-busca.js?v=7.55.6')]);
+      } catch(e) {if(minha===vez)st.diga(e.message,'erro');return;}
       if (minha !== vez) return;
       if (!cat) return st.diga('Não consegui ler o catálogo agora. Tente de novo.', 'erro');
       if (!faceta) {
@@ -928,7 +1124,7 @@
     [sSit, sCat, sGen].forEach((s) => { s.onchange = buscar; });
     box.focar = () => inp.focus();
     void buscar();
-    TKFotosNovas.carregar(buscar);
+    void carregarScript('fotos-novas.js').then(()=>TKFotosNovas.carregar(buscar)).catch(()=>{});
     return box;
   }
   const situacaoTxt = (x) => (ehInativo(x) ? 'arquivada (fora do site)' : typeof estaEsgotado === 'function' && estaEsgotado(x) ? 'esgotada' : 'no site');
@@ -983,8 +1179,8 @@
     // tarefa avulsa
     const bNova = el('button', 'bt', 'Nova tarefa para este produto'); bNova.type = 'button'; bNova.setAttribute('aria-expanded', 'false');
     const nova = el('div', 'nova-t'); nova.hidden = true;
-    const iT = el('input'); iT.type = 'text'; iT.maxLength = 60; iT.placeholder = 'O que precisa ser feito'; iT.setAttribute('aria-label', 'Nova tarefa');
-    const sF = el('select'); sF.setAttribute('aria-label', 'Função da nova tarefa'); [['', 'Qualquer pessoa da equipe']].concat(r.funcoes.map((f) => [f, f])).forEach(([v, rot]) => { const o = el('option', '', rot); o.value = v; if (v === 'Fotos') o.selected = true; sF.append(o); });
+    const iT = el('input'); iT.type = 'text'; iT.maxLength = 60; iT.placeholder = 'O que precisa ser feito'; iT.setAttribute('aria-label', 'Nova tarefa'); iT.dataset.retomarCampo='tarefa:'+pr.id;
+    const sF = el('select'); sF.setAttribute('aria-label', 'Função da nova tarefa'); sF.dataset.retomarCampo='funcao:'+pr.id; [['', 'Qualquer pessoa da equipe']].concat(r.funcoes.map((f) => [f, f])).forEach(([v, rot]) => { const o = el('option', '', rot); o.value = v; if (v === 'Fotos') o.selected = true; sF.append(o); });
     const bCriar = el('button', 'bt prim', 'Criar tarefa'); bCriar.type = 'button';
     const stN = el('p', 'muted'); stN.setAttribute('role', 'status');
     bCriar.onclick = async () => { bCriar.disabled = true; bCriar.textContent = 'Criando…'; const y = await srv('/esteira/tarefa-nova', { produto: pr.id, titulo: iT.value, funcao: sF.value }); if(y.foraDaTela)return; if (!y.ok) { bCriar.disabled = false; bCriar.textContent = 'Criar tarefa'; stN.className = 'erro'; stN.textContent = y.erro || 'Não consegui criar a tarefa.'; return; } telaPrep(); };
@@ -1025,6 +1221,12 @@
     });
     box.append(rot, ch, lO, lObs);
     box.valor = () => ({ opcoes: [...on].filter((k) => k !== 'outro'), querOutro: on.has('outro'), outro: on.has('outro') ? iO.value.trim() : '', obs: iObs.value.trim() });
+    box.preencher = valor => {
+      const opcoes = new Set(valor?.opcoes || []);
+      if(valor?.querOutro)opcoes.add('outro');
+      for(const b of ch.children)if(opcoes.has(b.dataset.opcao))b.click();
+      iO.value=valor?.outro||'';iObs.value=valor?.obs||'';
+    };
     box.erro = () => { const v = box.valor(); if (v.querOutro && !v.outro) { iO.focus(); return 'Escreva em “Outro” como quer a foto, ou desmarque essa opção.'; } if (!v.opcoes.length && !v.outro) return 'Escolha como quer as fotos: toque em uma ou mais opções.'; return ''; };
     return box;
   }
@@ -1281,7 +1483,7 @@
     else cp.append(...r.pedidos.map((g) => cartaoPedidoFotos(g, () => telaFotos())));
     app.append(cp);
     const cx = el('div', 'card'); cx.id = 'caixa'; app.append(cx);
-    void desenharCaixa(cx);
+    if (contextoRecuperado) await desenharCaixa(cx); else void desenharCaixa(cx).then(salvarRetomada);
     void filaLocal.then((pendentes) => {
       const topoAtual = $('fotos-topo');
       if (!pendentes.length || !vista.valida() || ABA !== 'fotos' || !topoAtual || $('caixa-pendente')) return;
@@ -1295,7 +1497,7 @@
         else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); }
       });
     });
-    } finally {fluidez.concluir(vista);}
+    } finally {fluidez.concluir(vista);marcarRetomada();}
   }
   const leiturasCaixa = new WeakMap();
   async function desenharCaixa(cx, pagina) {
@@ -1305,7 +1507,17 @@
     const titulo = gestor ? 'Fotos recebidas' : 'Suas fotos enviadas';
     if (!pagina) cx.replaceChildren(el('h2', '', titulo), el('p', 'muted', 'Carregando…'));
     const rota = '/esteira/caixa?pagina=1' + (gestor ? '&ver=' + filtroAtual : '');
-    const resposta = await srv(rota + (pagina ? '&antes=' + pagina.cursor : ''));
+    const chave = rota + (pagina ? '&antes=' + pagina.cursor : '');
+    let resposta = await srv(chave);
+    if (!pagina && resposta.ok && contextoRecuperado?.aba === 'fotos') {
+      resposta = { ...resposta, itens:[...resposta.itens] };
+      for(let n=1; n<contextoRecuperado.estado.caixaPaginas && resposta.proximo; n++){
+        const mais = contextoRecuperado.dados.get(rota+'&antes='+resposta.proximo);
+        if (!mais?.ok) break;
+        resposta.itens.push(...mais.itens);
+        resposta.proximo = mais.proximo;
+      }
+    }
     if (sessao !== sessaoAtual || leiturasCaixa.get(cx) !== tentativa || (gestor && filtroAtual !== CAIXA_VER)) return;
     if (resposta.exigeLogin && cx.isConnected) return telaLogin('');
     if (!resposta.ok) {
@@ -1329,10 +1541,10 @@
     const sel = pagina?.sel || new Set(), barra = el('div', 'cx-barra'); barra.hidden = true; const stB = linhaStatus();
     if (gestor) {
       const filtro = el('div', 'cx-filtro'); filtro.setAttribute('role', 'group'); filtro.setAttribute('aria-label', 'Quais fotos mostrar');
-      [['novas', 'Novas'], ['usadas', 'Usadas'], ['descartadas', 'Descartadas']].forEach(([v, t]) => { const b = el('button', '', t + ' (' + (r.contagem[v] || 0) + ')'); b.type = 'button'; b.dataset.ver = v; b.setAttribute('aria-pressed', String(CAIXA_VER === v)); b.onclick = () => { CAIXA_VER = v; desenharCaixa(cx); }; filtro.append(b); });
+      [['novas', 'Novas'], ['usadas', 'Usadas'], ['descartadas', 'Descartadas']].forEach(([v, t]) => { const b = el('button', '', t + ' (' + (r.contagem[v] || 0) + ')'); b.type = 'button'; b.dataset.ver = v; b.setAttribute('aria-pressed', String(CAIXA_VER === v)); b.onclick = () => { CAIXA_VER = v; void desenharCaixa(cx).then(salvarRetomada); }; filtro.append(b); });
       cx.append(filtro);
     }
-    if (!r.itens.length) { cx.append(el('p', 'muted vazio-cx', gestor ? (CAIXA_VER === 'novas' ? 'Nenhuma foto nova na caixa.' : CAIXA_VER === 'usadas' ? 'Nenhuma foto usada ainda.' : 'Nenhuma foto descartada.') : 'Você ainda não enviou fotos para a caixa.')); return; }
+    if (!r.itens.length) { if(cx.isConnected)marcarRetomada();cx.append(el('p', 'muted vazio-cx', gestor ? (CAIXA_VER === 'novas' ? 'Nenhuma foto nova na caixa.' : CAIXA_VER === 'usadas' ? 'Nenhuma foto usada ainda.' : 'Nenhuma foto descartada.') : 'Você ainda não enviou fotos para a caixa.')); return; }
     const todas = r.itens.map((i) => ({ url: i.url, tipo: 'foto' }));
     const lotes = new Map(); r.itens.forEach((i) => { const k = i.lote || 'x' + i.id; if (!lotes.has(k)) lotes.set(k, []); lotes.get(k).push(i); });
     const atualizarBarra = () => {
@@ -1374,7 +1586,7 @@
           const b = el('button', 'cx-sel', selecionada ? '✓ Escolhida' : 'Escolher');
           b.type = 'button'; b.setAttribute('aria-pressed', String(selecionada)); b.setAttribute('aria-label', 'Escolher a foto ' + (r.itens.indexOf(i) + 1));
           card.classList.toggle('sel', selecionada);
-          b.onclick = () => { if (sel.has(i.id)) sel.delete(i.id); else sel.add(i.id); b.setAttribute('aria-pressed', String(sel.has(i.id))); b.textContent = sel.has(i.id) ? '✓ Escolhida' : 'Escolher'; card.classList.toggle('sel', sel.has(i.id)); atualizarBarra(); };
+          b.onclick = () => { if (sel.has(i.id)) sel.delete(i.id); else sel.add(i.id); b.setAttribute('aria-pressed', String(sel.has(i.id))); b.textContent = sel.has(i.id) ? '✓ Escolhida' : 'Escolher'; card.classList.toggle('sel', sel.has(i.id)); atualizarBarra(); if(!sel.size&&!contextoRecuperado)pedirSincronia(); };
           card.append(b);
         }
         if (gestor && (i.status === 'descartada' || i.status === 'cadastro')) {
@@ -1406,6 +1618,7 @@
       });
       cx.append(acoes(mais), status);
     }
+    if(cx.isConnected && !contextoRecuperado) marcarRetomada();
     if (rolagem !== null) {
       const primeira = itensDaPagina[0];
       const alvo = primeira && cx.querySelector('[data-caixa="' + primeira.id + '"] button');
@@ -1614,10 +1827,10 @@
       app.append(el('p', 'grupo-tit', tit));
       l.forEach((x) => app.append(linhaPedido(x, x.status === 'conferido' ? () => telaAprovacao(x.id) : x.status === 'aprovado' ? () => telaAplicacao(x.id) : x.status === 'cancelado' ? null : () => telaEditor(x.id))));
     });
-    } finally {fluidez.concluir(vista);}
+    } finally {fluidez.concluir(vista);marcarRetomada();}
   }
   function linhaPedido(x, abrir) {
-    const b = el('button', 'peca pedido'); b.type = 'button'; b.dataset.pedido = String(x.id);
+    const b = el('button', 'peca pedido'); b.type = 'button'; b.id='ped-lista-'+x.id; b.dataset.pedido = String(x.id);
     const t = el('div', 't'); t.append(el('b', '', x.fornecedor || 'Pedido ' + x.id), el('small', 'muted', ['Pedido nº ' + x.id, x.previsao ? 'chega ' + diaBR(x.previsao) : '', x.itens === 1 ? '1 item' : x.itens + ' itens'].filter(Boolean).join(' · ')));
     const chip = x.status === 'conferido' ? el('span', 'chip al', 'aprovar') : x.status === 'aprovado' ? (x.faltaAplicar ? el('span', 'chip er', 'falta catálogo') : el('span', 'chip ok', 'aprovado')) : x.status === 'a_caminho' ? el('span', 'chip' + (x.contados ? ' al' : ''), x.contados ? x.contados + '/' + x.itens + ' contados' : 'a caminho') : el('span', 'chip', x.status === 'rascunho' ? 'rascunho' : 'cancelado');
     b.append(t, chip);
@@ -1628,6 +1841,7 @@
   /* ----- chegada: contagem cega (equipe; o Admin também pode contar por aqui) ----- */
   async function telaContagem(id) {
     versaoTela++;
+    app.dataset.tela = 'contagem';
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status !== 'a_caminho') return telaPedidos();
@@ -1918,6 +2132,7 @@
   /* ----- Admin total: aprovar a chegada (só as diferenças) ----- */
   async function telaAprovacao(id) {
     versaoTela++;
+    app.dataset.tela = 'aprovacao';
     app.replaceChildren(el('div', 'card', 'Abrindo a chegada…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status === 'aprovado') return telaAplicacao(id); if (ped.status !== 'conferido') return telaEditor(id);
@@ -2039,6 +2254,7 @@
   }
   async function telaAplicacao(id, auto, avisos=[]) {
     versaoTela++;
+    app.dataset.tela = 'aplicacao';
     app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status !== 'aprovado') return ped.status === 'conferido' ? telaAprovacao(id) : telaEditor(id);
@@ -2090,7 +2306,7 @@
     let carregarDetalhes;
     try {
     // Ao revalidar, conserva os detalhes visíveis até a resposta mais recente.
-    const jaDetalhado = !!vista.v.painel.querySelector('[data-painel-completo]');
+    const jaDetalhado = !!vista.v.painel.querySelector('[data-painel-completo]') || contextoRecuperado?.dados.has('/esteira/painel');
     const rota = jaDetalhado ? '/esteira/painel' : '/esteira/painel?resumo=1';
     const r = pre && pre.ok ? pre : await srv(rota);
     if(!vista.valida())return;
@@ -2197,7 +2413,7 @@
     app.append(c6, c7);
     } finally {
       fluidez.concluir(vista);
-      if (ABA === 'painel') void carregarDetalhes?.();
+      if (ABA === 'painel' && !contextoRecuperado) void carregarDetalhes?.();
     }
   }
   /** Lista do dia de uma pessoa numa folha: tirar, mover, colocar (busca no catálogo), trocar a categoria e refazer. Item conferido não sai. */
@@ -2298,11 +2514,11 @@
     tb.append(t); cPad.append(tb);
     if(r.fonteEquipe==='acessos'){cPad.replaceChildren(el('h2','','Rodízio automático'),el('p','muted','As funções se alternam a cada dia entre as pessoas ativas com Esteira. A escala semanal anterior fica preservada no histórico; ajuste somente o dia quando necessário.'));}
     // Funções e instruções + regras
-    const cReg = el('div', 'card'); cReg.append(el('h2', '', 'Funções e regras da conferência'));
-    const lF = el('label', 'campo'); lF.append(document.createTextNode('Funções do rodízio (separe por vírgula)')); const iF = el('input'); iF.type = 'text'; iF.id = 'cfg-funcoes'; iF.value = r.config.funcoes.join(', '); lF.append(iF);
+    const cReg = el('div', 'card'); cReg.id='cfg-regras'; cReg.append(el('h2', '', 'Funções e regras da conferência'));
+    const lF = el('label', 'campo'); lF.append(document.createTextNode('Funções do rodízio (separe por vírgula)')); const iF = el('input'); iF.type = 'text'; iF.id = 'cfg-funcoes'; iF.dataset.retomarCampo=iF.id; iF.defaultValue = r.config.funcoes.join(', '); lF.append(iF);
     const instr = {}; const boxI = el('div'); boxI.style.cssText = 'display:grid;gap:10px';
-    r.config.funcoes.forEach((f) => { const lb = el('label', 'campo'); lb.append(document.createTextNode('Instruções de ' + f)); const ta = el('textarea'); ta.id = 'cfg-instr-' + f.replace(/\W+/g, '-'); ta.value = r.config.instrucoes[f] || ''; ta.placeholder = 'O que quem estiver em ' + f + ' precisa cumprir no dia'; instr[f] = ta; lb.append(ta); boxI.append(lb); });
-    const num = (rot, id, v, min, max) => { const lb = el('label', 'campo'); lb.append(document.createTextNode(rot)); const i = el('input'); i.type = 'number'; i.id = id; i.min = String(min); i.max = String(max); i.value = String(v); lb.append(i); return [lb, i]; };
+    r.config.funcoes.forEach((f) => { const lb = el('label', 'campo'); lb.append(document.createTextNode('Instruções de ' + f)); const ta = el('textarea'); ta.id = 'cfg-instr-' + f.replace(/\W+/g, '-'); ta.dataset.retomarCampo=ta.id; ta.defaultValue = r.config.instrucoes[f] || ''; ta.placeholder = 'O que quem estiver em ' + f + ' precisa cumprir no dia'; instr[f] = ta; lb.append(ta); boxI.append(lb); });
+    const num = (rot, id, v, min, max) => { const lb = el('label', 'campo'); lb.append(document.createTextNode(rot)); const i = el('input'); i.type = 'number'; i.id = id; i.min = String(min); i.max = String(max); i.dataset.retomarCampo=id; i.defaultValue = String(v); lb.append(i); return [lb, i]; };
     const [lPP, iPP] = num('Produtos por pessoa por dia', 'cfg-pp', r.config.porPessoa, 1, 60), [lDS, iDS] = num('Não repetir produto conferido ou atualizada há menos de (dias)', 'cfg-ds', r.config.diasSemRepetir, 0, 120);
     const pesosBox = el('div', 'pesos'), PESOS = { nunca: 'Nunca conferida', diaConf: 'Por dia sem conferência', diaCadastro: 'Por dia desde o cadastro', diaSemEdicao: 'Por dia sem atualização', estoqueBaixo: 'Estoque baixo (1–2 un.)', divergiu: 'Deu diferença antes' }, iPesos = {};
     Object.keys(PESOS).forEach((k) => { const [lb, i] = num(PESOS[k], 'cfg-peso-' + k, r.config.pesos[k], 0, 500); i.step = 'any'; iPesos[k] = i; pesosBox.append(lb); });
@@ -2397,6 +2613,7 @@
     } finally {
       fluidez.concluir(vista);
       carregarCategorias?.();
+      marcarRetomada();
     }
   }
 
@@ -2421,46 +2638,170 @@
   async function guardarProcesso(tipo,dados,titulo,chave){guardandoProcessos++;document.documentElement.dataset.esteiraGuardando='1';try{return await processos.adicionar(tipo,dados,titulo,chave)}finally{guardandoProcessos--;if(!guardandoProcessos)delete document.documentElement.dataset.esteiraGuardando;}}
   function refrescarDepois(){fluidez.invalidar();CATALOGO=null;HOJE=null;const origem=versaoTela,toques=interacao;setTimeout(()=>{if(ABA!=='fotos'&&origem===versaoTela&&toques===interacao&&fluidez.visivel()&&!['editor','contagem','aprovacao','aplicacao'].includes(app.dataset.tela)&&!document.querySelector('.fundo')&&!document.activeElement?.matches('input,textarea,select'))void abrirAba();},1700)}
 
-  /* ---------- início ---------- */
+  /* ---------- abertura e retomada ---------- */
+  function iniciarComSessao() {
+    const p=iniciar();
+    aberturaEmCurso=p;
+    void p.catch(()=>{if(aberturaEmCurso===p)falha('Não consegui abrir a Esteira agora.',iniciarComSessao);})
+      .finally(()=>{if(aberturaEmCurso===p)aberturaEmCurso=null;});
+    return p;
+  }
+  function confirmarAcesso(r) {
+    acessoTela = r.acesso || null;
+    diaTela = r.data || null;
+    EU = Object.assign({}, EU || {}, r.eu);
+    $('quem').textContent = EU.nome || '';
+    desenharAbas();
+  }
   async function iniciar() {
     if (!getSessao()) return telaLogin('');
     performance.clearMarks('esteira:hoje:util');
     medirTela('abertura', 'hoje');
     const sessao = sessaoAtual;
-    // Hoje ainda carrega quando a autorização do menu já estiver confirmada.
+    const salvo = await Promise.race([retomada.ler(sessao), new Promise(resolve=>setTimeout(resolve,120))]);
+    if (!mesmaConta(sessao)) return;
+    if (salvo && Object.hasOwn(baseLeitura,salvo.aba) && salvo.dia===diaLoja()) {
+      const r = await srvRede('/esteira/sincronizar?aba='+salvo.aba);
+      if (!mesmaConta(sessao)) return;
+      if (r.exigeLogin || r.acessoRevogado) return telaLogin(r.erro);
+      if (r.ok && r.acesso && r.acesso===salvo.acesso && r.data===salvo.dia &&
+          r.eu.admin===salvo.admin && (!telaAdmin(salvo.aba) || r.eu.admin)) {
+        ABA = salvo.aba;
+        CAIXA_VER = ['novas','usadas','descartadas'].includes(salvo.filtro)?salvo.filtro:'novas';
+        confirmarAcesso(r);
+        const dados = new Map(salvo.leituras.filter(([rota])=>rotaDaAba(rota,ABA)));
+        leiturasTela = new Map(dados);
+        for(const r of dados.values())leituraEm.set(r,salvo.em);
+        const restaurada = {aba:ABA,dados,estado:salvo};
+        contextoRecuperado = restaurada;
+        try {
+          await abrirAba();
+          if (mesmaConta(sessao) && ABA===salvo.aba && fluidez.pronta(ABA)) {
+            recuperarCampos(salvo);
+            medirTela('retomada',ABA);
+          }
+        } finally { if(contextoRecuperado===restaurada)contextoRecuperado=null; }
+        if (!mesmaConta(sessao)) return;
+        ultimaLeitura.set(ABA,salvo.em);
+        salvarRetomada();
+        if (mudouRevisao(ABA,r.revisao) && !conferenciaAberta) {
+          for (const [rota] of leiturasTela) if(rotaDaAba(rota,ABA)) leiturasTela.delete(rota);
+          if(ABA==='fotos' && app.querySelector('.cx-sel[aria-pressed=true]')) {
+            fluidez.semRede(ABA,'Há fotos novas ou alteradas. Termine sua seleção para atualizar.');
+          } else await abrirAba();
+        }
+        return;
+      }
+      if(r.ok)void retomada.limpar(sessao);
+      if (r.ok && r.eu && (!telaAdmin(salvo.aba) || r.eu.admin)) {
+        ABA = salvo.aba;
+        confirmarAcesso(r);
+        return abrirAba();
+      }
+      if (!r.ok) {
+        return falha('Não consegui confirmar seu acesso à Esteira agora.', iniciarComSessao);
+      }
+    }
+    // O menu dá a primeira informação enquanto Hoje monta a lista em paralelo.
     const menu = srv('/esteira/menu?resumo=1');
     const hoje = telaHoje();
-    void menu.then(r => {
-      if (sessao !== sessaoAtual || EU || !r?.ok || !r.eu) return;
-      EU = r.eu;
-      $('quem').textContent = EU.nome || '';
-      desenharAbas();
-      medirTela('menu', 'hoje');
-      mostrarResumoAbertura(r.resumoHoje);
+    const tarefasAntecipadas = menu.then(async r=>{
+      if(!r.ok||!r.acesso)return;
+      await new Promise(resolve=>setTimeout(resolve,800));
+      if(!mesmaConta(sessao)||ABA!=='hoje'||HOJE||document.hidden)return;
+      const tarefas=await srv('/esteira/hoje/tarefas');
+      if(mesmaConta(sessao)&&ABA==='hoje'&&!HOJE&&tarefas.ok&&tarefas.tarefas?.length){
+        mostrarResumoAbertura(r.resumoHoje,tarefas.tarefas);
+      }
     });
-    await hoje;
+    void tarefasAntecipadas.catch(()=>{});
+    await Promise.all([hoje, menu.then(r => {
+      if (!mesmaConta(sessao) || !r.ok || !r.eu) return;
+      confirmarAcesso(r);
+      medirTela('menu','hoje');
+      mostrarResumoAbertura(r.resumoHoje);
+    })]);
+    if (mesmaConta(sessao)) salvarRetomada();
   }
   function sessaoMudou() {
     const s = getSessao();
     if (sessaoAtual && s && s.whatsapp === sessaoAtual.whatsapp && s.sessao === sessaoAtual.sessao) return;
+    apagarDadosDaSessao(sessaoAtual);
     sessaoAtual = s;
-    document.querySelectorAll('.fundo').forEach(f => f.esteiraFechar?.());
-    fotosLocais.forEach((_, url) => URL.revokeObjectURL(url));
-    fotosLocais.clear();
-    usuario = null; HOJE = null; EU = null; ABA = 'hoje'; CAIXA_VER = 'novas'; AVISO_FOTOS = '';
-    $('abas').hidden = true; $('quem').textContent = '';
-    fluidez.limpar();
-    void iniciar();
+    ABA = 'hoje'; CAIXA_VER = 'novas'; AVISO_FOTOS = '';
+    void iniciarComSessao();
   }
-  function revalidarAba(expirar = false) {
-    if (expirar && !document.hidden) fluidez.expirar();
-    if (ABA === 'fotos' || document.hidden || !fluidez.visivel() || document.querySelector('.fundo') ||
-        [...document.querySelectorAll('.overlay')].some(e => e.getClientRects().length)) return;
-    void abrirAba();
+  function mudouRevisao(aba,revisao) {
+    const dados = [...leiturasTela].filter(([rota])=>rotaDaAba(rota,aba));
+    return !revisao || !dados.length || dados.some(([,r])=>r.revisao!==revisao);
   }
-  setInterval(revalidarAba, 30000);
-  window.addEventListener('online', () => revalidarAba(true));
-  document.addEventListener('visibilitychange', () => revalidarAba(true));
+  function podeAtualizar() {
+    return !aberturaEmCurso && !abrirEmCurso && fluidez.visivel() && fluidez.pronta(ABA) && app.dataset.tela===ABA &&
+      !document.querySelector('.fundo') && ![...document.querySelectorAll('.overlay')].some(e=>e.getClientRects().length);
+  }
+  async function sincronizarAba() {
+    const aba=ABA, sessao=sessaoAtual;
+    if(!mesmaConta(sessao)||document.hidden||aberturaEmCurso)return;
+    if(!acessoTela) {
+      if(aba!=='fotos'&&podeAtualizar()){fluidez.expirar();await abrirAba();}
+      return;
+    }
+    const r=await srvRede('/esteira/sincronizar?aba='+aba);
+    if(!mesmaConta(sessao))return;
+    if(r.exigeLogin||r.acessoRevogado)return telaLogin(r.erro);
+    if(!r.ok){
+      fluidez.semRede(ABA,'Não consegui atualizar. As informações anteriores continuam visíveis.');
+      return;
+    }
+    if(r.acesso && acessoTela!==r.acesso){
+      apagarDadosDaSessao(sessao);
+      if(telaAdmin(ABA)&&!r.eu.admin)ABA='hoje';
+      confirmarAcesso(r);
+      await abrirAba();
+      return;
+    }
+    if(diaTela && r.data!==diaTela) {
+      void retomada.limpar(sessao);
+      if(!podeAtualizar())return;
+      HOJE=null;
+    }
+    confirmarAcesso(r);
+    if(ABA!==aba||!podeAtualizar())return;
+    const revisoes=[...leiturasTela].filter(([rota])=>rotaDaAba(rota,aba));
+    // Fontes externas podem mudar sem tocar o D1. Uma revisão igual posterga
+    // a leitura completa, com reconciliação periódica em segundo plano.
+    const recente=Date.now()-(ultimaLeitura.get(aba)||0)<180000;
+    if(recente&&!mudouRevisao(aba,r.revisao)){
+      fluidez.semRede(aba);
+      return;
+    }
+    if(!r.revisao && aba==='fotos')return; // compatibilidade com o Worker anterior
+    if(aba==='fotos' && app.querySelector('.cx-sel[aria-pressed=true]')){
+      fluidez.semRede(aba,'Há fotos novas ou alteradas. Termine sua seleção para atualizar.');
+      return;
+    }
+    for (const [rota] of revisoes) leiturasTela.delete(rota);
+    fluidez.invalidar(null,rotasDaAba(aba));
+    await abrirAba();
+  }
+  function pedirSincronia(imediata=false) {
+    if(!document.hidden&&sessaoAtual&&!mesmaConta(sessaoAtual)){sessaoMudou();return;}
+    if(document.hidden || !sessaoAtual || sincronizando || agendarSincronia ||
+        (!imediata&&Date.now()-ultimaSincronia<1000))return;
+    agendarSincronia=setTimeout(()=>{
+      agendarSincronia=null;
+      if(document.hidden||!sessaoAtual||sincronizando)return;
+      ultimaSincronia=Date.now();
+      sincronizando=sincronizarAba().catch(()=>{
+        fluidez.semRede(ABA,'Não consegui atualizar. As informações anteriores continuam visíveis.');
+      }).finally(()=>{sincronizando=null;});
+    },imediata?0:180);
+  }
+  setInterval(()=>pedirSincronia(),30000);
+  window.addEventListener('online',()=>pedirSincronia());
+  window.addEventListener('pageshow',e=>{if(e.persisted)pedirSincronia();});
+  window.addEventListener('pagehide',salvarRetomada);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)salvarRetomada();else pedirSincronia();});
   TKSessao.aoMudar(sessaoMudou);
   let larguraAbas = window.innerWidth; window.addEventListener('resize', () => { if ((window.innerWidth > 560) !== (larguraAbas > 560) && EU) desenharAbas(); larguraAbas = window.innerWidth; });
   sessaoMudou();

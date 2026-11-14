@@ -412,5 +412,104 @@ with sync_playwright() as p:
   assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   pg.screenshot(path=str(OUT/f'esteira-acesso-revogado-{w}.png'))
   c.close()
+ # Reiniciar o documento com a mesma sessão e rede controlada.
+ for w,h in [(320,844),(390,844),(412,915),(1440,900)]:
+  c=b.new_context(viewport={'width':w,'height':h},service_workers='block',has_touch=w<600)
+  ns['instalar'](c)
+  estado={'rev':'r1','auth':True,'reter':False,'consultas':0,'pedidos':0,'hoje':0,'escritas':0}
+  retidas=[]
+  from datetime import datetime, timezone, timedelta
+  from urllib.parse import urlsplit
+  dia=(datetime.now(timezone.utc)-timedelta(hours=3)).date().isoformat()
+  def responder_sync(r):
+   if not estado['auth']:
+    return r.fulfill(status=403,json={'ok':False,'acessoRevogado':True,'erro':'Seu acesso não permite entrar na Esteira.'})
+   return r.fulfill(json={'ok':True,'eu':{'admin':True,'nome':'Iara'},'acesso':'acesso-simulado','data':dia,'revisao':estado['rev']})
+  def retomada_rota(r):
+   path=urlsplit(r.request.url).path.rsplit('/',1)[-1]
+   if r.request.method!='GET':
+    estado['escritas']+=1
+    return r.fallback()
+   if path=='sincronizar':
+    estado['consultas']+=1
+    if estado['reter']:retidas.append(r);return
+    return responder_sync(r)
+   if path=='menu':
+    return r.fulfill(json={'ok':True,'eu':{'admin':True,'nome':'Iara'},'acesso':'acesso-simulado','data':dia})
+   if path=='hoje':estado['hoje']+=1
+   if path!='pedidos':return r.fallback()
+   estado['pedidos']+=1
+   pedidos=[{'id':n,'fornecedor':f'Fornecedor simulado {n}','status':'a_caminho','itens':2} for n in range(1,26)]
+   if estado['rev']=='r2':pedidos[-1]['fornecedor']='Fornecedor atualizado'
+   return r.fulfill(json={'ok':True,'admin':True,'pedidos':pedidos,'acesso':'acesso-simulado','diaRevisao':dia,'revisao':estado['rev']})
+  c.route('**/esteira/**',retomada_rota)
+  pg=c.new_page();pg.goto(BASE+'esteira.html')
+  pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+  pg.click('[data-aba=pedidos]')
+  pg.locator('[data-pedido="25"]').wait_for()
+  pg.evaluate('window.scrollTo(0,600)')
+  pg.wait_for_timeout(600)
+  pos=pg.evaluate('window.scrollY')
+  assert pos>400
+  antes=estado['pedidos']
+  pg.evaluate("() => {document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(new Event('online'));window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));}")
+  pg.wait_for_timeout(520)
+  assert estado['consultas']==1 and estado['pedidos']==antes,(w,estado)
+  assert pg.evaluate('window.scrollY')==pos
+  estado['reter']=True;hoje=estado['hoje']
+  pg.reload()
+  for _ in range(30):
+   if retidas:break
+   pg.wait_for_timeout(100)
+  assert len(retidas)==1 and not pg.locator('[data-pedido]').count(),(w,estado)
+  estado['reter']=False;responder_sync(retidas.pop())
+  pg.locator('[data-pedido="25"]').wait_for()
+  assert estado['pedidos']==antes and estado['hoje']==hoje,(w,estado)
+  assert pg.evaluate('window.scrollY')==pos
+  assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  pg.screenshot(path=str(OUT/f'esteira-retomada-pedidos-{w}.png'))
+  estado['rev']='r2'
+  pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+  pg.get_by_text('Fornecedor atualizado',exact=True).wait_for()
+  pg.wait_for_timeout(400)
+  assert estado['pedidos']==antes+1 and estado['hoje']==hoje,(w,estado)
+  estado['auth']=False
+  pg.reload();pg.locator('#login-w').wait_for()
+  assert not pg.locator('[data-pedido]').count() and estado['escritas']==0
+  c.close()
+ # O rascunho de uma conferência sobrevive à recarga, mas não registra nada sozinho.
+ c=b.new_context(viewport={'width':390,'height':844},service_workers='block',has_touch=True)
+ ns['instalar'](c)
+ rascunho_dia=dia
+ acessos={'rev':'r1','envios':0}
+ def conferencia_rota(r):
+  url=r.request.url
+  if r.request.method=='POST':
+   acessos['envios']+=1
+   return r.fulfill(status=503,json={'ok':False})
+  base={'ok':True,'acesso':'acesso-simulado','data':rascunho_dia,'revisao':acessos['rev'],
+        'eu':{'admin':True,'nome':'Iara','confere':True}}
+  if '/menu?' in url or '/sincronizar?' in url:return r.fulfill(json=base)
+  if url.endswith('/hoje'):
+   return r.fulfill(json={**base,'diaRevisao':rascunho_dia,'total':1,'feitas':0,'pecas':1,'escala':[],'funcoes':[],
+        'lista':[{'id':'1001','nome':'Vestido para conferir','estoque':'4','tamanhos':'P, M','cores':'Verde','grupo':'Vestidos'}]})
+  return r.fallback()
+ c.route('**/esteira/**',conferencia_rota)
+ pg=c.new_page();pg.goto(BASE+'esteira.html')
+ pg.fill('#login-w','88999999999');pg.fill('#login-s','senha');pg.click('text=Entrar >> nth=-1')
+ pg.get_by_role('button',name='Vestido para conferir, abrir conferência').tap()
+ pg.locator('#conf-estoque').fill('7')
+ pg.get_by_role('button',name='P',exact=True).tap()
+ pg.wait_for_timeout(650)
+ pg.reload()
+ pg.get_by_text('Conferência recuperada. Revise antes de salvar.',exact=True).wait_for()
+ assert pg.locator('#conf-estoque').input_value()=='7'
+ assert pg.get_by_role('button',name='P',exact=True).get_attribute('aria-pressed')=='false'
+ pg.screenshot(path=str(OUT/'esteira-retomada-conferencia-390.png'))
+ acessos['rev']='r2'
+ pg.get_by_role('button',name='Salvar conferência',exact=True).tap()
+ pg.get_by_text('A lista mudou ou ainda não pôde ser confirmada.',exact=False).wait_for()
+ assert pg.locator('#conf-estoque').input_value()=='7' and acessos['envios']==0
+ c.close()
  b.close()
 print('PASS 4 telas: cache imediato com revalidação lenta, resposta fora de ordem, dados novos por bloco e rascunho preservado.')
