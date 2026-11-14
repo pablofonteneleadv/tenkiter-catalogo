@@ -8080,13 +8080,18 @@ async function estMenu_(env, req, J, perms, medir) {
 }
 async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => executar()) {
   if (url.pathname === '/esteira/menu' && req.method === 'GET') return estMenu_(env, req, J, perms, medir);
-  await medir('inicializacao', async () => { await iniciar(env); await estIniciar_(env); });
   if(perms.acessosConfiguraveis&&!perms.includes('gerir_acessos')&&!perms.includes('esteira')&&!(url.pathname.startsWith('/esteira/caixa')&&(perms.includes('catalogo_admin')||perms.includes('catalogo_cadastrar'))))return J({ok:false,erro:'Seu acesso não permite entrar na Esteira.'},403);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
   const gestorFotos = admin || perms.includes('catalogo_cadastrar') || perms.includes('catalogo_admin');   // permissão já conferida na sessão
   // A marcação da caixa pode continuar quando a lista RH estiver indisponível; demais rotas continuam consultando RH.
   const caixaConfirmacao=perms.acessosConfiguraveis&&gestorFotos&&p==='/esteira/caixa/usar';
-  const equipe = caixaConfirmacao ? [] : await medir('equipe', () => estEquipe_(env, req, perms));
+  const bancoPronto = medir('inicializacao', async () => { await iniciar(env); await estIniciar_(env); });
+  const lerEquipe = () => medir('equipe', () => estEquipe_(env, req, perms));
+  // O RH remoto independe do D1. A equipe legada mora no D1 e aguarda o esquema.
+  const [, equipe] = await Promise.all([
+    bancoPronto,
+    caixaConfirmacao ? [] : perms.acessosConfiguraveis ? lerEquipe() : bancoPronto.then(lerEquipe),
+  ]);
   let config, catalogo;
   const lerConfig = () => config ||= medir('config', () => estCfg_(env));
   const lerCatalogo = () => catalogo ||= medir('catalogo', () => estCatalogo_(env));

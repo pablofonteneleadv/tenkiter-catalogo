@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.78.16 — Inicialização da Esteira em paralelo com o RH
+
+- Após confirmar o acesso, a consulta da equipe ao RH pode começar enquanto o D1 inicializa. A equipe legada continua a ser consultada depois de o banco estar pronto.
+
 ## 7.78.15 — Resumo do Painel da Esteira antes dos detalhes
 
 - Conferências já gravadas, pendências e pedidos aparecem enquanto listas detalhadas e informações do catálogo carregam. Falhas de atualização deixam o resumo disponível com opção de tentar novamente.
