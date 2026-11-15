@@ -282,17 +282,26 @@ function permissoes(env, req, medir, ctx) {
 /** v7.80.0: leituras da Esteira (listas e Caixa) aproveitam a última conferência de sessão guardada no D1.
  * Conta, perfil e permissões são os da última conferência AO VIVO no Apps Script. Regras:
  *  - vale até 10 min e só para GET das rotas abaixo; qualquer escrita (POST), /esteira/sincronizar e /esteira/menu conferem ao vivo;
- *  - passados 30 s, a leitura segue com o que está guardado e uma conferência ao vivo corre em segundo plano: se a sessão ou o acesso
- *    caiu, a linha é apagada e a leitura seguinte já é recusada (no máximo uma leitura de atraso);
+ *  - até 30 s depois da última conferência ao vivo, toda leitura usa o guardado. Passado esse prazo, a leitura segue com o guardado e UMA
+ *    conferência ao vivo corre em segundo plano: se a sessão ou o acesso caiu, a linha é invalidada e a leitura seguinte é recusada.
+ *    Atraso máximo de uma revogação nas leituras: ~30 s + uma leitura (o app confere ao vivo a cada 30 s em sincronizar, que já invalida).
+ *    Com o Apps Script fora do ar a conferência em segundo plano não decide nada e o guardado vale até o limite de 10 min;
  *  - toda conferência ao vivo da Esteira (inclusive a de sincronizar, a cada 30 s no app) renova ou apaga a linha;
  *  - a chave é um hash de WhatsApp+sessão: outra sessão, outro WhatsApp ou sessão inválida nunca acertam a linha, e o token não é guardado. */
 const EST_LEITURAS_RAPIDAS_ = new Set(['/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/fotos', '/esteira/caixa', '/esteira/preparacao']);
-const SESSAO_FRESCA_MS_ = 600000, SESSAO_REVALIDA_MS_ = 30000;
+const SESSAO_FRESCA_MS_ = 600000, SESSAO_REVALIDA_MS_ = 30000, SESSAO_REVALIDA_RESERVA_MS_ = 20000;
 const SESSAO_ESQUEMAS_ = new WeakSet();
 async function sessaoCacheEsquema_(env) {
   if (SESSAO_ESQUEMAS_.has(env.DB)) return;
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS sessao_cache (chave TEXT PRIMARY KEY, dados TEXT NOT NULL, em INTEGER NOT NULL)').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS sessao_cache (chave TEXT PRIMARY KEY, dados TEXT NOT NULL, em INTEGER NOT NULL, reval INTEGER NOT NULL DEFAULT 0)').run();
   SESSAO_ESQUEMAS_.add(env.DB);
+}
+async function sessaoReservarRevalidacao_(env, chave) {
+  try {
+    const agora = Date.now();
+    const r = await env.DB.prepare('UPDATE sessao_cache SET reval=? WHERE chave=? AND reval<?').bind(agora, chave, agora - SESSAO_REVALIDA_RESERVA_MS_).run();
+    return Number(r?.meta?.changes) === 1;
+  } catch (e) { return false; }
 }
 function permissoesMontar_(lista, perfis, nome, configuraveis, msgModelos) {
   lista.msgPerfis = perfis; lista.msgNome = nome; lista.acessosConfiguraveis = configuraveis; lista.msgModelos = msgModelos;
@@ -356,7 +365,8 @@ async function permissoesConferir_(env, req, medir = (_, executar) => executar()
         const v = JSON.parse(linha.dados);
         if (Array.isArray(v.permissoes)) {
           await medir('sessao_cache', async () => 0);
-          if (idade > SESSAO_REVALIDA_MS_ && typeof ctx?.waitUntil === 'function') {
+          // Uma só conferência em segundo plano por vez e por pessoa: quem reserva a linha dispara, os outros só leem.
+          if (idade > SESSAO_REVALIDA_MS_ && typeof ctx?.waitUntil === 'function' && await sessaoReservarRevalidacao_(env, chaveD1)) {
             const inicio = Date.now();
             ctx.waitUntil(permissoesAoVivo_(env, whats, sessao).then((novo) => sessaoRegistrar_(env, chaveD1, novo, inicio)).catch(() => {}));
           }

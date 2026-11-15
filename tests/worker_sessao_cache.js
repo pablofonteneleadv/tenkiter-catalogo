@@ -40,7 +40,7 @@ const cenarios = String.raw`
   chk('menu confere sempre ao vivo', x.status === 200 && vivas === 4, { s: x.status, vivas });
 
   // passados 30 s: serve o guardado e confere ao vivo em segundo plano
-  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 40000).run();
+  await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 40000).run();
   const antes = vivas;
   x = await Q(PABLO, CX);
   chk('leitura com 40 s responde sem esperar o Apps Script', x.status === 200 && vivas === antes + 1 && /sessao_cache;dur=/.test(x.timing) === true, { vivas, antes });
@@ -69,7 +69,7 @@ const cenarios = String.raw`
   x = await Q(PABLO, CX); await esperar();
   chk('acesso devolvido: volta a abrir (ao vivo) e guarda de novo', x.status === 200);
   usuarios[PABLO].permissoes = [];
-  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 40000).run();
+  await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 40000).run();
   x = await Q(PABLO, CX);
   chk('revogado com guardado vencido: no máximo UMA leitura de atraso', x.status === 200);
   await esperar();
@@ -80,7 +80,7 @@ const cenarios = String.raw`
 
   // corrida: uma conferência em segundo plano que começou ANTES da revogação e termina DEPOIS não ressuscita o acesso
   x = await Q(PABLO, CX); await esperar();
-  await env.DB.prepare('UPDATE sessao_cache SET em=? WHERE dados<>\'\'').bind(Date.now() - 40000).run();
+  await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0 WHERE dados<>\'\'').bind(Date.now() - 40000).run();
   let soltar; segurar = new Promise((ok) => { soltar = ok; });
   x = await Q(PABLO, CX);                               // serve o guardado e deixa a conferência lenta pendente (resposta ainda com permissões)
   chk('corrida: a leitura vencida é servida enquanto a conferência lenta segue pendente', x.status === 200 && pend.length === 1);
@@ -93,17 +93,31 @@ const cenarios = String.raw`
   chk('corrida: a resposta lenta, de antes da revogação, NÃO regrava as permissões antigas', x.status === 403 && (await linhas()).filter((l) => l.chave).length <= 1, { s: x.status });
   usuarios[PABLO].permissoes = permissoesPablo;
 
+
+  // uma só conferência em segundo plano por vez: 5 leituras paralelas com o guardado vencido => 1 chamada ao Apps Script
+  x = await Q(PABLO, CX); await esperar();
+  await env.DB.prepare("UPDATE sessao_cache SET em=?, reval=0 WHERE dados<>''").bind(Date.now() - 40000).run();
+  const vp = vivas;
+  const par = await Promise.all([1, 2, 3, 4, 5].map(() => Q(PABLO, CX)));
+  chk('paralelas com o guardado vencido: todas respondem sem esperar o Apps Script', par.every((q) => q.status === 200));
+  await esperar();
+  chk('…e só UMA conferência em segundo plano é disparada', vivas === vp + 1, { vivas, vp });
+  const antesReserva = vivas;
+  await env.DB.prepare("UPDATE sessao_cache SET em=? WHERE dados<>''").bind(Date.now() - 40000).run();
+  await Q(PABLO, CX); await esperar();
+  chk('a reserva segura novas conferências por 20 s (leitura seguinte não dispara outra)', vivas === antesReserva, { vivas, antesReserva });
+
   // validade máxima e backend fora do ar
   x = await Q(PABLO, CX); await esperar();
-  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 700000).run();
+  await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 700000).run();
   const v0 = vivas;
   x = await Q(PABLO, CX); await esperar();
   chk('guardado com mais de 10 min não vale: confere ao vivo', x.status === 200 && vivas === v0 + 1);
-  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 40000).run();
+  await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 40000).run();
   apiFora = true;
   x = await Q(PABLO, CX); await esperar();
   chk('backend fora do ar não apaga o guardado nem derruba a leitura', x.status === 200 && (await linhas()).length >= 1, { s: x.status });
-  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 700000).run();
+  await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 700000).run();
   x = await Q(PABLO, CX); await esperar();
   chk('sem guardado válido e com o backend fora, falha fechada (503), sem confundir com sessão inválida', x.status === 503, { s: x.status });
   apiFora = false;
