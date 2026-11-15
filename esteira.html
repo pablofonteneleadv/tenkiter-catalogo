@@ -1362,7 +1362,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   let revisaoFotos = null;
   async function revisarFotos(op) {
     if (!revisaoFotos) {
-      await carregarScript('esteira-fotos-revisao.js?v=7.81.0');
+      await carregarScript('esteira-fotos-revisao.js?v=7.82.0');
       revisaoFotos = TKRevisaoFotos({
         el, bt, abrirFolha, abrirGaleria, impressao, linhaStatus,
         enquadrar: async (o) => {
@@ -1542,12 +1542,16 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       };
       arq.onchange = async () => {
         const fs = [...arq.files].filter((f) => /^image\//.test(f.type)); arq.value = ''; if (!fs.length) return;
+        let rev = null;
+        try { rev = await revisarFotos({ modo: 'caixa', max: Math.max(0, 20 - sel.length), arquivos: fs }); }
+        catch (e) { return st.diga(e.message || 'Não consegui abrir a revisão das fotos.', 'erro'); }
+        if (!rev) return;
         let repetidas = 0, fora = 0;
-        for (const f of fs) {
+        for (const it of rev.itens) {
           if (sel.length >= 20) { fora++; continue; }
-          const hash = await impressao(f);
+          const hash = it.hash || await impressao(it.arquivo);
           if (hash && sel.some((s) => s.hash === hash)) { repetidas++; continue; }
-          sel.push({ file: f, hash, prev: URL.createObjectURL(f), descricao: '' });
+          sel.push({ file: it.arquivo, hash, prev: URL.createObjectURL(it.arquivo), descricao: '' });
         }
         pintar();
         st.diga([repetidas ? (repetidas === 1 ? '1 foto repetida ficou de fora.' : repetidas + ' fotos repetidas ficaram de fora.') : '', fora ? 'Cabem 20 fotos por envio; envie as outras depois.' : ''].filter(Boolean).join(' '), repetidas || fora ? 'muted' : '');

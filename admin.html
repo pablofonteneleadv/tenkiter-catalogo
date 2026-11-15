@@ -1783,6 +1783,17 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     ['sem-auditoria', 'catalogo_auditoria'], ['sem-push', 'catalogo_push'], ['sem-portal', 'portal'], ['sem-gerir', 'gerir_acessos']
   ];
 
+  /* v7.82.0: quem tem a Esteira costuma abri-la em seguida. Avisa o servidor, que confere e guarda a sessão, e a Esteira abre sem esperar
+     essa conferência. No máximo uma vez a cada 4 min por aba; não traz dado nenhum e falha em silêncio. */
+  function aquecerEsteira_() {
+    try {
+      const s = getSessao(); if (!s || typeof INSTAGRAM_URL === 'undefined') return;
+      const k = 'tk-aquecer-esteira'; let t = 0; try { t = Number(sessionStorage.getItem(k) || 0); } catch (e) { /* sem sessionStorage: aquece e segue */ }
+      if (Date.now() - t < 240000) return;
+      try { sessionStorage.setItem(k, String(Date.now())); } catch (e) { /* idem */ }
+      setTimeout(() => { fetch(INSTAGRAM_URL + '/esteira/aquecer', { headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao } }).catch(() => {}); }, 1500);
+    } catch (e) { /* aquecer nunca atrapalha a Gestão */ }
+  }
   function aplicarPermissoes(usuario) {
     { /* v7.77.0: o que a pessoa recebeu fica visível mesmo no painel simplificado */
       const admTot = temPermissao(usuario, 'gerir_acessos');
@@ -1790,6 +1801,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const podeEst = admTot || temPermissao(usuario, 'esteira');
       document.body.classList.toggle('tem-ia', !!podeIA); document.body.classList.toggle('tem-esteira', !!podeEst);
       const bEst = document.getElementById('btn-abrir-esteira'); if (bEst) bEst.hidden = !podeEst;
+      if (podeEst) aquecerEsteira_();
     }
     ['postador','fotoia'].forEach(k => document.body.classList.toggle('sem-'+k, !temPermissao(usuario,'gerir_acessos') && !(usuario && usuario.acessosConfiguraveis ? temPermissao(usuario,k) : temPermissao(usuario,'catalogo_cadastrar'))));
     NOMES_PERMISSOES.forEach(([classe, chave]) => document.body.classList.toggle(classe, !temPermissao(usuario, chave)));

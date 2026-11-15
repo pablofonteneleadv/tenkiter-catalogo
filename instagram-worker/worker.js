@@ -288,7 +288,7 @@ function permissoes(env, req, medir, ctx) {
  *    Com o Apps Script fora do ar a conferência em segundo plano não decide nada e o guardado vale até o limite de 10 min;
  *  - toda conferência ao vivo da Esteira (inclusive a de sincronizar, a cada 30 s no app) renova ou apaga a linha;
  *  - a chave é um hash de WhatsApp+sessão: outra sessão, outro WhatsApp ou sessão inválida nunca acertam a linha, e o token não é guardado. */
-const EST_LEITURAS_RAPIDAS_ = new Set(['/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/fotos', '/esteira/caixa', '/esteira/preparacao']);
+const EST_LEITURAS_RAPIDAS_ = new Set(['/esteira/aquecer', '/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/fotos', '/esteira/caixa', '/esteira/preparacao']);
 const SESSAO_FRESCA_MS_ = 600000, SESSAO_REVALIDA_MS_ = 30000, SESSAO_REVALIDA_RESERVA_MS_ = 20000;
 const SESSAO_ESQUEMAS_ = new WeakSet();
 async function sessaoCacheEsquema_(env) {
@@ -7547,7 +7547,7 @@ const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString()
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
 const estFone_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 13);
-const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/sincronizar', '/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
+const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/sincronizar', '/esteira/aquecer', '/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
 const EST_INICIALIZACOES_ = new WeakMap();
 function estIniciar_(env) {
   let inicializacao = EST_INICIALIZACOES_.get(env.DB);
@@ -8345,6 +8345,12 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
         env.DB.prepare('SELECT 1 FROM est_lista WHERE data=? AND whats=? LIMIT 1').bind(data, eu).first());
       if (existente) await lerCatalogo();
     }).catch(() => {});
+  }
+  if (p === '/esteira/aquecer' && req.method === 'GET') {
+    // v7.82.0: a Gestão avisa que a Esteira pode ser aberta em seguida. A sessão já foi conferida (e guardada) na entrada da rota e o banco
+    // acorda aqui; a resposta não traz dado nenhum. Quem abrir a Esteira logo depois encontra a conferência pronta.
+    await bancoPronto;
+    return J({ ok: true });
   }
   if (p === '/esteira/medida' && req.method === 'POST') {
     // v7.80.0: tempos medidos nos aparelhos (anônimos: sem WhatsApp, sem sessão). Mesma autorização do menu; só números e rótulos de uma lista fixa.

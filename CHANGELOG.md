@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.82.0 — Esteira abre mais rápido vindo da Gestão e fotos da caixa com revisão
+
+- Quem tem a Esteira e abre a Gestão faz o servidor conferir e guardar a sessão em segundo plano (`GET /esteira/aquecer`, sem dado algum, no máximo uma vez a cada 4 min). Ao tocar em Esteira em seguida, a abertura não espera a conferência de sessão.
+- O envio de fotos para a caixa passa pela mesma revisão de fotos de Fotos pedidas: ver em 4:5, girar, enquadrar, mudar a ordem, tirar e conferir antes de seguir para a lista do envio (que continua com o botão "Enviar fotos").
+
 ## 7.81.1 — Revisão de fotos publicada e conferência de arquivos públicos
 
 - Corrige a 7.81.0: o módulo da revisão de fotos não constava na lista de arquivos publicados e dava 404 em produção, então "Adicionar fotos" mostrava erro. Agora está na lista.

@@ -72,6 +72,9 @@
     "tests/esteira_fluidez_ui.py": [
       "esteira"
     ],
+    "tests/esteira_aquecer_ui.py": [
+      "esteira"
+    ],
     "tests/esteira_fotos_revisao_ui.py": [
       "esteira"
     ],

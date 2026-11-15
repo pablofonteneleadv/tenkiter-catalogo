@@ -129,6 +129,21 @@ const cenarios = String.raw`
   await Q(PABLO, CX); await esperar();
   chk('a reserva segura novas conferências por 20 s (leitura seguinte não dispara outra)', vivas === antesReserva, { vivas, antesReserva });
 
+
+  // aquecimento da sessão pela Gestão (/esteira/aquecer)
+  await env.DB.prepare('DELETE FROM sessao_cache').run();
+  const va = vivas;
+  x = await Q(PABLO, '/esteira/aquecer'); await esperar();
+  chk('aquecer: 1ª chamada confere ao vivo, guarda a sessão e não devolve dado algum', x.status === 200 && x.j.ok === true && Object.keys(x.j).join() === 'ok' && vivas === va + 1 && (await linhas()).length === 1, { s: x.status, vivas, va });
+  x = await Q(PABLO, '/esteira/aquecer'); await esperar();
+  const vb = vivas;
+  x = await Q(PABLO, CX); await esperar();
+  chk('aquecer: a leitura seguinte (Esteira aberta em seguida) usa a sessão guardada, sem Apps Script', x.status === 200 && vivas === vb && /sessao_cache;dur=/.test(x.timing), { vivas, vb });
+  x = await Q('88999990099', '/esteira/aquecer'); await esperar();
+  chk('aquecer: sessão inválida é recusada (401) e não deixa linha', x.status === 401 && (await linhas()).length === 1, { s: x.status });
+  x = await w.fetch(new Request('https://ig.fake/esteira/aquecer'), env, ctx2);
+  chk('aquecer: sem cabeçalhos de sessão é recusado (401)', x.status === 401);
+
   // validade máxima e backend fora do ar
   x = await Q(PABLO, CX); await esperar();
   await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 700000).run();
