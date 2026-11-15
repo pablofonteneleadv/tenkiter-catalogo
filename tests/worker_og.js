@@ -13,7 +13,7 @@ function ok(cond, nome, detalhe) { total++; if (!cond) { falhas.push(nome); cons
 const fonteWorker = fs.readFileSync(path.join(RAIZ, 'og-worker', 'worker.js'), 'utf8');
 let apiLista = null, apiQuebrada = false, chamadasApi = 0;
 function carregar() {
-  const ctx = { Response, URL, fetch: async (u) => {
+  const ctx = { Response, URL, AbortSignal, fetch: async (u) => {
     chamadasApi++;
     if (apiQuebrada) throw new Error('API fora do ar');
     if (String(u).includes('tenkiter-midia')) return { ok: !String(u).includes('semposter') };      // HEAD da miniatura do vídeo do R2

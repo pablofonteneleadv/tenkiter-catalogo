@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.82.3 — Prazo nas consultas ao Apps Script e falha do KV registrada
+
+- Workers: a conferência de sessão do `tenkiter-ig` e do `tenkiter-midia` e a consulta do catálogo do `tenkiter-og` passam a ter prazo (8 s, 8 s e 10 s). Antes, um Apps Script lento prendia a requisição sem limite. O comportamento ao falhar não mudou (sem sessão / erro tratado).
+- `tenkiter-og`: a falha ao gravar a lista no KV agora deixa registro no log em vez de passar em silêncio.
+- Novo teste `tests/workers_timeouts.js` trava esses prazos.
+
 ## 7.82.2 — Sessão guardada com relógio que nunca empata
 
 - Worker: as conferências de sessão e as invalidações usam um relógio que nunca repete valor dentro do processo. Isso elimina o empate de milissegundos entre eventos seguidos (que no teste do CI aparecia ora como resposta lenta regravando permissões antigas, ora como conferência nova descartada) e mantém a trava estrita. A trava de gravação passou a ter teste direto, e o publicado 7.82.1 (X das miniaturas) segue junto.

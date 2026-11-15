@@ -88,7 +88,7 @@ async function permissoes(env, req) {
   if (guardado) return guardado.json();
   let lista = null;
   try {
-    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
+    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(8000), body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
     const j = await r.json();
     if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) lista = j.usuario.permissoes;
   } catch (e) { return null; }
