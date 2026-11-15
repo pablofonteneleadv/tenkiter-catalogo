@@ -147,6 +147,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("esteira_retomada_fotos_ui.py", lambda o: "PASS retomada de Fotos e Caixa" in o),
     ("esteira_primeiro_item_ui.py", lambda o: "FALHAS=0" in o),   # v7.79.0: primeiro cartão de Hoje e blocos independentes de Fotos
     ("esteira_fotos_revisao_ui.py", lambda o: "FALHAS=0" in o),   # v7.81.0: revisar fotos antes de adicionar ao produto, com desfazer
+    ("esteira_aquecer_ui.py", lambda o: "FALHAS=0" in o),   # v7.82.0: Gestão aquece a sessão da Esteira
     ("pedir_fotos_lote.py", lambda o: "RESULTADO" in o),  # Gestão e catálogo: observação, falha parcial e troca de conta
     ("fotos_postadas_ui.py", lambda o: "FALHAS=0" in o),  # v7.49.0: foto nova sobe na vitrine/postador; fotos postadas desmarcadas com "Postada há N dias"
     ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos

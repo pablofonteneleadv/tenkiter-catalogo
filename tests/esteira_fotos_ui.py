@@ -27,6 +27,10 @@ def confirmar_revisao(pg):
     pg.wait_for_selector("#rev-confirmar:not([disabled])", timeout=8000)
     pg.click("#rev-confirmar"); pg.wait_for_selector(".tk-aviso .tk-aviso-desfazer", timeout=4000)
     pg.evaluate("Object.defineProperty(document,'hidden',{value:true,configurable:true});document.dispatchEvent(new Event('visibilitychange'));delete document.hidden")
+def confirmar_revisao_caixa(pg):
+    """v7.82.0: as fotos do envio para a caixa passam pela revisão; confirma e espera a revisão fechar."""
+    pg.wait_for_selector("#rev-confirmar:not([disabled])", timeout=8000)
+    pg.click("#rev-confirmar"); pg.wait_for_selector(".folha[aria-label='Revisar fotos para a caixa']", state="detached", timeout=4000)
 def alvos_ok(pg, sel):
     v = pg.evaluate(ALVOS, sel); ruins = [x for x in v if x[0] < 43.5]; return not ruins, ruins
 M = "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/"
@@ -203,8 +207,11 @@ with sync_playwright() as p:
         pg.click("text=Enviar fotos para a caixa"); pg.wait_for_selector("#cx-escolher", timeout=4000)
         chk(f"{w}: sem foto o botão de enviar fica desligado", pg.is_disabled("#cx-enviar"))
         pg.set_input_files("#cx-arq", [foto_png((10, 120, 90)), foto_png((10, 120, 90)), foto_png((150, 40, 160))])
+        pg.wait_for_selector(".rev-card >> nth=1", timeout=6000); pg.wait_for_timeout(300)
+        chk(f"{w}: a revisão abre antes do envio, com a foto repetida de fora (e avisa)", pg.locator(".rev-card").count() == 2 and "1 foto repetida ficou de fora" in pg.inner_text(".folha[aria-label='Revisar fotos para a caixa']"), pg.inner_text(".folha[aria-label='Revisar fotos para a caixa']")[:300])
+        confirmar_revisao_caixa(pg)
         pg.wait_for_selector(".cx-linha >> nth=1", timeout=4000)
-        chk(f"{w}: foto repetida na mesma escolha fica de fora (e avisa)", pg.locator(".cx-linha").count() == 2 and "1 foto repetida ficou de fora" in pg.inner_text(".folha"), pg.inner_text(".folha")[:300])
+        chk(f"{w}: depois de confirmar, as 2 fotos entram na lista do envio", pg.locator(".cx-linha").count() == 2)
         pg.locator(".cx-linha input").first.fill("vestido verde, falta cadastrar")
         pg.fill("#cx-desc-lote", "Chegaram hoje da Malharia Sol")
         pg.click("text=Ligar o um produto do catálogo (opcional)"); pg.fill("#cx-busca", "midi linho"); pg.wait_for_selector('.folha [data-escolher="1001"]', timeout=6000); pg.click('.folha [data-escolher="1001"]')
@@ -225,7 +232,7 @@ with sync_playwright() as p:
         pg.get_by_role('button',name='Fechar',exact=True).click()
         pg.wait_for_selector('#fotos-status >> text=2 fotos enviadas para a caixa.',timeout=6000)
         pg.click("text=Enviar fotos para a caixa");pg.wait_for_selector('#cx-escolher')
-        pg.set_input_files('#cx-arq',[foto_png((240,200,20))]);pg.wait_for_selector('.cx-linha')
+        pg.set_input_files('#cx-arq',[foto_png((240,200,20))]);confirmar_revisao_caixa(pg);pg.wait_for_selector('.cx-linha')
         f['falhar_upload']=[f['uploads']+1];pg.click('#cx-enviar');pg.wait_for_selector('.folha',state='detached')
         pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar de novo');n_env=len(f['enviar'])
         pg.reload();pg.wait_for_selector('.peca');pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar de novo')

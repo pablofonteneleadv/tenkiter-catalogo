@@ -4,11 +4,12 @@
  * Carregado sob demanda pela Esteira (não pesa na abertura). Nada é enviado aqui: devolve as fotos revisadas a quem chamou.
  *
  *   const rev = TKRevisaoFotos({ el, bt, abrirFolha, abrirGaleria, impressao, enquadrar, linhaStatus });
- *   const r = await rev.abrir({ produto:{nome,codigo}, atuais:[urls]|Promise, pedido:['No pano'], arquivos:[File], max:8 });
+ *   const r = await rev.abrir({ produto:{nome,codigo}, atuais:[urls]|Promise, pedido:['No pano'], arquivos:[File], max:8, modo:'caixa'? });
  *   r === null (cancelou) | { itens:[{ arquivo:Blob|File, hash }], capaIdx:-1|n }   // capaIdx = posição da nova capa na lista final
  *
  * Ferramentas por foto: capa, mover (‹ ›), girar 90°, enquadrar 4:5 (janela já usada no cadastro da Gestão) e tirar.
- * Fotos repetidas são avisadas e ficam de fora. O limite de 8 fotos por produto é respeitado já aqui. */
+ * Fotos repetidas são avisadas e ficam de fora. O limite de 8 fotos por produto é respeitado já aqui.
+ * modo:'caixa' (v7.82.0): revisão das fotos do envio para a caixa: sem produto, sem capa e sem "Como está hoje"; confirmar só devolve as fotos. */
 (function () {
   'use strict';
   var LADO_MAX = 1600, QUALIDADE = 0.88, css = false;
@@ -52,8 +53,9 @@
     function abrir(op) {
       estilo();
       return new Promise(function (resolve) {
+        var caixa = op.modo === 'caixa';
         var itens = [], capaId = null, seq = 0, atuais = [], fim = false, confirmou = false, ocupado = 0;
-        var atuaisPronto = false, max = op.max || 8, dica = null, grade = null, bOk = null, rodape = null, aviso = null, atualBox = null;
+        var atuaisPronto = caixa, max = op.max || 8, dica = null, grade = null, bOk = null, rodape = null, aviso = null, atualBox = null;
         var arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
 
         function vagas() { return Math.max(0, max - atuais.length - itens.length); }
@@ -74,7 +76,7 @@
           }
           dizer([
             repetidas ? (repetidas === 1 ? '1 foto repetida ficou de fora.' : repetidas + ' fotos repetidas ficaram de fora.') : '',
-            fora ? 'Este produto aceita no máximo ' + max + ' fotos; algumas ficaram de fora.' : '',
+            fora ? (caixa ? 'Cada envio leva no máximo ' + max + ' fotos; envie as outras depois.' : 'Este produto aceita no máximo ' + max + ' fotos; algumas ficaram de fora.') : '',
             ruins ? 'Só fotos podem ser adicionadas.' : ''
           ].filter(Boolean).join(' '));
           pintar();
@@ -112,7 +114,7 @@
           grade.replaceChildren();
           var semCapaAtual = atuaisPronto && atuais.length === 0;
           itens.forEach(function (i, k) {
-            var ehCapa = semCapaAtual ? k === 0 : capaId === i.id;
+            var ehCapa = caixa ? false : semCapaAtual ? k === 0 : capaId === i.id;
             var li = el('li', 'rev-card' + (ehCapa ? ' capa' : '')); li.dataset.foto = String(i.id);
             var q = el('div', 'rev-quadro'), img = el('img'); img.alt = 'Foto ' + (k + 1) + ' de ' + itens.length; img.src = i.url; img.decoding = 'async'; q.append(img);
             if (ehCapa) q.append(el('span', 'tk-selo-foto', 'Capa'));
@@ -126,23 +128,24 @@
             var linha = el('div', 'rev-linha');
             var cap = el('button', 'bt rev-capa', ehCapa ? '★ É a capa' : '☆ Tornar capa'); cap.type = 'button'; cap.setAttribute('aria-pressed', String(ehCapa));
             cap.onclick = function () { capaId = ehCapa ? null : i.id; pintar(); };
-            cap.hidden = semCapaAtual;
+            cap.hidden = semCapaAtual || caixa;
             var x = botao('Tirar', 'Tirar a foto ' + (k + 1) + ' desta lista', function () { tirar(i); });
             x.classList.add('discreto');
             linha.append(cap, x);
             li.append(q, f, linha); grade.append(li);
           });
           var n = itens.length;
-          bOk.textContent = n === 0 ? 'Escolha as fotos' : n === 1 ? 'Adicionar 1 foto' : 'Adicionar ' + n + ' fotos';
+          var verbo = caixa ? 'Usar' : 'Adicionar';
+          bOk.textContent = n === 0 ? 'Escolha as fotos' : n === 1 ? verbo + ' 1 foto' : verbo + ' ' + n + ' fotos';
           bOk.disabled = n === 0 || !!ocupado;
-          if (rodape) rodape.textContent = vagas() > 0 ? 'Cabem mais ' + vagas() + (vagas() === 1 ? ' foto' : ' fotos') + ' neste produto.' : 'Este produto já está com o máximo de ' + max + ' fotos.';
+          if (rodape) rodape.textContent = vagas() > 0 ? 'Cabem mais ' + vagas() + (vagas() === 1 ? ' foto' : ' fotos') + (caixa ? ' neste envio.' : ' neste produto.') : (caixa ? 'Este envio já está com o máximo de ' + max + ' fotos.' : 'Este produto já está com o máximo de ' + max + ' fotos.');
           if (dica) dica.hidden = n > 0;
         }
 
         function pintarAtuais() {
           if (!atualBox) return;
           atualBox.replaceChildren();
-          if (!atuaisPronto) return;
+          if (caixa || !atuaisPronto) return;
           if (!atuais.length) { atualBox.append(el('p', 'muted', 'Este produto ainda não tem foto: a primeira da lista vira a capa (use ‹ › para escolher qual).')); return; }
           var d = el('details', 'rev-atuais'), s = el('summary', '', 'Como está hoje (' + atuais.length + (atuais.length === 1 ? ' foto' : ' fotos') + ')');
           var box = el('div', 'minis');
@@ -155,7 +158,7 @@
           d.append(s, box); atualBox.append(d);
         }
 
-        api.abrirFolha('esteira-fotos-revisao', 'Revisar fotos', function (ctx) {
+        api.abrirFolha('esteira-fotos-revisao', caixa ? 'Revisar fotos para a caixa' : 'Revisar fotos', function (ctx) {
           var corpo = ctx.corpo, pe = ctx.pe;
           var resumo = el('div', 'rev-resumo');
           var p = op.produto || {};
@@ -164,7 +167,7 @@
           if (op.pedido && op.pedido.length) resumo.append(el('small', 'muted', 'Pedido: ' + op.pedido.join(' · ')));
           atualBox = el('div', 'rev-atuais-box');
           aviso = el('p', 'muted'); aviso.setAttribute('role', 'status');
-          dica = el('p', 'muted rev-vazio', 'Toque em “Escolher fotos” para abrir a câmera ou a galeria. Nada é enviado antes de você confirmar.');
+          dica = el('p', 'muted rev-vazio', caixa ? 'Toque em “Escolher fotos” para abrir a câmera ou a galeria. As fotos só seguem quando você tocar em “Enviar fotos”.' : 'Toque em “Escolher fotos” para abrir a câmera ou a galeria. Nada é enviado antes de você confirmar.');
           grade = el('ul', 'rev-grade'); grade.setAttribute('aria-label', 'Fotos a adicionar');
           rodape = el('p', 'muted');
           var bMais = bt('Escolher fotos', '', function () { arq.click(); }); bMais.id = 'rev-escolher';
