@@ -19,6 +19,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.80.0 — Esteira reabre sem esperar a conferência de sessão, com medição real e esqueleto de carregamento
+
+- As leituras da Esteira (Hoje, primeiros cartões, tarefas, Fotos, Caixa e Preparação) aproveitam a última conferência de sessão feita ao vivo no Apps Script, guardada no D1 por até 10 minutos. Quem reabre a Esteira logo depois de usá-la não espera mais os 2–3,5 s da conferência.
+- Escritas, `/esteira/sincronizar` e `/esteira/menu` continuam conferindo ao vivo, e cada conferência renova ou invalida o guardado. Passados 30 s, a leitura segue e uma conferência ao vivo corre em segundo plano: se o acesso caiu, a leitura seguinte é recusada (no máximo uma leitura de atraso). Uma conferência lenta que começou antes de uma revogação nunca regrava permissões antigas.
+- O token da sessão não é gravado (só um hash de WhatsApp e sessão). A variável `SESSAO_CACHE=off` do Worker volta ao comportamento anterior.
+- O app envia, sem identidade, o tempo até o primeiro item de trabalho (Hoje, Fotos e outras abas) com rede, núcleos e memória do aparelho; o Worker guarda em `est_medida` (45 dias) para medir o Android real. Só números e rótulos de uma lista fixa; nunca WhatsApp, sessão ou conteúdo.
+- Enquanto a lista carrega, a Esteira mostra um esqueleto no formato dos cartões (sem animação para quem pede menos movimento), mantendo o texto para leitores de tela.
+
 ## 7.79.0 — Primeiro cartão de Hoje e Fotos em blocos
 
 - Hoje mostra os primeiros cartões de conferência assim que o Worker devolve identidade, resumo e a lista já gerada do dia (D1 e catálogo em cache), sem esperar RH, geração, tarefas nem leitura remota do catálogo. A resposta completa só acrescenta o restante, reaproveita os cartões já na tela e mantém o botão no lugar.

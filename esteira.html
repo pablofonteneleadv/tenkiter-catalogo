@@ -28,6 +28,12 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   :root { --preto:#0d0d0d; --areia:#F5F1E8; --branco:#fff; --linha:#e5dfd3; --suave:#5c5650; --verde:#198754; --verde-fundo:#e6f4ec; --alerta:#8a4b00; --alerta-fundo:#fdf0dc; --vermelho:#c62828; --vermelho-fundo:#fdecea; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
+  /* v7.80.0: esqueleto no lugar do texto solto enquanto a lista chega (sem animação se a pessoa pediu menos movimento) */
+  .esq { display:grid; gap:10px; margin-top:14px; }
+  .esq i { display:block; height:44px; border-radius:12px; background:linear-gradient(90deg,#ece6d9 25%,#f6f2e9 37%,#ece6d9 63%); background-size:400% 100%; animation:esq 1.4s ease infinite; }
+  .esq i:nth-child(2) { width:86%; } .esq i:nth-child(3) { width:72%; }
+  @keyframes esq { 0% { background-position:100% 0; } 100% { background-position:0 0; } }
+  @media (prefers-reduced-motion:reduce) { .esq i { animation:none; } }
   html, body { margin:0; }
   body { font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--areia); color:var(--preto); line-height:1.45; padding-bottom:calc(32px + env(safe-area-inset-bottom,0px)); }
   header { position:sticky; top:0; z-index:var(--z-sticky,20); background:var(--preto); color:#fff; padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); border-bottom:2px solid var(--laranja); }
@@ -293,7 +299,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.72.0"></script>
-<script src="esteira-fluidez.js?v=7.79.0"></script>
+<script src="esteira-fluidez.js?v=7.80.0"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script>
 (function () {
@@ -309,7 +315,30 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     performance.mark(nome);
   };
   // v7.79.0: marco do primeiro item de trabalho utilizável (conferência em Hoje, primeira foto em Fotos).
-  const marcarItem = (aba) => { const nome = 'esteira:' + aba + ':item'; if (!performance.getEntriesByName(nome, 'mark').length) performance.mark(nome); };
+  const marcarItem = (aba) => { const nome = 'esteira:' + aba + ':item'; if (!performance.getEntriesByName(nome, 'mark').length) { performance.mark(nome); agendarMedida(aba); } };
+  /* v7.80.0: tempo até o primeiro item, medido neste aparelho e enviado sem identidade (só números e rótulos de uma lista fixa, no máximo
+     uma vez por aba e forma de abertura em cada carregamento da página). Serve para o servidor medir o Android real. Falha em silêncio. */
+  const viaMedida = { hoje: 'frio', fotos: 'toque', prep: 'toque', pedidos: 'toque' }, medidasEnviadas = new Set();
+  function agendarMedida(aba) {
+    const via = viaMedida[aba] || 'toque', chave = aba + ':' + via;
+    if (medidasEnviadas.has(chave)) return;
+    medidasEnviadas.add(chave);
+    setTimeout(() => enviarMedida(aba, via), 3000);
+  }
+  function enviarMedida(aba, via) {
+    try {
+      const s = getSessao(); if (!s) return;
+      const marca = (n) => performance.getEntriesByName('esteira:' + aba + ':' + n, 'mark').slice(-1)[0];
+      const item = marca('item'); if (!item) return;
+      const base = via === 'toque' ? (marca('toque')?.startTime || 0) : 0, itemMs = Math.round(item.startTime - base);
+      if (!(itemMs > 0 && itemMs < 120000)) return;
+      const util = marca('util'), utilMs = util && util.startTime >= base ? Math.round(util.startTime - base) : 0, c = navigator.connection || {};
+      const corpo = { aba, via, item_ms: itemMs, util_ms: utilMs > 0 && utilMs < 120000 ? utilMs : 0,
+        rede: ['slow-2g', '2g', '3g', '4g'].includes(c.effectiveType) ? c.effectiveType : '', cpu: navigator.hardwareConcurrency || 0, mem: navigator.deviceMemory || 0,
+        v: ((document.querySelector('script[src*="esteira-fluidez.js"]')?.src || '').match(/v=([0-9A-Za-z._-]+)/) || [])[1] || '' };
+      void fetch(INSTAGRAM_URL + '/esteira/medida', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: JSON.stringify(corpo) }).catch(() => {});
+    } catch (_) { /* a medida nunca atrapalha o trabalho */ }
+  }
   let primeirosHoje = false;
   const fotosLocais=new Map();
   function snapshotEnvio(v){if(typeof v==='string'&&fotosLocais.has(v))return fotosLocais.get(v) instanceof Blob?{fotoLocal:true,urlLocal:v,arquivo:fotosLocais.get(v)}:fotosLocais.get(v);if(Array.isArray(v))return v.map(snapshotEnvio);if(v&&typeof v==='object'&&!(v instanceof Blob))return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,snapshotEnvio(x)]));return v;}
@@ -2839,6 +2868,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       Array.isArray(salvo.leituras) && (!abaIndicada || salvo.aba===abaIndicada) ? salvo : null;
     const aba = abaIndicada || local?.aba;
     if (aba) {
+      viaMedida[aba] = 'retomada';
       const r = validacao || await validar(aba);
       if (!mesmaConta(sessao)) return;
       if (!r.ok || !r.eu) return falha('Não consegui confirmar seu acesso à Esteira agora.', iniciarComSessao);

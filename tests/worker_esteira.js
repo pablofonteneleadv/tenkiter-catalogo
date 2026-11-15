@@ -38,7 +38,7 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
     }
     return new Response('{}', { status: 404 });
   };
-  const env = { DB: d1(), CACHE: KV, API_URL: 'https://api.fake/exec' };
+  const env = { DB: d1(), CACHE: KV, API_URL: 'https://api.fake/exec', SESSAO_CACHE: 'off' };   // v7.80.0: estes testes provam a conferência ao vivo; o aproveitamento tem teste próprio (worker_sessao_cache.js)
   const ctx = { waitUntil() {} };
   const respostasEquipe = [];   // v7.43.0: tudo o que a equipe recebeu de /esteira/* (para provar que custo e quantidade pedida nunca vazam)
   const A = async (whats, metodo, rota, corpo) => { const r = await w.fetch(new Request('https://ig.fake' + rota, { method: metodo, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': whats, 'X-TK-Sessao': 'tk3.sessao-' + whats, 'Origin': 'https://tenkitermodas.com.br' }, body: corpo ? JSON.stringify(corpo) : undefined }), env, ctx); const j = await r.json(); if (whats !== '88999990001') respostasEquipe.push({ rota, j }); return { r, j }; };
