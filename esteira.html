@@ -1101,9 +1101,16 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       const arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
       const bF = el('button', 'bt', 'Adicionar fotos'); bF.type = 'button'; bF.title = 'Câmera ou galeria'; bF.onclick = () => arq.click();
       arq.onchange = async () => {
-        const fs=[...arq.files].slice(0,8);if(!fs.length)return;bF.disabled=true;
-        try{await guardarProcesso('fotos',{produto:String(t.produto),fotos:fs},'Adicionar fotos: '+t.titulo).then(id=>{void processos.aguardar(id).then(r=>{if(r.ok&&obs&&!obs.value)obs.value=r.fotos+' foto'+(r.fotos===1?' enviada':'s enviadas')+' pela Esteira';if(st.isConnected)msg(r.ok?r.fotos+' foto'+(r.fotos===1?' adicionada':'s adicionadas')+' ao produto.':r.erro,r.ok?'ok':'erro')});return id;});arq.value='';msg('Fotos guardadas na fila. Pode continuar trabalhando.','ok');}
-        catch(e){msg(e.message,'erro');}finally{bF.disabled=false;}
+        const fs = [...arq.files].filter((f) => /^image\//.test(f.type)); arq.value = ''; if (!fs.length) return;
+        bF.disabled = true;
+        let rev = null;
+        try { rev = await revisarFotos({ produto: { nome: t.produtoNome || ('Produto ' + t.produto), codigo: t.produtoCodigo }, atuais: fotosAtuais(t.produto, t.produtoFoto), arquivos: fs, max: 8 }); }
+        catch (e) { bF.disabled = false; return msg(e.message || 'Não consegui abrir a revisão das fotos.', 'erro'); }
+        if (!rev) { bF.disabled = false; return; }
+        enviarFotosRevisadas({ produto: t.produto, nome: t.produtoNome, titulo: 'Adicionar fotos: ' + t.titulo, rev, st: { diga: (x, c) => msg(x, c || 'muted') },
+          aoDesfazer: () => { bF.disabled = false; },
+          aoErro: (mm) => { bF.disabled = false; if (st.isConnected) msg(mm, 'erro'); },
+          aoFim: (r) => { bF.disabled = false; if (obs && !obs.value) obs.value = r.fotos + ' foto' + (r.fotos === 1 ? ' enviada' : 's enviadas') + ' pela Esteira'; if (st.isConnected) msg(r.fotos + ' foto' + (r.fotos === 1 ? ' adicionada' : 's adicionadas') + ' ao produto.', 'ok'); } });
       };
       acoes.append(bF, arq);
     }
@@ -1351,6 +1358,47 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     tarefas.forEach((t) => { const k = String(t.produto); if (!m.has(k)) m.set(k, { produto: k, nome: t.produtoNome, codigo: t.produtoCodigo, foto: t.produtoFoto, noSite: t.noSite !== false, itens: [] }); m.get(k).itens.push({ id: t.id, rotulos: t.rotulos || [], obs: t.pedidoObs || '', texto: t.instrucao || '', por: t.por || 'alguém da equipe', em: t.criada_em || '' }); });
     return [...m.values()];
   }
+  /* ---- v7.81.0: revisar as fotos ANTES de adicionar ao produto (ver, enquadrar, girar, capa, ordem) e desfazer por 8 s ---- */
+  let revisaoFotos = null;
+  async function revisarFotos(op) {
+    if (!revisaoFotos) {
+      await carregarScript('esteira-fotos-revisao.js?v=7.81.0');
+      revisaoFotos = TKRevisaoFotos({
+        el, bt, abrirFolha, abrirGaleria, impressao, linhaStatus,
+        enquadrar: async (o) => {
+          await carregarScript('admin-enquadrar.js?v=7.61.0');
+          // A janela nasceu na Gestão e conta com a camada `.overlay-sheet` de lá: aqui é a mesma camada do visualizador de fotos.
+          if (!document.getElementById('tk-enq-esteira')) { const s = document.createElement('style'); s.id = 'tk-enq-esteira'; s.textContent = '.overlay-sheet.enq-ov{display:none;position:fixed;inset:0;z-index:var(--z-foto,130);justify-content:center;background:rgba(13,13,13,.55)}.overlay-sheet.enq-ov.aberto{display:flex}'; document.head.append(s); }
+          window.TKEnquadrar.abrir(o);
+          document.querySelector('#enq-ov [data-enq=fechar]')?.classList.add('tk-fechar');
+        },
+      });
+    }
+    return revisaoFotos.abrir(op);
+  }
+  const fotosAtuais = (id, capa) => catalogoFundo().then((c) => { const x = c && c.get(String(id)); return x ? [x.Foto_URL].concat(lista(x.Fotos_Galeria)).map((u) => String(u || '').trim()).filter(urlOk) : (urlOk(capa) ? [capa] : []); }).catch(() => (urlOk(capa) ? [capa] : []));
+  /** As fotos revisadas só entram na fila depois de 8 s (tempo de desfazer). Se a tela sair de cena, entram na hora: nada se perde. */
+  function enviarFotosRevisadas({ produto, nome, titulo, rev, tarefas, st, aoDesfazer, aoErro, aoFim }) {
+    const n = rev.itens.length, dados = { produto: String(produto), fotos: rev.itens, capaIdx: rev.capaIdx };
+    if (tarefas && tarefas.length) dados.tarefas = tarefas;
+    let enviado = false, desfeito = false, tempo = 0;
+    const quandoOculta = () => { if (document.hidden) void enfileirar(); };
+    const soltar = () => { clearTimeout(tempo); document.removeEventListener('visibilitychange', quandoOculta); window.removeEventListener('pagehide', enfileirar); };
+    async function enfileirar() {
+      if (enviado || desfeito) return; enviado = true; soltar();
+      try {
+        const id = await guardarProcesso('fotos', dados, titulo);
+        void processos.aguardar(id).then((r) => { if (r.ok) aoFim?.(r); else aoErro?.(r.erro); });
+        st?.diga('Fotos guardadas na fila. Pode continuar trabalhando.', 'ok');
+      } catch (e) { aoErro?.(e.message || 'Não consegui guardar as fotos.'); }
+    }
+    document.addEventListener('visibilitychange', quandoOculta); window.addEventListener('pagehide', enfileirar);
+    const desfazer = () => { if (enviado || desfeito) return; desfeito = true; soltar(); aoDesfazer?.(); st?.diga('Pronto, nada foi enviado.', ''); };
+    if (!window.TKAviso) return void enfileirar();
+    tempo = setTimeout(enfileirar, 8000);
+    st?.diga('As fotos seguem em 8 s. Toque em Desfazer para mudar algo.', '');
+    TKAviso.ok((n === 1 ? '1 foto vai' : n + ' fotos vão') + ' para ' + (nome || 'o produto') + '.', { desfazer: { rotulo: 'Desfazer', fn: desfazer }, ms: 8000 });
+  }
   /** Cartão só de fotos: foto atual (abre todas + Ver no site), nome/código, o que foi pedido (quem e quando), Ver no site, Editar produto, Adicionar fotos e Feito. */
   function cartaoPedidoFotos(pd, aoMudar) {
     const c = el('div', 'pedido-fotos'); c.dataset.produto = pd.produto;
@@ -1372,9 +1420,16 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     const bOk = bt('Feito', 'feito-fotos');
     const ac = acoes(bAdd, bOk);
     const pronto = (txt) => { ac.replaceChildren(); st.diga(txt, 'ok'); c.classList.add('feito'); setTimeout(() => { if (c.isConnected&&ABA!=='fotos') aoMudar(); }, 1600); };
-    arq.onchange=async()=>{const fs=[...arq.files].slice(0,8);if(!fs.length)return;bAdd.disabled=true;bOk.disabled=true;
-      try{const id=await guardarProcesso('fotos',{produto:String(pd.produto),fotos:fs,tarefas:ids},'Fotos pedidas: '+(pd.nome||pd.produto));arq.value='';void processos.aguardar(id).then(r=>{if(!r.ok&&st.isConnected){bAdd.disabled=bOk.disabled=false;st.diga(r.erro,'erro')}});st.diga('Fotos guardadas na fila. Pode continuar trabalhando.','ok');}
-      catch(e){bAdd.disabled=bOk.disabled=false;st.diga(e.message,'erro');}
+    arq.onchange = async () => {
+      const fs = [...arq.files].filter((f) => /^image\//.test(f.type)); arq.value = ''; if (!fs.length) return;
+      bAdd.disabled = bOk.disabled = true;
+      let rev = null;
+      try { rev = await revisarFotos({ produto: { nome: pd.nome || ('Produto ' + pd.produto), codigo: pd.codigo }, atuais: fotosAtuais(pd.produto, pd.foto), pedido: pd.itens.flatMap((it) => it.rotulos || []), arquivos: fs, max: 8 }); }
+      catch (e) { bAdd.disabled = bOk.disabled = false; return st.diga(e.message || 'Não consegui abrir a revisão das fotos.', 'erro'); }
+      if (!rev) { bAdd.disabled = bOk.disabled = false; return; }
+      enviarFotosRevisadas({ produto: pd.produto, nome: pd.nome, titulo: 'Fotos pedidas: ' + (pd.nome || pd.produto), rev, tarefas: ids, st,
+        aoDesfazer: () => { bAdd.disabled = bOk.disabled = false; },
+        aoErro: (m) => { if (st.isConnected) { bAdd.disabled = bOk.disabled = false; st.diga(m, 'erro'); } } });
     };
     bOk.onclick = async () => { bOk.disabled = true; st.diga('Salvando…'); const r = await srv('/esteira/fotos/concluir', { ids }); if(r.foraDaTela)return; if (!r.ok) { bOk.disabled = false; return st.diga(r.erro || 'Não consegui salvar. Tente de novo.', 'erro'); } pronto('Pedido concluído.'); };
     c.append(topo, ul, acoesCadastro(x, pd.produto), ac, arq, st);
@@ -1946,14 +2001,15 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     const corpo = el('div', 'corpo'), pe = el('div', 'pe'); folha.append(topo, corpo, pe); fundo.append(folha);
     const pj = window.TKJanela ? TKJanela.prender(fundo, { papel: false, camada: chave, fechar: () => tentarFechar(), foco: () => corpo.querySelector('input:not([type=file]), select, textarea') || x }) : null;
     const devolver = () => { if (pj) pj.soltar(); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    let gancho = {};   // quem monta a folha pode devolver { sujo(), aoFechar() } (v7.81.0: revisão de fotos)
     /* fechar(): fecha de vez (usado depois de salvar). Voltar/Esc/✕/toque fora passam por tentarFechar() e perguntam se há alteração. */
-    const fechar = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (estava) devolver(); };
+    const fechar = () => { const estava=fundo.isConnected;fundo.remove(); if (estava&&window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (estava) { devolver(); gancho.aoFechar?.(); } };
     fundo.esteiraFechar=fechar;
     fundo.esteiraDono=String(getSessao()?.whatsapp||'');
-    montar({ corpo, pe, fechar }); pe.hidden = !pe.childNodes.length;
-    const guarda = FOLHAS_COM_GUARDA.has(chave) ? guardaAlteracao(corpo) : { ok: () => true };
+    gancho = montar({ corpo, pe, fechar, tentar: () => tentarFechar() }) || {}; pe.hidden = !pe.childNodes.length;
+    const guarda = gancho.sujo ? { ok: () => !gancho.sujo() || confirm(MSG_DESCARTAR) } : FOLHAS_COM_GUARDA.has(chave) ? guardaAlteracao(corpo) : { ok: () => true };
     const tentarFechar = () => { if (guarda.ok()) fechar(); };
-    const aoVoltar = () => { if (!fundo.isConnected) return; if (guarda.ok()) { fundo.remove(); devolver(); return; } setTimeout(() => { if (fundo.isConnected && window.TKCamadas) TKCamadas.empilhar(chave, aoVoltar); }, 0); };
+    const aoVoltar = () => { if (!fundo.isConnected) return; if (guarda.ok()) { fundo.remove(); devolver(); gancho.aoFechar?.(); return; } setTimeout(() => { if (fundo.isConnected && window.TKCamadas) TKCamadas.empilhar(chave, aoVoltar); }, 0); };
     x.onclick = tentarFechar; fundo.onclick = (e) => { if (e.target === fundo) tentarFechar(); };
     document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar(chave, aoVoltar);
     return fechar;
@@ -2798,7 +2854,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     await c.progresso('Registrando o aceite…');return c.worker('aceitar','/esteira/aceitar',{id:d.id});
   }
   async function subirArquivos(d,c){const urls=[];for(let i=0;i<d.fotos.length;i++){await c.progresso('Enviando foto '+(i+1)+' de '+d.fotos.length+'…');const u=await c.etapa('foto-'+i,async()=>{c.assert();const blob=await reduzirFoto(d.fotos[i].arquivo||d.fotos[i]);c.assert();return enviarFoto(blob)});urls.push(u)}return urls;}
-  async function executarFotos(d,c){const urls=await subirArquivos(d,c);await c.progresso('Salvando as fotos no produto…');const r=await c.etapa('produto',()=>colocarNoProduto(d.produto,urls,'',c));if(d.tarefas?.length)await c.worker('concluir','/esteira/fotos/concluir',{ids:d.tarefas,fotos:urls.length});return{ok:true,fotos:urls.length,produto:d.produto};}
+  async function executarFotos(d,c){const urls=await subirArquivos(d,c);await c.progresso('Salvando as fotos no produto…');const capa=Number.isInteger(d.capaIdx)&&d.capaIdx>=0?urls[d.capaIdx]||'':'';const r=await c.etapa('produto',()=>colocarNoProduto(d.produto,urls,capa,c));if(d.tarefas?.length)await c.worker('concluir','/esteira/fotos/concluir',{ids:d.tarefas,fotos:urls.length});return{ok:true,fotos:urls.length,produto:d.produto};}
   async function executarCaixa(d,c){const urls=await subirArquivos(d,c);await c.progresso('Registrando as fotos na caixa…');return c.worker('caixa','/esteira/caixa/enviar',{lote:c.job.id,descricaoLote:d.descricaoLote||'',produto:d.produto||'',produtoNome:d.produtoNome||'',itens:urls.map((url,i)=>({op:c.job.id+'-'+i,url,descricao:d.fotos[i].descricao||'',hash:d.fotos[i].hash||''}))});}
   async function executarColocar(d,c){await c.progresso('Salvando as fotos no produto…');await c.etapa('produto',()=>colocarNoProduto(d.produto,d.urls,d.capa||'',c));await c.progresso('Atualizando a caixa…');return c.worker('caixa','/esteira/caixa/usar',{ids:d.ids,uso:'produto',produto:d.produto,produtoNome:d.produtoNome});}
   async function executarPedido(d,c){await c.progresso('Salvando o pedido…');const pacote=await resolverFotos(d.pacote,c);const r=await c.worker('salvar','/esteira/pedidos/salvar',pacote);if(d.enviar){await c.progresso('Marcando o pedido como enviado…');await c.worker('enviar','/esteira/pedidos/enviar',{id:r.pedido.id})}return r;}

@@ -7,6 +7,11 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get('TK_BASE', 'http://127.0.0.1:8777/')
 OUT = Path(os.environ.get('TK_OUT', Path(__file__).parent / 'saida' / 'esteira-fluidez')); OUT.mkdir(parents=True, exist_ok=True)
 ok, falhas = 0, []
+def confirmar_revisao(pg):
+    """v7.81.0: as fotos passam pela revisão; confirma e solta os 8 s do desfazer (tela oculta entra na fila na hora)."""
+    pg.wait_for_selector("#rev-confirmar:not([disabled])", timeout=8000)
+    pg.click("#rev-confirmar"); pg.wait_for_selector(".tk-aviso .tk-aviso-desfazer", timeout=4000)
+    pg.evaluate("Object.defineProperty(document,'hidden',{value:true,configurable:true});document.dispatchEvent(new Event('visibilitychange'));delete document.hidden")
 def chk(nome, cond, det=None):
     global ok
     if cond: ok += 1; print('  ✔ ' + nome)
@@ -386,6 +391,7 @@ with sync_playwright() as p:
         ot.scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"esteira_outras_{w}.png"))
         # foto dentro da tarefa: mesmo caminho do painel (servidor de fotos) e pacote completo do update
         card.locator('.tarefa[data-tarefa="12"] input.arq-foto').set_input_files({"name": "foto.png", "mimeType": "image/png", "buffer": PNG})
+        confirmar_revisao(pg)
         pg.wait_for_selector("text=1 foto adicionada ao produto", timeout=8000)
         up = st["updates"][-1] if st["updates"] else {}
         chk(f"{w}: foto sobe ao servidor de fotos com a sessão e vira capa do produto sem foto", st["uploads"] == 1 and st["upload_hdr"] == "tk3.teste.sessao" and up.get("id") == "2001" and up.get("fotoUrlExistente") == URL_FOTO and up.get("nome") == "Blusa Nova Tricô" and up.get("descricao") == "Tricô macio" and up.get("sessao") == "tk3.teste.sessao", up)

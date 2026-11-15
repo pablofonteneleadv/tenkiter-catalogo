@@ -22,6 +22,11 @@ def foto_png(cor): return {"name": "foto%d.png" % sum(cor), "mimeType": "image/p
 def shot(pg, nome, full=False): pg.screenshot(path=str(EVID / (nome + ".jpg")), type="jpeg", quality=78, full_page=full)
 SEM_ROLAGEM = "document.documentElement.scrollWidth <= innerWidth"
 ALVOS = "(sel)=>[...document.querySelectorAll(sel)].filter(b=>b.getClientRects().length && getComputedStyle(b).visibility!=='hidden').map(b=>{const r=b.getBoundingClientRect();return [Math.round(Math.min(r.width,r.height)*10)/10,(b.textContent||b.getAttribute('aria-label')||'').trim().slice(0,30)]})"
+def confirmar_revisao(pg):
+    """v7.81.0: as fotos passam pela revisão; confirma e solta os 8 s do desfazer (tela oculta entra na fila na hora)."""
+    pg.wait_for_selector("#rev-confirmar:not([disabled])", timeout=8000)
+    pg.click("#rev-confirmar"); pg.wait_for_selector(".tk-aviso .tk-aviso-desfazer", timeout=4000)
+    pg.evaluate("Object.defineProperty(document,'hidden',{value:true,configurable:true});document.dispatchEvent(new Event('visibilitychange'));delete document.hidden")
 def alvos_ok(pg, sel):
     v = pg.evaluate(ALVOS, sel); ruins = [x for x in v if x[0] < 43.5]; return not ruins, ruins
 M = "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/"
@@ -174,6 +179,7 @@ with sync_playwright() as p:
         chk(f"{w}: aba Fotos sem rolagem horizontal", pg.evaluate(SEM_ROLAGEM))
         n_up = len(st["updates"])
         cf.locator("input.arq-foto").set_input_files([foto_png((200, 80, 60)), foto_png((60, 90, 200))])
+        confirmar_revisao(pg)
         pg.wait_for_selector("text=2 fotos adicionadas ao produto. Pedido concluído.", timeout=8000)
         up = st["updates"][-1] if len(st["updates"]) > n_up else {}
         chk(f"{w}: 'Adicionar fotos' sobe ao servidor de fotos e acrescenta à galeria do produto", up.get("id") == "1001" and (M + "up001.jpg") in up.get("fotosGaleriaExistentes", "") and (M + "up002.jpg") in up.get("fotosGaleriaExistentes", "") and up.get("fotoUrlExistente") == "https://midia.fake/m/1001-capa.jpg", up)

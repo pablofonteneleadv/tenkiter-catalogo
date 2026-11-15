@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.81.0 — Revisar as fotos antes de adicionar ao produto
+
+- Em Fotos pedidas e nas tarefas de fotos da Preparação, escolher as fotos abre uma tela de revisão: fotos grandes no formato 4:5 do site, enquadrar (a mesma janela da Gestão), girar, mudar a ordem, escolher a capa, tirar, ver "Como está hoje" e o que foi pedido. Nada é enviado antes de confirmar em "Adicionar N fotos".
+- Depois de confirmar há 8 segundos para Desfazer; se a tela sair de cena, as fotos entram na fila na hora. A capa e a ordem escolhidas valem no produto. O limite de 8 fotos é respeitado na revisão.
+- A tela é carregada só quando usada, sem pesar na abertura da Esteira.
+
 ## 7.80.0 — Esteira reabre sem esperar a conferência de sessão, com medição real e esqueleto de carregamento
 
 - As leituras da Esteira (Hoje, primeiros cartões, tarefas, Fotos, Caixa e Preparação) aproveitam a última conferência de sessão feita ao vivo no Apps Script, guardada no D1 por até 10 minutos. Quem reabre a Esteira logo depois de usá-la não espera mais os 2–3,5 s da conferência.
