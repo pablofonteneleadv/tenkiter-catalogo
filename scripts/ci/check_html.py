@@ -7,6 +7,9 @@ Checa, para cada .html versionado:
   3. <meta charset> e <meta name="viewport"> presentes;
   4. nenhum marcador de conflito de merge (<<<<<<<, =======, >>>>>>>).
 
+  5. todo .js/.css local que uma página pública carrega (tag ou carregarScript) consta em scripts/deploy/public-files.json;
+     o site só publica essa lista: arquivo fora dela vira 404 em produção (aconteceu com a revisão de fotos em 15/11/2026).
+
 Sai com código 1 se qualquer página falhar.
 """
 import os
@@ -76,12 +79,37 @@ def checar(caminho):
     return rel, problemas
 
 
+def publicados():
+    import json
+    try:
+        with open(os.path.join(RAIZ, "scripts", "deploy", "public-files.json"), encoding="utf-8") as f:
+            return set(json.load(f))
+    except Exception:
+        return None
+
+
+def nao_publicados(caminho, lista):
+    """Arquivos locais citados pela página (src/href ou carregarScript) que o deploy não publica."""
+    with open(caminho, encoding="utf-8") as f:
+        texto = f.read()
+    achados = set()
+    for m in re.finditer(r"""(?:src|href)=["']([A-Za-z0-9_./-]+\.(?:js|css))(?:\?[^"']*)?["']""", texto):
+        achados.add(m.group(1))
+    for m in re.finditer(r"""carregarScript\(\s*["']([A-Za-z0-9_./-]+\.js)(?:\?[^"']*)?["']""", texto):
+        achados.add(m.group(1))
+    return sorted(a for a in achados if a.lstrip("/") not in lista)
+
+
 def main():
     total = 0
     falhas = 0
+    lista = publicados()
     for caminho in paginas():
         total += 1
         rel, problemas = checar(caminho)
+        if lista is not None and os.path.basename(caminho) in lista:
+            for faltou in nao_publicados(caminho, lista):
+                problemas.append("%s não está em scripts/deploy/public-files.json (viraria 404 em produção)" % faltou)
         if problemas:
             falhas += 1
             print("::error file=%s::%s" % (rel, "; ".join(problemas)))

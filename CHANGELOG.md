@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.81.1 — Revisão de fotos publicada e conferência de arquivos públicos
+
+- Corrige a 7.81.0: o módulo da revisão de fotos não constava na lista de arquivos publicados e dava 404 em produção, então "Adicionar fotos" mostrava erro. Agora está na lista.
+- O `check_html.py` passa a conferir se todo `.js`/`.css` que uma página pública carrega (por tag ou por `carregarScript`) consta em `scripts/deploy/public-files.json`, para esse erro não se repetir.
+
 ## 7.81.0 — Revisar as fotos antes de adicionar ao produto
 
 - Em Fotos pedidas e nas tarefas de fotos da Preparação, escolher as fotos abre uma tela de revisão: fotos grandes no formato 4:5 do site, enquadrar (a mesma janela da Gestão), girar, mudar a ordem, escolher a capa, tirar, ver "Como está hoje" e o que foi pedido. Nada é enviado antes de confirmar em "Adicionar N fotos".
