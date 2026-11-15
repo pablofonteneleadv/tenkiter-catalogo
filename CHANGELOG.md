@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.80.0 — Esteira reabre sem esperar a conferência de sessão
+
+- As leituras da Esteira (Hoje, primeiros cartões, tarefas, Fotos, Caixa e Preparação) aproveitam a última conferência de sessão feita ao vivo no Apps Script, guardada no D1 por até 10 minutos. Quem reabre a Esteira logo depois de usá-la não espera mais os 2–3,5 s da conferência.
+- Escritas, `/esteira/sincronizar` e `/esteira/menu` continuam conferindo ao vivo, e cada conferência renova ou invalida o guardado. Passados 30 s, a leitura segue e uma conferência ao vivo corre em segundo plano: se o acesso caiu, a leitura seguinte é recusada (no máximo uma leitura de atraso). Uma conferência lenta que começou antes de uma revogação nunca regrava permissões antigas.
+- O token da sessão não é gravado (só um hash de WhatsApp e sessão). A variável `SESSAO_CACHE=off` do Worker volta ao comportamento anterior.
+
 ## 7.79.0 — Primeiro cartão de Hoje e Fotos em blocos
 
 - Hoje mostra os primeiros cartões de conferência assim que o Worker devolve identidade, resumo e a lista já gerada do dia (D1 e catálogo em cache), sem esperar RH, geração, tarefas nem leitura remota do catálogo. A resposta completa só acrescenta o restante, reaproveita os cartões já na tela e mantém o botão no lugar.

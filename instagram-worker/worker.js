@@ -274,21 +274,48 @@ async function cfgSet(env, k, v) { if (v === null || v === undefined) await env.
 const PERMS_MEMO_ = new WeakMap();
 const RH_TOKEN_ = 'tenkiter2026';   // token compartilhado já público no site (curriculos.html); só identifica o site no Apps Script do RH
 const MSG_ROTINA_POST_ = new Set(['/msg/enviar', '/msg/lida', '/msg/encerrar', '/msg/dono', '/msg/presenca', '/msg/iniciar', '/msg/rotular', '/msg/notas', '/msg/ficha', '/msg/pessoa', '/msg/contexto', '/msg/anexo', '/msg/agendar', '/msg/acompanhamento']);
-function permissoes(env, req, medir) {
+function permissoes(env, req, medir, ctx) {
   let m = PERMS_MEMO_.get(req);
-  if (!m) { m = permissoesConferir_(env, req, medir); PERMS_MEMO_.set(req, m); }
+  if (!m) { m = permissoesConferir_(env, req, medir, ctx); PERMS_MEMO_.set(req, m); }
   return m;
 }
-async function permissoesConferir_(env, req, medir = (_, executar) => executar()) {
-  const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
-  const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
-  if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
-  let caminho = ''; try { caminho = new URL(req.url).pathname; } catch (e) { /* sem caminho: confere na hora */ }
-  const esteira = caminho.startsWith('/esteira/');
-  const chave = esteira ? null : new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
-  const podeCache = !esteira && !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
-  const cache = chave ? caches.default : null, g = podeCache ? await cache.match(chave) : null;
-  if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; v.permissoes.acessosConfiguraveis = v.configuraveis === true;v.permissoes.msgModelos=v.msgModelos||{}; return v.permissoes; }
+/** v7.80.0: leituras da Esteira (listas e Caixa) aproveitam a última conferência de sessão guardada no D1.
+ * Conta, perfil e permissões são os da última conferência AO VIVO no Apps Script. Regras:
+ *  - vale até 10 min e só para GET das rotas abaixo; qualquer escrita (POST), /esteira/sincronizar e /esteira/menu conferem ao vivo;
+ *  - passados 30 s, a leitura segue com o que está guardado e uma conferência ao vivo corre em segundo plano: se a sessão ou o acesso
+ *    caiu, a linha é apagada e a leitura seguinte já é recusada (no máximo uma leitura de atraso);
+ *  - toda conferência ao vivo da Esteira (inclusive a de sincronizar, a cada 30 s no app) renova ou apaga a linha;
+ *  - a chave é um hash de WhatsApp+sessão: outra sessão, outro WhatsApp ou sessão inválida nunca acertam a linha, e o token não é guardado. */
+const EST_LEITURAS_RAPIDAS_ = new Set(['/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/fotos', '/esteira/caixa', '/esteira/preparacao']);
+const SESSAO_FRESCA_MS_ = 600000, SESSAO_REVALIDA_MS_ = 30000;
+const SESSAO_ESQUEMAS_ = new WeakSet();
+async function sessaoCacheEsquema_(env) {
+  if (SESSAO_ESQUEMAS_.has(env.DB)) return;
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS sessao_cache (chave TEXT PRIMARY KEY, dados TEXT NOT NULL, em INTEGER NOT NULL)').run();
+  SESSAO_ESQUEMAS_.add(env.DB);
+}
+function permissoesMontar_(lista, perfis, nome, configuraveis, msgModelos) {
+  lista.msgPerfis = perfis; lista.msgNome = nome; lista.acessosConfiguraveis = configuraveis; lista.msgModelos = msgModelos;
+  return lista;
+}
+/** Grava (sessão com permissões) ou invalida (sessão ou acesso que caiu) a linha da conferência. Nunca derruba a requisição.
+ * `inicio` é o instante em que a conferência ao vivo COMEÇOU: uma conferência que começou antes de outra já gravada (ou de uma
+ * invalidação) não sobrescreve nada, então uma resposta lenta nunca ressuscita permissões antigas. A invalidação só atualiza linha
+ * existente (não cria linha para sessão desconhecida). */
+async function sessaoRegistrar_(env, chave, v, inicio) {
+  try {
+    await sessaoCacheEsquema_(env);
+    if (v && Array.isArray(v.lista) && v.lista.length) {   // sem permissões (acesso retirado) nada é guardado
+      await env.DB.prepare("INSERT INTO sessao_cache (chave, dados, em) VALUES (?, ?, ?) ON CONFLICT(chave) DO UPDATE SET dados=excluded.dados, em=excluded.em WHERE excluded.em >= sessao_cache.em")
+        .bind(chave, JSON.stringify({ permissoes: v.lista, perfis: v.perfis, nome: v.nome, configuraveis: v.configuraveis, msgModelos: v.msgModelos }), inicio).run();
+      if (Math.random() < 0.04) await env.DB.prepare('DELETE FROM sessao_cache WHERE em < ?').bind(Date.now() - 3600000).run();
+    } else if (v && v !== 'indisponivel') {
+      await env.DB.prepare("UPDATE sessao_cache SET dados='', em=? WHERE chave=? AND em<=?").bind(inicio, chave, inicio).run();
+    }
+  } catch (e) { /* conforto: a próxima conferência ao vivo tenta de novo */ }
+}
+/** Conferência ao vivo no Apps Script (e no RH, se o catálogo for mais antigo). 'indisponivel' = backend fora do ar. */
+async function permissoesAoVivo_(env, whats, sessao, medir = (_, executar) => executar()) {
   let lista = null, perfis = [], nome = '', configuraveis = false, msgModelos = {};
   try {
     // Backend indisponível: falha fechada (503), sem confundir com sessão inválida (401).
@@ -310,8 +337,48 @@ async function permissoesConferir_(env, req, medir = (_, executar) => executar()
       } catch (e) { /* mantém a resposta do catálogo */ }
     }
   } catch (e) { return 'indisponivel'; }         // backend fora do ar != "faca login"
+  return { lista, perfis, nome, configuraveis, msgModelos };
+}
+async function permissoesConferir_(env, req, medir = (_, executar) => executar(), ctx) {
+  const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
+  const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
+  if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
+  let caminho = ''; try { caminho = new URL(req.url).pathname; } catch (e) { /* sem caminho: confere na hora */ }
+  const esteira = caminho.startsWith('/esteira/');
+  // SESSAO_CACHE='off' (variável do Worker) desliga o aproveitamento e volta a conferir ao vivo em toda requisição.
+  const chaveD1 = esteira && env.DB && env.SESSAO_CACHE !== 'off' ? await sha('est-sessao-v1|' + whats + '|' + sessao) : null;
+  if (chaveD1 && req.method === 'GET' && EST_LEITURAS_RAPIDAS_.has(caminho)) {
+    try {
+      await sessaoCacheEsquema_(env);
+      const linha = await medir('sessao_cache_leitura', () => env.DB.prepare('SELECT dados, em FROM sessao_cache WHERE chave=?').bind(chaveD1).first());
+      const idade = linha ? Date.now() - Number(linha.em) : -1;
+      if (linha && linha.dados && idade >= 0 && idade < SESSAO_FRESCA_MS_) {
+        const v = JSON.parse(linha.dados);
+        if (Array.isArray(v.permissoes)) {
+          await medir('sessao_cache', async () => 0);
+          if (idade > SESSAO_REVALIDA_MS_ && typeof ctx?.waitUntil === 'function') {
+            const inicio = Date.now();
+            ctx.waitUntil(permissoesAoVivo_(env, whats, sessao).then((novo) => sessaoRegistrar_(env, chaveD1, novo, inicio)).catch(() => {}));
+          }
+          return permissoesMontar_(v.permissoes, Array.isArray(v.perfis) ? v.perfis : [], String(v.nome || ''), v.configuraveis === true, v.msgModelos || {});
+        }
+      }
+    } catch (e) { /* cache é conforto: segue para a conferência ao vivo */ }
+  }
+  const chave = esteira ? null : new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
+  const podeCache = !esteira && !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
+  const cache = chave ? caches.default : null, g = podeCache ? await cache.match(chave) : null;
+  if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; v.permissoes.acessosConfiguraveis = v.configuraveis === true;v.permissoes.msgModelos=v.msgModelos||{}; return v.permissoes; }
+  const inicioVivo = Date.now();
+  const vivo = await permissoesAoVivo_(env, whats, sessao, medir);
+  if (vivo === 'indisponivel') return 'indisponivel';
+  const { lista, perfis, nome, configuraveis, msgModelos } = vivo;
   if (lista && chave) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis, nome, configuraveis, msgModelos }), { headers: { 'Cache-Control': 'max-age=120' } }));
-  if (lista) { lista.msgPerfis = perfis; lista.msgNome = nome; lista.acessosConfiguraveis = configuraveis; lista.msgModelos=msgModelos; }
+  if (chaveD1) {
+    const gravar = sessaoRegistrar_(env, chaveD1, vivo, inicioVivo);
+    if (typeof ctx?.waitUntil === 'function') ctx.waitUntil(gravar); else await gravar;
+  }
+  if (lista) permissoesMontar_(lista, perfis, nome, configuraveis, msgModelos);
   return lista || 'sem_sessao';                  // sessao que o backend nao reconhece
 }
 
@@ -6614,7 +6681,7 @@ export default {
       if (resposta.status >= 500) await anotarFalha_(env, url.pathname, resposta.status);
       return resposta;
     } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
-    const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req, medirEsteira)) : await permissoes(env, req);
+    const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req, medirEsteira, ctx)) : await permissoes(env, req, undefined, ctx);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
@@ -7470,7 +7537,7 @@ const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString()
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
 const estFone_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 13);
-const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/sincronizar', '/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
+const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/sincronizar', '/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
 const EST_INICIALIZACOES_ = new WeakMap();
 function estIniciar_(env) {
   let inicializacao = EST_INICIALIZACOES_.get(env.DB);

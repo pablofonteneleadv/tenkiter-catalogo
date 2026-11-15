@@ -1,0 +1,126 @@
+/* v7.80.0 — Esteira: leituras aproveitam a última conferência de sessão (D1); escrita, sincronizar e menu conferem ao vivo.
+ * Mesmo Worker, D1 SQLite e backend simulado de tests/worker_esteira.js (apenas o preparo, sem as jornadas). */
+const fs = require('fs'), path = require('path'), vm = require('vm');
+let harness = fs.readFileSync(path.join(__dirname, 'worker_esteira.js'), 'utf8').replace(/\r/g, '').split('  // acesso\n')[0];
+harness = harness.replace('tk_ig_esteira.mjs', 'tk_ig_sessao_cache.mjs');
+const cenarios = String.raw`
+  delete env.SESSAO_CACHE;   // o aproveitamento é o padrão; os outros testes o desligam
+  const f0 = globalThis.fetch; let vivas = 0, apiFora = false, segurar = null;
+  globalThis.fetch = async (u, init) => {
+    if (String(u).startsWith('https://api.fake/') && init && init.method === 'POST' && JSON.parse(init.body).action === 'sessao') {
+      vivas++; if (apiFora) throw new Error('Apps Script fora do ar');
+      if (segurar) { const resposta = await f0(u, init); await segurar; return resposta; }
+    }
+    return f0(u, init);
+  };
+  const pend = [], ctx2 = { waitUntil: (p) => { pend.push(p); } };
+  const esperar = async () => { while (pend.length) await pend.shift(); };
+  const Q = async (whats, rota, o = {}) => {
+    const r = await w.fetch(new Request('https://ig.fake' + rota, { method: o.metodo || 'GET', headers: { 'Content-Type': 'application/json', 'X-TK-Whats': whats, 'X-TK-Sessao': o.sessao || 'tk3.sessao-' + whats, 'Origin': 'https://tenkitermodas.com.br' }, body: o.corpo ? JSON.stringify(o.corpo) : undefined }), env, ctx2);
+    let j = null; try { j = await r.clone().json(); } catch (e) { /* sem corpo */ }
+    return { r, j, status: r.status, timing: r.headers.get('Server-Timing') || '' };
+  };
+  const linhas = async () => (await env.DB.prepare("SELECT chave, dados, em FROM sessao_cache WHERE dados<>''").all()).results;
+  const CX = '/esteira/caixa?pagina=1&ver=novas';
+
+  let x = await Q(PABLO, CX); await esperar();
+  chk('1ª leitura confere ao vivo e guarda a conferência', x.status === 200 && x.j.ok && vivas === 1 && (await linhas()).length === 1, { s: x.status, vivas });
+  x = await Q(PABLO, CX); await esperar();
+  chk('2ª leitura (menos de 30 s) usa o guardado, sem Apps Script, e é medida como sessao_cache', x.status === 200 && vivas === 1 && /sessao_cache;dur=/.test(x.timing), { vivas, t: x.timing });
+  for (const rota of ['/esteira/hoje/primeiros', '/esteira/fotos', '/esteira/hoje/tarefas']) {
+    x = await Q(PABLO, rota); await esperar();
+    chk('leitura rápida ' + rota + ' também aproveita', x.status === 200 && vivas === 1, { rota, s: x.status, vivas });
+  }
+
+  x = await Q(PABLO, '/esteira/toque', { metodo: 'POST', corpo: { ids: ['1001'] } }); await esperar();
+  chk('escrita (POST) confere sempre ao vivo', x.status === 200 && vivas === 2, { s: x.status, vivas });
+  x = await Q(PABLO, '/esteira/sincronizar?aba=hoje'); await esperar();
+  chk('sincronizar confere sempre ao vivo', x.status === 200 && vivas === 3, { s: x.status, vivas });
+  x = await Q(PABLO, '/esteira/menu'); await esperar();
+  chk('menu confere sempre ao vivo', x.status === 200 && vivas === 4, { s: x.status, vivas });
+
+  // passados 30 s: serve o guardado e confere ao vivo em segundo plano
+  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 40000).run();
+  const antes = vivas;
+  x = await Q(PABLO, CX);
+  chk('leitura com 40 s responde sem esperar o Apps Script', x.status === 200 && vivas === antes + 1 && /sessao_cache;dur=/.test(x.timing) === true, { vivas, antes });
+  await esperar();
+  chk('a conferência em segundo plano renova o guardado', vivas === antes + 1 && Date.now() - (await linhas())[0].em < 5000);
+
+  // outra sessão ou outro WhatsApp nunca acertam a linha
+  x = await Q(PABLO, CX, { sessao: 'tk3.outra-sessao' }); await esperar();
+  chk('outra sessão do mesmo WhatsApp confere ao vivo e cria a sua própria linha', x.status === 200 && vivas === antes + 2 && (await linhas()).length === 2, { vivas, n: (await linhas()).length });
+  x = await Q('88999990099', CX); await esperar();
+  chk('sessão que o backend não reconhece é recusada e não deixa linha', x.status === 401 && (await linhas()).length === 2, { s: x.status });
+  x = await Q('88999990099', CX); await esperar();
+  chk('e continua recusada na requisição seguinte (nada guardado a favor dela)', x.status === 401);
+  chk('o token da sessão nunca é gravado', (await linhas()).every((l) => !/tk3\./.test(l.dados) && !/tk3\./.test(l.chave) && /^[0-9a-f]{64}$/.test(l.chave)));
+
+  // revogação: sincronizar (ao vivo) apaga; leitura com guardado vencido faz no máximo uma leitura de atraso
+  const permissoesPablo = usuarios[PABLO].permissoes.slice();
+  usuarios[PABLO].permissoes = [];
+  x = await Q(PABLO, CX); await esperar();
+  chk('revogado há menos de 30 s: a leitura guardada ainda passa (limite documentado)', x.status === 200);
+  x = await Q(PABLO, '/esteira/sincronizar?aba=hoje'); await esperar();
+  chk('sincronizar ao vivo recusa e apaga a linha', x.status === 403 && (await linhas()).length === 1, { s: x.status, n: (await linhas()).length });
+  x = await Q(PABLO, CX); await esperar();
+  chk('a leitura seguinte já é recusada', x.status === 403, { s: x.status });
+  usuarios[PABLO].permissoes = permissoesPablo;
+  x = await Q(PABLO, CX); await esperar();
+  chk('acesso devolvido: volta a abrir (ao vivo) e guarda de novo', x.status === 200);
+  usuarios[PABLO].permissoes = [];
+  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 40000).run();
+  x = await Q(PABLO, CX);
+  chk('revogado com guardado vencido: no máximo UMA leitura de atraso', x.status === 200);
+  await esperar();
+  x = await Q(PABLO, CX); await esperar();
+  chk('…e a leitura seguinte já é recusada (a conferência em segundo plano apagou a linha)', x.status === 403, { s: x.status });
+  usuarios[PABLO].permissoes = permissoesPablo;
+
+
+  // corrida: uma conferência em segundo plano que começou ANTES da revogação e termina DEPOIS não ressuscita o acesso
+  x = await Q(PABLO, CX); await esperar();
+  await env.DB.prepare('UPDATE sessao_cache SET em=? WHERE dados<>\'\'').bind(Date.now() - 40000).run();
+  let soltar; segurar = new Promise((ok) => { soltar = ok; });
+  x = await Q(PABLO, CX);                               // serve o guardado e deixa a conferência lenta pendente (resposta ainda com permissões)
+  chk('corrida: a leitura vencida é servida enquanto a conferência lenta segue pendente', x.status === 200 && pend.length === 1);
+  usuarios[PABLO].permissoes = [];
+  const lenta = pend.shift(); segurar = null;
+  x = await Q(PABLO, '/esteira/sincronizar?aba=hoje'); await esperar();
+  chk('corrida: a conferência ao vivo posterior invalida o acesso', x.status === 403);
+  soltar(); await lenta;
+  x = await Q(PABLO, CX); await esperar();
+  chk('corrida: a resposta lenta, de antes da revogação, NÃO regrava as permissões antigas', x.status === 403 && (await linhas()).filter((l) => l.chave).length <= 1, { s: x.status });
+  usuarios[PABLO].permissoes = permissoesPablo;
+
+  // validade máxima e backend fora do ar
+  x = await Q(PABLO, CX); await esperar();
+  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 700000).run();
+  const v0 = vivas;
+  x = await Q(PABLO, CX); await esperar();
+  chk('guardado com mais de 10 min não vale: confere ao vivo', x.status === 200 && vivas === v0 + 1);
+  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 40000).run();
+  apiFora = true;
+  x = await Q(PABLO, CX); await esperar();
+  chk('backend fora do ar não apaga o guardado nem derruba a leitura', x.status === 200 && (await linhas()).length >= 1, { s: x.status });
+  await env.DB.prepare('UPDATE sessao_cache SET em=?').bind(Date.now() - 700000).run();
+  x = await Q(PABLO, CX); await esperar();
+  chk('sem guardado válido e com o backend fora, falha fechada (503), sem confundir com sessão inválida', x.status === 503, { s: x.status });
+  apiFora = false;
+
+  // desligar pelo Worker
+  env.SESSAO_CACHE = 'off';
+  const n0 = (await linhas()).length, v1 = vivas;
+  await Q(PABLO, CX); await Q(PABLO, CX); await esperar();
+  chk("SESSAO_CACHE='off' volta a conferir ao vivo em toda leitura e não grava", vivas === v1 + 2 && (await linhas()).length === n0, { vivas, v1 });
+  delete env.SESSAO_CACHE;
+
+  // fora da Esteira nada muda (Mensageiro continua com o cache da borda)
+  const antesMsg = (await linhas()).length;
+  await Q(PABLO, '/msg/acesso'); await esperar();
+  chk('rotas fora da Esteira não passam pela linha do D1', (await linhas()).length === antesMsg);
+  console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);
+})().catch((e) => { console.error(e); process.exit(1); });
+`;
+// o harness termina o IIFE assíncrono no fim do arquivo original; aqui abrimos só o preparo e anexamos os cenários
+vm.runInThisContext('(function(require,__dirname,__import){' + harness.replace('await import(', 'await __import(') + cenarios + '})', { filename: __filename })(require, __dirname, (u) => import(u));

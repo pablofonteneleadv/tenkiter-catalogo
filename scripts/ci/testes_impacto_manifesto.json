@@ -372,6 +372,9 @@
     "tests/worker_esteira.js": [
       "esteira"
     ],
+    "tests/worker_sessao_cache.js": [
+      "esteira"
+    ],
     "tests/worker_esteira_fotos.js": [
       "esteira"
     ],
