@@ -142,6 +142,34 @@ with sync_playwright() as p:
         chk(f"{nome}: a resposta completa monta Hoje como antes", pg.locator(".peca").count() == len(full["lista"]))
         ctx.close()
 
+
+    print("== Medidas anônimas e esqueleto ==")
+    ctx, st = contexto(b, 390, 844)
+    medidas = []; retidas = []; retidas_p = []
+    ctx.route("**/esteira/medida", lambda r, _q: (medidas.append(json.loads(r.request.post_data or "{}")), r.fulfill(json={"ok": True})))
+    ctx.route("**/esteira/hoje/primeiros", lambda r, _q: retidas_p.append(r))
+    ctx.route(re.compile(r".*/esteira/hoje$"), lambda r: retidas.append(r))
+    pg = ctx.new_page(); pg.set_default_timeout(8000)
+    pg.goto(BASE + "esteira.html"); entrar(pg)
+    pg.locator("[data-espera] .esq i").first.wait_for(state="attached")
+    chk("Esqueleto: o texto de espera continua e traz 3 linhas de esqueleto escondidas dos leitores de tela", pg.locator("[data-espera] .esq i").count() == 3 and pg.locator("[data-espera] .esq").get_attribute("aria-hidden") == "true" and "Montando a sua lista" in pg.locator("[data-espera]").inner_text())
+    shot(pg, "hoje-esqueleto-390")
+    retidas_p[0].fulfill(json=derivar(full)); pg.locator(".peca").first.wait_for()
+    retidas[0].fallback(); pg.wait_for_function("!document.querySelector('#hoje-resto')"); pg.wait_for_timeout(3600)
+    hoje_m = [m for m in medidas if m.get("aba") == "hoje"]
+    chk("Medida: um envio de Hoje, com forma de abertura e tempo até o primeiro cartão", len(hoje_m) == 1 and hoje_m[0]["via"] in ("frio", "retomada") and 0 < hoje_m[0]["item_ms"] < 60000, medidas)
+    chk("Medida: só campos permitidos, sem WhatsApp, sessão nem URL", bool(hoje_m) and set(hoje_m[0]) <= {"aba", "via", "item_ms", "util_ms", "rede", "cpu", "mem", "v"} and "88999999999" not in json.dumps(hoje_m[0]) and bool(re.fullmatch(r"[0-9][0-9A-Za-z._-]*", hoje_m[0].get("v", "0"))), hoje_m)
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, service_workers="block", reduced_motion="reduce")
+    st = instalar(ctx); fotos_srv(ctx, st)
+    retidas = []
+    ctx.route(re.compile(r".*/esteira/hoje$"), lambda r: retidas.append(r))
+    ctx.route("**/esteira/hoje/primeiros", lambda r, _q: r.fulfill(status=404, json={"ok": False}))
+    pg = ctx.new_page(); pg.set_default_timeout(8000)
+    pg.goto(BASE + "esteira.html"); entrar(pg); pg.locator("[data-espera] .esq i").first.wait_for(state="attached")
+    chk("Esqueleto: com 'menos movimento' a animação é desligada", pg.evaluate("getComputedStyle(document.querySelector('[data-espera] .esq i')).animationName") == "none")
+    for r in retidas: r.fallback()
+    ctx.close()
     print("== Fotos: blocos independentes na primeira entrada ==")
     for w, h in [(390, 844), (1440, 900)]:
         ctx, st = contexto(b, w, h)

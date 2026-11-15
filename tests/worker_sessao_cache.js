@@ -32,12 +32,34 @@ const cenarios = String.raw`
     chk('leitura rápida ' + rota + ' também aproveita', x.status === 200 && vivas === 1, { rota, s: x.status, vivas });
   }
 
+
+  // medidas anônimas enviadas pelos aparelhos (/esteira/medida)
+  const M = (corpo) => Q(PABLO, '/esteira/medida', { metodo: 'POST', corpo });
+  const vm0 = vivas;
+  x = await M({ aba: 'hoje', via: 'frio', item_ms: 2400, util_ms: 3100, rede: '4g', cpu: 8, mem: 4, v: '7.80.0' }); await esperar();
+  chk('medida válida é gravada e aproveita a sessão guardada (sem Apps Script)', x.status === 200 && x.j.ok && vivas === vm0, { s: x.status, vivas, vm0 });
+  const med = (await env.DB.prepare('SELECT * FROM est_medida').all()).results;
+  chk('a medida não guarda WhatsApp, sessão nem identidade', med.length === 1 && Object.keys(med[0]).sort().join() === 'aba,cpu,dia,em,id,item_ms,mem,rede,util_ms,versao,via' && !JSON.stringify(med[0]).includes(PABLO) && med[0].item_ms === 2400 && med[0].versao === '7.80.0', med);
+  for (const [nome, corpo, esperado] of [
+    ['aba fora da lista', { aba: 'x', via: 'frio', item_ms: 100 }, 400], ['via fora da lista', { aba: 'hoje', via: 'x', item_ms: 100 }, 400],
+    ['tempo zero', { aba: 'hoje', via: 'frio', item_ms: 0 }, 400], ['tempo gigante', { aba: 'hoje', via: 'frio', item_ms: 999999 }, 400],
+    ['tempo não inteiro', { aba: 'hoje', via: 'frio', item_ms: '12' }, 400], ['corpo enorme', { aba: 'hoje', via: 'frio', item_ms: 100, lixo: 'x'.repeat(2000) }, 413]]) {
+    x = await M(corpo); await esperar();
+    chk('medida inválida recusada: ' + nome, x.status === esperado, { s: x.status });
+  }
+  x = await Q('88999990099', '/esteira/medida', { metodo: 'POST', corpo: { aba: 'hoje', via: 'frio', item_ms: 100 } });
+  chk('medida sem sessão válida é recusada e não grava', x.status === 401 && (await env.DB.prepare('SELECT COUNT(*) AS n FROM est_medida').first()).n === 1, { s: x.status });
+  x = await M({ aba: 'fotos', via: 'toque', item_ms: 900, rede: 'rede-inventada', cpu: 500, mem: 3, v: '<script>' }); await esperar();
+  const med2 = (await env.DB.prepare('SELECT * FROM est_medida ORDER BY id DESC LIMIT 1').first());
+  chk('campos opcionais fora do padrão são zerados, nunca gravados como vieram', x.status === 200 && med2.rede === '' && med2.cpu === 0 && med2.mem === 0 && med2.versao === '', med2);
+
+  let ao0 = vivas;
   x = await Q(PABLO, '/esteira/toque', { metodo: 'POST', corpo: { ids: ['1001'] } }); await esperar();
-  chk('escrita (POST) confere sempre ao vivo', x.status === 200 && vivas === 2, { s: x.status, vivas });
+  chk('escrita (POST) confere sempre ao vivo', x.status === 200 && vivas === ao0 + 1, { s: x.status, vivas });
   x = await Q(PABLO, '/esteira/sincronizar?aba=hoje'); await esperar();
-  chk('sincronizar confere sempre ao vivo', x.status === 200 && vivas === 3, { s: x.status, vivas });
+  chk('sincronizar confere sempre ao vivo', x.status === 200 && vivas === ao0 + 2, { s: x.status, vivas });
   x = await Q(PABLO, '/esteira/menu'); await esperar();
-  chk('menu confere sempre ao vivo', x.status === 200 && vivas === 4, { s: x.status, vivas });
+  chk('menu confere sempre ao vivo', x.status === 200 && vivas === ao0 + 3, { s: x.status, vivas });
 
   // passados 30 s: serve o guardado e confere ao vivo em segundo plano
   await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 40000).run();

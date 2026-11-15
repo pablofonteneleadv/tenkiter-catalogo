@@ -356,7 +356,7 @@ async function permissoesConferir_(env, req, medir = (_, executar) => executar()
   const esteira = caminho.startsWith('/esteira/');
   // SESSAO_CACHE='off' (variável do Worker) desliga o aproveitamento e volta a conferir ao vivo em toda requisição.
   const chaveD1 = esteira && env.DB && env.SESSAO_CACHE !== 'off' ? await sha('est-sessao-v1|' + whats + '|' + sessao) : null;
-  if (chaveD1 && req.method === 'GET' && EST_LEITURAS_RAPIDAS_.has(caminho)) {
+  if (chaveD1 && ((req.method === 'GET' && EST_LEITURAS_RAPIDAS_.has(caminho)) || (req.method === 'POST' && caminho === '/esteira/medida'))) {
     try {
       await sessaoCacheEsquema_(env);
       const linha = await medir('sessao_cache_leitura', () => env.DB.prepare('SELECT dados, em FROM sessao_cache WHERE chave=?').bind(chaveD1).first());
@@ -8345,6 +8345,25 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
         env.DB.prepare('SELECT 1 FROM est_lista WHERE data=? AND whats=? LIMIT 1').bind(data, eu).first());
       if (existente) await lerCatalogo();
     }).catch(() => {});
+  }
+  if (p === '/esteira/medida' && req.method === 'POST') {
+    // v7.80.0: tempos medidos nos aparelhos (anônimos: sem WhatsApp, sem sessão). Mesma autorização do menu; só números e rótulos de uma lista fixa.
+    await bancoPronto;
+    const menu = await estMenu_(env, req, (dados, status) => ({ dados, status: status || 200 }), perms, medir, false);
+    if (!menu.dados.ok) return J(menu.dados, menu.status);
+    const texto = await req.text();
+    if (texto.length > 1024) return J({ ok: false, erro: 'Medida grande demais.' }, 413);
+    let d; try { d = JSON.parse(texto); } catch (e) { d = null; }
+    const um = (v, lista) => lista.includes(v) ? v : null, inteiro = (v, max) => Number.isInteger(v) && v >= 0 && v <= max ? v : null;
+    const aba = um(d?.aba, ['hoje', 'fotos', 'prep', 'pedidos']), via = um(d?.via, ['frio', 'retomada', 'toque']);
+    const item = inteiro(d?.item_ms, 120000), util = d?.util_ms == null ? 0 : inteiro(d.util_ms, 120000);
+    if (!aba || !via || !item || util == null) return J({ ok: false, erro: 'Medida inválida.' }, 400);
+    const rede = um(d.rede, ['slow-2g', '2g', '3g', '4g', '']) ?? '', versao = /^[0-9][0-9A-Za-z._-]{0,15}$/.test(String(d.v || '')) ? String(d.v) : '';
+    const cpu = inteiro(d.cpu, 128) ?? 0, mem = [0, 0.25, 0.5, 1, 2, 4, 8].includes(d.mem) ? d.mem : 0;
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS est_medida (id INTEGER PRIMARY KEY AUTOINCREMENT, em TEXT NOT NULL, dia TEXT NOT NULL, aba TEXT NOT NULL, via TEXT NOT NULL, rede TEXT NOT NULL DEFAULT \'\', cpu INTEGER NOT NULL DEFAULT 0, mem REAL NOT NULL DEFAULT 0, versao TEXT NOT NULL DEFAULT \'\', item_ms INTEGER NOT NULL, util_ms INTEGER NOT NULL DEFAULT 0)').run();
+    await env.DB.prepare('INSERT INTO est_medida (em, dia, aba, via, rede, cpu, mem, versao, item_ms, util_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(agora, data, aba, via, rede, cpu, mem, versao, item, util).run();
+    if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM est_medida WHERE dia < ?').bind(estHoje_(Date.now() - 45 * 864e5)).run();
+    return J({ ok: true });
   }
   if (p === '/esteira/hoje/primeiros' && req.method === 'GET') {
     // Mesma autorização de /esteira/menu (sessão já conferida na entrada; equipe legada no D1). Sem RH, sem geração, sem catálogo remoto.
