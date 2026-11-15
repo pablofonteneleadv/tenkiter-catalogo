@@ -560,6 +560,7 @@
     "tests/fotos_postadas_ui.py": "tests/saida/fotos-postadas",
     "tests/esteira_fotos_ui.py": "tests/saida/esteira-fotos",
     "tests/esteira_retomada_fotos_ui.py": "tests/saida/esteira-fluidez/fotos-retomada",
+    "tests/esteira_primeiro_item_ui.py": "tests/saida/esteira-primeiro-item",
     "tests/esteira_continuidade_edicao_ui.py": "tests/saida/esteira-fotos/continuidade",
     "tests/pedir_fotos_lote.py": "tests/saida/pedir-fotos-lote"
   },
