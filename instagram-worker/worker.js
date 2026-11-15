@@ -308,14 +308,14 @@ function permissoesMontar_(lista, perfis, nome, configuraveis, msgModelos) {
   return lista;
 }
 /** Grava (sessão com permissões) ou invalida (sessão ou acesso que caiu) a linha da conferência. Nunca derruba a requisição.
- * `inicio` é o instante em que a conferência ao vivo COMEÇOU: uma conferência que começou antes de outra já gravada (ou de uma
- * invalidação) não sobrescreve nada, então uma resposta lenta nunca ressuscita permissões antigas. A invalidação só atualiza linha
+ * `inicio` é o instante em que a conferência ao vivo COMEÇOU: uma conferência que NÃO começou depois de outra já gravada (ou de uma
+ * invalidação, inclusive no mesmo milissegundo) não sobrescreve nada, então uma resposta lenta nunca ressuscita permissões antigas. A invalidação só atualiza linha
  * existente (não cria linha para sessão desconhecida). */
 async function sessaoRegistrar_(env, chave, v, inicio) {
   try {
     await sessaoCacheEsquema_(env);
     if (v && Array.isArray(v.lista) && v.lista.length) {   // sem permissões (acesso retirado) nada é guardado
-      await env.DB.prepare("INSERT INTO sessao_cache (chave, dados, em) VALUES (?, ?, ?) ON CONFLICT(chave) DO UPDATE SET dados=excluded.dados, em=excluded.em WHERE excluded.em >= sessao_cache.em")
+      await env.DB.prepare("INSERT INTO sessao_cache (chave, dados, em) VALUES (?, ?, ?) ON CONFLICT(chave) DO UPDATE SET dados=excluded.dados, em=excluded.em WHERE excluded.em > sessao_cache.em")
         .bind(chave, JSON.stringify({ permissoes: v.lista, perfis: v.perfis, nome: v.nome, configuraveis: v.configuraveis, msgModelos: v.msgModelos }), inicio).run();
       if (Math.random() < 0.04) await env.DB.prepare('DELETE FROM sessao_cache WHERE em < ?').bind(Date.now() - 3600000).run();
     } else if (v && v !== 'indisponivel') {

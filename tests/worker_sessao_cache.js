@@ -100,7 +100,9 @@ const cenarios = String.raw`
   usuarios[PABLO].permissoes = permissoesPablo;
 
 
-  // corrida: uma conferência em segundo plano que começou ANTES da revogação e termina DEPOIS não ressuscita o acesso
+  // corrida: uma conferência em segundo plano que começou ANTES da revogação e termina DEPOIS não ressuscita o acesso.
+  // O relógio fica parado para o pior caso: início da conferência lenta e da que revoga no MESMO milissegundo.
+  const relogioReal = Date.now, agoraFixo = relogioReal(); Date.now = () => agoraFixo;
   x = await Q(PABLO, CX); await esperar();
   await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0 WHERE dados<>\'\'').bind(Date.now() - 40000).run();
   let soltar; segurar = new Promise((ok) => { soltar = ok; });
@@ -114,6 +116,7 @@ const cenarios = String.raw`
   x = await Q(PABLO, CX); await esperar();
   chk('corrida: a resposta lenta, de antes da revogação, NÃO regrava as permissões antigas', x.status === 403 && (await linhas()).filter((l) => l.chave).length <= 1, { s: x.status });
   usuarios[PABLO].permissoes = permissoesPablo;
+  Date.now = relogioReal;
 
 
   // uma só conferência em segundo plano por vez: 5 leituras paralelas com o guardado vencido => 1 chamada ao Apps Script
