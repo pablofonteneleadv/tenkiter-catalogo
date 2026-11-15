@@ -147,6 +147,19 @@ const cenarios = String.raw`
   x = await w.fetch(new Request('https://ig.fake/esteira/aquecer'), env, ctx2);
   chk('aquecer: sem cabeçalhos de sessão é recusado (401)', x.status === 401);
 
+  // trava de gravação testada direto (empate de milissegundos entre processos diferentes)
+  const T0 = Date.now(), regs = (c) => W.sessaoRegistrar_(env, c, { lista: ['esteira'], perfis: [], nome: 'T', configuraveis: true, msgModelos: {} }, T0);
+  await env.DB.prepare('DELETE FROM sessao_cache').run();
+  await env.DB.prepare('INSERT INTO sessao_cache (chave, dados, em) VALUES (?, ?, ?)').bind('c1', '', T0).run();
+  await regs('c1');
+  chk('trava: conferência com o MESMO instante da invalidação não ressuscita o acesso', (await env.DB.prepare("SELECT dados FROM sessao_cache WHERE chave='c1'").first()).dados === '');
+  await W.sessaoRegistrar_(env, 'c1', { lista: ['esteira'], perfis: [], nome: 'T', configuraveis: true, msgModelos: {} }, T0 + 1);
+  chk('trava: conferência mais nova que a invalidação volta a valer', (await env.DB.prepare("SELECT dados FROM sessao_cache WHERE chave='c1'").first()).dados !== '');
+  await W.sessaoRegistrar_(env, 'c1', { lista: [], perfis: [], nome: '', configuraveis: false, msgModelos: {} }, T0 + 1);
+  chk('trava: invalidação no mesmo instante da conferência vale (lado seguro)', (await env.DB.prepare("SELECT dados FROM sessao_cache WHERE chave='c1'").first()).dados === '');
+  const r1 = W.sessaoRelogio_(), r2 = W.sessaoRelogio_(), r3 = W.sessaoRelogio_();
+  chk('relógio da sessão nunca repete valor, mesmo no mesmo milissegundo', r2 > r1 && r3 > r2, [r1, r2, r3]);
+
   // validade máxima e backend fora do ar
   x = await Q(PABLO, CX); await esperar();
   await env.DB.prepare('UPDATE sessao_cache SET em=?, reval=0').bind(Date.now() - 700000).run();

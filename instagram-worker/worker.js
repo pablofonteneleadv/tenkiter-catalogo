@@ -291,6 +291,10 @@ function permissoes(env, req, medir, ctx) {
 const EST_LEITURAS_RAPIDAS_ = new Set(['/esteira/aquecer', '/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/hoje/tarefas', '/esteira/fotos', '/esteira/caixa', '/esteira/preparacao']);
 const SESSAO_FRESCA_MS_ = 600000, SESSAO_REVALIDA_MS_ = 30000, SESSAO_REVALIDA_RESERVA_MS_ = 20000;
 const SESSAO_ESQUEMAS_ = new WeakSet();
+/** Relógio que nunca repete valor neste processo: dois eventos seguidos (conferência, invalidação) jamais empatam no mesmo milissegundo e a ordem
+ * entre eles fica exata. Empate entre processos diferentes continua possível, e a trava estrita o trata do lado seguro (não sobrescreve). */
+let SESSAO_ULTIMO_ = 0;
+function sessaoRelogio_() { SESSAO_ULTIMO_ = Math.max(Date.now(), SESSAO_ULTIMO_ + 1); return SESSAO_ULTIMO_; }
 async function sessaoCacheEsquema_(env) {
   if (SESSAO_ESQUEMAS_.has(env.DB)) return;
   await env.DB.prepare('CREATE TABLE IF NOT EXISTS sessao_cache (chave TEXT PRIMARY KEY, dados TEXT NOT NULL, em INTEGER NOT NULL, reval INTEGER NOT NULL DEFAULT 0)').run();
@@ -360,14 +364,15 @@ async function permissoesConferir_(env, req, medir = (_, executar) => executar()
     try {
       await sessaoCacheEsquema_(env);
       const linha = await medir('sessao_cache_leitura', () => env.DB.prepare('SELECT dados, em FROM sessao_cache WHERE chave=?').bind(chaveD1).first());
-      const idade = linha ? Date.now() - Number(linha.em) : -1;
-      if (linha && linha.dados && idade >= 0 && idade < SESSAO_FRESCA_MS_) {
+      const idade = linha ? Date.now() - Number(linha.em) : -1000;
+      // `em` vem do relógio monotônico e pode estar poucos ms à frente do relógio real: tolera esse adiantamento.
+      if (linha && linha.dados && idade >= -100 && idade < SESSAO_FRESCA_MS_) {
         const v = JSON.parse(linha.dados);
         if (Array.isArray(v.permissoes)) {
           await medir('sessao_cache', async () => 0);
           // Uma só conferência em segundo plano por vez e por pessoa: quem reserva a linha dispara, os outros só leem.
           if (idade > SESSAO_REVALIDA_MS_ && typeof ctx?.waitUntil === 'function' && await sessaoReservarRevalidacao_(env, chaveD1)) {
-            const inicio = Date.now();
+            const inicio = sessaoRelogio_();
             ctx.waitUntil(permissoesAoVivo_(env, whats, sessao).then((novo) => sessaoRegistrar_(env, chaveD1, novo, inicio)).catch(() => {}));
           }
           return permissoesMontar_(v.permissoes, Array.isArray(v.perfis) ? v.perfis : [], String(v.nome || ''), v.configuraveis === true, v.msgModelos || {});
@@ -379,7 +384,7 @@ async function permissoesConferir_(env, req, medir = (_, executar) => executar()
   const podeCache = !esteira && !req.url.includes('/esteira/') && (req.method === 'GET' || (req.method === 'POST' && MSG_ROTINA_POST_.has(caminho)));
   const cache = chave ? caches.default : null, g = podeCache ? await cache.match(chave) : null;
   if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; v.permissoes.acessosConfiguraveis = v.configuraveis === true;v.permissoes.msgModelos=v.msgModelos||{}; return v.permissoes; }
-  const inicioVivo = Date.now();
+  const inicioVivo = sessaoRelogio_();
   const vivo = await permissoesAoVivo_(env, whats, sessao, medir);
   if (vivo === 'indisponivel') return 'indisponivel';
   const { lista, perfis, nome, configuraveis, msgModelos } = vivo;

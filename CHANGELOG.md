@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.82.2 — Sessão guardada com relógio que nunca empata
+
+- Worker: as conferências de sessão e as invalidações usam um relógio que nunca repete valor dentro do processo. Isso elimina o empate de milissegundos entre eventos seguidos (que no teste do CI aparecia ora como resposta lenta regravando permissões antigas, ora como conferência nova descartada) e mantém a trava estrita. A trava de gravação passou a ter teste direto, e o publicado 7.82.1 (X das miniaturas) segue junto.
+
 ## 7.82.1 — Sem X vermelho nas miniaturas da foto do produto
 
 - Worker: a gravação da sessão guardada só vale se a conferência começou estritamente depois da já gravada (antes aceitava empate no mesmo milissegundo, o que podia deixar uma resposta lenta regravar permissões antigas depois de uma revogação; o teste de corrida passou a ser determinístico).
