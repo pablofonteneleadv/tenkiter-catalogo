@@ -51,19 +51,22 @@ with sync_playwright() as p:
     ctx, pg, st, msgs, erros = abrir(b, PERMS_ALL)
     pg.locator(".card", has_text=st["produtos"][0]["Codigo"]).first.locator(".abrir-peca").click(); pg.wait_for_selector("#overlay.aberto"); pg.wait_for_timeout(300)
     chk("X grande sobre a foto que está na tela", pg.locator("#x-slide").count() == 1)
-    chk("X pequeno em cada miniatura (4 fotos + vídeo = 5)", pg.locator(".thumb-wrap .x-equipe").count() == 5, pg.locator(".thumb-wrap .x-equipe").count())
-    pg.locator(".thumb-wrap .x-equipe").nth(2).click(); pg.wait_for_timeout(700)
+    chk("NENHUM X sobre as miniaturas (pedido do Pablo 15/11/2026): só o X grande da foto aberta", pg.locator(".thumb-wrap").count() == 0 and pg.locator("#thumbs .x-equipe, .thumbs .x-equipe, .thumb-item .x-equipe").count() == 0 and pg.locator("#overlay .x-equipe").count() == 1, (pg.locator("#overlay .x-equipe").count(),))
+    chk("as 5 miniaturas (4 fotos + vídeo) continuam lá, sem botões por cima", pg.locator(".thumb-item:not(.thumb-composicao)").count() == 5, pg.locator(".thumb-item:not(.thumb-composicao)").count())
+    pg.locator('.thumb-item[data-idx="2"]').click(); pg.wait_for_timeout(300)
+    pg.click("#x-slide"); pg.wait_for_timeout(700)
     chk("confirmação de FOTO", msgs and "Tirar esta FOTO" in msgs[-1] and "dá para desfazer" in msgs[-1], msgs)
     c = [x for x in st["x_chamadas"] if x["action"] == "arquivarMidia"]
     chk("pediu arquivarMidia da foto certa (a 3ª = galeria 2)", len(c) == 1 and c[0]["tipo"] == "foto" and c[0]["url"] == G[1], c)
-    chk("sobraram 4 miniaturas (3 fotos + vídeo) e a janela continua aberta", pg.locator(".thumb-wrap").count() == 4 and pg.locator("#overlay.aberto").count() == 1, pg.locator(".thumb-wrap").count())
+    chk("sobraram 4 miniaturas (3 fotos + vídeo) e a janela continua aberta", pg.locator(".thumb-item:not(.thumb-composicao)").count() == 4 and pg.locator("#overlay.aberto").count() == 1, pg.locator(".thumb-item:not(.thumb-composicao)").count())
     chk("aparece 'Desfazer'", pg.locator("#toast-equipe.visivel #toast-equipe-btn:not([hidden])").count() == 1)
     pg.click("#toast-equipe-btn"); pg.wait_for_timeout(900)
     chk("Desfazer chama restaurarMidia", any(x["action"] == "restaurarMidia" for x in st["x_chamadas"]))
-    chk("a foto voltou (5 miniaturas)", pg.locator(".thumb-wrap").count() == 5, pg.locator(".thumb-wrap").count())
-    pg.locator(".thumb-wrap .x-equipe").nth(4).click(); pg.wait_for_timeout(700)
+    chk("a foto voltou (5 miniaturas)", pg.locator(".thumb-item:not(.thumb-composicao)").count() == 5, pg.locator(".thumb-item:not(.thumb-composicao)").count())
+    pg.locator(".thumb-video").click(); pg.wait_for_timeout(300)
+    pg.click("#x-slide"); pg.wait_for_timeout(700)
     c = [x for x in st["x_chamadas"] if x["action"] == "arquivarMidia"]
-    chk("X do vídeo: confirmação de VÍDEO e tipo video", "VÍDEO" in msgs[-1] and c[-1]["tipo"] == "video", (msgs[-1], c[-1]))
+    chk("X grande com o vídeo na tela: confirmação de VÍDEO e tipo video", "VÍDEO" in msgs[-1] and c[-1]["tipo"] == "video", (msgs[-1], c[-1]))
     chk("o vídeo saiu do produto", pg.locator(".thumb-video").count() == 0)
     pg.click("#x-slide"); pg.wait_for_timeout(700)
     c = [x for x in st["x_chamadas"] if x["action"] == "arquivarMidia"]
@@ -86,7 +89,7 @@ with sync_playwright() as p:
     ctx, pg, st, msgs, erros = abrir(b, PERMS_ALL)
     pg.locator(".card", has_text=st["produtos"][0]["Codigo"]).first.locator(".abrir-peca").click(); pg.wait_for_selector("#overlay.aberto"); pg.wait_for_timeout(500)
     v0 = len([e for e in st.get("eventos", []) if e.get("tipo") == "visualizacao"]) if isinstance(st.get("eventos"), list) else None
-    pg.locator(".thumb-wrap .x-equipe").nth(1).click(); pg.wait_for_timeout(800)
+    pg.locator('.thumb-item[data-idx="1"]').click(); pg.wait_for_timeout(300); pg.click("#x-slide"); pg.wait_for_timeout(800)
     v1 = len([e for e in st.get("eventos", []) if e.get("tipo") == "visualizacao"]) if isinstance(st.get("eventos"), list) else None
     chk("tirar uma foto não conta outra visualização do produto", v0 == v1, (v0, v1))
     ctx.close(); b.close()

@@ -19,6 +19,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.82.1 — Sem X vermelho nas miniaturas da foto do produto
+
+- Worker: a gravação da sessão guardada só vale se a conferência começou estritamente depois da já gravada (antes aceitava empate no mesmo milissegundo, o que podia deixar uma resposta lenta regravar permissões antigas depois de uma revogação; o teste de corrida passou a ser determinístico).
+- Para a equipe, as miniaturas abaixo da foto aberta não têm mais o X vermelho. O X vermelho fica só no canto esquerdo de cima da foto que está na tela, e tira aquela foto ou vídeo (com confirmação e Desfazer, como antes). Pedido do Pablo.
+
 ## 7.82.0 — Esteira abre mais rápido vindo da Gestão e fotos da caixa com revisão
 
 - Quem tem a Esteira e abre a Gestão faz o servidor conferir e guardar a sessão em segundo plano (`GET /esteira/aquecer`, sem dado algum, no máximo uma vez a cada 4 min). Ao tocar em Esteira em seguida, a abertura não espera a conferência de sessão.

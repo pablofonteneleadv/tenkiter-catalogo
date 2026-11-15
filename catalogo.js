@@ -1096,9 +1096,9 @@ try { tkSelExpirar_(); } catch (e) {}
       </div>
       ${totalSlides > 1 ? `
         <div class="thumbs-galeria">
-          ${fotosGaleria.map((f, idx) => { const im = `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`; return equipe_.pode ? `<span class="thumb-wrap">${im}<button type="button" class="x-equipe mini" data-x-idx="${idx}" aria-label="Tirar a foto ${idx+1} do produto">✕</button></span>` : im; }).join('')}
+          ${fotosGaleria.map((f, idx) => { const im = `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`; return im; }).join('')}
           ${pecasIA.map((q, i) => `<button type="button" class="thumb-item thumb-composicao" data-idx="${fotosGaleria.length + (idVid ? 1 : 0) + i}" aria-label="Ver produto: ${escaparHtml(q.Nome)}"><img ${atribSrc(fotoMini(q.Foto_URL || '', 120))} alt="" width="50" height="62"></button>`).join('')}
-          ${idVid ? (equipe_.pode ? `<span class="thumb-wrap"><div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div><button type="button" class="x-equipe mini" data-x-idx="${fotosGaleria.length}" aria-label="Tirar o vídeo do produto">✕</button></span>` : `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>`) : ''}
+          ${idVid ? `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>` : ''}
         </div>
       ` : ''}
       ${composicoesFalharam_ && /^Composição com (produtos|pe\u00e7as) vendid[ao]s separadamente\./.test(String(p.Descricao || '')) ? '<p class="composicao-ia-dica" role="status">Não foi possível carregar os produtos deste look. Atualize a página para tentar de novo; o valor da composição continua a consultar.</p>' : ''}
@@ -1175,7 +1175,6 @@ try { tkSelExpirar_(); } catch (e) {}
     const thumbs = document.querySelectorAll('.thumb-item');
     let atual = 0;
     const xs = document.getElementById('x-slide'); if (xs) xs.addEventListener('click', () => arquivarMidiaX_(p, slides[atual], atual));
-    document.querySelectorAll('.thumb-wrap .x-equipe').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); const k = Number(b.dataset.xIdx); arquivarMidiaX_(p, slides[k], k); }));
     function mostrarSlide(i) {
       atual = (i + slides.length) % slides.length;
       slideAtualModal_ = atual;
