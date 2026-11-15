@@ -321,8 +321,6 @@
   /* v3.7: X de arquivar (só Equipe do site ou maior) */
   .x-equipe { position: absolute; top: 8px; left: 8px; z-index: 6; width: 38px; height: 38px; border-radius: 50%; border: 2px dashed #fff; background: #b71c1c; color: #fff; font-size: 1.05rem; font-weight: 900; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,.55); }
   .x-equipe:focus-visible { outline: 3px solid var(--laranja); outline-offset: 2px; }
-  .x-equipe.mini { width: 22px; height: 22px; font-size: .7rem; top: 2px; left: 2px; border-width: 1px; }
-  .thumb-wrap { position: relative; flex: none; display: inline-block; }
   .btn-nova-peca { display: none; align-items: center; justify-content: center; gap: 8px; min-height: 48px; margin: 0 0 10px; border-radius: 12px; background: var(--laranja); color: #0d0d0d; font-weight: 800; text-decoration: none; }
   body.equipe-x .btn-nova-peca { display: flex; }
   .btn-editar-peca { position: absolute; left: 12px; bottom: 12px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--laranja); color: #0d0d0d; font-family: "Inter", sans-serif; font-weight: 800; font-size: 0.85rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.35); text-decoration: none; }
