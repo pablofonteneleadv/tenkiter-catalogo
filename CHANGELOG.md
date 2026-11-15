@@ -19,6 +19,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.82.4 — Falhas em segundo plano deixam rastro
+
+- Worker `tenkiter-ig`: as tarefas do cron (push, fila Zernio, entradas, agenda, nomes Google, catálogo da Esteira, retrato do estoque), o envio de push, os complementos, a foto IA, a resposta automática e a revalidação da sessão passam a registrar a falha no log (`tk_falha_segundo_plano`) em vez de engoli-la. O comportamento não muda: nenhuma delas derruba quem chamou.
+
 ## 7.82.3 — Prazo nas consultas ao Apps Script e falha do KV registrada
 
 - Workers: a conferência de sessão do `tenkiter-ig` e do `tenkiter-midia` e a consulta do catálogo do `tenkiter-og` passam a ter prazo (8 s, 8 s e 10 s). Antes, um Apps Script lento prendia a requisição sem limite. O comportamento ao falhar não mudou (sem sessão / erro tratado).
