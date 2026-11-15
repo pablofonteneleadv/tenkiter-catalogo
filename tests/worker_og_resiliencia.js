@@ -5,7 +5,7 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'og-worker/worker.js')
 let checks = 0;
 function ok(value, label) { assert.ok(value, label); checks++; }
 function load(fetcher) {
-  const c = { Response, URL, console, fetch: fetcher, module: { exports: {} } };
+  const c = { Response, URL, AbortSignal, console, fetch: fetcher, module: { exports: {} } };
   vm.runInNewContext(source.replace('export default', 'module.exports ='), c);
   return { worker: c.module.exports, context: c };
 }
