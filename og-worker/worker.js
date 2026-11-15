@@ -28,7 +28,7 @@ let consultaProdutosEmCurso = null;
 function produtos() {
   if (!consultaProdutosEmCurso) {
     consultaProdutosEmCurso = (async () => {
-      const r = await fetch(API_URL + '?action=list', { redirect: 'follow', cf: { cacheTtl: 60, cacheEverything: true } });
+      const r = await fetch(API_URL + '?action=list', { redirect: 'follow', signal: AbortSignal.timeout(10000), cf: { cacheTtl: 60, cacheEverything: true } });
       if (!r.ok) throw new Error('catálogo indisponível');
       const j = await r.json();
       if (!(j && j.ok === true && Array.isArray(j.produtos))) throw new Error('lista inválida');
@@ -53,7 +53,7 @@ async function listaComKV(env, ctx) {
   const fresco = !!(guardado && Array.isArray(guardado.produtos) && (Date.now() - (guardado.salvoEm || 0)) < KV_TTL_MS);
   if (fresco) return guardado.produtos;
   const atualizar = produtos().then(async (lista) => {
-    try { await kv.put(KV_CHAVE, JSON.stringify({ produtos: lista, salvoEm: Date.now() })); } catch (e) {}
+    try { await kv.put(KV_CHAVE, JSON.stringify({ produtos: lista, salvoEm: Date.now() })); } catch (e) { console.warn('og: falha ao gravar a lista no KV', e && e.message); }
     return lista;
   });
   if (guardado && Array.isArray(guardado.produtos) && guardado.produtos.length) {

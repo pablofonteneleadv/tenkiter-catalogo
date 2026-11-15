@@ -2214,7 +2214,7 @@ async function infoSessao(env, req) {       // {perms, nome} da sessão (qualque
   if (g) return g.json();
   let info = null;
   try {
-    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
+    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, signal: AbortSignal.timeout(8000), body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
     const j = await r.json();
     if (j && j.ok && j.usuario) info = { perms: Array.isArray(j.usuario.permissoes) ? j.usuario.permissoes : [], nome: String(j.usuario.nome || '').slice(0, 80), whats: soDigitos(j.usuario.whatsapp || whats, 15) };
   } catch (e) { return null; }

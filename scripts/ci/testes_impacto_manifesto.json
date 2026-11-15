@@ -381,6 +381,9 @@
     "tests/worker_sessao_cache.js": [
       "esteira"
     ],
+    "tests/workers_timeouts.js": [
+      "infra"
+    ],
     "tests/worker_esteira_fotos.js": [
       "esteira"
     ],

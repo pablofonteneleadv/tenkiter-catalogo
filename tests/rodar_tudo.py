@@ -112,6 +112,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_ig.js", lambda o: "FALHAS=0" in o),         # Worker do importador do Instagram (D1/R2/KV e Instagram falsos): ciclo, agrupamento, cópia, ações, token
     ("worker_esteira_fotos.js", lambda o: "FALHAS=0" in o),   # v7.51.0: pedido de fotos (opções + Outro), caixa de fotos da equipe, preparação sem tarefa duplicada
     ("worker_sessao_cache.js", lambda o: " 0 falhas" in o),   # v7.80.0: leituras da Esteira aproveitam a conferência de sessão (D1); escrita, sincronizar e menu ao vivo
+    ("workers_timeouts.js", lambda o: " 0 falhas" in o),   # v7.82.3: consultas de sessão/catálogo dos Workers têm prazo
     ("worker_fotos_postadas.js", lambda o: "FALHAS=0" in o),   # v7.49.0: registro por foto postada, mapa público de fotos novas, foto nova x outra edição
     ("cofre_admin.py", lambda o: "FALHAS=0" in o),       # cofre das Conexões: copiar chaves só com login + senha de novo
     ("foto_cliente.py", lambda o: "FALHAS=0" in o),   # cliente manda foto pela conta (Ela usa TM)
