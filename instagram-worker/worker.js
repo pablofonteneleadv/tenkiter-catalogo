@@ -6542,6 +6542,7 @@ export default {
     // Sincroniza uma página do Google por minuto, de forma independente da conta de atendente aberta.
     // Uma rodada completa ocorre no máximo a cada 4 h; a ponte não grava contatos nesta leitura.
     ctx.waitUntil(indexarNomesGoogle_(env).catch(() => {}));
+    ctx.waitUntil(estCatalogoAquecer_(env).catch(() => {}));                    // v7.79.0: catálogo sempre quente para a Esteira
     ctx.waitUntil(estRetratoCron_(env, ev && ev.scheduledTime ? Number(ev.scheduledTime) : Date.now()).catch(() => {}));   // v7.45.0: 1 leitura de KV; retrato do estoque 1x por dia
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
     if (min === 7) {ctx.waitUntil(limparVideoPreparo_(env));ctx.waitUntil(limparTemporarios(env).catch(() => {}));ctx.waitUntil((async()=>{const c=await env.CACHE.get('contatos_staging_cursor');const r=await contatosR2ExpurgarOrfaos_(env,Date.now(),c||undefined);if(r.cursor)await env.CACHE.put('contatos_staging_cursor',r.cursor,{expirationTtl:86400});else await env.CACHE.delete('contatos_staging_cursor');})().catch(()=>{}));}      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
@@ -7469,7 +7470,7 @@ const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString()
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
 const estFone_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 13);
-const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/sincronizar', '/esteira/hoje', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
+const EST_ROTAS_MEDIDAS_ = new Set(['/esteira/menu', '/esteira/sincronizar', '/esteira/hoje', '/esteira/hoje/primeiros', '/esteira/preparacao', '/esteira/fotos', '/esteira/caixa', '/esteira/pedidos', '/esteira/painel', '/esteira/config', '/esteira/config/categorias']);
 const EST_INICIALIZACOES_ = new WeakMap();
 function estIniciar_(env) {
   let inicializacao = EST_INICIALIZACOES_.get(env.DB);
@@ -7603,6 +7604,7 @@ async function estCfg_(env) {
   const hr = Number(c.retratoHora); out.retratoHora = c.retratoHora != null && Number.isInteger(hr) && hr >= 0 && hr <= 23 ? hr : EST_CFG_PADRAO_.retratoHora;
   return out;
 }
+const EST_SQL_LISTA_DIA_ = 'SELECT l.*, p.atualizado_em, p.conferido_em, f.nome AS familia_nome, m.rotulo AS familia_rotulo FROM est_lista l LEFT JOIN est_produto p ON p.id=l.produto LEFT JOIN fam_familia f ON f.id=l.familia AND EXISTS (SELECT 1 FROM fam_membro fm WHERE fm.familia=f.id) LEFT JOIN fam_membro m ON m.produto=l.produto AND EXISTS (SELECT 1 FROM fam_familia fm WHERE fm.id=m.familia) WHERE l.data=? AND l.whats=? ORDER BY l.pos';
 async function estCatalogo_(env, fresco) {                             // lista pública do catálogo (cache 10 min no KV); fresco: ignora o cache (retrato diário)
   const chave = 'est:catalogo:v1';
   if (!fresco) { try { const c = await env.CACHE.get(chave); if (c) return JSON.parse(c); } catch (e) { /* segue */ } }
@@ -7613,6 +7615,43 @@ async function estCatalogo_(env, fresco) {                             // lista 
   const ps = j.produtos.filter((p) => p && p.ID && String(p.Status || 'Ativo') !== 'Inativo').map((p) => ({ id: String(p.ID), nome: String(p.Nome || '').slice(0, 120), codigo: String(p.Codigo || ''), categoria: String(p.Categoria || '').split(',')[0].trim(), genero: String(p.Genero || '').trim(), estoque: p.Estoque === '' || p.Estoque == null ? '' : String(p.Estoque), tamanhos: String(p.Tamanhos || ''), cores: String(p.Cores || ''), foto: String(p.Foto_URL || ''), fotos: fpFotosDe_(p), cadastro: String(p.Data_Cadastro || '') }));
   try { await env.CACHE.put(chave, JSON.stringify(ps), { expirationTtl: 600 }); } catch (e) { /* cache é conforto */ }
   return ps;
+}
+/** v7.79.0: o catálogo do cache, sem nunca ir ao Apps Script. Quem abre a Esteira não espera uma leitura de até 25 s. */
+async function estCatalogoEmCache_(env) {
+  try { const c = await env.CACHE.get('est:catalogo:v1'); const ps = c ? JSON.parse(c) : null; return Array.isArray(ps) ? ps : null; } catch (e) { return null; }
+}
+/** v7.79.0: chamado a cada minuto pelo agendador. Renova o catálogo antes de o cache vencer (10 min), para ninguém pagar a leitura lenta.
+ * A idade fica no D1 (cfg): o KV gratuito tem poucas gravações por dia, e assim há uma só gravação a cada ~6 min. */
+async function estCatalogoAquecer_(env) {
+  await iniciar(env);
+  const em = Number(await cfgGet(env, 'est_catalogo_em')) || 0;
+  if (Date.now() - em < 360000) return;
+  await estCatalogo_(env, true);
+  await cfgSet(env, 'est_catalogo_em', String(Date.now()));
+}
+/** v7.79.0: primeiros cartões de Hoje só com D1 e o catálogo em cache. Nunca gera a lista, não consulta RH nem catálogo remoto.
+ * Se faltar lista do dia ou catálogo, devolve pronto:false e a tela espera a resposta completa de /esteira/hoje. */
+async function estPrimeirosHoje_(env, data, eu, limite) {
+  const [lista, foco] = await Promise.all([
+    env.DB.prepare(EST_SQL_LISTA_DIA_).bind(data, eu).all(),
+    env.DB.prepare('SELECT categoria FROM est_foco WHERE data=? AND whats=?').bind(data, eu).first(),
+  ]);
+  const linhas = lista.results || [];
+  if (!linhas.length) return { pronto: false, motivo: 'sem_lista' };
+  const prog = estProgresso_(linhas.map((l) => ({ produto: l.produto, familia: l.familia, feito: !!l.feito_em })));
+  const base = { total: prog.total, feitas: prog.feitas, pecas: linhas.length, categoria: foco?.categoria || '' };
+  const catalogo = await estCatalogoEmCache_(env);
+  if (!catalogo) return { pronto: false, motivo: 'sem_catalogo', ...base };
+  // Uma família nunca é cortada no meio: o cartão dela só existe inteiro.
+  let corte = 0;
+  while (corte < linhas.length && (corte < limite || (linhas[corte].familia && linhas[corte].familia === linhas[corte - 1]?.familia))) corte++;
+  const porId = new Map(catalogo.map((x) => [x.id, x]));
+  const itens = linhas.slice(0, corte).map((l) => {
+    const x = porId.get(l.produto);
+    const fam = l.familia ? { familia: l.familia, familiaNome: l.familia_nome || '', rotulo: l.familia_rotulo || '' } : { familia: '' };
+    return x ? Object.assign({}, x, { grupo: l.grupo, feito: !!l.feito_em, feito_em: l.feito_em || '', atualizado_em: l.atualizado_em || '', conferido_em: l.conferido_em || '' }, fam) : Object.assign({ id: l.produto, nome: 'Peça arquivada ou fora do site', grupo: l.grupo, feito: !!l.feito_em, sumiu: true }, fam);
+  });
+  return { pronto: true, lista: itens, restantes: linhas.length - corte, ...base };
 }
 async function estEquipe_(env, req, perms) {
   if (!perms?.acessosConfiguraveis) return (await env.DB.prepare('SELECT * FROM est_equipe WHERE ativo=1 ORDER BY nome').all()).results || [];
@@ -8230,11 +8269,25 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
       if (existente) await lerCatalogo();
     }).catch(() => {});
   }
+  if (p === '/esteira/hoje/primeiros' && req.method === 'GET') {
+    // Mesma autorização de /esteira/menu (sessão já conferida na entrada; equipe legada no D1). Sem RH, sem geração, sem catálogo remoto.
+    await bancoPronto;
+    const [menu, primeiros] = await Promise.all([
+      estMenu_(env, req, (dados, status) => ({ dados, status: status || 200 }), perms, medir, true),
+      medir('primeiros', () => estPrimeirosHoje_(env, data, eu, 8)),
+    ]);
+    if (!menu.dados.ok) return J(menu.dados, menu.status);
+    return J({ ...menu.dados, ...primeiros });
+  }
   const lerEquipe = () => medir('equipe', () => estEquipe_(env, req, perms));
+  // v7.79.0: nas leituras da Caixa e de Fotos a equipe só serve para trocar o nome guardado pelo nome atual no RH.
+  // Quando a permissão da conta já basta, não espera o RH; o nome vem do que o D1 guardou no envio.
+  const semEquipeRH = perms.acessosConfiguraveis && req.method === 'GET' &&
+    ((p === '/esteira/caixa' && (admin || perms.includes('esteira') || gestorFotos)) || (p === '/esteira/fotos' && (admin || perms.includes('esteira'))));
   // O RH remoto independe do D1. A equipe legada mora no D1 e aguarda o esquema.
   const [, equipe, marcas] = await Promise.all([
     bancoPronto,
-    caixaConfirmacao ? [] : perms.acessosConfiguraveis ? lerEquipe() : bancoPronto.then(lerEquipe),
+    caixaConfirmacao || semEquipeRH ? [] : perms.acessosConfiguraveis ? lerEquipe() : bancoPronto.then(lerEquipe),
     marcasLeitura,
   ]);
   if (marcas) {
@@ -8332,7 +8385,7 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
       try { await medir('gerar', () => estGarantirListas_(env, data, c, equipe, lerCatalogo)); }
       catch (e) { return { erro: e.message || 'Não consegui montar a lista de hoje. Tente de novo.' }; }
       const [registros, foco] = await medir('lista_d1', () => Promise.all([
-        env.DB.prepare('SELECT l.*, p.atualizado_em, p.conferido_em, f.nome AS familia_nome, m.rotulo AS familia_rotulo FROM est_lista l LEFT JOIN est_produto p ON p.id=l.produto LEFT JOIN fam_familia f ON f.id=l.familia AND EXISTS (SELECT 1 FROM fam_membro fm WHERE fm.familia=f.id) LEFT JOIN fam_membro m ON m.produto=l.produto AND EXISTS (SELECT 1 FROM fam_familia fm WHERE fm.id=m.familia) WHERE l.data=? AND l.whats=? ORDER BY l.pos').bind(data, eu).all(),
+        env.DB.prepare(EST_SQL_LISTA_DIA_).bind(data, eu).all(),
         env.DB.prepare('SELECT categoria FROM est_foco WHERE data=? AND whats=?').bind(data, eu).first(),
       ]));
       if (registros.results?.length) buscarProdutos();

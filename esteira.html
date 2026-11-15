@@ -8,6 +8,17 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="preconnect" href="https://tenkiter-ig.distkrpconfeccoes.workers.dev" crossorigin>
+<script>
+/* v7.79.0: pede os primeiros cartões de Hoje assim que o <head> chega, sem esperar os 260 KB da página e os scripts.
+   Vale só para a mesma conta, por poucos segundos, e só quando não há retomada pelo cache do aparelho (que valida por outro caminho).
+   Qualquer falha ou diferença cai no pedido normal. Não guarda nada: a resposta fica só na memória desta página. */
+(function(){try{
+var s=JSON.parse(localStorage.getItem('tm_session')||'null');if(!s||!s.whatsapp||!s.sessao)return;
+var d=JSON.parse(localStorage.getItem('tk-esteira-ultima-aba-v1')||'null');if(d&&d.em>Date.now()-1200000)return;
+var u='https://tenkiter-ig.distkrpconfeccoes.workers.dev',c=new AbortController(),t=setTimeout(function(){c.abort()},90000);
+window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetch(u+'/esteira/hoje/primeiros',{signal:c.signal,headers:{'Content-Type':'application/json','X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao}}).then(function(r){return r.json().then(function(j){if(r.status===401)j.exigeLogin=true;return j})}).catch(function(){return null}).then(function(j){clearTimeout(t);return j})};
+}catch(e){}})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
@@ -282,7 +293,7 @@
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.72.0"></script>
-<script src="esteira-fluidez.js?v=7.78.29"></script>
+<script src="esteira-fluidez.js?v=7.79.0"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script>
 (function () {
@@ -297,6 +308,9 @@
     performance.clearMarks(nome);
     performance.mark(nome);
   };
+  // v7.79.0: marco do primeiro item de trabalho utilizável (conferência em Hoje, primeira foto em Fotos).
+  const marcarItem = (aba) => { const nome = 'esteira:' + aba + ':item'; if (!performance.getEntriesByName(nome, 'mark').length) performance.mark(nome); };
+  let primeirosHoje = false;
   const fotosLocais=new Map();
   function snapshotEnvio(v){if(typeof v==='string'&&fotosLocais.has(v))return fotosLocais.get(v) instanceof Blob?{fotoLocal:true,urlLocal:v,arquivo:fotosLocais.get(v)}:fotosLocais.get(v);if(Array.isArray(v))return v.map(snapshotEnvio);if(v&&typeof v==='object'&&!(v instanceof Blob))return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,snapshotEnvio(x)]));return v;}
   async function resolverFotos(v,c,caminho='anexo'){if(v?.fotoLocal&&v.arquivo instanceof Blob){const url=await c.etapa(caminho,async()=>{const blob=await reduzirFoto(v.arquivo);c.assert();return enviarFoto(blob)});if(v.urlLocal){fotosLocais.set(v.urlLocal,url);document.querySelectorAll('img').forEach(i=>{if(i.src===v.urlLocal)i.src=url});URL.revokeObjectURL(v.urlLocal);}return url;}if(Array.isArray(v)){const a=[];for(let i=0;i<v.length;i++)a.push(await resolverFotos(v[i],c,caminho+'-'+i));return a;}if(v&&typeof v==='object'&&!(v instanceof Blob)){const a={};for(const[k,x]of Object.entries(v))a[k]=await resolverFotos(x,c,caminho+'-'+k);return a;}return v;}
@@ -639,7 +653,7 @@
         b = el('button'); b.type = 'button'; b.dataset.aba = id; b.setAttribute('role', 'tab');
         b.onclick = () => {
           if (ABA === id && app.dataset.tela === id) return;
-          performance.clearMarks('esteira:' + id + ':util');
+          performance.clearMarks('esteira:' + id + ':util'); performance.clearMarks('esteira:' + id + ':item');
           salvarRetomada(); medirTela('toque', id); ABA = id; desenharAbas(); void abrirAba();
         };
         nav.insertBefore(b, nav.children[indice] || null);
@@ -699,44 +713,27 @@
     if(!anterior)painel.prepend(bloco);
     medirTela('resumo', 'hoje');
   }
-  async function telaHoje(recarregar) {
-    versaoTela++;
-    const vista=fluidez.preparar('hoje','Montando a sua lista de hoje…'),app=vista.app;
-    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
-    try {
-    if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
-    app.replaceChildren();
-    const r = HOJE;
-    app.append(...avisosPedidosHoje(r.pedidos, EU.admin));
+  /** v7.79.0: cartão de progresso e lista de conferência são desenhados tanto pelos primeiros itens quanto pela resposta completa. */
+  function cartaoProgressoHoje(r) {
     const prog = el('div', 'card'); prog.append(el('h2', '', 'Minha conferência'), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros()));
     if (!r.total) prog.append(el('p', 'muted', EU.confere ? 'Nenhum produto para conferir hoje: tudo foi conferido ou atualizado nos últimos dias.' : 'Você não está marcada para conferir produtos. O Admin total muda isso em Configurações.'));
     else {
       const pl = el('div', 'progresso'); pl.append(el('b', 'num', r.feitas + '/' + r.total), el('span', 'muted', r.feitas >= r.total ? 'Tudo conferido hoje. Obrigada!' : (r.pecas && r.pecas > r.total ? 'itens ao longo do dia · família conta como 1' : 'produtos ao longo do dia, em qualquer ordem')));
       const bar = el('div', 'barra'); const i = el('i'); i.style.width = Math.round((r.feitas / r.total) * 100) + '%'; bar.append(i);
-      const grupos = [...new Set(r.lista.map((x) => String(x.grupo || '').split(' · ')[0]).filter(Boolean))].slice(0, 3);
+      const grupos = [...new Set((r.lista || []).map((x) => String(x.grupo || '').split(' · ')[0]).filter(Boolean))].slice(0, 3);
       prog.append(pl, bar);
       if (r.categoria) prog.append(el('p', 'muted', 'Categoria do dia: ' + r.categoria + (grupos.length > 1 ? ' (e um pouco de ' + grupos.filter((g) => g !== r.categoria).join(', ') + ')' : '')));   // v7.45.0
       else if (grupos.length) prog.append(el('p', 'muted', 'Hoje: ' + grupos.join(' · ')));
     }
-    app.append(prog);
-    r.funcoes.forEach((f) => { const c = el('div', 'card funcao'); c.append(el('h3', '', 'Sua função hoje: ' + f.funcao)); c.append(el('p', f.instrucoes ? '' : 'muted', f.instrucoes || 'Sem instruções cadastradas para esta função.')); app.append(c); });
-    const pedFotos = (r.tarefas || []).filter((t) => t.origem === 'pedido_fotos'), outrasT = (r.tarefas || []).filter((t) => t.origem !== 'pedido_fotos');
-    if (pedFotos.length) {                                                 // v7.52.0: pedidos de fotos: cartão só de fotos (um por produto)
-      const c = el('div', 'card'); c.id = 'fotos-pedidas-hoje'; const gs = gruposPedidoFotos(pedFotos);
-      c.append(el('h2', '', 'Fotos pedidas'), ...gs.map((g) => cartaoPedidoFotos(g, () => telaHoje())));
-      app.append(c);
-    }
-    if (outrasT.length) {                                                  // v7.42.0: tarefas da função do dia (preparação e fotos novas pedidas)
-      const c = el('div', 'card'); c.id = 'tarefas-hoje'; c.append(el('h2', '', 'Tarefas da sua função'), el('p', 'muted', outrasT.length === 1 ? '1 tarefa esperando.' : outrasT.length + ' tarefas esperando.'));
-      c.append(...tarefasPorPeca(outrasT, () => telaHoje()));   // v7.48.0: uma vez o produto (fotos, dados, editar), depois as tarefas dela
-      app.append(c);
-    }
-    if (!r.funcoes.length && r.escala.some((e) => e.whats)) { const c = el('div', 'card'); c.append(el('h3', '', 'Escala de hoje')); c.append(el('p', 'muted', r.escala.filter((e) => e.whats).map((e) => e.funcao + ': ' + (e.nome || '—')).join(' · '))); app.append(c); }
+    prog.id = 'hoje-progresso';
+    return prog;
+  }
+  function desenharListaHoje(app, lista) {
     let grupoAtual = null;
     const chipDe = (p) => { const dConf = haDias(p.conferido_em); return p.feito ? el('span', 'chip ok', '✓ conferida') : p.sumiu ? el('span', 'chip er', 'fora do site') : dConf == null ? el('span', 'chip er', 'nunca conferida') : el('span', 'chip al', 'conferir'); };
     const estoqueTxt = (p) => p.estoque !== '' && p.estoque != null ? p.estoque + ' un.' : '';
     // v7.44.0: peças da mesma família chegam juntas do servidor; aqui viram um cartão só
-    const blocos = []; r.lista.forEach((p) => { const ult = blocos[blocos.length - 1]; if (p.familia && ult && ult.familia === p.familia) ult.itens.push(p); else blocos.push({ familia: p.familia || '', itens: [p] }); });
+    const blocos = []; lista.forEach((p) => { const ult = blocos[blocos.length - 1]; if (p.familia && ult && ult.familia === p.familia) ult.itens.push(p); else blocos.push({ familia: p.familia || '', itens: [p] }); });
     blocos.forEach((bl) => {
       const p0 = bl.itens[0];
       if (p0.grupo && p0.grupo !== grupoAtual) { grupoAtual = p0.grupo; app.append(el('p', 'grupo-tit', p0.grupo)); }
@@ -773,6 +770,78 @@
       linha.append(p.sumiu ? el('div', 'semfoto') : fotoPeca(p.id, p.foto, p.nome, '', true), b);
       app.append(linha);
     });
+  }
+  /** Mantém na tela o botão que a pessoa ia tocar quando blocos novos entram acima dele. */
+  function ancoraDaTela() {
+    const alvo = [...app.querySelectorAll('.peca')].find((b) => { const t = b.getBoundingClientRect(); return t.height && t.bottom > 0 && t.top < innerHeight; });
+    return alvo ? { alvo, topo: alvo.getBoundingClientRect().top } : null;
+  }
+  /** Segura o botão no mesmo lugar da tela enquanto o conteúdo novo termina de assentar (miniaturas que carregam depois).
+   * Para ao primeiro toque, rolagem ou tecla da pessoa, ou em 2,5 s; a âncora nativa do navegador fica desligada só nesse intervalo. */
+  function restaurarAncora(a) {
+    if (!a) return;
+    const raiz = document.documentElement, anterior = raiz.style.overflowAnchor, eventos = ['touchstart', 'wheel', 'keydown', 'pointerdown'];
+    let ativo = true, tempo, observador;
+    const aplicar = () => {
+      if (!ativo || !a.alvo.isConnected) return;
+      const d = a.alvo.getBoundingClientRect().top - a.topo;
+      if (Math.abs(d) > 1) window.scrollBy({ top: d, left: 0, behavior: 'instant' });
+    };
+    const parar = () => {
+      if (!ativo) return;
+      ativo = false; clearTimeout(tempo); observador?.disconnect(); raiz.style.overflowAnchor = anterior;
+      eventos.forEach((e) => removeEventListener(e, parar, true));
+    };
+    raiz.style.overflowAnchor = 'none';
+    eventos.forEach((e) => addEventListener(e, parar, { capture: true, passive: true }));
+    tempo = setTimeout(parar, 2500);
+    if (typeof ResizeObserver === 'function') { observador = new ResizeObserver(aplicar); observador.observe(app); }
+    aplicar();
+  }
+  /** v7.79.0: primeiros cartões de conferência (D1 + catálogo em cache do Worker). A resposta completa chega depois e só acrescenta o que falta. */
+  function mostrarPrimeiros(r) {
+    const painel = app.querySelector('.esteira-vista');
+    if (ABA !== 'hoje' || app.dataset.tela !== 'hoje' || HOJE || !painel || !EU || r.pronto !== true || !r.lista?.length || painel.querySelector('#hoje-progresso')) return false;
+    const espera = painel.querySelector('[data-espera]');
+    const resumo = $('hoje-resumo-abertura');
+    if (resumo) resumo.remove();
+    const pedidos = avisosPedidosHoje(r.resumoHoje?.pedidos, EU.admin);
+    const resto = el('p', 'dica', r.restantes ? 'Carregando o restante da lista…' : 'Conferindo o restante do dia…'); resto.id = 'hoje-resto'; resto.setAttribute('role', 'status');
+    const pedacos = document.createElement('div');
+    pedacos.append(...pedidos, cartaoProgressoHoje(r));
+    desenharListaHoje(pedacos, r.lista);
+    pedacos.append(resto);
+    const novos = [...pedacos.childNodes];
+    if (espera) espera.replaceWith(...novos); else painel.prepend(...novos);
+    primeirosHoje = true;
+    marcarItem('hoje');
+    return true;
+  }
+  async function telaHoje(recarregar) {
+    versaoTela++;
+    const vista=fluidez.preparar('hoje','Montando a sua lista de hoje…'),app=vista.app;
+    const falha=(msg,tentar)=>{vista.erro=msg||'Não foi possível atualizar.';vista.tentar=tentar;};
+    let ancoraAntes = null;
+    try {
+    if (!HOJE || recarregar !== false) {  const r = await srv('/esteira/hoje'); if(!vista.valida())return; if (primeirosHoje) ancoraAntes = ancoraDaTela(); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
+    app.replaceChildren();
+    const r = HOJE;
+    app.append(...avisosPedidosHoje(r.pedidos, EU.admin));
+    app.append(cartaoProgressoHoje(r));
+    r.funcoes.forEach((f) => { const c = el('div', 'card funcao'); c.append(el('h3', '', 'Sua função hoje: ' + f.funcao)); c.append(el('p', f.instrucoes ? '' : 'muted', f.instrucoes || 'Sem instruções cadastradas para esta função.')); app.append(c); });
+    const pedFotos = (r.tarefas || []).filter((t) => t.origem === 'pedido_fotos'), outrasT = (r.tarefas || []).filter((t) => t.origem !== 'pedido_fotos');
+    if (pedFotos.length) {                                                 // v7.52.0: pedidos de fotos: cartão só de fotos (um por produto)
+      const c = el('div', 'card'); c.id = 'fotos-pedidas-hoje'; const gs = gruposPedidoFotos(pedFotos);
+      c.append(el('h2', '', 'Fotos pedidas'), ...gs.map((g) => cartaoPedidoFotos(g, () => telaHoje())));
+      app.append(c);
+    }
+    if (outrasT.length) {                                                  // v7.42.0: tarefas da função do dia (preparação e fotos novas pedidas)
+      const c = el('div', 'card'); c.id = 'tarefas-hoje'; c.append(el('h2', '', 'Tarefas da sua função'), el('p', 'muted', outrasT.length === 1 ? '1 tarefa esperando.' : outrasT.length + ' tarefas esperando.'));
+      c.append(...tarefasPorPeca(outrasT, () => telaHoje()));   // v7.48.0: uma vez o produto (fotos, dados, editar), depois as tarefas dela
+      app.append(c);
+    }
+    if (!r.funcoes.length && r.escala.some((e) => e.whats)) { const c = el('div', 'card'); c.append(el('h3', '', 'Escala de hoje')); c.append(el('p', 'muted', r.escala.filter((e) => e.whats).map((e) => e.funcao + ': ' + (e.nome || '—')).join(' · '))); app.append(c); }
+    desenharListaHoje(app, r.lista);
     } finally {
       const resumo = vista.v.painel.querySelector('#hoje-resumo-abertura');
       if (vista.valida() && vista.erro && resumo) {
@@ -781,7 +850,19 @@
         vista.stage.append(resumo, aviso);
         vista.erro = '';
       }
-      fluidez.concluir(vista);
+      if (vista.valida() && vista.erro && primeirosHoje && vista.v.painel.querySelector('#hoje-progresso')) {
+        // Falha na resposta completa: os primeiros cartões continuam utilizáveis e o aviso fica no fim da lista, sem empurrar nada.
+        vista.v.pronta = true;
+        const resto = vista.v.painel.querySelector('#hoje-resto');
+        if (resto) { resto.textContent = 'Não consegui carregar o restante da lista. '; resto.append(bt('Tentar de novo', 'prim', vista.tentar)); }
+        vista.erro = ''; primeirosHoje = false;
+      } else {
+        const ancora = ancoraAntes || (primeirosHoje ? ancoraDaTela() : null);
+        fluidez.concluir(vista);
+        restaurarAncora(ancora);
+        if (vista.valida()) primeirosHoje = false;
+        if (vista.valida() && !vista.erro && HOJE?.lista?.length) marcarItem('hoje');
+      }
     }
   }
   /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todas as peças conferidas (igual ao servidor). */
@@ -1470,6 +1551,8 @@
   const rotaCaixa = filtro => '/esteira/caixa?pagina=1&ver=' + filtro;
   async function telaFotos(aviso) {
     versaoTela++;
+    const progressiva = !contextoRecuperado && !fluidez.pronta('fotos');
+    let concluida = false;
     const vista=fluidez.preparar('fotos','Carregando as fotos…'),app=vista.app;
     // O envio já foi confirmado: avisa antes de aguardar a revalidação da lista.
     if(typeof aviso==='string'&&aviso){AVISO_FOTOS=aviso;const atual=$('fotos-status');if(atual?.diga)atual.diga(aviso,'ok');}
@@ -1481,17 +1564,25 @@
     const rota = rotaCaixa(CAIXA_VER);
     // No retorno pelo cache, desenharCaixa lê apenas o snapshot já validado.
     const caixa = contextoRecuperado ? null : {rota, leitura:srv(rota)};
-    const r = await fotos; if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
-    if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
+    // v7.79.0: na primeira entrada, a estrutura aparece já com as ações e a Caixa desenha quando a própria resposta chegar.
+    // Pedidos de fotos e Caixa são blocos independentes, cada um com a sua recuperação.
+    let r = null;
+    if (!progressiva) {
+      r = await fotos; if(!vista.valida())return; if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaFotos());
+      if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
+    }
     app.replaceChildren();
     const topo = el('div', 'card'); topo.id = 'fotos-topo'; topo.append(el('h2', '', 'Fotos'));
     const stTopo = linhaStatus(); stTopo.id = 'fotos-status'; if (AVISO_FOTOS) stTopo.diga(AVISO_FOTOS, 'ok');
     topo.append(acoes(bt('Enviar fotos para a caixa', 'laranja', () => abrirEnviarCaixa((x) => telaFotos(x.enviadas === 1 ? '1 foto enviada para a caixa.' : x.enviadas + ' fotos enviadas para a caixa.'))), bt('Pedir fotos de um produto', '', () => abrirPedirFotos(null, (m) => telaFotos(m))), bt('Atualizar fotos', 'leve', () => {fluidez.invalidar();telaFotos();}), bt(EU.admin?'Registros da equipe':'Meus registros','leve',()=>abrirRegistros())), stTopo);
     app.append(topo);
     const cp = el('div', 'card'); cp.id = 'fotos-pedidas';
-    cp.append(el('h2', '', 'Fotos pedidas'));
-    if (!r.pedidos.length) cp.append(el('p', 'muted', 'Nenhum pedido de fotos aberto.'));
-    else cp.append(...r.pedidos.map((g) => cartaoPedidoFotos(g, () => telaFotos())));
+    const preencherPedidos = (x) => {
+      cp.replaceChildren(el('h2', '', 'Fotos pedidas'));
+      if (!x.pedidos.length) cp.append(el('p', 'muted', 'Nenhum pedido de fotos aberto.'));
+      else cp.append(...x.pedidos.map((g) => cartaoPedidoFotos(g, () => telaFotos())));
+    };
+    if (r) preencherPedidos(r); else cp.append(el('h2', '', 'Fotos pedidas'), el('p', 'muted', 'Carregando os pedidos de fotos…'));
     app.append(cp);
     const cx = el('div', 'card'); cx.id = 'caixa'; app.append(cx);
     if (contextoRecuperado) await desenharCaixa(cx); else void desenharCaixa(cx, null, caixa);
@@ -1508,14 +1599,37 @@
         else { st.diga(falhaCaixa(x), 'erro'); c.append(bt('Tentar de novo', 'prim', () => telaFotos())); }
       });
     });
-    } finally {fluidez.concluir(vista);marcarRetomada();}
+    if (!r) {
+      fluidez.concluir(vista); concluida = true;
+      // Os pedidos de fotos têm leitura e nova tentativa próprias: a Caixa e as ações não saem do lugar.
+      let leituraPedidos = 0;
+      const carregarPedidos = async (leitura) => {
+        const meu = ++leituraPedidos, sessao = sessaoAtual;
+        const resp = await (leitura || srv('/esteira/fotos'));
+        if (meu !== leituraPedidos || !mesmaConta(sessao)) return;
+        if (resp.exigeLogin) return telaLogin('');
+        if (!resp.ok) {
+          cp.replaceChildren(el('h2', '', 'Fotos pedidas'), el('p', 'erro', resp.erro || 'Não consegui abrir os pedidos de fotos.'), bt('Tentar de novo', '', () => {
+            cp.replaceChildren(el('h2', '', 'Fotos pedidas'), el('p', 'muted', 'Carregando os pedidos de fotos…'));
+            void carregarPedidos();
+          }));
+          return;
+        }
+        if (resp.eu) EU = Object.assign({}, EU || {}, resp.eu);
+        preencherPedidos(resp);
+        if (resp.pedidos.length) marcarItem('fotos');
+        marcarRetomada();
+      };
+      void carregarPedidos(fotos);
+    }
+    } finally {if(!concluida)fluidez.concluir(vista);marcarRetomada();}
   }
   const leiturasCaixa = new WeakMap(), caixaRenderizada = new WeakMap();
   async function desenharCaixa(cx, pagina, antecipada) {
-    const gestor = !!(EU && EU.gestorFotos), filtroAtual = CAIXA_VER, sessao = sessaoAtual;
+    let gestor = !!(EU && EU.gestorFotos); const filtroAtual = CAIXA_VER, sessao = sessaoAtual;
     const tentativa = {};
     leiturasCaixa.set(cx, tentativa);
-    const titulo = gestor ? 'Fotos recebidas' : 'Suas fotos enviadas';
+    let titulo = gestor ? 'Fotos recebidas' : 'Suas fotos enviadas';
     if (!pagina) {
       caixaRenderizada.delete(cx);
       cx.replaceChildren(el('h2', '', titulo), el('p', 'muted', 'Carregando…'));
@@ -1546,6 +1660,8 @@
       }
       return;
     }
+    // A Caixa pode chegar antes de /esteira/fotos: o Worker diz se esta conta é gestora de fotos.
+    if (typeof resposta.gestor === 'boolean' && resposta.gestor !== gestor) { gestor = resposta.gestor; titulo = gestor ? 'Fotos recebidas' : 'Suas fotos enviadas'; EU = Object.assign({}, EU || {}, { gestorFotos: gestor }); }
     const itensDaPagina = resposta.itens;
     const r = { ...resposta };
     if (pagina) {
@@ -1614,6 +1730,13 @@
         grade.append(card);
       });
       g.append(grade); cx.append(g);
+    }
+    if (!pagina) {
+      cx.querySelectorAll('.cx-item img').forEach((im, n) => { if (n < 3) { im.loading = 'eager'; im.fetchPriority = 'high'; } });
+      const primeira = cx.querySelector('.cx-item img');
+      if (!primeira) { if (r.itens.length) marcarItem('fotos'); }
+      else if (primeira.complete && primeira.naturalWidth) marcarItem('fotos');
+      else primeira.addEventListener('load', () => marcarItem('fotos'), { once: true });
     }
     if (gestor && CAIXA_VER === 'novas') {
       const bP = bt('Colocar num produto', 'prim cx-colocar', () => abrirColocar(escolhidas(), depois));
@@ -2671,9 +2794,16 @@
     $('quem').textContent = EU.nome || '';
     desenharAbas();
   }
+  /** A busca começada no <head> só serve para a mesma conta, recente e uma única vez. */
+  function primeirosAntecipados() {
+    const pre = window.__esteiraPre, s = getSessao();
+    window.__esteiraPre = null;
+    if (!pre || !s || pre.whats !== s.whatsapp || pre.sessao !== s.sessao || pre.url !== INSTAGRAM_URL || Date.now() - pre.em > 30000) return Promise.resolve(null);
+    return pre.p;
+  }
   async function iniciar() {
     if (!getSessao()) return telaLogin('');
-    performance.clearMarks('esteira:hoje:util');
+    performance.clearMarks('esteira:hoje:util'); performance.clearMarks('esteira:hoje:item'); primeirosHoje = false;
     medirTela('abertura', 'hoje');
     const sessao = sessaoAtual;
     const leitura = retomada.ler(sessao);
@@ -2767,12 +2897,15 @@
       }
     }
     // O menu dá a primeira informação enquanto Hoje monta a lista em paralelo.
-    const menu = srv('/esteira/menu?resumo=1');
+    // v7.79.0: o Worker devolve identidade, resumo e os primeiros cartões sem esperar RH, geração ou catálogo remoto.
+    // Se não houver lista pronta (ou o Worker for anterior), cai no menu de antes e Hoje funciona como sempre.
+    const rapido = primeirosAntecipados().then(r => r || srvRede('/esteira/hoje/primeiros'));
+    const menu = rapido.then(r => r.ok && r.eu && r.acesso ? r : srv('/esteira/menu?resumo=1'));
     const hoje = telaHoje();
     const tarefasAntecipadas = menu.then(async r=>{
       if(!r.ok||!r.acesso)return;
       await new Promise(resolve=>setTimeout(resolve,800));
-      if(!mesmaConta(sessao)||ABA!=='hoje'||HOJE||document.hidden)return;
+      if(!mesmaConta(sessao)||ABA!=='hoje'||HOJE||document.hidden||primeirosHoje)return;
       const tarefas=await srv('/esteira/hoje/tarefas');
       if(mesmaConta(sessao)&&ABA==='hoje'&&!HOJE&&tarefas.ok&&tarefas.tarefas?.length){
         mostrarResumoAbertura(r.resumoHoje,tarefas.tarefas);
@@ -2783,7 +2916,7 @@
       if (!mesmaConta(sessao) || !r.ok || !r.eu) return;
       confirmarAcesso(r);
       medirTela('menu','hoje');
-      mostrarResumoAbertura(r.resumoHoje);
+      if (!mostrarPrimeiros(r)) mostrarResumoAbertura(r.resumoHoje);
     })]);
     if (mesmaConta(sessao)) salvarRetomada();
   }

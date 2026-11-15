@@ -19,6 +19,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.79.0 — Primeiro cartão de Hoje e Fotos em blocos
+
+- Hoje mostra os primeiros cartões de conferência assim que o Worker devolve identidade, resumo e a lista já gerada do dia (D1 e catálogo em cache), sem esperar RH, geração, tarefas nem leitura remota do catálogo. A resposta completa só acrescenta o restante, reaproveita os cartões já na tela e mantém o botão no lugar.
+- O pedido dos primeiros cartões começa no `<head>`, antes de a página e os scripts terminarem de baixar. Sem lista pronta, ou com Worker anterior, a abertura funciona como antes.
+- Fotos mostra as ações na hora e carrega os pedidos e a Caixa como blocos independentes, cada um com a sua nova tentativa; as primeiras miniaturas têm prioridade.
+- Worker: nova rota `/esteira/hoje/primeiros` (mesma autorização do menu); Caixa e Fotos de contas com acessos configuráveis não esperam o RH (o nome vem do que o D1 guardou no envio); o agendador renova o catálogo a cada ~6 min para a abertura não pagar a leitura lenta.
+
 ## 7.78.31 — Navegação durante a retomada da Esteira
 
 - Depois de confirmar o acesso, a Esteira libera as abas enquanto o cache do aparelho abre. A tela recuperada respeita a aba que a pessoa escolher durante a espera.
