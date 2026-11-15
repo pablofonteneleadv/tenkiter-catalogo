@@ -373,7 +373,7 @@ async function permissoesConferir_(env, req, medir = (_, executar) => executar()
           // Uma só conferência em segundo plano por vez e por pessoa: quem reserva a linha dispara, os outros só leem.
           if (idade > SESSAO_REVALIDA_MS_ && typeof ctx?.waitUntil === 'function' && await sessaoReservarRevalidacao_(env, chaveD1)) {
             const inicio = sessaoRelogio_();
-            ctx.waitUntil(permissoesAoVivo_(env, whats, sessao).then((novo) => sessaoRegistrar_(env, chaveD1, novo, inicio)).catch(() => {}));
+            ctx.waitUntil(permissoesAoVivo_(env, whats, sessao).then((novo) => sessaoRegistrar_(env, chaveD1, novo, inicio)).catch(falhou_('sessao:revalidar')));
           }
           return permissoesMontar_(v.permissoes, Array.isArray(v.perfis) ? v.perfis : [], String(v.nome || ''), v.configuraveis === true, v.msgModelos || {});
         }
@@ -2206,6 +2206,8 @@ export function extensaoImagem(b) {      // confere os BYTES (JPEG/PNG/WEBP); HE
   return null;
 }
 export function instagramLimpo(t) { const x = String(t || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/[/?#].*$/, '').toLowerCase(); return /^[a-z0-9._]{1,30}$/.test(x) ? x : ''; }
+/** Falha em tarefa de segundo plano: não derruba quem chamou, mas deixa rastro no log (antes passava em silêncio). `nulo` devolve null em vez de undefined. */
+function falhou_(rotulo, nulo) { return (e) => { try { console.warn(JSON.stringify({ evento: 'tk_falha_segundo_plano', rotulo, erro: String((e && e.message) || e).slice(0, 200) })); } catch (_) {} return nulo ? null : undefined; }; }
 const soDigitos = (t, n) => String(t || '').replace(/\D/g, '').slice(0, n || 15);
 async function infoSessao(env, req) {       // {perms, nome} da sessão (qualquer conta: cliente, aluno, equipe); 2 min de cache
   const whats = soDigitos(req.headers.get('X-TK-Whats'), 20), sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
@@ -3385,7 +3387,7 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
   if (perms.acessosConfiguraveis && !perms.includes('gerir_acessos') && !perms.includes('fotoia')) return J({ok:false,erro:'Seu acesso não permite usar esta área.'},403);
   const p = url.pathname, gestor = (perms || []).indexOf('gerir_acessos') !== -1;
   const agoraIso = () => new Date().toISOString();
-  const disparar = (id) => { const f = processarFotoIA(env, id).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(f); return f; };
+  const disparar = (id) => { const f = processarFotoIA(env, id).catch(falhou_('foto_ia')); if (ctx && ctx.waitUntil) ctx.waitUntil(f); return f; };
   if (p === '/fotoia/incorporar' && req.method === 'POST') return incorporarFotoIA_(env, req, J);
   if (p === '/fotoia/composicao' && req.method === 'GET') { await composicoesFotoIA_(env); const item = await env.DB.prepare('SELECT produto FROM fotoia_composicao WHERE job=?').bind(Number(url.searchParams.get('id')) || 0).first(); return J({ ok: true, produto: item ? item.produto : '' }); }
   if (p === '/fotoia/composicao' && req.method === 'POST') return salvarComposicaoFotoIA_(env, req, J);
@@ -3947,8 +3949,8 @@ async function aceitarEntrada_(env,ctx,tipo,canal,dados) {
   const tarefa=(async()=>{
     const r=await processarEntrada_(env,chave);
     // A fila de avisos é independente; indisponibilidade do push não devolve eventos à entrada.
-    await processarPushMobile_(env,true).catch(()=>{});
-    await processarComplementos_(env).catch(()=>{});
+    await processarPushMobile_(env,true).catch(falhou_('push_mobile'));
+    await processarComplementos_(env).catch(falhou_('complementos'));
     return r;
   })().catch(()=>({pendente:true}));
   if(typeof ctx?.waitUntil==='function'){ctx.waitUntil(tarefa);return {ok:true,recebido:true};}
@@ -4049,7 +4051,7 @@ const processarComplementos_=(env,forcar=false)=>processarLoteEntrada_(env,'comp
 async function processarEntradas_(env,forcar=false) {
   await processarLoteEntrada_(env,'recebidas',20,forcar);
   await processarLoteEntrada_(env,'atualizacoes',20,forcar);
-  await processarPushMobile_(env,true).catch(()=>{});
+  await processarPushMobile_(env,true).catch(falhou_('push_mobile'));
   await processarComplementos_(env,forcar);
 }
 async function completarMidiaEntrada_(env,canal,m) {
@@ -4538,7 +4540,7 @@ async function agendarAuto_(ctx, env, canal, m) {
   if (m._bloquearAuto||!autoElegivel_(canal, m)) return;
   let cfg; try { cfg = await msgAuto_(env); } catch (e) { return; }
   if (!cfg.boasVindas.ligado && !cfg.foraHorario.ligado) return;            // desligadas: nada é agendado
-  const p = respostaAutomatica_(env, canal, m, cfg).catch(() => null);
+  const p = respostaAutomatica_(env, canal, m, cfg).catch(falhou_('resposta_automatica', true));
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p); else await p;
 }
 /** Boas-vindas (loja aberta, 12 h sem nenhuma mensagem na conversa) ou Fora do horário (loja fechada, 1 vez por período fechado).
@@ -4938,7 +4940,7 @@ async function processarFilaZernio_(env){
       await env.DB.prepare('DELETE FROM msg_zernio_fila WHERE id=?').bind(row.id).run();
       await cfgSet(env,'msg_zernio_processado',JSON.stringify({em:agora(),ok:true}));
       // Push failures cannot make the already-saved message disappear or retry ingestion.
-      if(b.event==='message.received')await processarPushMobile_(env,true).catch(()=>{});
+      if(b.event==='message.received')await processarPushMobile_(env,true).catch(falhou_('push_mobile'));
     }catch(e){
       await env.DB.prepare('UPDATE msg_zernio_fila SET tentativas=tentativas+1,prox=?,trava=0 WHERE id=?').bind(Date.now()+Math.min(1800000,30000*Math.pow(2,Math.min(6,row.tentativas))),row.id).run();
       await cfgSet(env,'msg_zernio_processado',JSON.stringify({em:agora(),ok:false,erro:'Falha ao gravar; evento preservado para nova tentativa.'}));
@@ -6613,19 +6615,19 @@ async function videoUsuario_(env,req,url,J){
 
 export default {
   async scheduled(ev, env, ctx) {
-    ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
-    ctx.waitUntil(processarFilaZernio_(env).catch(()=>{}));
-    ctx.waitUntil(processarEntradas_(env).catch(()=>{}));
-    ctx.waitUntil(processarAgenda_(env).catch(()=>{}));                      // a cada minuto: mensagens agendadas que chegaram na hora
+    ctx.waitUntil(processarPushMobile_(env).catch(falhou_('cron:push_mobile')));
+    ctx.waitUntil(processarFilaZernio_(env).catch(falhou_('cron:fila_zernio')));
+    ctx.waitUntil(processarEntradas_(env).catch(falhou_('cron:entradas')));
+    ctx.waitUntil(processarAgenda_(env).catch(falhou_('cron:agenda')));                      // a cada minuto: mensagens agendadas que chegaram na hora
     ctx.waitUntil(dispararPostagens_(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     ctx.waitUntil(filaContatosAuto_(env));
-    ctx.waitUntil((async()=>{await iniciar(env);await processarFilaNomesGoogle_(env,3);})().catch(()=>{}));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
+    ctx.waitUntil((async()=>{await iniciar(env);await processarFilaNomesGoogle_(env,3);})().catch(falhou_('cron:fila_nomes_google')));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
     // Sincroniza uma página do Google por minuto, de forma independente da conta de atendente aberta.
     // Uma rodada completa ocorre no máximo a cada 4 h; a ponte não grava contatos nesta leitura.
-    ctx.waitUntil(indexarNomesGoogle_(env).catch(() => {}));
-    ctx.waitUntil(estCatalogoAquecer_(env).catch(() => {}));                    // v7.79.0: catálogo sempre quente para a Esteira
-    ctx.waitUntil(estRetratoCron_(env, ev && ev.scheduledTime ? Number(ev.scheduledTime) : Date.now()).catch(() => {}));   // v7.45.0: 1 leitura de KV; retrato do estoque 1x por dia
+    ctx.waitUntil(indexarNomesGoogle_(env).catch(falhou_('cron:nomes_google')));
+    ctx.waitUntil(estCatalogoAquecer_(env).catch(falhou_('cron:catalogo_aquecer')));                    // v7.79.0: catálogo sempre quente para a Esteira
+    ctx.waitUntil(estRetratoCron_(env, ev && ev.scheduledTime ? Number(ev.scheduledTime) : Date.now()).catch(falhou_('cron:retrato_estoque')));   // v7.45.0: 1 leitura de KV; retrato do estoque 1x por dia
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
     if (min === 7) {ctx.waitUntil(limparVideoPreparo_(env));ctx.waitUntil(limparTemporarios(env).catch(() => {}));ctx.waitUntil((async()=>{const c=await env.CACHE.get('contatos_staging_cursor');const r=await contatosR2ExpurgarOrfaos_(env,Date.now(),c||undefined);if(r.cursor)await env.CACHE.put('contatos_staging_cursor',r.cursor,{expirationTtl:86400});else await env.CACHE.delete('contatos_staging_cursor');})().catch(()=>{}));}      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
@@ -6691,7 +6693,7 @@ export default {
       if (req.method === 'POST' && resposta.ok) {
         const recebido = await resposta.clone().json().catch(() => null);
         // A mensagem já está persistida; push não atrasa nem derruba o aceite do webhook.
-        if (recebido && (recebido.nova === true || recebido.novas > 0) && typeof ctx?.waitUntil === 'function') ctx.waitUntil(processarPushMobile_(env,true).catch(() => {}));
+        if (recebido && (recebido.nova === true || recebido.novas > 0) && typeof ctx?.waitUntil === 'function') ctx.waitUntil(processarPushMobile_(env,true).catch(falhou_('push_mobile')));
       }
       if (resposta.status >= 500) await anotarFalha_(env, url.pathname, resposta.status);
       return resposta;
@@ -6768,7 +6770,7 @@ export default {
         return J({ok:true,configurada:true});
       }
       if(p==='/msg/entrada/reprocessar'&&req.method==='POST'){
-        const tarefa=processarEntradas_(env,true).catch(()=>{});
+        const tarefa=processarEntradas_(env,true).catch(falhou_('entradas'));
         if(typeof ctx?.waitUntil==='function')ctx.waitUntil(tarefa);else await tarefa;
         try{await caches.default.delete(new Request('https://saude.invalid/entrada-v1'));}catch(_){}
         return J({ok:true,iniciado:true});
