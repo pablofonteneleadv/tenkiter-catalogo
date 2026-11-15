@@ -180,10 +180,13 @@ def jornada(chromium, largura, altura):
         retidas = [esperar_rota(pg, estado), esperar_rota(pg, estado)]
         por_rota = {urlsplit(r.request.url).path: r for r in retidas}
         assert set(por_rota) == {"/esteira/fotos", "/esteira/caixa"}
-        assert not pg.locator("#fotos-pedidas, [data-caixa]").count()
+        # v7.79.0: na primeira entrada as ações aparecem já; pedidos e Caixa chegam cada um no seu tempo.
+        assert pg.locator("#fotos-topo").is_visible()
+        assert pg.locator("#fotos-pedidas").inner_text().count("Carregando os pedidos de fotos")
+        assert not pg.locator("[data-caixa]").count()
         estado["reter_fotos"] = False
         pedidos_fotos(por_rota["/esteira/fotos"])
-        pg.locator("#fotos-pedidas").wait_for()
+        pg.wait_for_function("!document.querySelector('#fotos-pedidas')?.innerText.includes('Carregando os pedidos')")
         pg.wait_for_timeout(360)
         assert (pg.evaluate(LER) or {}).get("aba") != "fotos"
         estado["reter_caixa"] = False

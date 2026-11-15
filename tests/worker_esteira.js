@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_esteira.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js')) + '\nexport {estMontarListas_, estRetratoCron_, estParadas_, estValidarCampos_, estFornecedorLimpo_, estGarantirListas_};');
+fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js')) + '\nexport {estMontarListas_, estRetratoCron_, estParadas_, estValidarCampos_, estFornecedorLimpo_, estGarantirListas_, estCatalogoAquecer_};');
 let ok = 0; const falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 function d1() {
@@ -945,6 +945,70 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
     await DB.prepare("UPDATE est_produto SET etapa='aceito' WHERE id=?").bind(saiu).run();
     chk('Cursor continua válido se a última peça da primeira página sair da Preparação', JSON.stringify((await pagina(p1.proximo)).j.produtos) === JSON.stringify(p2.produtos));
     chk('Cursor inválido retorna 400 e usuário revogado não recebe a página', (await pagina('inválido')).status === 400 && (await ler(rota, VISITA)).status === 403);
+  }
+
+  { // v7.79.0: primeiros cartões de Hoje sem RH, sem geração e sem catálogo remoto; Caixa/Fotos sem esperar o RH.
+    const diaHoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+    const completo = (await A(IARA, 'GET', '/esteira/hoje')).j;
+    chk('Base do teste: Hoje completo tem lista maior que a primeira página', completo.ok && completo.lista.length > 8, completo.lista?.length);
+    const antesCatalogo = listas;
+    const pr = await A(IARA, 'GET', '/esteira/hoje/primeiros');
+    chk('Primeiros: pronto, mesma identidade e contagens globais do Hoje completo', pr.r.status === 200 && pr.j.ok && pr.j.pronto === true && pr.j.eu?.admin === false && !!pr.j.acesso && pr.j.data === completo.data &&
+      pr.j.total === completo.total && pr.j.feitas === completo.feitas && pr.j.pecas === completo.pecas && pr.j.categoria === completo.categoria, { ...pr.j, lista: undefined });
+    chk('Primeiros: itens são o início exato da lista completa e o restante é informado', pr.j.lista.length >= 1 && pr.j.lista.length <= 8 + 10 &&
+      JSON.stringify(pr.j.lista) === JSON.stringify(completo.lista.slice(0, pr.j.lista.length)) && pr.j.restantes === completo.lista.length - pr.j.lista.length);
+    chk('Primeiros: não consulta o catálogo remoto e é medido por Server-Timing', listas === antesCatalogo && /primeiros;dur=/.test(pr.r.headers.get('Server-Timing') || ''), listas - antesCatalogo);
+    chk('Primeiros: não repete o custo nem dados privados (sem funções, tarefas, escala)', !('funcoes' in pr.j) && !('tarefas' in pr.j) && !('escala' in pr.j));
+    kv.delete('est:catalogo:v1');
+    const frio = await A(IARA, 'GET', '/esteira/hoje/primeiros');
+    chk('Primeiros com catálogo frio: pronto:false, mantém contagens e NÃO consulta o Apps Script', frio.j.ok && frio.j.pronto === false && frio.j.motivo === 'sem_catalogo' && frio.j.total === completo.total && !frio.j.lista && listas === antesCatalogo, { ...frio.j });
+    const listaSalva = (await env.DB.prepare('SELECT * FROM est_lista WHERE data=? AND whats=?').bind(diaHoje, IARA).all()).results;
+    await env.DB.prepare('DELETE FROM est_lista WHERE data=? AND whats=?').bind(diaHoje, IARA).run();
+    const semLista = await A(IARA, 'GET', '/esteira/hoje/primeiros');
+    const geradas = (await env.DB.prepare('SELECT COUNT(*) AS n FROM est_lista WHERE data=? AND whats=?').bind(diaHoje, IARA).first()).n;
+    chk('Primeiros sem lista do dia: pronto:false e NÃO gera lista', semLista.j.ok && semLista.j.pronto === false && semLista.j.motivo === 'sem_lista' && geradas === 0, { ...semLista.j });
+    // família nunca é cortada: 7 peças soltas + família de 3 (limite 8)
+    kv.delete('est:catalogo:v1'); await W.estCatalogoAquecer_(env);
+    for (let i = 0; i < 10; i++) await env.DB.prepare('INSERT INTO est_lista(data,whats,produto,pos,grupo,familia,feito_em) VALUES(?,?,?,?,?,?,?)').bind(diaHoje, IARA, String(1000 + i), i, 'Vestidos', i >= 7 ? 'FAM-T' : '', i === 0 ? new Date().toISOString() : null).run();
+    const fam = await A(IARA, 'GET', '/esteira/hoje/primeiros');
+    chk('Primeiros: família que cruza o limite entra inteira e as contagens são globais', fam.j.pronto && fam.j.lista.length === 10 && fam.j.restantes === 0 && fam.j.total === 8 && fam.j.feitas === 1 && fam.j.pecas === 10, { n: fam.j.lista?.length, t: fam.j.total, f: fam.j.feitas });
+    await env.DB.prepare('DELETE FROM est_lista WHERE data=? AND whats=?').bind(diaHoje, IARA).run();
+    for (const l of listaSalva) await env.DB.prepare('INSERT INTO est_lista(data,whats,produto,pos,grupo,familia,feito_em) VALUES(?,?,?,?,?,?,?)').bind(l.data, l.whats, l.produto, l.pos, l.grupo, l.familia || '', l.feito_em || null).run();
+    chk('Primeiros recusa sessão sem vínculo e sem sessão', (await A(VISITA, 'GET', '/esteira/hoje/primeiros')).r.status === 403 && (await w.fetch(new Request('https://ig.fake/esteira/hoje/primeiros'), env, ctx)).status === 401);
+    const adm = await A(PABLO, 'GET', '/esteira/hoje/primeiros');
+    chk('Primeiros: Admin total abre sem vínculo, identidade vem da sessão', adm.j.ok && adm.j.eu?.admin === true);
+    kv.delete('est:catalogo:v1');
+    let l0 = listas; await W.estCatalogoAquecer_(env);
+    const emD1 = async () => Number((await env.DB.prepare("SELECT valor FROM cfg WHERE chave='est_catalogo_em'").first())?.valor || 0);
+    await env.DB.prepare("DELETE FROM cfg WHERE chave='est_catalogo_em'").run(); kv.delete('est:catalogo:v1'); l0 = listas; await W.estCatalogoAquecer_(env);
+    chk('Aquecimento: sem registro de idade busca o catálogo, enche o cache e grava a idade', listas === l0 + 1 && (await emD1()) > 0 && !!kv.get('est:catalogo:v1'));
+    l0 = listas; await W.estCatalogoAquecer_(env);
+    chk('Aquecimento: cache recente (<6 min) não consulta o Apps Script', listas === l0);
+    await env.DB.prepare("UPDATE cfg SET valor=? WHERE chave='est_catalogo_em'").bind(String(Date.now() - 400000)).run(); l0 = listas; await W.estCatalogoAquecer_(env);
+    chk('Aquecimento: cache com 6 min ou mais é renovado antes de vencer', listas === l0 + 1 && Date.now() - (await emD1()) < 5000);
+  }
+  { // Contas configuráveis: Caixa e Fotos não esperam o RH; Hoje continua consultando.
+    const fetchAnterior = globalThis.fetch, usuAnterior = usuarios[IARA];
+    const envRH = { ...env, RH_URL: 'https://rh.fake/exec' };
+    let equipeRH = 0;
+    usuarios[IARA] = { nome: 'Iara', permissoes: ['esteira', 'catalogo_cadastrar'], acessosConfiguraveis: true };
+    await env.DB.prepare("INSERT OR IGNORE INTO est_caixa(op,url,enviada_por,enviada_nome,enviada_em,status) VALUES('op-cfg-1','https://img.fake/1.jpg',?,?,?,'nova')").bind(CLARICE, 'Clarice do envio', new Date().toISOString()).run();
+    globalThis.fetch = async (url, init) => {
+      if (String(url) === envRH.RH_URL && JSON.parse(init.body).action === 'esteira_equipe') { equipeRH++; return new Response(JSON.stringify({ ok: true, fonte: 'acessos', equipe: [{ whats: IARA, nome: 'Nome atual no RH', ativo: 1, rodizio: 1, confere: 1 }] })); }
+      return fetchAnterior(url, init);
+    };
+    const ler = (rota) => w.fetch(new Request('https://ig.fake' + rota, { headers: { 'X-TK-Whats': IARA, 'X-TK-Sessao': 'tk3.sessao-' + IARA, 'Origin': 'https://tenkitermodas.com.br' } }), envRH, ctx);
+    try {
+      const cx = await ler('/esteira/caixa?pagina=1&ver=novas'), cj = await cx.json();
+      chk('Caixa de conta configurável responde sem consultar o RH e usa o nome guardado no envio', cx.status === 200 && cj.ok && equipeRH === 0 && cj.itens.some(i => i.por === 'Clarice do envio'), { equipeRH, por: cj.itens?.map(i => i.por) });
+      const ft = await ler('/esteira/fotos'), fj = await ft.json();
+      chk('Fotos de conta configurável com acesso Esteira responde sem consultar o RH', ft.status === 200 && fj.ok && equipeRH === 0, { equipeRH, st: ft.status });
+      const hj = await ler('/esteira/hoje');
+      chk('Hoje completo continua consultando o RH (escala e rodízio)', hj.status === 200 && equipeRH === 1, { equipeRH, st: hj.status });
+      usuarios[IARA] = { nome: 'Iara', permissoes: [], acessosConfiguraveis: true };
+      const rev = await ler('/esteira/caixa?pagina=1&ver=novas');
+      chk('Acesso revogado barra a Caixa na requisição seguinte, sem RH', rev.status === 403 && equipeRH === 1);
+    } finally { globalThis.fetch = fetchAnterior; usuarios[IARA] = usuAnterior; }
   }
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

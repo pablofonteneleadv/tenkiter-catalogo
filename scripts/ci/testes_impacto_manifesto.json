@@ -78,6 +78,9 @@
     "tests/esteira_lote_arquivo_ui.py": [
       "esteira"
     ],
+    "tests/esteira_primeiro_item_ui.py": [
+      "esteira"
+    ],
     "tests/esteira_processos_ui.py": [
       "esteira"
     ],
