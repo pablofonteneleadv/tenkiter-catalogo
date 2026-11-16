@@ -114,6 +114,7 @@ with sync_playwright() as p:
     marca(pg, 2, 10, 0); pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"]
     chk("agendado vai com data ISO no futuro", c["quando"].endswith("Z") and c["quando"] > "2026-10-12", c.get("quando"))
+    if pg.locator("[data-fila-modo=canal]").count(): pg.click("[data-fila-modo=canal]"); pg.wait_for_timeout(500)   # a Fila abre por mídia; o cancelar fica na visão por canal
     chk("abre a Fila com 'Agendado'", "Agendado" in corpo(pg) and pg.locator("[data-a=cancelar]").count() >= 1)
     pg.click("[data-a=cancelar] >> nth=0"); pg.wait_for_timeout(600)
     chk("cancelar pede confirmação e tira da fila", any("Encerrar esta postagem" in d and "não apaga" in d for d in dialogos) and "Nada na fila" in corpo(pg), corpo(pg)[:150])

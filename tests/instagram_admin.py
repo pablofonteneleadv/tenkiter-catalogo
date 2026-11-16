@@ -292,7 +292,7 @@ with sync_playwright() as p:
     perms = [x for x in PERMS_ALL if x != "gerir_acessos"] if isinstance(PERMS_ALL, (list, tuple)) else None
     if perms is not None:
         b, pg, st, log, errs = novo(p, perms)
-        chk("faixa escondida e Worker nem foi chamado", pg.locator("#ig-faixa").is_hidden() and not [c for c in st["ig"]["chamadas"] if not (c["path"]=="/catalogo/tecidos" or c["path"].startswith("/msg/"))], st["ig"]["chamadas"][:1])
+        chk("faixa escondida e Worker nem foi chamado", pg.locator("#ig-faixa").is_hidden() and not [c for c in st["ig"]["chamadas"] if not (c["path"]=="/catalogo/tecidos" or c["path"].startswith("/msg/"))], [c for c in st["ig"]["chamadas"] if not (c["path"]=="/catalogo/tecidos" or c["path"].startswith("/msg/"))][:5])
         b.close()
 print("\nOK=%d FALHAS=%d" % (len(OK), len(BAD)))
 sys.exit(1 if BAD else 0)

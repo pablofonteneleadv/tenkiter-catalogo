@@ -176,7 +176,7 @@ with sync_playwright() as p:
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2400)
     abrir_numeros(pg)
     chk("sem metricasAvancadas: não aparece o bloco de filtros", pg.locator("#mt-det").count() == 0)
-    chk("tela antiga continua (Últimos 7/30/90 dias)", "Últimos 7 dias" in texto(pg) and "Produtos mais vistas" in texto(pg))
+    chk("tela antiga continua (Últimos 7/30/90 dias)", "Últimos 7 dias" in texto(pg) and "Produtos mais vistos" in texto(pg))
     pg.click("[data-mt-dias='7']"); pg.wait_for_timeout(700)
     chk("tela antiga: trocar período ainda funciona", ultimos(log2)[0].get("dias") == 7 and "horaDe" not in ultimos(log2)[0])
     chk("nenhum erro de JavaScript (3.4)", not erros2, erros2)

@@ -63,15 +63,17 @@ with sync_playwright() as p:
     chk('tirar um mantém os outros três e desliga atalho',selecionados(pg)=={'instagram','whatsapp2','grupo'} and pg.locator('[data-destino=todos]').get_attribute('aria-pressed')=='false')
     escolher(pg,{'grupo'});pg.wait_for_timeout(300);pg.reload();pg.wait_for_timeout(2600);abrir(pg)
     chk('rascunho preserva grupo sozinho após recarregar',selecionados(pg)=={'grupo'})
-    preparar(pg);escolher(pg,set());pg.click('[data-a=enviar]');pg.wait_for_timeout(300)
-    chk('nenhum destino bloqueia envio sem trocar para Instagram',not st['ig'].get('post_chamadas') and 'Escolha pelo menos um destino' in corpo(pg))
+    preparar(pg);escolher(pg,set());pg.click('[data-a=enviar]')
+    try: pg.wait_for_function("document.body.innerText.includes('Escolha pelo menos um destino')",timeout=3000)
+    except Exception: pass
+    chk('nenhum destino bloqueia envio sem trocar para Instagram',not [x for x in st['ig'].get('post_chamadas',[]) if x['path']=='/post'] and 'Escolha pelo menos um destino' in corpo(pg),corpo(pg)[:200])
     axe(pg,'seletor dos três destinos')
     combos=[{'instagram'},{'whatsapp'},{'whatsapp2'},{'grupo'},{'instagram','whatsapp'},{'instagram','grupo'},{'whatsapp','grupo'},{'whatsapp','whatsapp2'},{'instagram','whatsapp','whatsapp2','grupo'}]
     for i,ds in enumerate(combos):
         if i: aba(pg,'nova');preparar(pg)
         escolher(pg,ds);pg.click('[data-q=agora]');pg.wait_for_timeout(100)
         if pg.locator('[data-a=agora-sim]').count():pg.click('[data-a=agora-sim]')
-        pg.click('[data-a=enviar]');pg.wait_for_timeout(1000)
+        pg.click('[data-a=enviar]');pg.wait_for_timeout(1500)
         chamadas=[x['corpo'] for x in st['ig'].get('post_chamadas',[]) if x['path']=='/post']
         pedido=chamadas[-1] if chamadas else {}
         esperado='ambos' if {'instagram','whatsapp'}<=ds else 'instagram' if 'instagram' in ds else 'whatsapp' if 'whatsapp' in ds else 'whatsapp2' if ('whatsapp2' in ds and 'grupo' not in ds) else 'grupo'

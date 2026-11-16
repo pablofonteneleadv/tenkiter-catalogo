@@ -5,7 +5,7 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, AQUI)
 from mock import *
 from playwright.sync_api import sync_playwright
-BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/").replace("//127.0.0.1", "//localhost")   # o pwa.js só registra o service worker em https ou localhost
 OK = []; BAD = []
 def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))

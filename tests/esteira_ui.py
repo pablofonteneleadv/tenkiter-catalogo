@@ -236,7 +236,9 @@ def instalar(ctx, admin=True, familia=False):
             if b.get("action") == "sessao": return route.fulfill(json={"ok": True, "usuario": {"whatsapp": "88999999999", "nome": "Iara", "permissoes": ["catalogo_cadastrar"]}})
             return route.fulfill(json={"ok": False, "erro": "Ação não simulada."})
         if "tenkiter-midia" in u and req.method == "POST":
-            st["uploads"] += 1; st["upload_hdr"] = req.headers.get("x-tk-sessao")
+            # v7.8x: cada foto gera a original (POST /u) e cópias reduzidas em segundo plano (POST /u?mini=...&w=...); o contrato conta só as originais
+            if "mini=" in u: st["minis"] = st.get("minis", 0) + 1
+            else: st["uploads"] += 1; st["upload_hdr"] = req.headers.get("x-tk-sessao")
             return route.fulfill(json={"ok": True, "url": URL_FOTO, "tipo": "foto"})
         if "tenkiter-ig" in u:
             path = re.sub(r"^https://[^/]+", "", u).split("?")[0]
@@ -413,7 +415,7 @@ with sync_playwright() as p:
         chk(f"{w}: aceitar reativa no catálogo (bulkUpdate reativar) antes de registrar", bk.get("tipoAcao") == "reativar" and bk.get("ids") == ["2001"] and bk.get("sessao") == "tk3.teste.sessao" and bk.get("whatsapp") == "88999999999" and st["aceitos"] == ["2001"], bk)
         # colocar peça em preparação (busca no catálogo)
         pg.click("text=Colocar produto em preparação")
-        chk(f"{w}: 7.48 colocar em preparação explica o que acontece e busca em todas as situações", "Arquivada fica fora do site até ser aceita." in pg.inner_text("main") and pg.input_value(".busca-cat .f-situacao") == "todas")
+        chk(f"{w}: 7.48 colocar em preparação explica o que acontece e busca nas ativas (padrão) e deixa escolher todas as situações", "Arquivada fica fora do site até ser aceita." in pg.inner_text("main") and pg.input_value(".busca-cat .f-situacao") == "ativas" and "Todas as situações" in pg.locator(".busca-cat .f-situacao option").all_inner_texts())
         pg.fill("#prep-busca", "saia")
         pg.wait_for_selector(".busca-res >> text=Saia Plissada Midi", timeout=6000)
         pg.click(".busca-res >> text=Saia Plissada Midi"); pg.wait_for_selector('[data-produto="1003"]', timeout=6000)
@@ -436,7 +438,7 @@ with sync_playwright() as p:
         chk(f"{w}: regras salvas com instruções", "Salvo." in pg.inner_text("main") and "Fotos" in json.dumps(st.get("cfg", {})))
         chk(f"{w}: configurações mostram as tarefas da preparação e quem aceita", "Tarefas da preparação" in pg.inner_text("main") and "Aceitam para o site: Admin total." in pg.inner_text("main"))
         pg.fill("#mod-titulo-0", "Cadastro revisado"); pg.click("#cfg-preparacao >> text=Acrescentar tarefa"); pg.fill("#mod-titulo-2", "Etiqueta")
-        pg.click("text=Salvar tarefas da preparação"); pg.wait_for_selector("text=Vale para as próximas produtos", timeout=4000)
+        pg.click("text=Salvar tarefas da preparação"); pg.wait_for_selector("text=Vale para os próximos produtos", timeout=4000)
         mp = st["cfgs"][-1].get("config", {})
         chk(f"{w}: modelos salvos sozinhos (sem mexer nas regras)", [m["titulo"] for m in mp.get("modelosPreparacao", [])] == ["Cadastro revisado", "1ª foto", "Etiqueta"] and mp["modelosPreparacao"][1]["tipo"] == "foto" and "porPessoa" not in mp, mp)
         chk(f"{w}: configurações sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))

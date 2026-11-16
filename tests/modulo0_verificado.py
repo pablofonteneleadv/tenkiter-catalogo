@@ -178,7 +178,8 @@ with sync_playwright() as p:
     shot(pg, "10-gestor-pratica")
     pg.click("#tmv-aprovar"); pg.wait_for_timeout(500)
     chk("aprovar com itens desmarcados é barrado no próprio site", not st["praticas"])
-    for i in range(5): pg.locator("#tmv-adm label.it input").nth(i).check(force=True)
+    pg.wait_for_timeout(2500)   # o aviso do clique anterior sai de cima dos itens
+    for i in range(5): pg.locator("#tmv-adm label.it").nth(i).click(); pg.wait_for_timeout(120)
     pg.click("#tmv-aprovar"); pg.wait_for_timeout(900)
     chk("prática aprovada é gravada com quem validou", st["praticas"] and st["praticas"][-1]["resultado"] == "aprovada" and st["praticas"][-1]["validadoPor"] == "Pablo Teste")
     shot(pg, "11-gestor-pratica-aprovada")
