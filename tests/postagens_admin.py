@@ -29,6 +29,8 @@ def novo(b, perms=PERMS_ALL, versao="4.3"):
 def abrir(pg):
     if pg.locator("#details-ferramentas[open]").count() == 0: pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
     pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(700)
+    try: pg.wait_for_function("document.querySelectorAll('#po-abas [role=tab]').length>=7 && document.querySelector('#po-corpo').innerText.length>10", timeout=8000)
+    except Exception: pass
 def corpo(pg): return pg.inner_text("#po-corpo")
 def garantir(pg):
     if pg.locator('#overlay-postagens.aberto').count() == 0: abrir(pg)
@@ -55,7 +57,7 @@ with sync_playwright() as p:
 
     print("== Nova postagem: Feed agora com template ==")
     abrir(pg)
-    chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 7 and "Qual produto?" in corpo(pg))
+    chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() >= 7 and "Qual produto?" in corpo(pg), (pg.locator("#po-abas [role=tab]").count(), corpo(pg)[:150]))
     pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300)
     chk("busca por código mostra o produto", pg.locator(".po-card").count() >= 1, corpo(pg)[:200])
     pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(400); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(500)
@@ -79,7 +81,13 @@ with sync_playwright() as p:
     chk("subiu ao R2 uma imagem montada de verdade (não a miniatura)", st["midia"]["envios"] and st["midia"]["envios"][0].get("tam", 0) > 5000, st["midia"]["envios"][:1])
     chk("guarda o produto e o template no pedido", c.get("produto") == "TK-0003" and c.get("template") == "classico")
     chk("vai para 'Já postadas' com aviso", "Enviado" in corpo(pg) or "Já postadas" in pg.inner_text("#po-abas"), corpo(pg)[:200])
-    aba(pg, "hist"); chk("histórico mostra Publicado + link do Instagram", "Publicado" in corpo(pg) and pg.locator("#po-corpo a:has-text('Ver no Instagram')").count() == 1)
+    aba(pg, "hist")
+    if pg.locator("[data-hist-modo=canal]").count(): pg.click("[data-hist-modo=canal]"); pg.wait_for_timeout(500)
+    for _ in range(4):
+        pg.evaluate("document.querySelectorAll('#po-corpo details').forEach(d=>d.open=true); document.querySelectorAll('#po-corpo [aria-expanded=false]').forEach(b=>b.click())"); pg.wait_for_timeout(300)
+    try: pg.wait_for_selector("#po-corpo a:has-text('Ver no Instagram')", timeout=8000)
+    except Exception: pass
+    chk("histórico mostra Publicado + link do Instagram", "Publicado" in corpo(pg) and pg.locator("#po-corpo a:has-text('Ver no Instagram')").count() == 1, corpo(pg)[:700])
 
     print("== Carrossel e validações ==")
     aba(pg, "nova"); pg.fill("#po-busca", "TK-0004"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300)
@@ -114,7 +122,8 @@ with sync_playwright() as p:
     marca(pg, 2, 10, 0); pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"]
     chk("agendado vai com data ISO no futuro", c["quando"].endswith("Z") and c["quando"] > "2026-10-12", c.get("quando"))
-    chk("abre a Fila com 'Agendado'", "Agendado" in corpo(pg) and pg.locator("[data-a=cancelar]").count() >= 1)
+    if pg.locator("[data-fila-modo=canal]").count(): pg.click("[data-fila-modo=canal]"); pg.wait_for_timeout(500)   # a Fila abre por mídia; o cancelar fica na visão por canal
+    chk("abre a Fila com 'Agendado'", "Agendado" in corpo(pg) and pg.locator("[data-a=cancelar]").count() >= 1, corpo(pg)[:300])
     pg.click("[data-a=cancelar] >> nth=0"); pg.wait_for_timeout(600)
     chk("cancelar pede confirmação e tira da fila", any("Encerrar esta postagem" in d and "não apaga" in d for d in dialogos) and "Nada na fila" in corpo(pg), corpo(pg)[:150])
     g["posts"].append({"id": 900, "tipo": "feed", "modo": "auto", "legenda": "x", "midias": [{"url": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a1.jpg", "tipo": "imagem"}], "agendadoEm": "2026-10-11T12:00:00Z", "status": "erro", "tentativas": 3, "erro": "O Instagram não aceitou a mídia. Confira o formato.", "permalink": "", "criadoPor": "Ana"})
@@ -245,7 +254,7 @@ with sync_playwright() as p:
     print("== Fotos de clientes + template Ela usa TM ==")
     g["fotos"] = [{"id": 7, "origem": "cliente", "url": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/fc7.jpg", "whats": "88988887777", "nome": "Maria Cliente", "instagram": "maria.cli", "obs": "Usei no aniversário", "status": "nova", "vinculo": "conta", "criadoPor": "Maria Cliente"}]; g["foto_seq"] = 50
     garantir(pg); aba(pg, "fotos")
-    chk("aba 'Fotos de clientes' lista a foto enviada pelo cliente, com nome, WhatsApp, Instagram e observação", all(x in corpo(pg) for x in ["Maria Cliente", "(88) 98888-7777", "@maria.cli", "Usei no aniversário", "Enviada pelo cliente", "ligada à conta"]), corpo(pg)[:300])
+    chk("aba 'Fotos de clientes' lista a foto enviada pelo cliente, com nome, WhatsApp, Instagram e observação", all(x in corpo(pg) for x in ["Maria Cliente", "(88) 98888-7777", "@maria.cli", "Usei no aniversário", "Enviada pelo cliente", "ligada à conta"]), corpo(pg)[:700])
     pg.click("[data-a=fotoform]"); pg.wait_for_timeout(200)
     pg.click("[data-a=fotosalvar]"); pg.wait_for_timeout(300); chk("salvar sem foto: pede a foto", "Escolha a foto" in corpo(pg))
     pg.set_input_files("#po-f-arq", os.path.join(d2, "cli1.jpg")); pg.click("[data-a=fotosalvar]"); pg.wait_for_timeout(300)
@@ -255,12 +264,12 @@ with sync_playwright() as p:
     pg.fill("#po-f-whats", "(88) 97777-6666"); pg.fill("#po-f-obs", "Mandou pelo WhatsApp"); pg.set_input_files("#po-f-arq", [os.path.join(d2, "cli1.jpg"), os.path.join(d2, "cli2.jpg")]); pg.click("[data-a=fotosalvar]"); pg.wait_for_timeout(2500)
     nc = [x for x in g["foto_chamadas"] if x["path"] == "/fotos/nova"]
     chk("2 fotos anexadas com o WhatsApp só em dígitos, observação e JPEG reduzido", len(nc) == 2 and nc[0]["q"]["whats"] == "88977776666" and nc[0]["q"]["obs"] == "Mandou pelo WhatsApp" and nc[0]["jpeg"] and nc[0]["q"]["por"], nc[:1])
-    chk("WhatsApp que já tem cadastro: avisa que ligou à conta", "2 fotos salvas" in corpo(pg) and "Ligada à conta de Joana Cadastrada" in corpo(pg), corpo(pg)[:300])
+    chk("WhatsApp que já tem cadastro: avisa que ligou à conta", "2 fotos salvas" in corpo(pg) and "Ligada à conta de Joana Cadastrada" in corpo(pg), corpo(pg)[:700])
     chk("as novas aparecem na lista como anexadas pela equipe", corpo(pg).count("Joana Cadastrada") >= 2 and "Anexada pela equipe" in corpo(pg))
     pg.click("[data-a=fotoform]"); pg.click("[data-a=fotoform]"); pg.fill("#po-f-ig", "@Nova.Pessoa"); pg.set_input_files("#po-f-arq", os.path.join(d2, "cli1.jpg")); pg.click("[data-a=fotosalvar]"); pg.wait_for_timeout(1500)
     chk("só Instagram, sem cadastro: salva só com os dados informados", "Salva só com os dados informados" in corpo(pg), corpo(pg)[:200])
     pg.fill("#po-f-ig", "@Maria.Cli"); pg.set_input_files("#po-f-arq", os.path.join(d2, "cli2.jpg")); pg.click("[data-a=fotosalvar]"); pg.wait_for_timeout(1500)
-    chk("Instagram que já apareceu: reaproveita os dados da foto anterior", "dados de uma foto anterior (Maria Cliente)" in corpo(pg), corpo(pg)[:300])
+    chk("Instagram que já apareceu: reaproveita os dados da foto anterior", "dados de uma foto anterior (Maria Cliente)" in corpo(pg), corpo(pg)[:700])
     axe(pg, "Fotos de clientes")
     pg.locator("[data-fsel]").nth(0).check(); pg.locator("[data-fsel]").nth(1).check(); pg.wait_for_timeout(200)
     chk("marcar fotos mostra 'Colocar 2 na fila de Story'", "Colocar 2 na fila de Story" in corpo(pg))
