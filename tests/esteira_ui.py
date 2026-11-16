@@ -551,6 +551,9 @@ with sync_playwright() as p:
         dif("Blusa listrada").locator(".custo-extra").fill("25,50"); dif("Blusa listrada").locator(".cat-extra").select_option("Blusas"); dif("Blusa listrada").locator(".gen-extra").select_option("Feminino Adulto")
         dif("Blusa listrada").locator("button", has_text="Incluir com estes dados").click(); pg.wait_for_selector('.card.dif:has-text("Blusa listrada") button[data-decisao="incluir"][aria-pressed="true"]', timeout=6000)
         aguardar_processos(pg)
+        for _ in range(60):
+            if [x.get("decisao") for x in st["pedidos"][1]["itens"]] == ["", "cobrar", "devolver", "incluir"]: break
+            pg.wait_for_timeout(100)
         chk(f"{w}: decisões gravadas (cobrar, devolver sobra, incluir com custo)", [x.get("decisao") for x in st["pedidos"][1]["itens"]] == ["", "cobrar", "devolver", "incluir"] and st["pedidos"][1]["itens"][3]["custo"] == 25.5, [x.get("decisao") for x in st["pedidos"][1]["itens"]])
         pg.screenshot(path=str(OUT / f"esteira_aprovacao_{w}.png"), full_page=True)
         chk(f"{w}: aprovação sem rolagem horizontal e botões ≥ 44 px", pg.evaluate("document.documentElement.scrollWidth <= innerWidth") and all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('main button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
