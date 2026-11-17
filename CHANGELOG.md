@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.83.1 — Enquadrar abre na hora
+
+- A janela Enquadrar é montada com antecedência, mostra a miniatura da foto no mesmo instante do toque e liga a edição quando a foto de verdade chega; reabrir a mesma foto é instantâneo.
+- O botão reage ao toque na hora e um segundo toque durante a abertura não abre duas vezes.
+
 ## 7.55.8 — vídeos, seleção imediata e solicitações de clientes
 
 - Aba Vídeos separa upload/preparo do rascunho; Recuperar vídeos inclui o original completo e permite limpar a biblioteca sem apagar cópias em uso.
