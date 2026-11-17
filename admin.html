@@ -339,6 +339,7 @@
   .galeria-item { position: relative; width: 86px; height: 107px; margin-bottom: 34px; }
   /* v4.32: "✂ Enquadrar" abre a janela com Site / Feed-Carrossel / Story; a miniatura já é o quadro 4:5 do site */
   .galeria-item .btn-enq { position: absolute; left: 0; right: 0; top: 112px; height: 30px; width: auto; min-height: 30px; padding: 0 4px; border-radius: 8px; border: 1.5px solid #c9c9c9; background: #fff; color: #222; font-size: 0.72rem; font-weight: 700; cursor: pointer; line-height: 1; }
+  .galeria-item .btn-enq:active { transform: scale(.96); background: #ffe9d2; border-color: var(--laranja, #E67E22); }   /* v7.83.1: resposta visual no toque, antes mesmo da janela abrir */
   .galeria-item .btn-enq::after { content: ''; position: absolute; inset: -7px -2px -4px; }
   .galeria-item .selo-enq { position: absolute; left: 4px; top: 24px; background: #fff; color: #0d0d0d; font-size: 0.58rem; font-weight: 800; padding: 1px 5px; border-radius: 6px; pointer-events: none; border: 1px solid #c9c9c9; }
   .galeria-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; display: block; }
@@ -2134,7 +2135,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const it = fotosItens[idx]; if (!it || !window.TKEnquadrar) return;
     const base = it.orig || it;
     TKEnquadrar.abrir({
-      src: base.url || base.prev, podeVoltar: !!it.orig && !it.auto, ajuste: it.enquadramento, quantidade: fotosItens.length,   // v7.26: encaixe automático não oferece "voltar" (para cortar, use Cortar)
+      src: base.url || base.prev, previa: it.prev || it.url, podeVoltar: !!it.orig && !it.auto, ajuste: it.enquadramento, quantidade: fotosItens.length,   // v7.26: encaixe automático não oferece "voltar" (para cortar, use Cortar)
       aoAplicarTodas: fotosItens.length > 1 ? async (ajuste, vigente) => {
         const originais = fotosItens.slice(), novos = [];
         for (const foto of originais) {
@@ -2182,6 +2183,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
       const enq = document.createElement('button'); enq.type = 'button'; enq.className = 'btn-enq'; enq.textContent = '✂ Enquadrar';
       enq.title = 'Posicionar, girar e dar zoom vendo como fica no site, no Feed, no Carrossel e no Story'; enq.setAttribute('aria-label', 'Enquadrar a foto ' + (idx + 1));
+      enq.addEventListener('pointerdown', () => { if (window.TKEnquadrar && TKEnquadrar.preparar) { const b = (fotosItens[idx] && (fotosItens[idx].orig || fotosItens[idx])) || {}; TKEnquadrar.preparar(b.url || b.prev); } });   // v7.83.1: a foto começa a carregar no toque, antes do clique terminar
       enq.addEventListener('click', () => abrirEnquadrar_(idx));
       box.appendChild(enq);
 
@@ -6573,7 +6575,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="fotos-novas.js?v=7.49.0"></script>
 <script src="admin-postagens.js?v=7.66.0"></script>
 <script src="admin-fotoia.js?v=7.57.0"></script>
-<script src="admin-enquadrar.js?v=7.61.0"></script>
+<script src="admin-enquadrar.js?v=7.83.1"></script>
 <script src="admin-capa-video.js"></script>
 <script src="nav.js?v=7.61.0" data-ativo="gestao"></script>
 <script>

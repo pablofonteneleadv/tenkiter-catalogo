@@ -127,6 +127,20 @@
     });
   }
 
+  // v7.83.1: a foto já carregada fica lembrada (as 2 últimas): reabrir a mesma foto é instantâneo, e quem chama pode pedir o carregamento
+  // antes mesmo do toque terminar (preparar). Erro não fica lembrado, para tentar de novo.
+  var lembradas = [];
+  function carregarLembrando(src) {
+    for (var i = 0; i < lembradas.length; i++) if (lembradas[i].src === src) return lembradas[i].p;
+    var p = carregar(src), reg = { src: src, p: p };
+    lembradas.push(reg); if (lembradas.length > 2) lembradas.shift();
+    p.catch(function () { var k = lembradas.indexOf(reg); if (k >= 0) lembradas.splice(k, 1); });
+    return p;
+  }
+  function preparar(src) {
+    try { montar(); if (src) carregarLembrando(src).catch(function () { /* o aviso aparece ao abrir */ }); } catch (e) { /* só adianta trabalho */ }
+  }
+
   /* ---------- janela ---------- */
   function injetarCss() {
     if (css) return; css = true;
@@ -139,6 +153,8 @@
       '.enq-palco{position:relative;width:min(60vw,250px,calc(36dvh * .8));margin:2px auto 8px}',
       '.enq-palco canvas{display:block;width:100%;height:auto;aspect-ratio:4/5;border-radius:10px;border:2px solid var(--laranja,#E67E22);background:#eee;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}',
       '.enq-palco canvas:focus-visible{outline:3px solid var(--tk-foco-cor,#A85200);outline-offset:2px}',
+      '.enq-previa{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;border:2px solid var(--laranja,#E67E22);box-sizing:border-box;pointer-events:none;background:#eee}',
+      '.enq-previa[hidden]{display:none}',
       '.enq-aviso{margin:8px 0;padding:8px 10px;border-radius:8px;background:#fdecea;color:#8a1c14;font-size:.85rem;line-height:1.35}',
       '.enq-aviso[hidden]{display:none}',
       '.enq-palco{width:min(78vw,360px,calc(53dvh * .8))}',
@@ -175,7 +191,7 @@
       '<div class="enq-box">' +
         '<div class="enq-topo"><strong id="enq-tit">✂ Enquadrar a foto</strong><button type="button" class="sheet-x btn-fechar" aria-label="Fechar" data-enq="fechar">✕</button></div>' +
         '<div class="enq-corpo">' +
-          '<div class="enq-palco"><canvas id="enq-cv" data-tut-interagir="Foto do produto" width="' + PW + '" height="' + PH + '" tabindex="0" role="img" aria-label="Foto do produto no quadro 4:5. Arraste para mover; dois dedos para aumentar e girar; setas movem, mais e menos dão zoom."></canvas></div>' +
+          '<div class="enq-palco"><canvas id="enq-cv" data-tut-interagir="Foto do produto" width="' + PW + '" height="' + PH + '" tabindex="0" role="img" aria-label="Foto do produto no quadro 4:5. Arraste para mover; dois dedos para aumentar e girar; setas movem, mais e menos dão zoom."></canvas><img class="enq-previa" id="enq-previa" alt="" aria-hidden="true" hidden></div>' +
           '<div class="enq-aviso" id="enq-aviso" role="status" hidden></div>' +
           '<p class="enq-dica enq-dica-gestos">Arraste com um dedo. Use dois dedos para aumentar, diminuir e girar.</p>' +
           '<div class="enq-acoes"><button type="button" data-enq="desfazer">Desfazer</button><button type="button" data-enq="todas" id="enq-todas" hidden>Aplicar a todas</button><button type="button" data-enq="voltar" id="enq-voltar" hidden>↩ Voltar à original</button></div>' +
@@ -305,9 +321,10 @@
   /* ---------- abrir / fechar ---------- */
   var aberta = false;
   function abrir(op) {
+    if (aberta && estado && !estado.img && estado.src === op.src) return;   // toque repetido enquanto a foto ainda abre: a janela já está a caminho
     montar();
     $('#enq-ajustes').open = false;
-    estado = { img: null, modo: 'encaixar', z: 1, x: 0, y: 0, r: 0, historico: [], aoAplicar: op.aoAplicar, aoAplicarTodas: op.aoAplicarTodas, aoVoltar: op.aoVoltar };
+    estado = { src: op.src, img: null, modo: 'encaixar', z: 1, x: 0, y: 0, r: 0, historico: [], aoAplicar: op.aoAplicar, aoAplicarTodas: op.aoAplicarTodas, aoVoltar: op.aoVoltar };
     Object.assign(estado, op.ajuste || {});
     $('#enq-todas').hidden = !op.aoAplicarTodas; $('#enq-todas').disabled = false;
     $('#enq-todas').textContent = 'Aplicar a todas (' + (op.quantidade || 0) + ')';
@@ -319,12 +336,17 @@
     if (window.TKCamadas) TKCamadas.empilhar('enq', function () { sair(); });
     var cv = $('#enq-cv'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
     aviso('Abrindo a foto…');
+    // a miniatura que já está na tela aparece NA HORA no quadro, enquanto a foto de verdade carrega (a edição liga quando ela chega)
+    var pv = $('#enq-previa');
+    if (pv) { if (op.previa) { pv.src = op.previa; pv.hidden = false; } else { pv.hidden = true; pv.removeAttribute('src'); } }
     var meu = estado;
-    carregar(op.src).then(function (img) {
+    carregarLembrando(op.src).then(function (img) {
       if (estado !== meu) return;
+      if (pv) pv.hidden = true;
       meu.img = img; aviso(''); ok.disabled = false; ajustarZoom(meu); agendar(); setTimeout(function () { try { cv.focus({ preventScroll: true }); } catch (e) { /* ok */ } }, 50);
     }).catch(function (e) {
       if (estado !== meu) return;
+      if (pv) pv.hidden = true;
       aviso(e && e.message === 'cors'
         ? 'Não consegui abrir esta foto aqui (ela está num lugar que não deixa o navegador mexer nela). Tire a foto e suba de novo para poder enquadrar.'
         : 'Não consegui abrir esta foto. Tente de novo.');
@@ -341,5 +363,8 @@
     if (aplicou) sair();
   }
 
-  window.TKEnquadrar = { renderizar: renderizar, abrir: abrir, fechar: fechar, _estado: function () { return estado; } };
+  // monta a janela (escondida) quando o navegador está livre: o primeiro toque em "Enquadrar" não paga a montagem
+  (window.requestIdleCallback || function (f) { return setTimeout(f, 1500); })(function () { try { montar(); } catch (e) { /* abre normal no toque */ } }, { timeout: 4000 });
+
+  window.TKEnquadrar = { renderizar: renderizar, abrir: abrir, preparar: preparar, fechar: fechar, _estado: function () { return estado; } };
 })();
