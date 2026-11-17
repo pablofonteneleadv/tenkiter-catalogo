@@ -33,8 +33,8 @@
       generos.push(...tokens(p && p.Genero));
       const t = apis.TKTecido;
       if (t && typeof t.ler === 'function') {
-        const tecido = t.ler(p);
-        if (tecido) tecidos.push(tecido);
+        if (typeof t.lista === 'function') tecidos.push(...t.lista(p));
+        else { const tecido = t.ler(p); if (tecido) tecidos.push(tecido); }
       }
       cores.push(...tokens(p && p.Cores));
     });

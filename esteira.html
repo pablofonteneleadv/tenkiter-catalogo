@@ -298,7 +298,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 <script src="common.js?v=7.59.0"></script>
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
-<script src="catalogo-tecido.js?v=7.72.0"></script>
+<script src="catalogo-tecido.js?v=7.83.0"></script>
 <script src="esteira-fluidez.js?v=7.80.0"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script>
@@ -2311,11 +2311,11 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       const [lP, iP] = campoTexto('Preço de venda (R$)', x.preco ? String(x.preco).replace('.', ',') : '', { id: 'novo-preco', modo: 'decimal', max: 12, ph: 'Vazio = consultar valor' });
       const cT = campoChips('Tamanhos', L.tamanhos, x.tamanhos, { id: 'novo-tamanhos', vazio: 'Escolher tamanhos' });
       const cK = campoChips('Cores', L.cores, x.cores, { id: 'novo-cores', vazio: 'Escolher cores' });
-      const [lX, iX] = campoEscolha('Tecido (opcional)', L.tecidos, x.tecido, { id: 'novo-tecido', vazio: 'Sem tecido informado' });
+      const iX = campoChips('Tecido (opcional, pode marcar mais de um)', L.tecidos, x.tecido, { id: 'novo-tecido', vazio: 'Sem tecido informado' }), lX = iX;
       const st = linhaStatus();
       corpo.append(lN, lC, lG, lP, cT, cK, lX, el('p', 'muted', 'Falta uma opção? Ela é criada na Gestão pelo Admin total; aqui só se escolhe.'), el('h3', '', 'Fotos do fornecedor'), el('p', 'muted', 'A primeira vira a capa no catálogo. A equipe usa as fotos para reconhecer o produto na chegada.'), campoFotos(x.fotos, 'Adicionar fotos do fornecedor', 8), st);
       const ok = bt(it ? 'Salvar produto' : 'Incluir no pedido', 'laranja', () => {
-        Object.assign(x, { nome: iN.value.trim(), categoria: iC.value, genero: iG.value, preco: iP.value.trim(), tamanhos: cT.valor(), cores: cK.valor(), tecido: iX.value });
+        Object.assign(x, { nome: iN.value.trim(), categoria: iC.value, genero: iG.value, preco: iP.value.trim(), tamanhos: cT.valor(), cores: cK.valor(), tecido: iX.valor() });
         if (!x.nome) { st.diga('Informe o nome do produto.', 'erro'); return iN.focus(); }
         if (!x.categoria || !x.genero) { st.diga('Escolha a categoria e o público: são necessários para criar o produto no catálogo.', 'erro'); return (x.categoria ? iG : iC).focus(); }
         const fora = foraDasListas([['a categoria', iC], ['o público', iG], ['os tamanhos', cT], ['as cores', cK], ['o tecido', iX]]); if (fora) return st.diga(fora, 'erro');
@@ -2390,12 +2390,12 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       const [lG, iG] = campoEscolha('Público', L.generos, x.genero, { cls: 'gen-extra', vazio: 'Escolha o público' });
       const [lP, iP] = campoTexto('Preço de venda (R$)', x.preco ? String(x.preco).replace('.', ',') : '', { modo: 'decimal', max: 12, ph: 'Vazio = consultar valor' });
       const cT = campoChips('Tamanhos', L.tamanhos, x.tamanhos, { id: 'extra-tam-' + x.id, vazio: 'Escolher tamanhos' }), cK = campoChips('Cores', L.cores, x.cores, { id: 'extra-cor-' + x.id, vazio: 'Escolher cores' });
-      const [lX, iX] = campoEscolha('Tecido (opcional)', L.tecidos, x.tecido, { cls: 'tec-extra', vazio: 'Sem tecido informado' });
+      const iX = campoChips('Tecido (opcional, pode marcar mais de um)', L.tecidos, x.tecido, { id: 'extra-tec-' + x.id, vazio: 'Sem tecido informado' }), lX = iX;
       const b = bt(x.decisao === 'incluir' ? 'Salvar dados' : 'Incluir com estes dados', 'prim', () => {
         if (!Number.isFinite(numBR(iCu.value))) { st.diga('Informe o custo unitário do que veio a mais.', 'erro'); return iCu.focus(); }
         if (!iC.value || !iG.value) { st.diga('Escolha categoria e público: o produto vai ser criado no catálogo.', 'erro'); return (iC.value ? iG : iC).focus(); }
         const fora = foraDasListas([['a categoria', iC], ['o público', iG], ['os tamanhos', cT], ['as cores', cK], ['o tecido', iX]]); if (fora) return st.diga(fora, 'erro');
-        decidir(x, { decisao: 'incluir', custo: iCu.value, nome: iN.value, categoria: iC.value, genero: iG.value, preco: iP.value, tamanhos: cT.valor(), cores: cK.valor(), tecido: iX.value }, st, b);
+        decidir(x, { decisao: 'incluir', custo: iCu.value, nome: iN.value, categoria: iC.value, genero: iG.value, preco: iP.value, tamanhos: cT.valor(), cores: cK.valor(), tecido: iX.valor() }, st, b);
       });
       box.append(lCu, lN, lC, lG, lP, cT, cK, lX, b); return box;
     };

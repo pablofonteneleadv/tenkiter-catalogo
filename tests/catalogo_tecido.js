@@ -10,7 +10,7 @@ const context = { window: {} };
 vm.runInNewContext(source, context, { filename: 'catalogo-tecido.js' });
 const TKTecido = context.window.TKTecido;
 
-assert.deepEqual(Object.keys(TKTecido).sort(), ['aplicar','carregar','ler','opcoes','resolver','salvar','semDescricao','serializar'].sort());
+assert.deepEqual(Object.keys(TKTecido).sort(), ['aplicar','carregar','ler','lista','opcoes','partes','resolver','salvar','semDescricao','serializar'].sort());
 
 // Ida e volta pelo campo Descricao que o backend atual já persiste.
 const descricao = 'Conjunto leve.\n\nCaimento reto.';
@@ -43,10 +43,10 @@ assert.equal(TKTecido.ler({ Tecido: null, Descricao: 'Tecido: Viscose' }), '');
 assert.equal(TKTecido.ler({ Descricao: 'Tecido: Modal\nDescrição' }), 'Modal');
 assert.equal(TKTecido.ler({ Descricao: 'descrição sem tecido' }), '');
 
-// Valor em uma só linha, sem controles/rótulo duplicado e limitado a 100 caracteres.
+// Valor em uma só linha, sem controles/rótulo duplicado e limitado a 160 caracteres.
 assert.equal(TKTecido.serializar('X', 'Tecido: 100%\n algodão\u0000'), 'X\nTecido: 100% algodão');
-assert.equal(TKTecido.ler({ Tecido: 'a'.repeat(110) }).length, 100);
-assert.equal(TKTecido.serializar('X', 'a'.repeat(110)).split('\n')[1].length, 108);
+assert.equal(TKTecido.ler({ Tecido: 'a'.repeat(170) }).length, 160);
+assert.equal(TKTecido.serializar('X', 'a'.repeat(170)).split('\n')[1].length, 168);
 
 console.log('catalogo_tecido: verificações aprovadas');
 
@@ -63,4 +63,13 @@ assert.equal(TKTecido.resolver('linho cru'),'Linho');
 assert.equal(TKTecido.resolver('Seda'),'Seda');
 TKTecido.aplicar({versao:3,itens:[{nome:'Linho',apelidos:['viscose lisa']}]});
 assert.equal(TKTecido.resolver('viscose lisa'),'Linho');
+// v7.83.0: mais de um tecido por produto (mistura, ou tecido e forro).
+TKTecido.aplicar({versao:4,itens:[{nome:'Algodão',apelidos:['algodao cru']},{nome:'Poliéster'},{nome:'Forro de poliéster'}]});
+assert.equal(TKTecido.resolver('algodao cru, POLIESTER'),'Algodão, Poliéster');
+assert.equal(TKTecido.resolver('Algodão; Algodão ,  Poliéster'),'Algodão, Poliéster');
+assert.deepEqual([...TKTecido.lista({Descricao:'Peça.\nTecido: Algodão, Forro de poliéster'})],['Algodão','Forro de poliéster']);
+assert.equal(TKTecido.ler({Descricao:'Tecido: Algodão, Forro de poliéster'}),'Algodão, Forro de poliéster');
+assert.deepEqual([...TKTecido.lista({Descricao:'sem tecido'})],[]);
+assert.equal(TKTecido.serializar('Peça.','Algodão, Poliéster'),'Peça.\nTecido: Algodão, Poliéster');
+assert.deepEqual([...TKTecido.opcoes([{Descricao:'Tecido: Seda, Linho'}])].sort(),['Algodão','Forro de poliéster','Linho','Poliéster','Seda']);
 console.log('catalogo_tecido: índice de apelidos aprovado');

@@ -23,6 +23,12 @@ with sync_playwright() as p:
   if w==390 and h==844:
    pg.locator('[data-passo=nome]').scroll_into_view_if_needed();pg.screenshot(path=str(OUT/'cadastro-tecido.png'))
   assert pg.input_value('#tecido')=='Dior';assert pg.locator('#tecidos-rapidos button',has_text='Dior').count()==1
+  # v7.83.0: mais de um tecido (mistura, ou tecido e forro): toque marca e desmarca cada um
+  pg.fill('#tecido','Dior, Seda');pg.wait_for_timeout(300)
+  assert pg.locator('#tecidos-rapidos button',has_text='Dior').get_attribute('aria-pressed')=='true'
+  pg.locator('#tecidos-rapidos button',has_text='Dior').click();assert pg.input_value('#tecido')=='Seda',pg.input_value('#tecido')
+  pg.locator('#tecidos-rapidos button',has_text='Dior').click();assert pg.input_value('#tecido')=='Seda, Dior',pg.input_value('#tecido')
+  pg.fill('#tecido','Dior');pg.wait_for_timeout(200)
   adiar[0]=w==390 and h==844
   pg.click('#tecidos-gerenciar');pg.wait_for_selector('#overlay-tecidos.aberto');pg.select_option('#tecidos-antigo','Dior');pg.fill('#tecidos-novo','Crepe Dior');
   if adiar[0]:

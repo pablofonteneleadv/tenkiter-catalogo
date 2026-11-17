@@ -19,6 +19,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.83.0 — Mais de um tecido por produto
+
+- Na Gestão e na Esteira, o tecido agora aceita mais de uma escolha (mistura como algodão com poliéster, ou tecido e forro). Toque de novo para tirar.
+- O catálogo, os filtros, a busca, o Mensageiro e a ficha entendem cada tecido separado: quem filtra por "Algodão" acha também as peças "Algodão, Poliéster".
+- Produtos antigos com um tecido só continuam iguais. O limite do campo subiu de 100 para 160 caracteres. Sem mudança no Apps Script.
+
 ## 7.82.4 — Falhas em segundo plano deixam rastro
 
 - Worker `tenkiter-ig`: as tarefas do cron (push, fila Zernio, entradas, agenda, nomes Google, catálogo da Esteira, retrato do estoque), o envio de push, os complementos, a foto IA, a resposta automática e a revalidação da sessão passam a registrar a falha no log (`tk_falha_segundo_plano`) em vez de engoli-la. O comportamento não muda: nenhuma delas derruba quem chamou.
