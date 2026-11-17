@@ -16,7 +16,7 @@
       .replace(/\s+/g, ' ')
       .replace(ROTULO_TECIDO, '')
       .trim()
-      .slice(0, 100)
+      .slice(0, 160)
       .trim();
   }
 
@@ -42,8 +42,12 @@
   var lembrar=new Map(), indice=null;
   var chave=function(v){var s=String(v||''),c=lembrar.get(s);if(c!==undefined)return c;c=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();if(lembrar.size>4000)lembrar.clear();lembrar.set(s,c);return c;};
   function montarIndice(){indice=new Map();cadastro.itens.forEach(function(x){[x.nome].concat(x.apelidos||[]).forEach(function(a){var k=chave(a);if(!indice.has(k))indice.set(k,x.nome);});});}
-  function resolver(v){var k=chave(v);if(!indice)montarIndice();return indice.has(k)?indice.get(k):normalizarTecido(v);}
+  function resolverUm(v){var k=chave(v);if(!indice)montarIndice();return indice.has(k)?indice.get(k):normalizarTecido(v);}
+  /* v7.83.0: um produto pode ter mais de um tecido (mistura, ou tecido e forro). Ficam numa só linha separados por vírgula, como as cores. */
+  function partes(v){var vistos=[],ch={};String(v==null?'':v).split(/[,;|]/).forEach(function(x){var n=resolverUm(x);if(n&&!ch[chave(n)]){ch[chave(n)]=1;vistos.push(n);}});return vistos;}
+  function resolver(v){return partes(v).join(', ');}
   function ler(p){return resolver(lerBruto(p));}
+  function lista(p){return partes(lerBruto(p));}
   function aplicar(c){if(!c||!Array.isArray(c.itens))return;var mudou=JSON.stringify(cadastro)!==JSON.stringify({versao:c.versao||0,itens:c.itens});cadastro={versao:c.versao||0,itens:c.itens};indice=null;if(mudou&&root.dispatchEvent)root.dispatchEvent(new CustomEvent('tk:tecidos-atualizados'));}
   function endpoint(){return typeof INSTAGRAM_URL==='string'?INSTAGRAM_URL+'/catalogo/tecidos':'';}
   async function carregar(forcar){
@@ -52,7 +56,7 @@
     carregando=(async function(){var r=await fetch(endpoint(),{signal:AbortSignal.timeout(8000)});var c=await r.json();if(!r.ok||!c.ok)throw new Error(c.erro||'Não foi possível carregar os tecidos.');aplicar(c);return cadastro;})();
     try{return await carregando;}catch(e){throw new Error('Não foi possível carregar os tecidos. Tente de novo.');}finally{carregando=null;}
   }
-  function opcoes(produtos){var nomes=cadastro.itens.map(function(x){return x.nome;}).concat((produtos||[]).map(ler)).filter(Boolean);return [...new Set(nomes)].sort(function(a,b){return a.localeCompare(b,'pt-BR');});}
+  function opcoes(produtos){var nomes=cadastro.itens.map(function(x){return x.nome;}).concat((produtos||[]).reduce(function(a,p){return a.concat(lista(p));},[])).filter(Boolean);return [...new Set(nomes)].sort(function(a,b){return a.localeCompare(b,'pt-BR');});}
   async function salvar(de,nome){
     await carregar(true);
     var sess=typeof getSessao==='function'&&getSessao();if(!sess)throw new Error('Entre na sua conta de administrador.');
@@ -63,12 +67,12 @@
     var corpo = semDescricao(descricao)
       .replace(/(?:\r\n|\n|\r)+$/, '')
       .trim();
-    var valor = resolver(normalizarTecido(tecido));
+    var valor = resolver(String(tecido == null ? '' : tecido).replace(/[\r\n\t\f\v]+/g, ' ').replace(ROTULO_TECIDO, '')).slice(0, 160);
     if (!valor) return corpo;
     return (corpo ? corpo + '\n' : '') + 'Tecido: ' + valor;
   }
 
-  var api = { ler: ler, semDescricao: semDescricao, serializar: serializar, resolver:resolver, carregar:carregar, salvar:salvar, opcoes:opcoes, aplicar:aplicar };
+  var api = { ler: ler, lista: lista, partes: partes, semDescricao: semDescricao, serializar: serializar, resolver:resolver, carregar:carregar, salvar:salvar, opcoes:opcoes, aplicar:aplicar };
   root.TKTecido = api;
   if(root.document)carregar().catch(function(){/* cadastro continua utilizável com os nomes gravados nos produtos */});
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

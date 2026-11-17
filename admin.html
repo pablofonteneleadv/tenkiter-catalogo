@@ -1307,8 +1307,8 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
       <section class="passo passo-tecido" data-passo="tecido" aria-labelledby="tecido-rotulo">
         <div class="passo-tit" id="tecido-rotulo"><span class="num">4</span><label for="tecido">Tecido</label> <span class="opc">(se souber)</span></div>
-        <input id="tecido" type="text" maxlength="80" list="tecidos-opcoes" placeholder="Escolha ou escreva o tecido" autocomplete="off" aria-describedby="tecido-ajuda">
-        <p id="tecido-ajuda" class="tecido-ajuda" hidden>Toque num tecido abaixo (toque de novo para tirar). Só o Admin total cria tecidos novos.</p>
+        <input id="tecido" type="text" maxlength="160" list="tecidos-opcoes" placeholder="Escolha ou escreva o tecido" autocomplete="off" aria-describedby="tecido-ajuda">
+        <p id="tecido-ajuda" class="tecido-ajuda" hidden>Toque em um ou mais tecidos abaixo (mistura, ou tecido e forro); toque de novo para tirar. Só o Admin total cria tecidos novos.</p>
         <datalist id="tecidos-opcoes"></datalist>
         <div id="tecidos-rapidos" class="chips" role="group" aria-label="Tecidos cadastrados"></div>
         <button type="button" class="btn-escolher" id="tecidos-gerenciar" hidden>Gerenciar nomes de tecidos</button>
@@ -1659,8 +1659,8 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="sessao-rapida.js?v=7.50.0"></script>
 <script src="fila-lote.js?v=7.61.0"></script>
-<script src="catalogo-tecido.js?v=7.72.0"></script>
-<script src="admin-tecidos.js?v=7.48.1" defer></script>
+<script src="catalogo-tecido.js?v=7.83.0"></script>
+<script src="admin-tecidos.js?v=7.83.0" defer></script>
 <script src="icones.js?v=7.17.0"></script>
 <script>/* ícones de linha nos botões fixos do painel (o emoji fica como reserva se icones.js falhar) */
 document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.TKIcone && TKIcone(el.dataset.ico); if (s) el.innerHTML = s; });</script>
@@ -4705,7 +4705,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const ordem = (document.getElementById('fa-ordem') || {}).value || 'recentes';
     let lista = produtos.filter(p => (!busca || semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca) || semAcento_(TKTecido.ler(p)).includes(busca)) && (ignorarStatus || passaStatus_(p)));
     // v4.10 (FE-08): filtros extras da busca do admin
-    if(fTecido)lista=lista.filter(p=>TKTecido.ler(p)===fTecido);
+    if(fTecido)lista=lista.filter(p=>TKTecido.lista(p).includes(fTecido));
     if (fCat) lista = lista.filter(p => semAcento_(p.Categoria).includes(fCat));
     if (fGen) lista = lista.filter(p => semAcento_(p.Genero).includes(fGen));
     if (fTam) lista = lista.filter(p => semAcento_(textoPlano(p.Tamanhos)).split(',').map(x => x.trim()).includes(fTam));
@@ -4721,7 +4721,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   /** v4.10 (FE-08): preenche os selects de categoria/gênero com o que existe na loja. */
   function renderizarFiltrosAdmin_() {
-    const tec=document.getElementById('fa-tecido');if(tec){const atual=TKTecido.resolver(tec.value),nomes=[...new Set(produtos.map(p=>TKTecido.ler(p)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));tec.innerHTML='<option value="">Tecido: todos</option>'+nomes.map(t=>'<option value="'+escaparHtml(t)+'">'+escaparHtml(t)+'</option>').join('');tec.value=atual;}
+    const tec=document.getElementById('fa-tecido');if(tec){const atual=TKTecido.resolver(tec.value),nomes=[...new Set(produtos.flatMap(p=>TKTecido.lista(p)))].sort((a,b)=>a.localeCompare(b,'pt-BR'));tec.innerHTML='<option value="">Tecido: todos</option>'+nomes.map(t=>'<option value="'+escaparHtml(t)+'">'+escaparHtml(t)+'</option>').join('');tec.value=atual;}
     const selC = document.getElementById('fa-categoria'), selG = document.getElementById('fa-genero'), selR = document.getElementById('fa-cor'), selT = document.getElementById('fa-tam');
     if (selT) { const tams = new Set(); produtos.forEach(p => { textoPlano(p.Tamanhos).split(',').map(s => s.trim()).filter(Boolean).forEach(t => tams.add(t)); }); const atualT = selT.value; selT.innerHTML = '<option value="">Tamanho: todos</option>' + Array.from(tams).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })).map(t => '<option value="' + escaparHtml(t) + '">' + escaparHtml(t) + '</option>').join(''); selT.value = atualT; }
     if (!selC || !selG) return;
@@ -6563,7 +6563,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-gestor.js?v=7.61.0"></script>
 <script src="mensagens-registros.js?v=7.64.0"></script>
 <script src="mensagens-fila.js?v=7.70.0"></script>
-<script src="admin-mensagens.js?v=7.78.2"></script>
+<script src="admin-mensagens.js?v=7.83.0"></script>
 <script src="admin-instagram.js?v=7.63.0"></script>
 <script src="admin-caixa-fotos.js?v=7.52.1"></script>
 <link rel="stylesheet" href="pedir-fotos.css?v=7.61.0">

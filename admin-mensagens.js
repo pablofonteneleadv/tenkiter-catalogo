@@ -1583,7 +1583,7 @@
     const resultado=el('p','ms-prod-dica');resultado.id='ms-prod-resultado';resultado.setAttribute('role','status');
     corpo.append(q, so, filtrosProd, resumoFiltros, resultado, dica, ul);
     const tamanhosCliente=p=>window.TKTamanhos ? TKTamanhos.cliente(String(p.Tamanhos||''),p.Genero).valores.filter(v=>!/consult/i.test(v)) : tamanhosDe_(p);
-    const campos=[{id:'tamanho',nome:'Tamanho',tags:tamanhosCliente},{id:'categoria',nome:'Categoria',tags:p=>String(p.Categoria||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'cor',nome:'Cor',tags:p=>String(p.Cores||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'genero',nome:'Para quem',tags:p=>String(p.Genero||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'tecido',nome:'Tecido',tags:p=>{const t=window.TKTecido&&TKTecido.ler(p);return t?[t]:[]}}];
+    const campos=[{id:'tamanho',nome:'Tamanho',tags:tamanhosCliente},{id:'categoria',nome:'Categoria',tags:p=>String(p.Categoria||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'cor',nome:'Cor',tags:p=>String(p.Cores||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'genero',nome:'Para quem',tags:p=>String(p.Genero||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'tecido',nome:'Tecido',tags:p=>window.TKTecido?TKTecido.lista(p):[]}];
     const refinados=Object.fromEntries(campos.map(c=>[c.id,new Set()]));
     const combina=(p,ignorar)=>campos.every(c=>c.id===ignorar||!refinados[c.id].size||c.tags(p).some(v=>refinados[c.id].has(v)));
     function pintarFiltros(base){

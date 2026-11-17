@@ -136,7 +136,7 @@ try { tkSelExpirar_(); } catch (e) {}
       listaDeTags(textoPlano(p.Cores)).forEach(c => coresDisponiveis.add(c));
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
-      const tecido = window.TKTecido && TKTecido.ler(p); if (tecido) tecidosDisponiveis.add(tecido);
+      if (window.TKTecido) TKTecido.lista(p).forEach(t => tecidosDisponiveis.add(t));
     });
     renderizarChipExtra();
     renderizarPillsCategoria();
@@ -374,7 +374,7 @@ try { tkSelExpirar_(); } catch (e) {}
       if (sem !== 'tam') if (filtroTamanhos.size) { const tt = tagsTamanhoCliente_(p); if (!tt.some(t => filtroTamanhos.has(t))) return false; }
       if (sem !== 'cor') if (filtroCores.size) { const tc = listaDeTags(textoPlano(p.Cores)); if (!tc.some(t => filtroCores.has(t))) return false; }
       if (sem !== 'gen') if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
-      if (sem !== 'tec') if (filtroTecidos.size) { const tecido = window.TKTecido && TKTecido.ler(p); if (!tecido || !filtroTecidos.has(tecido)) return false; }
+      if (sem !== 'tec') if (filtroTecidos.size) { const ts = window.TKTecido ? TKTecido.lista(p) : []; if (!ts.some(t => filtroTecidos.has(t))) return false; }
       return true;
     };
     let porBusca = termos.length ? produtos.filter(p => casaBusca(p, termos)) : produtos;
@@ -1924,7 +1924,7 @@ try { tkSelExpirar_(); } catch (e) {}
     { id: 'gen', rot: 'Para quem', conj: () => filtroGeneros, tags: (p) => listaDeTags(p.Genero), box: 'chips-genero', disp: () => generosDisponiveis, res: 'resumo-genero' },
     { id: 'tam', rot: 'Tamanho', conj: () => filtroTamanhos, tags: (p) => tagsTamanhoCliente_(p).filter((t) => !/consult/i.test(t)), box: 'chips-tamanho', disp: () => tamanhosDisponiveis, res: 'resumo-tamanho' },
     { id: 'cor', rot: 'Cor', conj: () => filtroCores, tags: (p) => listaDeTags(textoPlano(p.Cores)), box: 'chips-cor', disp: () => coresDisponiveis, res: 'resumo-cor' },
-    { id: 'tec', rot: 'Tecido', conj: () => filtroTecidos, tags: (p) => { const t=window.TKTecido&&TKTecido.ler(p);return t?[t]:[]; }, box: 'chips-tecido', disp: () => tecidosDisponiveis, res: 'resumo-tecido' }
+    { id: 'tec', rot: 'Tecido', conj: () => filtroTecidos, tags: (p) => window.TKTecido ? TKTecido.lista(p) : [], box: 'chips-tecido', disp: () => tecidosDisponiveis, res: 'resumo-tecido' }
   ];
   const novoEl_ = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   function pecasDaBusca_(txt) {

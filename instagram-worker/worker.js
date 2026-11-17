@@ -8899,7 +8899,7 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
       for (let k = 0; k < lista.length; k++) {
         const x = lista[k] || {}, tipo = x.tipo === 'novo' ? 'novo' : 'reposicao', n = k + 1;
         const qtd = estInt_(x.qtd_pedida, 9999), custo = estCusto_(x.custo);
-        const it = { id: Number(x.id) || 0, tipo, produto: tipo === 'reposicao' ? String(x.produto || '').trim().slice(0, 40) : '', nome: String(x.nome || '').trim().slice(0, 120), categoria: String(x.categoria || '').trim().slice(0, 120), genero: String(x.genero || '').trim().slice(0, 80), preco: String(x.preco == null ? '' : x.preco).trim().replace(',', '.').slice(0, 12), tamanhos: String(x.tamanhos || '').trim().slice(0, 200), cores: String(x.cores || '').trim().slice(0, 200), tecido: tipo === 'novo' ? String(x.tecido || '').replace(/\s+/g, ' ').trim().slice(0, 80) : '', fotos: JSON.stringify(estFotos_(x.fotos)), qtd, custo };
+        const it = { id: Number(x.id) || 0, tipo, produto: tipo === 'reposicao' ? String(x.produto || '').trim().slice(0, 40) : '', nome: String(x.nome || '').trim().slice(0, 120), categoria: String(x.categoria || '').trim().slice(0, 120), genero: String(x.genero || '').trim().slice(0, 80), preco: String(x.preco == null ? '' : x.preco).trim().replace(',', '.').slice(0, 12), tamanhos: String(x.tamanhos || '').trim().slice(0, 200), cores: String(x.cores || '').trim().slice(0, 200), tecido: tipo === 'novo' ? String(x.tecido || '').replace(/\s+/g, ' ').trim().slice(0, 160) : '', fotos: JSON.stringify(estFotos_(x.fotos)), qtd, custo };
         if (tipo === 'reposicao' && !it.produto) return J({ ok: false, erro: 'Item ' + n + ': escolha a peça do catálogo.' }, 400);
         if (!it.nome) return J({ ok: false, erro: 'Item ' + n + ': informe o nome.' }, 400);
         if (!(qtd >= 1)) return J({ ok: false, erro: 'Item ' + n + ' (' + it.nome + '): a quantidade pedida precisa ser 1 ou mais.' }, 400);
@@ -8951,7 +8951,7 @@ async function rotasEsteira_(env, req, url, J, perms, medir = (_, executar) => e
         const custo = estCusto_(d.custo === undefined ? it.custo : d.custo);
         if (custo === undefined) return J({ ok: false, erro: 'Custo inválido. Use só números, como 45,90.' }, 400);
         const v = (k, max) => String(d[k] == null ? (it[k] || '') : d[k]).trim().slice(0, max);
-        const c = { nome: v('nome', 120) || it.nome, categoria: v('categoria', 120), genero: v('genero', 80), preco: v('preco', 12).replace(',', '.'), tamanhos: v('tamanhos', 200), cores: v('cores', 200), tecido: v('tecido', 80) };
+        const c = { nome: v('nome', 120) || it.nome, categoria: v('categoria', 120), genero: v('genero', 80), preco: v('preco', 12).replace(',', '.'), tamanhos: v('tamanhos', 200), cores: v('cores', 200), tecido: v('tecido', 160) };
         if (c.preco && !(Number(c.preco) > 0)) return J({ ok: false, erro: 'Preço de venda inválido.' }, 400);
         if (dec === 'incluir') { const vl = estValidarCampos_(await estListasCadastro_(env), c, ''); if (vl.erro) return J({ ok: false, erro: vl.erro }, 400); Object.assign(c, vl.valores); }   // v7.48.0
         await env.DB.prepare('UPDATE est_pedido_item SET decisao=?, custo=?, nome=?, categoria=?, genero=?, preco=?, tamanhos=?, cores=?, tecido=?, obs=? WHERE id=?').bind(dec, custo, c.nome, c.categoria, c.genero, c.preco, c.tamanhos, c.cores, c.tecido, obs, it.id).run();
