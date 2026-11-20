@@ -74,6 +74,7 @@ function d1() {
   const zerar = async () => { await DB.prepare('DELETE FROM postagem').run(); for (const k of ['ig_pausa_ate', 'ig_pausa_motivo', 'ig_pausa_estado', 'ig_ultima_ms', 'ig_cota_real', 'po_eventos']) await cfg(k, null); igErro = null; wafPosts = []; igPub = []; igCriar = []; cotaChamadas = 0; };
   await P();                                                                                      // cria o esquema
   await cfg('wafly_1', JSON.stringify({ instance: 'INST_TESTE_001', token: 'TOKEN_TESTE_AAA111', clientToken: 'CLIENT_TESTE_BBB222' }));
+  await cfg('wafly_2', JSON.stringify({ instance: 'INST_TESTE_002', token: 'TOKEN_TESTE_CCC333', clientToken: 'CLIENT_TESTE_DDD444' }));
   await cfg('ig_token', TOKEN); await cfg('ig_token_exp', String(Date.now() + 50 * 86400000));
 
   console.log('== Regras: teto real 50 e ritmo do "Na sequência" ==');
@@ -99,20 +100,30 @@ function d1() {
   await cfg('po_cfg', JSON.stringify({ pausaAtiva: false, max24h: 100, canais: { story: { max24h: 90, gapMin: 120, gapMax: 120 }, status: { max24h: 90, gapMin: 120, gapMax: 120 } } }));
   await publicadas(50, 24 * 60 - 10);                                                              // a mais antiga completa 24 h daqui a 10 min
   cotaFake = { usado: 50, total: 50 };
-  const amb = await nova('ambos'), soIg = await nova('instagram');
+  const amb = await nova('ambos', { origem_midia: 'bloco-1' }), stAmb = await nova('whatsapp2', { origem_midia: 'bloco-1' }), soIg = await nova('instagram', { agendado_em: iso(-0.5) });
   await P();
   let la = await L(amb), ls = await L(soIg);
   chk('nenhuma chamada de publicação ao Instagram sem vaga (antes: recusa e pausa às cegas)', igCriar.length === 0 && igPub.length === 0, [igCriar.length, igPub.length]);
   chk('a cota oficial foi conferida (perto do teto)', cotaChamadas >= 1 && JSON.parse(await cfgV('ig_cota_real')).total === 50);
-  chk('"ambos": o WhatsApp sai no horário mesmo com o Instagram cheio', la.zap_estado === 'confirmado' && wafPosts.length === 1, [la.zap_estado, wafPosts.length]);
-  chk('"ambos": o Story espera a vaga com a hora certa, sem virar erro', la.status === 'agendado' && /Aguardando vaga no limite do Instagram \(50/.test(la.erro) && /próxima vaga por volta das/.test(la.erro), la.erro);
+  chk('bloco: sem vaga no Instagram, o WhatsApp do "ambos" NÃO sai separado', !la.zap_estado && wafPosts.length === 0, [la.zap_estado, wafPosts.length]);
+  chk('bloco: o Status 2 da mesma mídia também espera, dizendo que sai junto', (await L(stAmb)).status === 'agendado' && /sair junto/.test((await L(stAmb)).erro), await L(stAmb));
+  chk('o "ambos" espera a vaga com a hora certa, sem virar erro', la.status === 'agendado' && /Aguardando vaga no limite do Instagram \(50/.test(la.erro) && /próxima vaga por volta das/.test(la.erro) && /saem juntos/.test(la.erro), la.erro);
   chk('só-Instagram fica agendado, sem erro e sem pausa global', ls.status === 'agendado' && !(await cfgV('ig_pausa_ate')), [ls.status, await cfgV('ig_pausa_ate')]);
   let { j } = await A('GET', '/posts?limite=250');
   chk('a tela recebe a cota do Instagram (50 de 50 e quando abre a vaga) e o ritmo', j.cotaIg && j.cotaIg.usadas === 50 && j.cotaIg.limite === 50 && !!j.cotaIg.liberaEm && j.cotaIg.ritmoMin === 29, j.cotaIg);
   await passar(12); cotaFake = { usado: 49, total: 50 }; await cfg('ig_cota_real', null);
   await P();
-  chk('a vaga abriu (a mais antiga completou 24 h): sai UMA publicação, a outra continua esperando', igPub.length === 1 && [await L(amb), await L(soIg)].filter((x) => x.status === 'publicado').length === 1, [igPub.length, (await L(amb)).status, (await L(soIg)).status]);
-  chk('o WhatsApp do "ambos" não foi reenviado', wafPosts.length === 1);
+  la = await L(amb);
+  chk('a vaga abriu (a mais antiga completou 24 h): sai UMA publicação no Instagram, a mais antiga da fila', igPub.length === 1 && la.status === 'publicado' && (await L(soIg)).status === 'agendado', [igPub.length, la.status, (await L(soIg)).status]);
+  chk('bloco: o "ambos" saiu inteiro (Instagram + WhatsApp uma vez) e o Status 2 da mesma mídia junto', la.zap_estado && wafPosts.filter((b) => String(b.requestId || '').startsWith('tkpost-' + String(amb).padStart(12, '0'))).length === 1 && (await L(stAmb)).status === 'publicado', [la.zap_estado, wafPosts.length, (await L(stAmb)).status]);
+
+  console.log('== Ao criar: o bloco já entra no horário da vaga, todos os destinos juntos ==');
+  await zerar(); await cfg('po_cfg', JSON.stringify({ pausaAtiva: false }));
+  await publicadas(50, 24 * 60 - 30); cotaFake = { usado: 50, total: 50 };                      // a mais antiga completa 24 h daqui a 30 min
+  let cr = await A('POST', '/post', { posts: [{ tipo: 'story', canal: 'ambos', status2: true, midias: JSON.parse(midia), quando: 'agora' }] });
+  const linhasBloco = (await DB.prepare("SELECT canal, agendado_em FROM postagem WHERE status='agendado'").all()).results;
+  chk('“Agora mesmo” sem vaga: o bloco vai para a vaga (~31 min), não fica para o Instagram recusar', cr.j.ok && Math.abs(Date.parse(cr.j.quandos[0]) - (Date.now() + 31 * 60000)) < 90000 && cr.j.ajustes.some((a) => a.motivo === 'teto_instagram'), [cr.j.quandos, cr.j.ajustes]);
+  chk('todos os destinos da mídia (Instagram+Status 1 e Status 2) no MESMO horário', linhasBloco.length === 2 && linhasBloco[0].agendado_em === linhasBloco[1].agendado_em, linhasBloco);
 
   console.log('== Instagram recusa com 2207042 (teto): espera exata e código guardado ==');
   await zerar();
@@ -140,7 +151,7 @@ function d1() {
   await publicadas(48, 24 * 60 - 60); cotaFake = { usado: 48, total: 50 };
   ({ j } = await A('POST', '/post/previsao-ig', { n: 5, tipo: 'story', canal: 'ambos', quando: 'sequencia' }));
   chk('perto do teto: avisa quantas vão esperar e até quando', j.problema === true && j.atrasadas >= 3 && j.cabemSemAtraso === 2 && /vão esperar vaga/.test(j.frase) && /Já saíram 48/.test(j.frase), j);
-  chk('dá soluções: seguir (WhatsApp no horário), só WhatsApp e escolher menos', ['seguir', 'whatsapp', 'menos'].every((s) => j.solucoes.some((x) => x.id === s)) && /WhatsApp sai no horário/.test(j.solucoes[0].texto), j.solucoes);
+  chk('dá soluções: seguir (todos os destinos juntos), só WhatsApp e escolher menos', ['seguir', 'whatsapp', 'menos'].every((s) => j.solucoes.some((x) => x.id === s)) && /todos os destinos juntos/.test(j.solucoes[0].texto) && /Nenhum destino sai separado/.test(j.solucoes[0].texto), j.solucoes);
   ({ j } = await A('POST', '/post/previsao-ig', { n: 5, tipo: 'story', canal: 'whatsapp', quando: 'sequencia' }));
   chk('só WhatsApp: o teto do Instagram não se aplica', j.ok && j.aplica === false);
   const antes = (await DB.prepare('SELECT COUNT(*) n FROM postagem').first()).n;

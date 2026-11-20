@@ -148,20 +148,23 @@ function d1() {
   const t2 = await nova('instagram'); await passar(4); await P(); est = JSON.parse(await cfgV('ig_pausa_estado'));
   chk('2 publicações seguidas: volta ao normal', (await L(t2)).status === 'publicado' && est.nivel === 0, est);
 
-  console.log('== Na pausa: WhatsApp sai, Instagram espera; Grupo e Status 2 normais ==');
+  // v7.84.0 (pedido do Pablo, 20/11): a mídia é UM bloco -- na pausa do Instagram nenhum destino dela sai separado.
+  console.log('== Na pausa: a mídia do Instagram espera INTEIRA (bloco); mídias só de WhatsApp/Grupo/Status 2 seguem ==');
   await limparFila();
   await cfg('ig_pausa_ate', iso(15)); await cfg('ig_pausa_motivo', 'limite do Instagram'); await cfg('ig_pausa_estado', JSON.stringify({ tipo: 'limite', nivel: 1, sucessos: 0 }));
-  const amb = await nova('ambos'), soIg = await nova('instagram'), grp = await nova('grupo'), st2 = await nova('whatsapp2'), zap1 = await nova('whatsapp');
+  const amb = await nova('ambos', { origem_midia: 'bloco-amb' }), grpAmb = await nova('grupo', { origem_midia: 'bloco-amb' });
+  const soIg = await nova('instagram'), grp = await nova('grupo'), st2 = await nova('whatsapp2'), zap1 = await nova('whatsapp');
   wafPosts = []; grupoPosts = []; igPub = []; igCriar = [];
   await P();
   let la = await L(amb);
-  chk('"ambos": WhatsApp sai no horário', la.zap_estado === 'confirmado' && wafPosts.filter((b) => b.requestId === 'tkpost-' + String(amb).padStart(12, '0')).length === 1, la);
-  chk('"ambos": Instagram espera a pausa (agendado, não erro)', la.status === 'agendado' && /Aguardando a pausa do Instagram/.test(la.erro), la.erro);
+  chk('"ambos" na pausa: o WhatsApp NÃO sai separado do Instagram', !la.zap_estado && wafPosts.filter((b) => b.requestId === 'tkpost-' + String(amb).padStart(12, '0')).length === 0, la);
+  chk('"ambos": espera a pausa inteiro (agendado, não erro), com o motivo', la.status === 'agendado' && /Aguardando a pausa do Instagram/.test(la.erro) && /saem juntos/.test(la.erro), la.erro);
+  chk('o Grupo da MESMA mídia também espera, dizendo que sai junto', (await L(grpAmb)).status === 'agendado' && /sair junto/.test((await L(grpAmb)).erro), await L(grpAmb));
   chk('só-Instagram espera sem virar erro', (await L(soIg)).status === 'agendado');
-  chk('Grupo clientes e Status 2 e Status 1 saem normais', (await L(grp)).status === 'publicado' && (await L(st2)).status === 'publicado' && (await L(zap1)).status === 'publicado', [await L(grp), await L(st2)].map((q) => [q.status, q.erro]));
+  chk('mídias de outros blocos só de Grupo, Status 2 e Status 1 saem normais', (await L(grp)).status === 'publicado' && (await L(st2)).status === 'publicado' && (await L(zap1)).status === 'publicado', [await L(grp), await L(st2)].map((q) => [q.status, q.erro]));
   chk('o Instagram não foi chamado', igCriar.length === 0 && igPub.length === 0);
   await P(); await P();
-  chk('sem duplicar o WhatsApp do "ambos" nas passagens seguintes', wafPosts.filter((b) => b.requestId === 'tkpost-' + String(amb).padStart(12, '0')).length === 1);
+  chk('nas passagens seguintes o bloco continua inteiro esperando', wafPosts.filter((b) => b.requestId === 'tkpost-' + String(amb).padStart(12, '0')).length === 0 && (await L(grpAmb)).status === 'agendado');
   ({ j } = await A('GET', '/posts?limite=250'));
   const pa = j.posts.find((q) => q.id === amb);
   chk('tela: item "aguardando pausa do Instagram" com horário previsto', pa.esperaIg && pa.esperaIg.previsto && pa.status === 'agendado', pa.esperaIg);
@@ -173,7 +176,8 @@ function d1() {
   chk('gestor retoma: a pausa é limpa', x.j.ok === true && !(await cfgV('ig_pausa_ate')), x.j);
   await P(); await passar(4); await P();
   la = await L(amb);
-  chk('depois da pausa o Instagram do "ambos" sai sozinho, sem repetir o WhatsApp', la.status === 'publicado' && (await L(soIg)).status === 'publicado' && wafPosts.filter((b) => b.requestId === 'tkpost-' + String(amb).padStart(12, '0')).length === 1, [la.status, (await L(soIg)).status]);
+  chk('depois da pausa o "ambos" sai inteiro: Instagram e WhatsApp juntos, uma vez só', la.status === 'publicado' && (await L(soIg)).status === 'publicado' && wafPosts.filter((b) => b.requestId === 'tkpost-' + String(amb).padStart(12, '0')).length === 1, [la.status, (await L(soIg)).status]);
+  chk('e o Grupo da mesma mídia sai junto com ele', (await L(grpAmb)).status === 'publicado', await L(grpAmb));
 
   console.log('== Série "ambos" na pausa: WhatsApp das partes segue, Stories saem depois na ordem ==');
   await limparFila();
@@ -181,7 +185,7 @@ function d1() {
   const s3 = 'serie-pausa', r1 = await nova('ambos', { serie: s3, parte: 1, partes: 2 }), r2 = await nova('ambos', { serie: s3, parte: 2, partes: 2 });
   wafPosts = []; igPub = [];
   await P(); await P();
-  chk('as duas partes saíram no WhatsApp durante a pausa', (await L(r1)).zap_estado === 'confirmado' && (await L(r2)).zap_estado === 'confirmado' && igPub.length === 0);
+  chk('série "ambos" na pausa: nenhuma parte sai separada no WhatsApp (bloco)', !(await L(r1)).zap_estado && !(await L(r2)).zap_estado && igPub.length === 0 && wafPosts.length === 0, [(await L(r1)).zap_estado, (await L(r2)).zap_estado, wafPosts.length]);
   await cfg('ig_pausa_ate', iso(-1));
   for (let i = 0; i < 4; i++) { await P(); await passar(4); }
   const c1 = JSON.parse((await L(r1)).containers || '{}').principal, c2 = JSON.parse((await L(r2)).containers || '{}').principal;
@@ -208,7 +212,7 @@ function d1() {
   const lk = await Promise.all(tk.map(L));
   chk('nenhuma postagem virou erro', lk.every((q) => q.status === 'agendado'), lk.map((q) => q.status));
   chk('o Instagram foi chamado uma vez só (depois, pausa)', igCriar.length === 1, igCriar.length);
-  chk('os "ambos" mandaram o WhatsApp mesmo assim', lk.filter((q) => q.canal === 'ambos').every((q) => q.zap_estado === 'confirmado'));
+  chk('os "ambos" esperam inteiros: o WhatsApp não sai separado do Instagram', lk.filter((q) => q.canal === 'ambos').every((q) => !q.zap_estado) && wafPosts.length === 0, lk.map((q) => [q.canal, q.zap_estado]));
   ({ j } = await A('GET', '/posts?limite=250'));
   chk('aviso ao gestor na faixa de saúde', /vencido/.test(j.saude.avisoGestor) && j.saude.canais.instagram.estado === 'desconectado', j.saude);
   igErro = null; x = await A('POST', '/token', { token: TOKEN });
