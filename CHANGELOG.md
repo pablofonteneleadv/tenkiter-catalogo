@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.84.0 — Teto real do Instagram (50 a cada 24 h)
+
+- O Instagram desta conta aceita 50 publicações por API a cada 24 h corridas (conferido na API oficial). O sistema permitia 90/100, então a fila só parava depois da recusa e esperava às cegas (15 → 120 min). Agora o teto é 50 em tudo, e a fila confere a cota oficial perto do limite.
+- Sem vaga, o Instagram não é chamado: o item espera a hora exata em que abre a próxima vaga. No “Instagram e WhatsApp”, o WhatsApp sai no horário.
+- “Na sequência” no Instagram segue um ritmo que faz as 50 durarem o dia (06:30–22:00 ≈ 1 a cada 19 min). Intervalo escolhido pela pessoa, “Dia e hora”, “Agora mesmo” e partes de vídeo continuam como antes.
+- Antes de postar, a tela avisa quando o limite vai atrasar algo e oferece saídas: postar assim mesmo, só WhatsApp, escolher menos ou agendar mais tarde. A Nova postagem mostra quantas das 50 já foram usadas.
+- O registro da fila guarda o código e o texto originais do Instagram; recusa de teto (2207042) espera a vaga exata em vez de subir a espera.
+
 ## 7.83.1 — Enquadrar abre na hora
 
 - A janela Enquadrar é montada com antecedência, mostra a miniatura da foto no mesmo instante do toque e liga a edição quando a foto de verdade chega; reabrir a mesma foto é instantâneo.

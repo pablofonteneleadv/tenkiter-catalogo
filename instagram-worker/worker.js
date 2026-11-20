@@ -909,7 +909,10 @@ const CANAL_POSTAGEM_PADRAO = 'instagram';
 function normalizarCanal_(v) { const c = String(v == null ? '' : v).trim().toLowerCase(); return CANAIS_POSTAGEM.indexOf(c) === -1 ? CANAL_POSTAGEM_PADRAO : c; }
 function canalUsaInstagram_(c) { const x = normalizarCanal_(c); return x === 'instagram' || x === 'ambos'; }
 function canalUsaWhatsApp_(c) { const x = normalizarCanal_(c); return x === 'whatsapp' || x === 'ambos'; }
-const MAX_POSTS_24H = 90;                 // o Instagram deixa ~100 publicações por API a cada 24 h; paramos antes
+/* v7.84.0 (20/11/2026): o teto REAL desta conta é 50 publicações por API a cada 24 h corridas (content_publishing_limit devolveu
+ * quota_total 50 / quota_duration 86400; as 16 pausas de 19–20/11 aconteceram todas com exatamente 50 publicadas). O 90/100 antigo
+ * nunca segurava a fila antes do Instagram recusar. O valor da própria API (ig_cota_real) prevalece se um dia for diferente. */
+const MAX_POSTS_24H = 50;
 const MAX_ESPERA_VIDEO_MS = 20 * 60 * 1000;
 const MAX_TENT = 3;
 class ErroIG extends Error { constructor(e, http) { super((e && e.message) || ('HTTP ' + http)); this.code = e && e.code; this.sub = e && e.error_subcode; this.http = http; this.transitorio = !!(e && e.is_transient); } }
@@ -1670,7 +1673,87 @@ const SEGURA_BALDE_MAX_MS_ = 20 * 60000;                 // vigia: tempo máximo
 const PROCESSANDO_PRESO_MS_ = 30 * 60000;                // "enviando" sem novidade por mais que isso = recuperação
 const MAX_TENT_TRANSITORIO_ = 6;
 const ZAP_OK_ = ['confirmado', 'sem_confirmacao'];
-const MOTIVO_PAUSA_IG_ = { limite: 'limite do Instagram', token: 'token do Instagram vencido — o gestor precisa conectar de novo', permissao: 'token sem permissão de publicar — o gestor precisa gerar outro', instavel: 'Instagram instável (sem resposta)' };
+const IG_FOLGA_CONSULTA_ = 5;                            // v7.84.0: a partir de teto-5 publicadas, a fila confere a cota oficial antes de publicar
+/** v7.84.0: cota oficial do Instagram ({ total, usado }), guardada por 1 min em cfg ig_cota_real. Falhou = null (vale a contagem local). */
+async function cotaRealIg_(env, token) {
+  let c = null; try { c = JSON.parse((await cfgGet(env, 'ig_cota_real')) || 'null'); } catch (e) { c = null; }
+  if (c && Date.now() - (Number(c.ms) || 0) < 60000 && c.total > 0) return c;
+  try {
+    const j = await graph(env, token, '/me/content_publishing_limit?fields=quota_usage,config'), d = j && Array.isArray(j.data) ? j.data[0] : null;
+    const total = Number(d && d.config && d.config.quota_total), usado = Number(d && d.quota_usage);
+    if (!(total > 0) || !Number.isFinite(usado)) return null;
+    c = { total: total, usado: usado, ms: Date.now(), em: agora() };
+    await cfgSet(env, 'ig_cota_real', JSON.stringify(c));
+    return c;
+  } catch (e) { return null; }
+}
+/** v7.84.0: instante em que abre a próxima vaga do Instagram (a publicação que estoura o teto completa 24 h + 1 min). 0 = há vaga. */
+async function liberacaoIg_(env, teto, usados) {
+  if (usados < teto) return 0;
+  const desde = new Date(Date.now() - 86400000).toISOString();
+  const xs = ((await env.DB.prepare("SELECT publicado_em FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=? ORDER BY publicado_em").bind(desde).all()).results || []).map((r) => Date.parse(r.publicado_em)).filter(Number.isFinite);
+  const k = xs.length - teto;                                          // a (k+1)-ª mais antiga é a que precisa sair da janela
+  return xs.length ? xs[Math.max(0, k)] + 86400000 + 60000 : Date.now() + 15 * 60000;   // contagem oficial maior que a nossa (outro aplicativo): a nossa mais antiga sair libera a vaga; sem nenhuma nossa, confere de novo em 15 min
+}
+/** v7.84.0 (função pura, testada): horário real de cada publicação nova do Instagram, na ordem, respeitando o teto de 24 h corridas.
+ *  `ocupadosMs` = publicadas nas últimas 24 h + já agendadas (cada uma ocupa uma vaga no seu horário); `desejadosMs` = horários pedidos. */
+export function preverCotaIg_(cfg, teto, ocupadosMs, desejadosMs) {
+  const ev = (ocupadosMs || []).filter(Number.isFinite).sort((a, b) => a - b), saida = [];
+  for (const d of desejadosMs || []) {
+    let t = d;
+    for (let i = 0; i < 400; i++) {
+      const janela = ev.filter((x) => x > t - 86400000 && x <= t);
+      if (janela.length < teto) { const p = foraDaPausa(cfg, t); if (p === t) break; t = p; continue; }
+      t = janela[janela.length - teto] + 86400000 + 60000;
+    }
+    saida.push(t); ev.push(t); ev.sort((a, b) => a - b);
+  }
+  return saida;
+}
+/** v7.84.0: aviso ANTES de postar. Simula os horários do pedido (mesma regra da fila) e diz se o teto do Instagram vai atrasar algo, com saídas. */
+async function previsaoIgPost_(env, b) {
+  const canal = normalizarCanal_(b.canal), tipo = TIPOS_FILA.indexOf(b.tipo) !== -1 ? b.tipo : 'story', n = Math.max(1, Math.min(60, Math.round(Number(b.n) || 1)));
+  if (!canalUsaInstagram_(canal) || b.modo === 'manual') return { ok: true, aplica: false };
+  const cfg = await lerCfgPost(env), agoraMs = Date.now(), desde = new Date(agoraMs - 86400000).toISOString();
+  let teto = cfg.max24h || MAX_POSTS_24H;
+  const pub = ((await env.DB.prepare("SELECT publicado_em FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).all()).results || []).map((r) => Date.parse(r.publicado_em));
+  const fila = ((await env.DB.prepare("SELECT agendado_em FROM postagem WHERE status IN ('agendado','processando') AND modo='auto' AND COALESCE(canal,'instagram') IN ('instagram','ambos')").all()).results || []).map((r) => Math.max(agoraMs, Date.parse(r.agendado_em)));
+  let usados = pub.length; const tk = await cfgGet(env, 'ig_token');
+  if (tk && usados >= teto - IG_FOLGA_CONSULTA_) { const real = await cotaRealIg_(env, tk); if (real) { teto = Math.min(teto, real.total); usados = Math.max(usados, real.usado); } }
+  while (pub.length < usados) pub.push(agoraMs - 3600000);             // publicadas por outro aplicativo: hora desconhecida, conta como recente
+  const bs = bucketsDoPost(tipo, canal), ocup = {}, desejados = [];
+  for (const k of bs) ocup[k] = await ocupadosDoTipo_(env, k, 0, gapMaxDoTipoMs(cfg, k));
+  const pedidos = Array.isArray(b.quandos) ? b.quandos.map((q) => Date.parse(q)).filter(Number.isFinite) : [];
+  let cursor = null;
+  for (let i = 0; i < n; i++) {
+    let t;
+    if (b.quando === 'agora') t = agoraMs + i * Math.max(60000, (Number(cfg.igGapMin) || 0) * 60000);
+    else if (b.quando === 'agendar') t = ajustarHorarioMulti(cfg, bs, Math.max(agoraMs, pedidos[i] || pedidos[pedidos.length - 1] || agoraMs), ocup).t;
+    else if (intervaloPedidoMs_(b.intervalo) && cursor != null) t = intervaloEscolhido_(cfg, bs, ocup, cursor, intervaloPedidoMs_(b.intervalo));
+    else t = proximoLivreMulti(intervaloPedidoMs_(b.intervalo) ? cfg : cfgRitmoIg_(cfg), bs, ocup, cursor == null ? agoraMs + 60000 : cursor, () => 0.5).t;
+    bs.forEach((k) => ocup[k].push(t)); cursor = t; desejados.push(t);
+  }
+  const reais = preverCotaIg_(cfg, teto, pub.concat(fila), desejados);
+  const atrasadas = reais.filter((t, i) => t > desejados[i] + 120000).length, ultima = Math.max(...reais);
+  const fimHoje = foraDaPausa(cfg, agoraMs) === agoraMs && cfg.pausaAtiva ? (() => { const d = new Date(agoraMs + FUSO_MIN * 60000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - FUSO_MIN * 60000 + hmParaMin_(cfg.pausaDe, 1320) * 60000; })() : agoraMs + 86400000;
+  const amanha = reais.filter((t) => t >= fimHoje).length, semAtraso = reais.findIndex((t, i) => t > desejados[i] + 120000);
+  const livresAgora = Math.max(0, teto - pub.filter((x) => x > agoraMs - 86400000).length - fila.filter((x) => x <= agoraMs + 60000).length);
+  const hh = (ms) => horaLocal_(ms) + (ms >= fimHoje ? ' de amanhã' : '');
+  const r = { ok: true, aplica: true, teto: teto, usados: usados, livresAgora: livresAgora, naFila: fila.length, n: n, primeira: new Date(reais[0]).toISOString(), ultima: new Date(ultima).toISOString(), atrasadas: atrasadas, amanha: amanha, cabemSemAtraso: semAtraso === -1 ? n : semAtraso, ritmoMin: Math.round(ritmoIgSeg_(cfg.pausaAtiva, cfg.pausaDe, cfg.pausaAte, teto) / 60), problema: atrasadas > 0 };
+  const nome = tipo === 'story' ? (n > 1 ? 'Stories' : 'Story') : (n > 1 ? 'publicações' : 'publicação'), umaSo = n === 1;
+  r.frase = 'O Instagram aceita ' + teto + ' publicações a cada 24 h. Já saíram ' + usados + (fila.length ? ' e há ' + fila.length + ' na fila' : '') + '. ' +
+    (r.problema ? (umaSo ? (tipo === 'story' ? 'Este Story vai' : 'Esta publicação vai') + ' esperar vaga: sai por volta das ' + hh(ultima) + '.'
+      : 'Destes ' + n + ' ' + nome + ', ' + atrasadas + (atrasadas === 1 ? ' vai' : ' vão') + ' esperar vaga: o último sai por volta das ' + hh(ultima) + (amanha ? ' (' + amanha + ' só amanhã)' : '') + '.')
+      : (umaSo ? 'Cabe: sai por volta das ' + hh(ultima) + '.' : 'Os ' + n + ' ' + nome + ' cabem: saem entre ' + horaLocal_(reais[0]) + ' e ' + hh(ultima) + '.'));
+  r.solucoes = !r.problema ? [] : [
+    { id: 'seguir', texto: 'Postar assim mesmo: ' + (canal === 'ambos' ? 'o WhatsApp sai no horário e ' : '') + 'o Instagram sai sozinho quando abrir vaga (último por volta das ' + hh(ultima) + ').' },
+    canal === 'ambos' ? { id: 'whatsapp', texto: 'Mandar só para o WhatsApp (o Instagram fica de fora deste envio).' } : null,
+    r.cabemSemAtraso > 0 && r.cabemSemAtraso < n ? { id: 'menos', texto: 'Escolher menos mídias: ' + r.cabemSemAtraso + ' saem no horário, sem esperar.' } : { id: 'depois', texto: 'Agendar para mais tarde (a próxima vaga abre por volta das ' + hh(reais[0]) + ').' },
+  ].filter(Boolean);
+  return r;
+}
+function fraseEsperaCotaIg_(teto, ms) { return ('Aguardando vaga no limite do Instagram (' + teto + ' publicações a cada 24 h)' + (ms ? ': próxima vaga por volta das ' + horaLocal_(ms) : '') + '. Sai sozinho; no “Instagram e WhatsApp” o WhatsApp sai no horário. Não é erro.').slice(0, 300); }
+const MOTIVO_PAUSA_IG_ = { cota: 'teto de publicações do Instagram nas últimas 24 h', limite: 'limite do Instagram',token: 'token do Instagram vencido — o gestor precisa conectar de novo', permissao: 'token sem permissão de publicar — o gestor precisa gerar outro', instavel: 'Instagram instável (sem resposta)' };
 function zapSaiu_(r) { return !!r && r.canal === 'ambos' && ZAP_OK_.indexOf(String(r.zap_estado || '')) !== -1; }
 /** Para a SEQUÊNCIA, a parte saiu: publicada, feita à mão, ou ("ambos") com o WhatsApp confirmado mesmo que o Instagram falhe/espere. */
 export function parteSaiu_(r) { return !!r && (r.status === 'publicado' || r.status === 'manual_feito' || (zapSaiu_(r) && ['erro', 'agendado', 'processando', 'cancelado'].indexOf(r.status) !== -1)); }   // cancelado + WhatsApp ok = o Story foi repostado à parte
@@ -1690,10 +1773,11 @@ export async function lerPausaIg_(env) {
   return { ate: ate, motivo: String((await cfgGet(env, 'ig_pausa_motivo')) || ''), tipo: String(est.tipo || ''), nivel: Number(est.nivel) || 0, sucessos: Number(est.sucessos) || 0, ativa: ate > Date.now() };
 }
 /** Liga a pausa SÓ do Instagram. limite = backoff crescente; token/permissão = 2 h (e aviso); instável = 5 min. Devolve a pausa. */
-async function pausarIg_(env, tipo, detalhe) {
+async function pausarIg_(env, tipo, detalhe, ateMs) {
   const a = await lerPausaIg_(env);
   let nivel = a.nivel, dur;
-  if (tipo === 'limite') { nivel = Math.min(IG_PAUSA_NIVEIS_MIN_.length, nivel + 1); dur = IG_PAUSA_NIVEIS_MIN_[nivel - 1] * 60000; }
+  if (tipo === 'cota') dur = Math.max(5 * 60000, (Number(ateMs) || 0) - Date.now());   // v7.84.0: teto de 24 h = espera a vaga exata, sem subir o backoff
+  else if (tipo === 'limite') { nivel = Math.min(IG_PAUSA_NIVEIS_MIN_.length, nivel + 1); dur = IG_PAUSA_NIVEIS_MIN_[nivel - 1] * 60000; }
   else if (tipo === 'token' || tipo === 'permissao') dur = IG_PAUSA_TOKEN_MS_;
   else dur = IG_PAUSA_INSTAVEL_MS_;
   const ate = Math.max(a.ativa ? a.ate : 0, Date.now() + dur), motivo = MOTIVO_PAUSA_IG_[tipo] || MOTIVO_PAUSA_IG_.limite;
@@ -1737,7 +1821,17 @@ async function falhaPostagem(env, p, e, ctxFila) {
   if (f.espera || f.conta) {
     /* Limite/bloqueio ou token: a culpa não é DESTA postagem. Pausa só o Instagram e a postagem continua agendada no mesmo
      * lugar da fila (sem gastar tentativa e sem apagar o container já criado: menos ações no Instagram). */
-    const pausa = await pausarIg_(env, f.espera ? 'limite' : f.conta, '');
+    /* v7.84.0: guarda o código e o texto originais do Instagram (sem token) e separa o TETO de 24 h (vaga com hora exata) do
+     * bloqueio anti-spam (espera crescente). Antes tudo virava "limite do Instagram" e a espera era às cegas (15 → 120 min). */
+    const msg = String((e && e.message) || '').replace(/access_token=[^&\s]+/g, 'access_token=***').replace(/^Instagram:\s*/i, '');
+    const detalhe = ('Instagram respondeu' + (e && e.code ? ' código ' + e.code : '') + (e && e.sub ? '/' + e.sub : '') + (msg ? ': ' + msg : '')).slice(0, 160);
+    let tipo = f.espera ? 'limite' : f.conta, ate = 0;
+    if (f.espera) {
+      const cfgP = await lerCfgPost(env), teto = cfgP.max24h || MAX_POSTS_24H;
+      const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(new Date(Date.now() - 86400000).toISOString()).first()) || {}).n) || 0;
+      if (Number(e && e.sub) === 2207042 || usados >= teto - 1) { tipo = 'cota'; ate = await liberacaoIg_(env, teto, Math.max(usados, teto)); }
+    }
+    const pausa = await pausarIg_(env, tipo, detalhe, ate);
     if (ctxFila) ctxFila.pausa = pausa;
     await env.DB.prepare("UPDATE postagem SET status='agendado', inicio_proc='', erro=?, atualizado_em=? WHERE id=? AND status IN ('agendado','processando')").bind(fraseEsperaIg_(bloqueioIg_('x', pausa)).slice(0, 300), agora(), p.id).run();
     return;
@@ -1870,8 +1964,14 @@ export async function processarPostagens(env) {
     const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
     /* v1.6: além do teto do Instagram, cada canal (Story, Status do WhatsApp, Reels, Carrossel, Feed) tem o SEU limite nas últimas 24 h. "Ambos" conta nos dois. */
     const porCanal = {}; for (const b of CANAIS_FILA) porCanal[b] = await contarUsados24h_(env, b, desde);
-    let novas = usados;
-    const cotaCheia = (p) => { const bs = baldesRestantes_(p); return (canalUsaInstagram_(p.canal) && novas >= (cfgP.max24h || MAX_POSTS_24H)) || bs.some((b) => porCanal[b] >= limiteDoTipo(cfgP, b)); };
+    let novas = usados, tetoIg = cfgP.max24h || MAX_POSTS_24H;
+    /* v7.84.0: perto do teto, a fila confere a cota OFICIAL (conta também o que outro aplicativo publicou) e nunca chama o Instagram
+     * sem vaga. Cheio = o Story/Feed espera a vaga exata (a publicação mais antiga das 24 h completar 24 h); no "ambos" o WhatsApp sai no horário. */
+    if (precisaIg && token && usados >= tetoIg - IG_FOLGA_CONSULTA_) { const real = await cotaRealIg_(env, token); if (real) { tetoIg = Math.min(tetoIg, real.total); novas = Math.max(novas, real.usado); } }
+    const liberaIgMs = precisaIg ? await liberacaoIg_(env, tetoIg, novas) : 0;
+    const igCheia = (p) => canalUsaInstagram_(p.canal) && (novas >= tetoIg || baldesRestantes_(p).some((b) => TIPOS_FILA.indexOf(b) !== -1 && porCanal[b] >= limiteDoTipo(cfgP, b)));
+    const zapCheio = (p) => baldesRestantes_(p).some((b) => TIPOS_FILA.indexOf(b) === -1 && porCanal[b] >= limiteDoTipo(cfgP, b));
+    const cotaCheia = (p) => igCheia(p) || zapCheio(p);
     const ativas = await seriesAtivas_(env, cfgP, ctxFila.pausa, token, cotaCheia);
     const recentes=(await env.DB.prepare("SELECT id,serie,origem_midia,tipo,canal,publicado_em FROM postagem WHERE status IN ('publicado','manual_feito') AND publicado_em>? ORDER BY publicado_em DESC LIMIT 1000").bind(new Date(Date.now()-86400000).toISOString()).all()).results||[];
     const estados=new Map(lin.filter(p=>p.serie).map(p=>[p.serie+':'+p.parte,p])),anteriores=lin.filter(p=>p.serie&&p.parte>1);
@@ -1917,10 +2017,10 @@ export async function processarPostagens(env) {
         if(liberar>Date.now()){tentadas++;await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
       }
       const usaIg = canalUsaInstagram_(p.canal);
-      if (p.status === 'agendado' && cotaCheia(p)) continue;              // teto do Instagram / limite do canal: fica agendada até abrir vaga
-      /* v7.56: o Instagram só é chamado se estiver livre (token, pausa, espaço mínimo, Story anterior da série). */
+      if (p.status === 'agendado' && (p.canal === 'ambos' ? zapCheio(p) : cotaCheia(p))) continue;   // teto do Instagram / limite do canal: fica agendada até abrir vaga (no "ambos" só o WhatsApp cheio segura tudo)
+      /* v7.56: o Instagram só é chamado se estiver livre (token, pausa, teto de 24 h, espaço mínimo, Story anterior da série). */
       const bIg = usaIg ? bloqueioIg_(token, ctxFila.pausa) : null;
-      const igEspera = bIg ? 'pausa' : usaIg && igEsperaAnterior ? 'anterior' : usaIg && p.status === 'agendado' && igGapMs && ultimaIg + igGapMs > Date.now() ? 'espaco' : '';
+      const igEspera = bIg ? 'pausa' : usaIg && igEsperaAnterior ? 'anterior' : usaIg && p.status === 'agendado' && igCheia(p) ? 'cota' : usaIg && p.status === 'agendado' && igGapMs && ultimaIg + igGapMs > Date.now() ? 'espaco' : '';
       if (igEspera) {
         if (p.canal === 'ambos' && p.status === 'agendado' && !zapJaEnviado_(p)) {          // o WhatsApp sai no horário; o Instagram espera
           if (bucketsDoPost(p.tipo, 'whatsapp').some((b) => porCanal[b] >= limiteDoTipo(cfgP, b))) continue;
@@ -1932,6 +2032,9 @@ export async function processarPostagens(env) {
           if (p.status === 'processando' && !String(p.ig_id || '').startsWith('zapq:')) await env.DB.prepare("UPDATE postagem SET status='agendado', inicio_proc='', atualizado_em=? WHERE id=? AND status='processando'").bind(agora(), p.id).run();
           const frase = fraseEsperaIg_(bIg).slice(0, 300);
           if (p.erro !== frase) await env.DB.prepare("UPDATE postagem SET erro=?, atualizado_em=? WHERE id=? AND status IN ('agendado','processando')").bind(frase, agora(), p.id).run();
+        } else if (igEspera === 'cota') {
+          const frase = fraseEsperaCotaIg_(tetoIg, liberaIgMs);
+          if (p.erro !== frase) await env.DB.prepare("UPDATE postagem SET erro=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(frase, agora(), p.id).run();
         }
         continue;
       }
@@ -2028,10 +2131,34 @@ export function normalizarCfgPost(c) {
     if (mx < mn) mx = mn;                                                                                 // o máximo nunca fica abaixo do mínimo
     canais[b] = { max24h: num(src.max24h, 1, 100, dp.max24h), gapMin: mn, gapMax: mx };
   });
+  const pausaAtiva = x.pausaAtiva === undefined ? d.pausaAtiva : !!x.pausaAtiva, pausaDe = hm(x.pausaDe, d.pausaDe), pausaAte = hm(x.pausaAte, d.pausaAte);
+  /* v7.84.0: nada do Instagram passa do teto real (50/24 h), nem o teto geral nem o de cada tipo. */
+  const max24h = Math.min(num(x.max24h, 1, 100, d.max24h), MAX_POSTS_24H);
+  TIPOS_FILA.forEach((b) => { canais[b].max24h = Math.min(canais[b].max24h, max24h); });
   return {
-    pausaAtiva: x.pausaAtiva === undefined ? d.pausaAtiva : !!x.pausaAtiva, pausaDe: hm(x.pausaDe, d.pausaDe), pausaAte: hm(x.pausaAte, d.pausaAte),
-    max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora, canais: canais, partesRapidas:x.partesRapidas===undefined?true:!!x.partesRapidas, igGapMin: num(x.igGapMin, 0, 30, d.igGapMin),
+    pausaAtiva: pausaAtiva, pausaDe: pausaDe, pausaAte: pausaAte,
+    max24h: max24h, agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora, canais: canais, partesRapidas:x.partesRapidas===undefined?true:!!x.partesRapidas, igGapMin: num(x.igGapMin, 0, 30, d.igGapMin),
   };
+}
+/** v7.84.0: minutos por dia em que a fila pode publicar (fora da pausa da madrugada). */
+export function minutosAtivosDia_(pausaAtiva, pausaDe, pausaAte) {
+  if (!pausaAtiva) return 1440;
+  const de = hmParaMin_(pausaDe, 1320), ate = hmParaMin_(pausaAte, 390);
+  if (de === ate) return 1440;
+  return Math.max(60, 1440 - (de < ate ? ate - de : 1440 - de + ate));
+}
+/** v7.84.0: intervalo médio (s) para que `teto` publicações do Instagram caibam nas horas ativas de 24 h. */
+export function ritmoIgSeg_(pausaAtiva, pausaDe, pausaAte, teto) { return Math.ceil(minutosAtivosDia_(pausaAtiva, pausaDe, pausaAte) * 60 / Math.max(1, Number(teto) || MAX_POSTS_24H)); }
+/** v7.84.0: regras para o "Na sequência": o intervalo MÉDIO sorteado entre publicações do Instagram (Story/Feed/Carrossel/Reels) faz o
+ *  teto durar as horas ativas do dia (06:30–22:00 = 930 min ÷ 50 ≈ 19 min; sorteio entre ~15 e ~23 min). Sem isso a fila gastava as
+ *  50 vagas de manhã e o Instagram recusava o resto. "Agora mesmo", "Dia e hora" e partes de vídeo não mudam. */
+export function cfgRitmoIg_(cfg) {
+  const ritmo = ritmoIgSeg_(cfg.pausaAtiva, cfg.pausaDe, cfg.pausaAte, cfg.max24h), canais = Object.assign({}, cfg.canais);
+  TIPOS_FILA.forEach((b) => {
+    const c = Object.assign({}, canais[b]), mn = Math.min(7200, Math.max(Number(c.gapMin) || 0, Math.round(ritmo * 0.8)));
+    canais[b] = Object.assign(c, { gapMin: mn, gapMax: Math.min(7200, Math.max(Number(c.gapMax) || 0, 2 * ritmo - mn, mn)) });
+  });
+  return Object.assign({}, cfg, { canais: canais });
 }
 /** Junta o que o gestor mandou (pode ser só um canal) com o que já estava salvo, canal por canal. */
 export function mesclarCfgPost(atual, novo) {
@@ -2568,7 +2695,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
     const cfg=await lerCfgPost(env),cotas=await cotasPostagens_(env,cfg);
     const conectadoIg = !!(await cfgGet(env, 'ig_token')), saude = await saudePostagens_(env, q, conectadoIg, perms);
-    return J({ ok: true, posts: q.map(p=>({...linhaPostagem(p),espera:esperaCotaPost_(p,cotas),esperaIg:esperaIgPost_(p,saude._bloqueio)})), saude: Object.assign({}, saude, { _bloqueio: undefined }), contagens: conta, conectado: conectadoIg, usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: (await status2Info_(env)).ok, status2Motivo: (await status2Info_(env)).motivo, regras: 1, config: cfg, uso24h: Object.fromEntries(CANAIS_FILA.map(b=>[b,cotas.canais[b].usadas])), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    return J({ ok: true, posts: q.map(p=>({...linhaPostagem(p),espera:esperaCotaPost_(p,cotas),esperaIg:esperaIgPost_(p,saude._bloqueio)})), saude: Object.assign({}, saude, { _bloqueio: undefined }), contagens: conta, conectado: conectadoIg, usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: (await status2Info_(env)).ok, status2Motivo: (await status2Info_(env)).motivo, regras: 1, config: cfg, cotaIg: Object.assign({}, cotas.instagram, { ritmoMin: Math.round(ritmoIgSeg_(cfg.pausaAtiva, cfg.pausaDe, cfg.pausaAte, cfg.max24h) / 60) }), uso24h:Object.fromEntries(CANAIS_FILA.map(b=>[b,cotas.canais[b].usadas])), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if(p==='/post/retomar-pendentes'&&req.method==='POST')return retomarPendentesPost_(env,req,b,perms||[],J);
@@ -2578,6 +2705,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
     return J({ ok: true, mensagem: a.ativa ? 'Instagram retomado. As postagens que esperavam a pausa saem na ordem, com o espaço mínimo entre elas.' : 'O Instagram já estava liberado.' });
   }
+  if (p === '/post/previsao-ig' && req.method === 'POST') return J(await previsaoIgPost_(env, b));   // v7.84.0: aviso antes de postar (só lê; nada é criado)
   if (p === '/post' && req.method === 'POST') {
     const executarPost_ = async () => {
       const originais = Array.isArray(b.posts) ? b.posts : [b];
@@ -2607,7 +2735,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       for (const v of vs) if (v.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.midias); if (erro) return J({ ok: false, erro }, 400); }
       if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
       const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
-      const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], inicioSeries={}, horariosOriginais=new Map(), intervaloMs = intervaloPedidoMs_(b.intervalo);
+      const cfg = await lerCfgPost(env), cfgSeq = cfgRitmoIg_(cfg), ocup = {}, cursores = {}, ajustes = [], inicioSeries={}, horariosOriginais=new Map(), intervaloMs = intervaloPedidoMs_(b.intervalo);
       try{await validarSeriesPost_(env,req,lista,vs);}catch(e){return J({ok:false,erro:e.message},400);}
       for (let i = 0; i < vs.length; i++) {
         const v = vs[i], origem=lista[i].origemMidia;
@@ -2616,14 +2744,15 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
         const bs = [...new Set(vs.flatMap((destino,j)=>lista[j].origemMidia===origem?bucketsDoPost(destino.tipo,destino.canal):[]))].sort(), ck = bs.join('+');
         const continuacao=!!(v.serie&&v.parte>1);
         const anteriorOriginal=horariosOriginais.get(origem);
-        const editorial=continuacao?0:anteriorOriginal?anteriorOriginal.editorial:intervaloEditorialMs_(cfg,bs,intervaloMs);
+        const cfR=v.sequencia&&!intervaloMs&&v.modo==='auto'&&canalUsaInstagram_(v.canal)?cfgSeq:cfg;   // v7.84.0: "Na sequência" automático do Instagram segue o ritmo que cabe no teto; intervalo escolhido pela pessoa e Story à mão ficam como estão
+        const editorial=continuacao?0:anteriorOriginal?anteriorOriginal.editorial:intervaloEditorialMs_(cfR,bs,intervaloMs);
         for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
         let t;
         if(anteriorOriginal)t=anteriorOriginal.t;
         else if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
         else if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
-        else if (v.sequencia && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], editorial);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
-        else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
+        else if (v.sequencia && cursores[ck] != null) t = intervaloEscolhido_(cfR, bs, ocup, cursores[ck], editorial);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
+        else if (v.sequencia) t = proximoLivreMulti(cfR, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
         else {
           const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
           t = aj.t; if (aj.ajustado) ajustes.push({ i: i, tipo: v.tipo, de: new Date(pedido).toISOString(), para: new Date(t).toISOString(), motivo: aj.motivo });
