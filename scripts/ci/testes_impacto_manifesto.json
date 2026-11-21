@@ -460,6 +460,9 @@
     "tests/worker_postagens_prova_falhas.js": [
       "postagens"
     ],
+    "tests/worker_teto_instagram.js": [
+      "postagens"
+    ],
     "tests/worker_postagens_runtime.cjs": [
       "infra",
       "midia",
@@ -513,6 +516,9 @@
       "padroes"
     ],
     "tests/postagens_chave_ui.py": [
+      "postagens"
+    ],
+    "tests/postagens_teto_ig_ui.py": [
       "postagens"
     ],
     "tests/worker_post_chave.js": [

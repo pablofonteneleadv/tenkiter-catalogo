@@ -416,12 +416,14 @@ function d1() {
 
     // ---- NA SEQUÊNCIA (intervalo humano) e mesmo horário
     await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
+    const RG = W.cfgRitmoIg_((await G('GET', '/post/config')).j.config).canais.story, RMIN = RG.gapMin * 1000, RMAX = RG.gapMax * 1000;   // v7.84.0: faixa do ritmo do teto, calculada da regra em vigor
     x = await G('POST', '/post', { posts: [1, 2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
     const q = x.j.quandos.map((t) => Date.parse(t));
-    chk('na sequência: 4 Stories saem escalonados, cada um 2 a 5 min depois do anterior (intervalo sorteado)', x.j.ok && q.length === 4 && q.every((t, i) => i === 0 || (t - q[i - 1] >= 120000 && t - q[i - 1] <= 300000)), x.j.quandos);
-    chk('o 1º da sequência sai a partir de ~1 min (nunca na mesma hora do pedido; um Story publicado há instantes empurra +2 min)', q[0] - Date.now() > 30000 && q[0] - Date.now() < 320000);
+    // v7.84.0: o "Na sequência" do Instagram segue o ritmo que cabe no teto real (50/24 h nas horas ativas; com a pausa 06:30–22:00 = 1116 s em média)
+    chk('na sequência: 4 Stories saem escalonados no ritmo do teto do Instagram (~15 a ~22 min, intervalo sorteado)', x.j.ok && q.length === 4 && q.every((t, i) => i === 0 || (t - q[i - 1] >= RMIN && t - q[i - 1] <= RMAX)), x.j.quandos);
+    chk('o 1º da sequência sai a partir de ~1 min (nunca na mesma hora do pedido; um Story publicado há instantes empurra +2 min)', q[0] - Date.now() > 30000 && q[0] - Date.now() < RMAX + 90000);
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(5)], quando: 'sequencia' });
-    chk('cada tipo tem a sua fila: o Feed não espera os Stories (só respeita os 5 min do último Feed publicado)', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < 650000 && Date.parse(x.j.quandos[0]) < q[3] + 650000, [x.j.quandos, q[3]]);
+    chk('cada tipo tem a sua fila: o Feed não espera os Stories (só respeita os 5 min do último Feed publicado)', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < RMAX + 90000 && Date.parse(x.j.quandos[0]) < q[3], [x.j.quandos, q[3]]);
     const idsSeq = (await DB.prepare("SELECT id FROM postagem WHERE seq=1 AND status='agendado'").all()).results.length;
     chk('as da sequência ficam marcadas como sequência', idsSeq === 5, idsSeq);
     chk('o intervalo humano (função antiga) varia (não é sempre igual)', new Set(Array.from({ length: 30 }, () => W.intervaloHumanoMs('feed', 'feed'))).size > 5);
@@ -437,7 +439,7 @@ function d1() {
     await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
     x = await G('POST', '/post', { intervalo: 'abc', posts: [1, 2, 3].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
     const qx = x.j.quandos.map((t) => Date.parse(t));
-    chk('intervalo inválido ("abc") volta ao sorteio do gestor (2 a 5 min)', x.j.ok && qx.every((t, i) => i === 0 || (t - qx[i - 1] >= 120000 && t - qx[i - 1] <= 300000)), x.j.quandos);
+    chk('intervalo inválido ("abc") volta ao sorteio (no ritmo do teto do Instagram)', x.j.ok && qx.every((t, i) => i === 0 || (t - qx[i - 1] >= RMIN && t - qx[i - 1] <= RMAX)), x.j.quandos);
     chk('intervaloPedidoMs_: 0 inválido, 1 min mínimo, 1440 máximo (24 h)', W.intervaloPedidoMs_('x') === 0 && W.intervaloPedidoMs_(0) === 0 && W.intervaloPedidoMs_(1) === 60000 && W.intervaloPedidoMs_(99999) === 1440 * 60000);
     await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
     x = await G('POST', '/post', { tipo: 'story', midias: [IMG(1)], quando: 'sequencia' }); const q0 = Date.parse(x.j.quandos[0]);
@@ -519,9 +521,9 @@ function d1() {
     let x, a;
     const C0 = P0.canais;
     chk('padrão: pausa 22:00–06:30 ligada; intervalos mín.–máx.: Story/Status 2–5 min, Feed/Carrossel 5–10 min, Reels 10–20 min', P0.pausaAtiva === true && P0.pausaDe === '22:00' && P0.pausaAte === '06:30' && C0.story.gapMin === 120 && C0.story.gapMax === 300 && C0.status.gapMin === 120 && C0.feed.gapMin === 300 && C0.feed.gapMax === 600 && C0.carrossel.gapMin === 300 && C0.reels.gapMin === 600 && C0.reels.gapMax === 1200, P0);
-    chk('padrão: cada canal tem o seu limite de 24 h e a soma do Instagram cabe no teto de 90', ['story', 'status', 'feed', 'carrossel', 'reels'].every((k) => C0[k].max24h >= 1) && C0.story.max24h + C0.feed.max24h + C0.carrossel.max24h + C0.reels.max24h <= P0.max24h, C0);
+    chk('padrão: cada canal tem o seu limite de 24 h e nenhum tipo do Instagram passa do teto real de 50', ['story', 'status', 'feed', 'carrossel', 'reels'].every((k) => C0[k].max24h >= 1) && P0.max24h === 50 && ['story', 'feed', 'carrossel', 'reels'].every((k) => C0[k].max24h <= P0.max24h), [C0, P0.max24h]);
     a = W.normalizarCfgPost({ gapStory: 1, gapFeed: 'x', pausaDe: '25:99', max24h: 500, folga: -5, canais: { reels: { gapMin: 900, gapMax: 100, max24h: 0 }, status: { gapMin: 'abc', max24h: 9999 } } });
-    chk('valor inválido volta ao padrão e há limites (mín. 10 s, máx. 100 por dia)', a.canais.story.gapMin === 10 && a.canais.feed.gapMin === 300 && a.pausaDe === '22:00' && a.max24h === 100 && a.folga === undefined && a.canais.status.gapMin === 120 && a.canais.status.max24h === 100 && a.canais.reels.max24h === 1, a);
+    chk('valor inválido volta ao padrão e há limites (mín. 10 s, máx. 100 por dia)', a.canais.story.gapMin === 10 && a.canais.feed.gapMin === 300 && a.pausaDe === '22:00' && a.max24h === 50 && a.folga === undefined && a.canais.status.gapMin === 120 && a.canais.status.max24h === 100 && a.canais.reels.max24h === 1, a);
     chk('o máximo do intervalo nunca fica abaixo do mínimo (900 s mín. e 100 s máx. viram 900–900)', a.canais.reels.gapMin === 900 && a.canais.reels.gapMax === 900, a.canais.reels);
     a = W.mesclarCfgPost(W.normalizarCfgPost({ canais: { story: { gapMin: 200, gapMax: 400, max24h: 7 } } }), { canais: { feed: { gapMax: 900 } }, pausaAtiva: false });
     chk('mesclar: mexer só no Feed não apaga o que já estava salvo no Story (nem volta ao padrão)', a.canais.story.gapMin === 200 && a.canais.story.gapMax === 400 && a.canais.story.max24h === 7 && a.canais.feed.gapMax === 900 && a.canais.feed.gapMin === 300 && a.pausaAtiva === false, a);
@@ -590,7 +592,8 @@ function d1() {
     x = await G('POST', '/post', { tipo: 'story', midias: [IMG(1)], quando: ts(1) });
     x = await G('POST', '/post', { posts: [2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
     const qs = x.j.quandos.map((t) => Date.parse(t));
-    chk('sequência de Stories pula o horário ocupado e sai de 2 em 2 min (faixa 2–2, sem sorteio)', qs[0] - Date.now() > 150000 && qs[0] - Date.now() < 200000 && qs[1] - qs[0] === 120000 && qs[2] - qs[1] === 120000, qs.map((t) => Math.round((t - Date.now()) / 1000)));
+    // v7.84.0: sem pausa, 50 por 24 h = 1728 s em média: o ritmo do teto prevalece sobre a faixa 2–2 do gestor (sorteio 1382–2074 s)
+    chk('sequência de Stories pula o horário ocupado e segue o ritmo do teto do Instagram (sem pausa: ~23 a ~35 min)', qs[0] - Date.now() > 1400000 && qs[0] - Date.now() < 2200000 && qs[1] - qs[0] >= 1382000 && qs[1] - qs[0] <= 2074000 && qs[2] - qs[1] >= 1382000 && qs[2] - qs[1] <= 2074000, qs.map((t) => Math.round((t - Date.now()) / 1000)));
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'sequencia' });
     chk('o Feed tem fila própria: sai em ~1 min mesmo com Stories na fila', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < 100000, x.j);
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'sequencia' });
