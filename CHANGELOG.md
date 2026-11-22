@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.88.0 — Cadastro contínuo: sempre com sinal de vida e sem perder o lugar
+
+- **Esteira não volta mais para “Hoje” sozinha.** Quando outra tela (a Gestão) renovava o login, a Esteira achava que a conta tinha mudado, apagava o que lembrava e recomeçava em “Hoje”. Agora, mesma conta, ela continua na mesma aba, filtro e ponto da tela. Se a tela recarregar, volta para a última aba e posição (lembrança marcada na hora em que você sai).
+- **Abrir o cadastro pela caixa:** aparece na hora o aviso “Abrindo o cadastro com N fotos da caixa…” com animação, e as fotos começam a ser lidas junto com a Gestão (antes só depois da lista inteira).
+- **Cadastrar (vindo da Esteira):** aviso “Salvando…”, e a volta para a Esteira acontece assim que o servidor confirma, sem esperar a Gestão recarregar a lista.
+- **Salvar e cadastrar o próximo:** a escolha das próximas fotos abre na hora, mostrando “Salvando…” → “✓ salvo”; dá para escolher enquanto salva (o botão segue sozinho ao terminar). O próximo cadastro abre na mesma tela, sem recarregar a Gestão.
+- **Ícone Postagens do app:** a Gestão não aparece mais antes; fica o aviso “Abrindo as Postagens…” com animação até o painel abrir (e checagem 2× mais rápida).
+- **Fotos da escolha inteiras** (sem corte) e com **lupa** para ver em tela cheia com zoom.
+- **Envio em andamento** deixou de aparecer em vermelho (parecia erro): fundo neutro com roda girando.
+- Em Fotos, quando um envio para a caixa termina, a lista mostra as fotos que chegaram (no mesmo ponto da tela; nunca no meio de uma escolha).
+- App Android 2.5.3 (PR separada): com a Gestão já aberta, “Abrir o cadastro” usa a mesma tela em vez de recarregar.
+
 ## 7.87.0 — Telas mais enxutas no celular e topo do app sem faixa vazia
 
 - **Gestão no celular** (proposta aprovada pelo Pablo): some a barra “Atendente: … | Sair” (o nome e o Sair estão no botão de conta do topo), os números viram uma faixa baixa, “O que fazer agora” fica numa linha com 4 botões, sai o atalho “Ferramentas do gestor” repetido e a linha “Gestão & Atendimento do Catálogo”. O primeiro produto da lista já aparece inteiro na primeira tela.

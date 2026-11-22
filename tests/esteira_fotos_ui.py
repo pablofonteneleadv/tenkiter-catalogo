@@ -59,6 +59,8 @@ def fotos_srv(ctx, st, admin=True):
         b = json.loads(req.post_data or "{}") if req.method == "POST" else {}
         J = lambda d, s=200: route.fulfill(status=s, json=d)
         eu = {"whats": "88999999999", "nome": "Iara", "admin": admin, "membro": True, "confere": True, "aceitar": admin, "gestorFotos": admin}
+        # v7.88.0: ao recarregar, a Esteira volta para a aba em que a pessoa estava e confere o acesso dessa aba primeiro.
+        if path == "/esteira/sincronizar": return J({"ok": True, "eu": eu, "acesso": "qa-fotos", "data": "", "revisao": 1})
         if path == "/esteira/fotos": return J({"ok": True, "eu": eu, "pedidos": f["pedidos"], "caixaNovas": sum(1 for i in f["caixa"] if i["status"] == "nova") if admin else 0})
         if path == "/esteira/fotos/pedir":
             f["pedir"].append(b)
@@ -235,12 +237,15 @@ with sync_playwright() as p:
         pg.set_input_files('#cx-arq',[foto_png((240,200,20))]);confirmar_revisao_caixa(pg);pg.wait_for_selector('.cx-linha')
         f['falhar_upload']=[f['uploads']+1];pg.click('#cx-enviar');pg.wait_for_selector('.folha',state='detached')
         pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar de novo');n_env=len(f['enviar'])
-        pg.reload();pg.wait_for_selector('.peca');pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar de novo')
+        pg.reload();pg.wait_for_selector('#fotos-topo',timeout=15000)
+        chk(f"{w}: recarregar a Esteira volta para a aba Fotos, onde a pessoa estava (7.88.0)",pg.locator('nav.abas button[data-aba=fotos][aria-selected=true], nav.abas button[data-aba=fotos][aria-current]').count()>=1 or pg.locator('#fotos-topo').count()==1)
+        pg.click('#esteira-processos-abrir');pg.wait_for_selector('#esteira-processos >> text=Tentar de novo')
         pg.locator('#esteira-processos button',has_text='Tentar de novo').click();pg.wait_for_function("document.querySelector('#esteira-processos-abrir').textContent==='Processos'")
         chk(f"{w}: foto original e erro são recuperados após recarregar",len(f['enviar'])==n_env+1 and len(f['enviar'][-1]['itens'])==1)
         pg.get_by_role('button',name='Fechar',exact=True).click();pg.click('[data-aba=fotos]')
         # ---- 2. gestor: colocar num produto, cadastrar produto novo, descartar ----
         pg.wait_for_selector("#caixa .cx-item", timeout=6000)
+        pg.wait_for_function("(document.getElementById('caixa')||{}).innerText && document.getElementById('caixa').innerText.includes('Sem descrição')", timeout=12000)   # 7.88.0: a aba já estava aberta; espera a atualização depois do reenvio
         cxt = pg.inner_text("#caixa")
         chk(f"{w}: 'Fotos recebidas' mostra quem enviou, quando, descrição, produto indicada e foto repetida", all(x in cxt for x in ["Fotos recebidas", "Bia · 03/11/26 · 3 fotos", "“Vestidos que chegaram hoje”", "vestido azul no manequim", "Repetida", "Igual a uma enviada por Clarice em 01/11/26", "Produto indicado: Vestido Longo Floral", "Sem descrição"]), cxt[:600])
         chk(f"{w}: barra de ações só aparece com foto escolhida", not pg.is_visible(".cx-barra"))
@@ -410,18 +415,31 @@ with sync_playwright() as p:
         b.close()
     print("== Gestão: Salvar e cadastrar o próximo (7.86.0) ==")
     b, ctx, pg, st, log, errs, cx = admin_ctx(p, 390, 844)
-    pg.goto(TK_ADMIN + "esteira.html"); pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12&modo=um&volta=esteira")
+    pg.goto(TK_ADMIN + "esteira.html"); pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12&modo=um&volta=esteira", wait_until="commit")
+    try: pg.wait_for_selector("#tkcx-espera:not([hidden])", timeout=8000); viu = True
+    except Exception: viu = False
+    chk("ao abrir o cadastro pela caixa aparece na hora o aviso 'Abrindo o cadastro…' com animação (7.88.0)", viu and pg.locator("#tkcx-espera .tkcx-roda").count() == 1)
     pg.wait_for_selector("#btn-salvar-proximo", timeout=20000)
+    chk("o aviso de espera some quando o cadastro está pronto", pg.locator("#tkcx-espera:not([hidden])").count() == 0)
     chk("cadastro da caixa tem 'Salvar e cadastrar o próximo' logo abaixo de Cadastrar", pg.evaluate("(()=>{const a=document.getElementById('btn-salvar'),b=document.getElementById('btn-salvar-proximo');return a.nextElementSibling===b&&b.getBoundingClientRect().height>=44})()"))
     preencher(pg, "Vestido próximo")
     pg.click("#btn-salvar-proximo")
     try: pg.wait_for_selector("#tkcx-proximas", timeout=20000); abriu = True
     except Exception: abriu = False
+    if abriu:   # 7.88.0: a escolha abre na hora; o salvamento e a lista da caixa chegam logo depois
+        pg.wait_for_selector("#tkcx-salvando.ok", timeout=20000); pg.wait_for_selector("#tkcx-proximas .tkcx-foto", timeout=20000)
     chk("salvou e abriu as próximas fotos da caixa aqui mesmo (sem voltar para a Esteira)", abriu and "admin.html" in pg.url and len([x for x in log if x.get("action") == "create"]) == 1, pg.url)
     if abriu:
         ids = pg.evaluate("[...document.querySelectorAll('#tkcx-proximas .tkcx-foto')].map(b=>Number(b.dataset.id))")
         chk("mostra só fotos novas que ainda não foram usadas (13), não as do produto salvo (11, 12)", ids == [13], ids)
         chk("'Cadastrar' só libera depois de escolher", pg.is_disabled("#tkcx-prox-ok"))
+        chk("a folha mostra o salvamento do anterior e confirma 'salvo' (7.88.0)", "salvo" in pg.inner_text("#tkcx-salvando"))
+        chk("fotos inteiras na escolha (sem corte)", pg.evaluate("getComputedStyle(document.querySelector('#tkcx-proximas .tkcx-foto img')).objectFit") == "contain")
+        pg.click("#tkcx-proximas .tkcx-zoom"); pg.wait_for_selector("#tkfg.aberto", timeout=4000)
+        chk("a lupa abre a foto grande com zoom", pg.locator("#tkfg.aberto").count() == 1)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+        chk("fechar a foto grande volta para a escolha", pg.locator("#tkfg.aberto").count() == 0 and pg.is_visible("#tkcx-proximas"))
+        pg.evaluate("window.__semRecarregar = 1")
         pg.wait_for_timeout(300); shot(pg, "gestao-proximas-390")
         pg.click('#tkcx-proximas .tkcx-foto[data-id="13"]')
         chk("escolher numera a foto (1 = capa) e o botão diz quantas", pg.inner_text('#tkcx-proximas .tkcx-foto[data-id="13"] .tkcx-n') == "1" and pg.inner_text("#tkcx-prox-ok") == "Cadastrar com 1 foto")
@@ -429,6 +447,7 @@ with sync_playwright() as p:
         chk("folha das próximas com alvos de pelo menos 44 px", ok_t, ruins)
         pg.click("#tkcx-prox-ok")
         pg.wait_for_function("(document.getElementById('titulo-form')||{}).textContent==='Produto novo com fotos da caixa' && document.querySelectorAll('#galeria-grid .galeria-item').length===1", timeout=20000)
+        chk("o próximo cadastro abre na mesma tela, sem recarregar a Gestão (7.88.0)", pg.evaluate("window.__semRecarregar") == 1)
         chk("o cadastro reabre já com a foto escolhida e a marca 'em cadastro' na caixa", cx["lidas"][-1] == [13] and {"ids": [13], "uso": "cadastro"} in cx["usar"], (cx["lidas"], cx["usar"]))
         chk("o próximo continua sabendo voltar para a Esteira", pg.evaluate("sessionStorage.getItem('tk_caixa_volta_esteira')") is not None)
     chk("próximo: sem erro de JavaScript", not errs, errs)
