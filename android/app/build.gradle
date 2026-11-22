@@ -17,7 +17,7 @@ android {
         unitTests.includeAndroidResources = true
         unitTests.all {
             ['https.proxyHost','https.proxyPort','http.proxyHost','http.proxyPort','javax.net.ssl.trustStore','javax.net.ssl.trustStorePassword'].each { key -> if(System.getProperty(key)) systemProperty key,System.getProperty(key) }
-            systemProperty 'robolectric.dependency.repo.url','https://repo.maven.apache.org/maven2'
+            systemProperty 'robolectric.dependency.repo.url','https://maven-central.storage-download.googleapis.com/maven2'   // espelho do Maven Central (evita 429)
         }
     }
     signingConfigs {
