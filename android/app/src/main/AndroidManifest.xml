@@ -20,5 +20,24 @@
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
+        <!-- 2.5.0: cada área com ícone e janela próprios (tarefa separada nos recentes), mesmo login do app. -->
+        <activity android:name=".JanelaGestao" android:exported="true" android:label="Gestão" android:icon="@drawable/ic_janela_gestao" android:launchMode="singleTask" android:taskAffinity="${applicationId}.gestao" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+        <activity android:name=".JanelaEsteira" android:exported="true" android:label="Esteira" android:icon="@drawable/ic_janela_esteira" android:launchMode="singleTask" android:taskAffinity="${applicationId}.esteira" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+        <activity android:name=".JanelaPrincipal" android:exported="true" android:label="Principal" android:icon="@drawable/ic_janela_principal" android:launchMode="singleTask" android:taskAffinity="${applicationId}.principal" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+        <activity android:name=".JanelaPostagens" android:exported="true" android:label="Postagens" android:icon="@drawable/ic_janela_postagens" android:launchMode="singleTask" android:taskAffinity="${applicationId}.postagens" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+        <activity android:name=".JanelaRh" android:exported="true" android:label="RH" android:icon="@drawable/ic_janela_rh" android:launchMode="singleTask" android:taskAffinity="${applicationId}.rh" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+        <activity android:name=".JanelaCurriculos" android:exported="true" android:label="Currículos" android:icon="@drawable/ic_janela_curriculos" android:launchMode="singleTask" android:taskAffinity="${applicationId}.curriculos" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
     </application>
 </manifest>
