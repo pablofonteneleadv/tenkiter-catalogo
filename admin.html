@@ -358,17 +358,29 @@
   .galeria-item .mover button { flex: 1; height: 24px; border: none; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 24px; }
   .galeria-item .mover button:disabled { opacity: 0.35; cursor: default; }
   /* v7.50.0: uniões no "Cadastrar vários produtos" — fotos do mesmo grupo viram UM produto (borda + número do grupo) */
-  .unioes { margin: 0 0 8px; display: flex; flex-direction: column; gap: 8px; }
+  .unioes { margin: 0 0 6px; display: flex; flex-direction: column; gap: 6px; }
   .unioes[hidden] { display: none; }
   .uni-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .uni-conta { flex: 1 1 180px; font-size: .88rem; font-weight: 800; color: #141414; }
+  .uni-conta { flex: 1 1 160px; font-size: .85rem; font-weight: 800; color: #141414; line-height: 1.25; }
   .uni-conta small { display: block; font-weight: 500; color: #625c53; font-size: .76rem; }
-  .unioes button { width: auto; min-height: 44px; padding: 0 14px; border-radius: 10px; font-weight: 800; font-size: .86rem; cursor: pointer; }
+  .unioes button { width: auto; min-height: 44px; padding: 0 12px; border-radius: 10px; font-weight: 800; font-size: .84rem; cursor: pointer; }
+  .uni-fam { background: #fff !important; color: #141414 !important; border-color: #141414 !important; }
+  /* v7.89.0: enxuto — a contagem ocupa uma linha e os botões ficam lado a lado (não um por linha) */
+  .uni-topo .uni-conta { flex: 1 1 100%; }
+  .uni-topo > button { flex: 1 1 0; }
+  .unioes .uni-grupo { padding-top: 2px; padding-bottom: 2px; }
+  .fam-copia { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; padding: 4px 4px 4px 10px; border: 2px dashed #141414; border-radius: 10px; background: #f6f3ec; font-size: .82rem; line-height: 1.3; }
+  .fam-copia .fam-copia-txt { flex: 1 1 auto; min-width: 0; }
+  .fam-copia button { flex: none; width: auto; min-height: 44px; padding: 0 12px; border-radius: 8px; background: #fff; color: #141414; border: 1.5px solid #c9c2b6; font-weight: 800; font-size: .8rem; }
+  .uni-fams .uni-familia { border-style: dashed; }
+  .uni-copiada { background: #f6f3ec; }
+  .galeria-item[data-familia] { box-shadow: 0 0 0 2px var(--fcor) inset; border-radius: 10px; }
+  .galeria-item .selo-familia { position: absolute; left: 4px; top: 26px; z-index: 2; background: #fff; color: var(--fcor); border: 2px dashed var(--fcor); font-size: .62rem; font-weight: 800; padding: 0 5px; border-radius: 6px; pointer-events: none; }
   .uni-unir { background: #0d0d0d; color: #fff; border: 2px solid #0d0d0d; }
   .uni-ok { background: var(--laranja); color: #0d0d0d; border: 2px solid var(--laranja); }
   .uni-ok:disabled { opacity: .45; cursor: default; }
   .uni-cancelar, .uni-grupo button { background: #fff; color: #141414; border: 1.5px solid #c9c2b6; }
-  .uni-dica { font-size: .8rem; color: #5c3a00; background: #fff7ec; border: 1px solid #f3d3a6; border-radius: 10px; padding: 8px 10px; }
+  .uni-dica { font-size: .78rem; color: #5c3a00; background: #fff7ec; border: 1px solid #f3d3a6; border-radius: 10px; padding: 6px 9px; line-height: 1.35; }
   .uni-dica[role=alert] { color: #8a1c13; background: #fdecea; border-color: #f5c2bd; }
   .uni-grupos { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
   .uni-grupo { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; border: 2px solid var(--gcor, #0d0d0d); border-left-width: 6px; border-radius: 12px; padding: 3px 4px 3px 10px; font-size: .82rem; background: #fff; min-width: 0; }
@@ -2192,7 +2204,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
       img.src = it.url ? fotoMini(it.url, 200) : it.prev; img.decoding = 'async';
       img.title = 'Toque para ver a foto grande';
-      img.addEventListener('click', () => { if (uniaoModo_ && modoFormulario === 'varias') { alternarMarcaUniao_(it); return; } abrirFotoGrandeForm_(idx); });
+      img.addEventListener('click', () => { if (familiaModo_ && modoFormulario === 'varias') { alternarMarcaFamilia_(it); return; } if (uniaoModo_ && modoFormulario === 'varias') { alternarMarcaUniao_(it); return; } abrirFotoGrandeForm_(idx); });
       box.appendChild(img);
       if (modoFormulario === 'varias') marcarItemUniao_(box, img, it);   // v7.50.0: borda e número do grupo, ou o ✓ de "marcar"
 
@@ -2246,6 +2258,46 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
    * O grupo mora na própria foto (it.grupo = número); a ordem do grupo é a ordem das fotos na fila. Nada sobe de novo: só muda como o envio é montado. */
   let uniaoModo_ = false, seqGrupo_ = 0, uniaoErro_ = '';
   const uniaoMarcadas_ = new Set();
+  /* v7.89.0 — famílias no "Cadastrar vários produtos" (pedido do Pablo): igual ao "Unir fotos", mas para FAMÍLIAS. A pessoa
+     toca nos produtos (foto solta ou grupo) que são do mesmo produto em outra estampa/tamanho e forma a família; pode formar
+     várias. A família mora na foto (it.fam = número), como o grupo. Ao cadastrar, cada família é ligada quando todos os seus
+     produtos forem salvos (admin-familias.js, com novas tentativas guardadas no aparelho). */
+  let familiaModo_ = false, seqFam_ = 0, familiaErro_ = '';
+  const familiaMarcadas_ = new Set();   // guarda a 1ª foto de cada produto (unidade) marcado
+  const CORES_FAM_ = ['#0b6a78', '#7b2cbf', '#1b6e3c', '#b3261e', '#1f5fbf', '#4a4a4a', '#14141a'];
+  const unidadeDe_ = (it) => unidadesUniao_().find((u) => u.indexOf(it) !== -1) || [it];
+  /** Famílias do lote: [{k, unidades}] só com 2 ou mais produtos (família com 1 produto volta a ser sem família). */
+  function familiasLote_() {
+    const mapa = new Map();
+    unidadesUniao_().forEach((u) => { const k = u[0].fam || 0; if (!k) return; if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(u); });
+    const out = [];
+    mapa.forEach((us, k) => { if (us.length >= 2) out.push({ k, unidades: us }); else us.forEach((u) => u.forEach((i) => { i.fam = 0; })); });
+    return out;
+  }
+  function numeroFamilia_(it) { const u = unidadeDe_(it), fs = familiasLote_(); for (let i = 0; i < fs.length; i++) if (fs[i].unidades.indexOf(u) !== -1 || fs[i].unidades.some((x) => x[0] === u[0])) return i + 1; return 0; }
+  const corFamilia_ = (n) => CORES_FAM_[(n - 1) % CORES_FAM_.length];
+  function alternarMarcaFamilia_(it) {
+    const u = unidadeDe_(it), chave = u[0];
+    if (familiaMarcadas_.has(chave)) familiaMarcadas_.delete(chave); else familiaMarcadas_.add(chave);
+    familiaErro_ = '';
+    const foco = fotosItens.indexOf(it); desenharFotos();
+    const im = document.querySelectorAll('#galeria-grid .galeria-item img')[foco]; if (im) im.focus({ preventScroll: true });
+  }
+  function confirmarFamilia_() {
+    const marcadas = unidadesUniao_().filter((u) => familiaMarcadas_.has(u[0]));
+    if (marcadas.length < 2) { familiaErro_ = 'Marque pelo menos 2 produtos da mesma família.'; desenharFotos(); return; }
+    const k = ++seqFam_;
+    marcadas.forEach((u) => u.forEach((i) => { i.fam = k; }));
+    familiaMarcadas_.clear(); familiaModo_ = false; familiaErro_ = '';
+    desenharFotos();
+    document.getElementById('status').textContent = 'Família ' + numeroFamilia_(marcadas[0][0]) + ' formada com ' + marcadas.length + ' produtos: ao cadastrar, eles ficam ligados.';
+  }
+  function desfazerFamilia_(n) {
+    const f = familiasLote_()[n - 1]; if (!f) return;
+    f.unidades.forEach((u) => u.forEach((i) => { i.fam = 0; }));
+    desenharFotos();
+    document.getElementById('status').textContent = 'Família ' + n + ' desfeita.';
+  }
   const CORES_GRUPO_ = ['#1f5fbf', '#7b2cbf', '#1b6e3c', '#b3261e', '#0b6a78', '#8a4b00', '#4a4a4a'];
   /** Produtos que o envio vai criar, na ordem: [[capa, ...galeria], ...]. Foto solta = [foto]. */
   function unidadesUniao_() {
@@ -2263,6 +2315,16 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function corGrupo_(n) { return CORES_GRUPO_[(n - 1) % CORES_GRUPO_.length]; }
   function ehCapaDoGrupo_(it) { if (!it || !it.grupo) return false; const g = gruposUniao_().find((u) => u.indexOf(it) !== -1); return !!g && g[0] === it; }
   function marcarItemUniao_(box, img, it) {
+    const nf = modoFormulario === 'varias' && it.fam ? numeroFamilia_(it) : 0;
+    if (nf) { box.dataset.familia = String(nf); box.style.setProperty('--fcor', corFamilia_(nf)); const sf = document.createElement('span'); sf.className = 'selo-familia'; sf.textContent = 'F' + nf; sf.title = 'Família ' + nf; box.appendChild(sf); }
+    if (familiaModo_ && modoFormulario === 'varias') {
+      const u = unidadeDe_(it), marcada = familiaMarcadas_.has(u[0]);
+      box.classList.add('uni-marcando'); box.classList.toggle('uni-marcada', marcada);
+      img.setAttribute('role', 'checkbox'); img.setAttribute('aria-checked', String(marcada)); img.tabIndex = 0;
+      img.setAttribute('aria-label', 'Produto da foto ' + (fotosItens.indexOf(it) + 1) + (nf ? ', na família ' + nf : '') + (marcada ? ', marcado para a família' : ', toque para marcar'));
+      img.onkeydown = (ev) => { if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); alternarMarcaFamilia_(it); } };
+      const c = document.createElement('span'); c.className = 'uni-check'; c.setAttribute('aria-hidden', 'true'); c.textContent = marcada ? '✓' : ''; box.appendChild(c);
+    }
     const n = it.grupo ? numeroGrupo_(it) : 0;
     if (n) {
       box.dataset.grupo = String(n); box.style.setProperty('--gcor', corGrupo_(n));
@@ -2294,7 +2356,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const pos = fotosItens.indexOf(marcadas[0]);
     const resto = fotosItens.filter((it) => !uniaoMarcadas_.has(it));
     const antes = fotosItens.slice(0, pos).filter((it) => !uniaoMarcadas_.has(it)).length;
-    marcadas.forEach((it) => { it.grupo = g; });
+    const famDoGrupo = (marcadas.find((it) => it.fam) || {}).fam || 0;   // v7.89.0: produto unido fica numa família só
+    marcadas.forEach((it) => { it.grupo = g; it.fam = famDoGrupo; });
     fotosItens = resto.slice(0, antes).concat(marcadas, resto.slice(antes));
     uniaoMarcadas_.clear(); uniaoModo_ = false; uniaoErro_ = '';
     desenharFotos();
@@ -2317,7 +2380,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function desenharUnioes_() {
     const box = document.getElementById('unioes'); if (!box) return;
     const varias = modoFormulario === 'varias';
-    if (!varias) { uniaoModo_ = false; uniaoMarcadas_.clear(); }
+    if (!varias) { uniaoModo_ = false; uniaoMarcadas_.clear(); familiaModo_ = false; familiaMarcadas_.clear(); }
     box.hidden = !varias || !fotosItens.length;
     const salvar = document.getElementById('btn-salvar');
     if (box.hidden) { if (varias && salvar) salvar.textContent = 'Cadastrar os produtos'; box.replaceChildren(); return; }
@@ -2335,14 +2398,44 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const k = uniaoMarcadas_.size;
       const ok = bt(k >= 2 ? 'Unir ' + k + ' fotos' : 'Unir fotos', 'uni-ok', confirmarUniao_); ok.id = 'uni-ok'; ok.disabled = k < 2;
       topo.append(ok, bt('Cancelar', 'uni-cancelar', () => { uniaoModo_ = false; uniaoMarcadas_.clear(); uniaoErro_ = ''; desenharFotos(); }));
+    } else if (familiaModo_) {
+      const k = familiaMarcadas_.size;
+      const ok = bt(k >= 2 ? 'Formar família (' + k + ')' : 'Formar família', 'uni-ok', confirmarFamilia_); ok.id = 'fam-ok'; ok.disabled = k < 2;
+      topo.append(ok, bt('Cancelar', 'uni-cancelar', () => { familiaModo_ = false; familiaMarcadas_.clear(); familiaErro_ = ''; desenharFotos(); }));
     } else if (fotosItens.length >= 2) {
       const b = bt('🔗 Unir fotos', 'uni-unir', () => { uniaoModo_ = true; uniaoMarcadas_.clear(); uniaoErro_ = ''; desenharFotos(); const p = document.querySelector('#galeria-grid .galeria-item img'); if (p) p.focus({ preventScroll: true }); });
       b.id = 'uni-unir'; topo.append(b);
+      if (n >= 2) {
+        const f = bt('👪 Família', 'uni-unir uni-fam', () => { familiaModo_ = true; familiaMarcadas_.clear(); familiaErro_ = ''; desenharFotos(); const p = document.querySelector('#galeria-grid .galeria-item img'); if (p) p.focus({ preventScroll: true }); }, 'Formar família com produtos deste cadastro');
+        f.id = 'fam-formar'; topo.append(f);
+      }
     }
     box.append(topo);
     if (uniaoModo_ || uniaoErro_) {
       const d = el('p', 'uni-dica', uniaoErro_ || 'Toque nas fotos que são do MESMO produto e depois em “Unir”. A primeira marcada vira a capa.');
       d.style.margin = '0'; if (uniaoErro_) d.setAttribute('role', 'alert'); box.append(d);
+    }
+    if (familiaModo_ || familiaErro_) {
+      const d = el('p', 'uni-dica', familiaErro_ || 'Toque nos produtos da mesma família (outra estampa ou tamanho) e depois em “Formar família”. Cada produto continua separado; no site eles aparecem juntos.');
+      d.style.margin = '0'; if (familiaErro_) d.setAttribute('role', 'alert'); box.append(d);
+    }
+    const fams = familiasLote_(), copiada = window.tkFamiliaCopiadaInfo ? window.tkFamiliaCopiadaInfo() : null;
+    if (fams.length || copiada) {
+      const ulf = el('ul', 'uni-grupos uni-fams'); ulf.setAttribute('aria-label', 'Famílias deste cadastro');
+      fams.forEach((f, i) => {
+        const li = el('li', 'uni-grupo uni-familia'); li.style.setProperty('--gcor', corFamilia_(i + 1)); li.dataset.familia = String(i + 1);
+        const t = el('span'); t.append(el('b', '', 'Família ' + (i + 1)), document.createTextNode(' · ' + f.unidades.length + ' produtos'));
+        li.append(t, bt('Desfazer', '', () => desfazerFamilia_(i + 1), 'Desfazer a família ' + (i + 1)));
+        ulf.append(li);
+      });
+      if (copiada) {
+        const semFam = unidadesUniao_().filter((u) => !u[0].fam).length;
+        const li = el('li', 'uni-grupo uni-familia uni-copiada'); li.style.setProperty('--gcor', '#0d0d0d');
+        const t = el('span'); t.append(el('b', '', 'Família “' + copiada.nome + '”'), document.createTextNode(' · ' + (semFam === 1 ? '1 produto entra' : semFam + ' produtos entram') + ' (copiada)'));
+        li.append(t, bt('Não ligar', '', () => { if (window.tkFamiliaCopiaDesfazer) window.tkFamiliaCopiaDesfazer(); desenharFotos(); }, 'Não ligar estes produtos à família ' + copiada.nome));
+        ulf.append(li);
+      }
+      box.append(ulf);
     }
     if (grupos.length) {
       const ul = el('ul', 'uni-grupos'); ul.setAttribute('aria-label', 'Grupos de fotos');
@@ -3205,7 +3298,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const v = (i) => document.getElementById(i).value, c = (i) => { const e = document.getElementById(i); return !!(e && e.checked); };
     desfazerCopia_ = { nome: v('nome'), preco: v('preco'), consultar: c('consultar-valor'), estoque: v('estoque'), tamanhos: v('tamanhos'), cores: v('cores'), descricao: v('descricao'), tecido: v('tecido'), novidade: c('novidade'), cats: new Set(selecionadasCategorias), gens: new Set(selecionadosGeneros) };
     const campo = document.getElementById('nome');
-    if (modoFormulario !== 'editando') preencherFormComProduto(p);
+    if (modoFormulario !== 'editando') { preencherFormComProduto(p); if (window.tkFamiliaDaCopia) window.tkFamiliaDaCopia(p); if (modoFormulario === 'varias') desenharFotos(); }   // v7.89.0: copiar de um produto com família = entrar na família dele
     campo.value = String(p.Nome).slice(0, 80); nomeSugCopiado_ = campo.value;
     if (TKCamadas.aberta('overlay-copiar')) fecharComHistorico_('overlay-copiar');
     const av = document.getElementById('aviso-copiado');
@@ -3219,6 +3312,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
   function desfazerCopia() {
     const d = desfazerCopia_; if (!d) return; desfazerCopia_ = null;
+    if (window.tkFamiliaCopiaDesfazer) { window.tkFamiliaCopiaDesfazer(); if (modoFormulario === 'varias') desenharFotos(); }
     const put = (i, x) => { document.getElementById(i).value = x; };
     put('nome', d.nome); put('preco', d.preco); put('estoque', d.estoque); put('tamanhos', d.tamanhos); put('cores', d.cores); put('descricao', d.descricao); put('tecido',d.tecido || '');
     const cv = document.getElementById('consultar-valor'); if (cv) cv.checked = d.consultar;
@@ -3809,7 +3903,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       await new Promise((res, rej) => {
         const tx = db.transaction('e', 'readwrite');
         tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: null, videoArquivos: arquivosDeVideo_(it), videosSalvos: it.videosSalvos || [], videosRemover: it.videosRemover || [], capaNovaB64: it.capaNovaB64 || null,
-          galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, familia: it.familia || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '',
+          galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, familia: it.familia || null, familiaLote: it.familiaLote || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '',
           subiu: it.subiu || null, recortesDe: it.recortesDe || null, v: 2, ka: !!it.ka, pacote: pacoteLeve_(it) });   // v4.25: pacote final leve (sem credencial) para qualquer tela terminar; v4.20: o que já subiu (endereços) fica guardado; v:2 = o servidor sabe reconhecer reenvio (opId)
         tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
       });
@@ -4385,7 +4479,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
       it.estado = 'ok'; it.respSalvo = resultado.resp; if (!it.arquivadaDepois) conferir_.push(it);
       if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id, fotosDoToque_(it));
-      if (it.familia && !it.ehEdicao && window.tkFamiliaDepoisDeSalvar) window.tkFamiliaDepoisDeSalvar(it, resultado.resp.id);   // v7.44.0: liga a variação nova à família
+      if (it.familia && !it.ehEdicao && window.tkFamiliaDepoisDeSalvar) window.tkFamiliaDepoisDeSalvar(it, resultado.resp.id);
+      if (it.familiaLote && !it.ehEdicao && window.tkFamiliaLoteSalvo) window.tkFamiliaLoteSalvo(it.familiaLote, resultado.resp.id);   // v7.89.0: família formada no "vários produtos"   // v7.44.0: liga a variação nova à família
       if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
       window.logDebug_('════ "' + it.titulo + '": salvo ════');
     } else if (!resultado.ok && resultado.enfileirado) {
@@ -4513,7 +4608,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     e.preventDefault();
     const faltas = faltasDoForm_();
     if (faltas.length) { mostrarFaltas_(faltas); return; } // sem foto/nome/preço/gênero/categoria o produto não é salvo
-    const famNova = modoFormulario === 'duplicando' && window.tkFamiliaAoSalvar ? window.tkFamiliaAoSalvar() : null;   // v7.44.0/v7.47.0: "+ Nova variação desta família"
+    const famNova = (modoFormulario === 'duplicando' || (modoFormulario !== 'editando' && modoFormulario !== 'varias' && window.__familiaNova)) && window.tkFamiliaAoSalvar ? window.tkFamiliaAoSalvar() : null;   // v7.44.0/v7.47.0: "+ Nova variação desta família"; v7.89.0: família copiada
     if (famNova === false) return;
     const idParaEditar = document.getElementById('produto-id').value;
     const ehEdicao = modoFormulario === 'editando' && idParaEditar;
@@ -4541,6 +4636,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const unidades = unidadesUniao_().map(u => u.filter(i => i.b64 || i.url)).filter(u => u.length);
       if (!unidades.length) { TKAviso.aviso('Escolha pelo menos uma foto — cada foto vira um produto.'); return; }
       if (uniaoModo_) { uniaoModo_ = false; uniaoMarcadas_.clear(); }
+      if (familiaModo_) { familiaModo_ = false; familiaMarcadas_.clear(); }
+      // v7.89.0: famílias do lote (novas) e a família copiada (para quem não tem família própria)
+      const famLote = familiasLote_(), loteId = 'lote-' + Date.now().toString(36);
+      const nomeFam = (window.tkFamiliaSepararNome ? window.tkFamiliaSepararNome(base.nome).base : '') || base.nome;
+      const famCopia = window.tkFamiliaAoSalvar ? window.tkFamiliaAoSalvar() : null;
+      const famDaUnidade = (u) => { const i = famLote.findIndex((f) => f.unidades.some((x) => x[0] === u[0])); return i < 0 ? null : { chave: loteId + '-' + (i + 1), base: nomeFam, total: famLote[i].unidades.length }; };
       // Vídeo(s) escolhidos no lote vão só no PRIMEIRO produto (um mesmo arquivo em dois produtos se perderia ao mexer num deles); depois dá para juntar os produtos.
       const vidsLote = videosItens.filter(v => v.file).map(v => v.file);
       const vidsLoteItens = videosItens.filter(v => v.file);
@@ -4550,7 +4651,9 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         const dadosU = Object.assign({}, base, capa.b64 ? {} : { fotoUrlExistente: capa.url }, gal.some(g => !g.b64) ? { fotosGaleriaExistentes: gal.filter(g => !g.b64).map(g => g.url).join(',') } : {});
         const daCaixa = u.map(i => i.caixaId || (i.orig && i.orig.caixaId) || 0).filter(Boolean);   // v7.52.0: avisa a Esteira quais fotos da caixa viraram este produto
         envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Produto', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: capa.b64 || null, galeriaNovaB64: galNovas.map(g => g.b64), dados: dadosU, estado: 'fila', msg: '', rascunhoId: daCaixa.length ? 'caixa:' + daCaixa.join('.') : null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
-        guardarEnvio_(envios[envios.length - 1]);
+        const novo = envios[envios.length - 1], fl = famDaUnidade(u);
+        if (fl) novo.familiaLote = fl; else if (famCopia) novo.familia = Object.assign({}, famCopia, { rotulo: '' });
+        guardarEnvio_(novo);
       });
       cancelarDuplicacao();
       document.getElementById('status').textContent = 'Cadastrando ' + unidades.length + (unidades.length === 1 ? ' produto' : ' produtos') + ' em segundo plano.';
@@ -6585,7 +6688,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.61.0">
 <script src="admin-disponibilidade.js?v=7.58.1"></script>
-<script src="admin-familias.js?v=7.65.0"></script>
+<script src="admin-familias.js?v=7.89.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.61.0">
 <script src="mensagens-presenca.js?v=7.40.43"></script>

@@ -84,6 +84,8 @@
     const box = caixaForm(); if (!box) return;
     box.replaceChildren();
     const nova = window.__familiaNova;
+    pintarCopia();
+    if (nova && nova.copia) { box.hidden = true; return; }   // v7.89.0: a família copiada aparece junto do "Copiei os dados de…" (pintarCopia)
     if (nova) {   // cadastrando um tamanho novo
       box.hidden = false; box.classList.add('nova');
       box.append(el('b', 'fam-tit', 'Nova variação da família “' + nova.base + '”'), el('p', 'fam-sub', 'Fotos, tamanhos, cores e quantidade ficam vazios: escolha o que é deste produto. O resto veio do produto original. Ao cadastrar, ele entra na família.'));
@@ -128,6 +130,20 @@
     const st = el('p', 'fam-st'); st.setAttribute('role', 'status');
     box.append(acoes, st);
   }
+  /** v7.89.0: família que veio com o "Copiar dados de outro produto", logo abaixo do aviso da cópia (onde a pessoa copiou). */
+  function pintarCopia() {
+    const nova = window.__familiaNova, av = $('aviso-copiado');
+    let linha = $('fam-copia');
+    if (!(nova && nova.copia)) { if (linha) linha.remove(); return; }
+    if (!linha) { linha = el('div', 'fam-copia'); linha.id = 'fam-copia'; linha.setAttribute('role', 'status'); }
+    const ref = av || $('cp-abrir');   // o aviso da cópia aparece logo em seguida: a família fica logo abaixo dele
+    if (ref && linha.previousElementSibling !== ref) ref.after(linha);
+    const varias = typeof modoFormulario !== 'undefined' && modoFormulario === 'varias';
+    const txt = el('span', 'fam-copia-txt');
+    txt.append(el('b', '', '👪 Família “' + nova.base + '”'), document.createTextNode(varias ? ' · os produtos sem família própria entram nela' : ' · este produto entra nela ao cadastrar'));
+    linha.replaceChildren(txt, botao('Não ligar', 'fam-copia-x', () => { window.tkFamiliaCopiaDesfazer(); if (varias && typeof desenharFotos === 'function') desenharFotos(); }));
+    linha.lastChild.setAttribute('aria-label', 'Não ligar à família ' + nova.base);
+  }
   function abrirOutra(id) {
     if (typeof editarProduto !== 'function') return;
     editarProduto(String(id));
@@ -171,6 +187,16 @@
     return r;
   };
   window.tkFamiliaNovaVariacao = novaVariacao;
+  /** v7.89.0: "Copiar dados de outro produto" — se ele tem família, o produto novo entra nela (amarrado e visível no formulário). */
+  window.tkFamiliaDaCopia = function (p) {
+    if (!p) return null;
+    const f = familiaDe(p.ID);
+    if (!f) { if (window.__familiaNova && window.__familiaNova.copia) { window.__familiaNova = null; pintarForm(); } return null; }
+    window.__familiaNova = { origem: String(p.ID), familia: f.id, base: f.nome || separarNome(p.Nome).base || p.Nome, nomeOrigem: p.Nome, copia: true };
+    pintarForm(); return f;
+  };
+  window.tkFamiliaCopiaDesfazer = function () { if (window.__familiaNova && window.__familiaNova.copia) { window.__familiaNova = null; pintarForm(); } };
+  window.tkFamiliaCopiadaInfo = function () { const n = window.__familiaNova; return n && n.copia ? { nome: n.base, origem: n.origem } : null; };
   window.tkFamiliaNovoTamanho = novaVariacao;   // nome antigo (7.44.0)
   /** Chamado no "Cadastrar": devolve o que o envio precisa guardar para ligar a peça nova (null = não é variação). Nunca bloqueia o cadastro. */
   window.tkFamiliaAoSalvar = function () {
@@ -198,7 +224,35 @@
     gravarPend(lerPend().concat([x]));
     aviso('O produto foi cadastrado. Não consegui ligar à família agora; tento de novo sozinho na próxima vez que a Gestão abrir.');
   };
+  /* v7.89.0 — famílias formadas no "Cadastrar vários produtos": junta os produtos salvos de cada família e liga quando todos
+     chegarem. Guardado no aparelho: se a Gestão fechar no meio, termina na próxima vez (e, passada 1 h, liga os que chegaram). */
+  const LOTES = 'tk_fam_lotes_v1';
+  const lerLotes = () => { try { const o = JSON.parse(localStorage.getItem(LOTES) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } };
+  const gravarLotes = (o) => { try { localStorage.setItem(LOTES, JSON.stringify(o)); } catch (e) {} };
+  async function ligarLote(chave, forcar) {
+    const o = lerLotes(), l = o[chave]; if (!l || l.ligando) return;
+    const ids = [...new Set(l.ids || [])];
+    if (!(ids.length >= l.total || (forcar && ids.length >= 2))) return;
+    l.ligando = true; gravarLotes(o);
+    const r = await srv('/familias/ligar', { produtos: ids, nome: String(l.base || '').slice(0, 80), juntar: true });
+    const o2 = lerLotes();
+    if (r && r.ok) { delete o2[chave]; gravarLotes(o2); if (r.familia) usarFamilia(r.familia); aviso('Família “' + ((r.familia && r.familia.nome) || l.base) + '” ligada com ' + ids.length + ' produtos.'); return; }
+    if (o2[chave]) { o2[chave].ligando = false; o2[chave].erro = (r && r.erro) || ''; gravarLotes(o2); }
+    aviso('Os produtos foram cadastrados. Não consegui ligar a família agora; tento de novo sozinho na próxima vez que a Gestão abrir.');
+  }
+  window.tkFamiliaLoteSalvo = function (lote, novoId) {
+    if (!lote || !lote.chave || !novoId) return;
+    const o = lerLotes(), l = o[lote.chave] || { base: lote.base, total: Number(lote.total) || 2, ids: [], em: Date.now() };
+    if (l.ids.indexOf(String(novoId)) < 0) l.ids.push(String(novoId));
+    o[lote.chave] = l; gravarLotes(o);
+    void ligarLote(lote.chave, false);
+  };
+  async function tentarLotes() {
+    const o = lerLotes();
+    for (const k of Object.keys(o)) { const l = o[k]; if (l) { l.ligando = false; gravarLotes(o); await ligarLote(k, Date.now() - (Number(l.em) || 0) > 3600000); } }
+  }
   async function tentarPendentes() {
+    await tentarLotes();
     const l = lerPend(); if (!l.length) return;
     const resto = [];
     for (const x of l) { const r = await ligarNova(x); if (!r.ok && !/outra família|famílias diferentes/.test(r.erro || '')) resto.push(x); }
