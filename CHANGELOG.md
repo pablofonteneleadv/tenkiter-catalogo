@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.88.1 — Correção urgente: Esteira em branco no app
+
+- **Relato do Pablo (captura):** no app, a Esteira ficava em branco (sem abas e sem conteúdo), em qualquer conta e celular; arrastar não resolvia. Pelo navegador abria.
+- **Causa:** outras janelas do app (Gestão, Mensagens) renovam o código da sessão. A Esteira comparava esse código: o carregamento em andamento parava no meio e o módulo de fluidez limpava a tela. Desde a 7.88.0 ela não recomeçava mais do zero nesse caso, então a tela ficava vazia.
+- **Correção:** a Esteira passa a reconhecer a pessoa pelo WhatsApp (o código renovado é só atualizado, sem interromper nada). Trocar de CONTA continua limpando tudo.
+- **Teste novo:** `esteira_sessao_renovada_ui.py` renova o código em vários momentos do carregamento (10 cenários), com a tela aberta em Fotos e com troca de conta.
+
 ## 7.88.0 — Cadastro contínuo: sempre com sinal de vida e sem perder o lugar
 
 - **Esteira não volta mais para “Hoje” sozinha.** Quando outra tela (a Gestão) renovava o login, a Esteira achava que a conta tinha mudado, apagava o que lembrava e recomeçava em “Hoje”. Agora, mesma conta, ela continua na mesma aba, filtro e ponto da tela. Se a tela recarregar, volta para a última aba e posição (lembrança marcada na hora em que você sai).
