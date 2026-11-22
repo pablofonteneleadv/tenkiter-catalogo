@@ -91,6 +91,9 @@
     "tests/esteira_fotos_ui.py": [
       "esteira"
     ],
+    "tests/esteira_sessao_renovada_ui.py": [
+      "esteira"
+    ],
     "tests/esteira_lote_arquivo_ui.py": [
       "esteira"
     ],

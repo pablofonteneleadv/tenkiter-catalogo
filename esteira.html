@@ -306,7 +306,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.83.0"></script>
-<script src="esteira-fluidez.js?v=7.88.0"></script>
+<script src="esteira-fluidez.js?v=7.88.1"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script>
 (function () {
@@ -373,7 +373,10 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   let acessoTela, diaTela, leiturasTela = new Map(), contextoRecuperado, sincronizando, aberturaEmCurso, conferenciaAberta;
   let agendarSincronia, agendaSalvar, ultimaSincronia = 0, ultimaLeitura = new Map(), abrirEmCurso = null;
   const diaLoja = () => new Date(Date.now()-10800000).toISOString().slice(0,10);
-  const mesmaConta = s => !!s && s === sessaoAtual && s.sessao === getSessao()?.sessao && s.whatsapp === getSessao()?.whatsapp;
+  // v7.89.1: "mesma conta" é a mesma pessoa (mesmo objeto de sessão e mesmo WhatsApp). O código da sessão pode ser renovado
+  // por outra tela (Gestão, Mensagens) a qualquer momento; comparar o código fazia o carregamento em andamento parar no meio
+  // e a Esteira ficava em branco no app. Os pedidos ao servidor já usam sempre o código atual (getSessao em srvRede).
+  const mesmaConta = s => !!s && s === sessaoAtual && s.whatsapp === getSessao()?.whatsapp;
   const rotaDaAba = (rota, aba) => rota.split('?')[0] === baseLeitura[aba] || aba === 'fotos' && rota.startsWith('/esteira/caixa?');
   const telaAdmin = aba => aba === 'painel' || aba === 'config';
   const rotasDaAba = aba => new Set([baseLeitura[aba], ...(aba === 'fotos' ? ['/esteira/caixa'] : [])]);
@@ -3033,10 +3036,8 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     // v7.88.0: mesma conta, só o código da sessão renovado (outra tela, como a Gestão, conferiu o login): continua na mesma
     // aba, filtro e rolagem e só atualiza os dados. Antes voltava para "Hoje" e a pessoa se perdia no meio do trabalho.
     if (sessaoAtual && s && s.whatsapp === sessaoAtual.whatsapp) {
-      sessaoAtual = s;
-      fluidez.invalidar();
-      pedirSincronia(true);
-      void salvarRetomada();
+      sessaoAtual.sessao = s.sessao;   // v7.89.1: só o código novo, no MESMO objeto: nada em andamento é interrompido
+      if (acessoTela && podeAtualizar()) pedirSincronia(true);   // tela pronta: atualiza; carregando: o carregamento termina sozinho
       return;
     }
     apagarDadosDaSessao(sessaoAtual);

@@ -3,7 +3,8 @@
  'use strict';
  window.TKEsteiraFluidez=function(root,sessao){
   const vistas=new Map(),leituras=new Map(),sujas=new WeakSet();let conta='',epoca=0,ativa='',ultimoBloco=null;
-  const identidade=()=>{const s=sessao()||{};return String(s.whatsapp||'')+'|'+String(s.sessao||'')};
+  // v7.89.1: a identidade é a pessoa (WhatsApp). O código da sessão é renovado por outras telas; trocar de conta continua limpando tudo.
+  const identidade=()=>{const s=sessao()||{};return String(s.whatsapp||'')};
   function conferir(){const c=identidade();if(c!==conta){conta=c;epoca++;vistas.clear();leituras.clear();root.replaceChildren();ativa=''}return epoca}
   root.addEventListener('click',e=>{ultimoBloco=e.target.closest('.card')},true);
   root.addEventListener('input',e=>{const c=e.target.closest('.card');if(c)sujas.add(c)});
