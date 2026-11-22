@@ -265,6 +265,7 @@
   function telaDaLoja() { return /(^|\/)((index|curriculo)\.html)?$/.test(location.pathname); }   // loja e candidatura: só para a equipe
   function mostrarTopo() {
     if (!sessaoTopo() || window.top !== window.self || /[?&]embed=1/.test(location.search) || document.documentElement.getAttribute('data-tk-conta') === 'nao') return false;
+    if (/[?&]app=mensagens(&|$)/.test(location.search)) return false;   // Mensagens tem a conta no próprio menu (…); o botão cobria esse menu
     return !telaDaLoja();   // a loja e a candidatura já têm "Minha conta" no canto direito, com Trocar de conta e Sair
   }
   function cssTopo() {
@@ -354,7 +355,8 @@
   try {
     window.addEventListener('storage', function (e) { if (!e || e.key === CH_SESSAO || e.key === null) conferirOutraTela(); });
     window.addEventListener('tk:sessao', function () { sabido = quemTopo(); montarTopo(); });   // mudou nesta mesma tela
-    document.addEventListener('visibilitychange', function () { if (document.hidden) return; if (recarregarAo) { recarregarAo = false; recarregarQuandoPuder(); } else conferirOutraTela(); });
+    // Ao sair da frente, guarda a conta de agora: o que esta própria tela fez (ex.: entrar sem avisar) não conta como "outra tela".
+    document.addEventListener('visibilitychange', function () { if (document.hidden) { if (!recarregarAo) sabido = quemTopo(); return; } if (recarregarAo) { recarregarAo = false; recarregarQuandoPuder(); } else conferirOutraTela(); });
     window.addEventListener('pageshow', function (e) { if (e && e.persisted) conferirOutraTela(); });
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montarTopo); else setTimeout(montarTopo, 0);
   } catch (e) { /* navegador sem eventos: segue sem o botão */ }
