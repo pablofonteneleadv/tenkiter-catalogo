@@ -3061,6 +3061,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   /* Tamanhos da peça na lista da gestão (para conferir de relance sem abrir a edição). */
   function tamanhosLinha_(p) {
+    // Se tamanhos-vinculados.js não carregou (rede ruim no app), a lista aparece mesmo assim, sem o resumo.
+    if (!window.TKTamanhos) return '';
     const dados = TKTamanhos.cliente(textoPlano(p.Tamanhos), p.Genero);
     const resumo = TKTamanhos.resumir(dados.valores, dados.tipo);
     return resumo

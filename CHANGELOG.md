@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.89.1 — Tela vazia no app: conferência de todas as áreas
+
+- **Pergunta do Pablo:** a tela cinza/vazia aparecia também em outros ícones, não só na Esteira.
+- **Conferido:** Gestão, Postagens, Mensagens, Principal, RH e Currículos foram testados com o login renovado por outra janela em 5 momentos diferentes (abrindo e já aberta). Nenhuma tela ficou vazia nem pediu login; a causa da 7.88.1 existia só na Esteira.
+- **Reforço achado na conferência:** se o arquivo de tamanhos não carregar (rede ruim no app), a Gestão dava erro ao montar a lista e a loja podia ficar sem os cartões. Agora a lista aparece mesmo assim, só sem o resumo de tamanhos.
+- **Teste novo:** `sessao_renovada_telas_ui.py` (64 verificações).
+
 ## 7.89.0 — Famílias no “Cadastrar vários produtos” e família ao copiar dados
 
 - **👪 Família** ao lado do “Unir fotos”: toque nos produtos (foto solta ou grupo unido) que são o mesmo produto em outra estampa ou tamanho e forme a família. Dá para formar várias famílias; cada uma tem número e cor (selo F1, F2 nas fotos) e pode ser desfeita. Ao cadastrar, cada família é ligada sozinha quando todos os seus produtos forem salvos (se cair a conexão, tenta de novo na próxima vez que a Gestão abrir).
