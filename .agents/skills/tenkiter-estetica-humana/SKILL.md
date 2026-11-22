@@ -45,6 +45,7 @@ Antes de desenhar, leia `docs/ia/padroes-site.md`: para cada tema (janelas, apar
 - A interface usa texto genérico, excesso de caixas, sombras, cores, emojis ou explicações que competem com a tarefa.
 - O estado vazio, erro, espera ou sucesso deixa a pessoa sem próxima ação clara.
 - O resultado parece um conjunto de componentes prontos sem relação com a linguagem visual TENKiTER.
+- A tela ocupa espaço que não ajuda (decisão do Pablo, 22/11/2026, regra “Compacto por padrão” em `docs/ia/padroes-site.md`): botão sozinho numa linha quando cabe ao lado de outro, contagem ou rótulo em duas linhas sem necessidade, texto que repete o título, explicação longa sempre visível. Compare com a versão anterior e corte antes de entregar, mantendo os 44 px de toque.
 
 ## Critério contra resultado genérico
 

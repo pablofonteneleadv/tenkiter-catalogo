@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.89.0 — Famílias no “Cadastrar vários produtos” e família ao copiar dados
+
+- **👪 Família** ao lado do “Unir fotos”: toque nos produtos (foto solta ou grupo unido) que são o mesmo produto em outra estampa ou tamanho e forme a família. Dá para formar várias famílias; cada uma tem número e cor (selo F1, F2 nas fotos) e pode ser desfeita. Ao cadastrar, cada família é ligada sozinha quando todos os seus produtos forem salvos (se cair a conexão, tenta de novo na próxima vez que a Gestão abrir).
+- **Copiar dados de um produto que tem família:** a família vem junto. Logo abaixo do “Copiei os dados de…” aparece “👪 Família … · este produto entra nela ao cadastrar”, com “Não ligar”. No “vários produtos”, quem não tiver família própria entra na família copiada.
+- **Tela mais enxuta:** contagem numa linha e “Unir fotos” e “Família” lado a lado; listas de grupos e famílias mais baixas.
+- **Regra “Compacto por padrão”** (decisão do Pablo) registrada em `docs/ia/padroes-site.md` e na skill de estética: toda tela nova ou mexida corta espaço que não ajuda, mantendo 44 px de toque.
 ## 7.88.1 — Correção urgente: Esteira em branco no app
 
 - **Relato do Pablo (captura):** no app, a Esteira ficava em branco (sem abas e sem conteúdo), em qualquer conta e celular; arrastar não resolvia. Pelo navegador abria.

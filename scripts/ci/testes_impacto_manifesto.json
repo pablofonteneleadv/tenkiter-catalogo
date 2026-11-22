@@ -135,6 +135,9 @@
       "esteira",
       "postagens"
     ],
+    "tests/familias_varias_ui.py": [
+      "catalogo"
+    ],
     "tests/gestao_unioes.py": [
       "esteira"
     ],
@@ -591,6 +594,7 @@
     "tests/fotos_postadas_ui.py": "tests/saida/fotos-postadas",
     "tests/esteira_fotos_ui.py": "tests/saida/esteira-fotos",
     "tests/conta_topo_ui.py": "tests/saida/conta-topo",
+    "tests/familias_varias_ui.py": "tests/saida/familias-varias",
     "tests/telas_enxutas_ui.py": "tests/saida/telas-enxutas",
     "tests/esteira_retomada_fotos_ui.py": "tests/saida/esteira-fluidez/fotos-retomada",
     "tests/esteira_primeiro_item_ui.py": "tests/saida/esteira-primeiro-item",
