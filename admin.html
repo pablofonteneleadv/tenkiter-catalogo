@@ -4450,8 +4450,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       }
     });
     desenharEnvios();
+    // v7.85.0: quem abriu o cadastro pela Esteira volta para ela quando tudo deste lote foi salvo (admin-caixa-fotos.js).
+    try { window.dispatchEvent(new CustomEvent('tk:fila-terminou', { detail: { itens: lote.map(it => ({ estado: it.estado, edicao: !!it.ehEdicao, caixa: /^caixa:/.test(String(it.rascunhoId || '')) })), restam: envios.filter(e => e.estado === 'fila' || e.estado === 'enviando' || e.estado === 'erro').length } })); } catch (e) {}
     const formulario = document.getElementById('card-form');
-    const digitando = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+    const digitando =/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
     if (lote.every(it => it.estado === 'ok') && !formulario.open && !digitando && !document.querySelector('.overlay-sheet.aberto')) {
       const cabecalho = document.querySelector('#card-menu-cadastro > summary');
       cabecalho.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -6567,7 +6569,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-fila.js?v=7.70.0"></script>
 <script src="admin-mensagens.js?v=7.83.0"></script>
 <script src="admin-instagram.js?v=7.63.0"></script>
-<script src="admin-caixa-fotos.js?v=7.52.1"></script>
+<script src="admin-caixa-fotos.js?v=7.85.0"></script>
 <link rel="stylesheet" href="pedir-fotos.css?v=7.61.0">
 <script src="pedir-fotos.js?v=7.58.1"></script>
 <script src="video-validation.js?v=7.58.1"></script>

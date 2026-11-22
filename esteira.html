@@ -1627,14 +1627,14 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
           const b = el('button', 'cx-modo'); b.type = 'button'; b.dataset.modo = v; b.setAttribute('aria-pressed', String(modo === v)); b.disabled = (v === 'um' && itens.length > 8) || (v === 'varias' && itens.length < 2);
           b.append(el('b', '', t), el('small', '', d)); b.onclick = () => { modo = v; pintar(); }; opc.append(b);
         });
-        a.href = 'admin.html?caixaFotos=' + ids + '&modo=' + modo;
+        a.href = 'admin.html?caixaFotos=' + ids + '&modo=' + modo + '&volta=esteira';
       };
-      a.onclick = () => { srv('/esteira/caixa/usar', { ids: itens.map((i) => i.id), uso: 'cadastro' }).then(r => {if(r.foraDaTela||!r.ok){const st=document.getElementById('fotos-status');if(st?.diga)st.diga(r.ok?'O cadastro abriu. Use “Atualizar fotos” para rever a lista.':r.erro||'Não consegui confirmar a caixa.','muted');return;}aoTerminar?.('O cadastro abriu em outra aba. As fotos ficam marcadas “em cadastro” até o produto ser salvo.');}); setTimeout(fechar, 0); };
-      corpo.append(miniFotos(urls), opc, el('p', 'muted dica', 'Abre a Gestão em outra aba já com as fotos. Lá você confere os dados e cadastra.')); pe.append(a); pintar();
+      a.onclick = () => { srv('/esteira/caixa/usar', { ids: itens.map((i) => i.id), uso: 'cadastro' }).then(r => {if(r.foraDaTela||!r.ok){const st=document.getElementById('fotos-status');if(st?.diga)st.diga(r.ok?'O cadastro abriu. Use “Atualizar fotos” para rever a lista.':r.erro||'Não consegui confirmar a caixa.','muted');return;}aoTerminar?.('O cadastro abriu. As fotos ficam marcadas “em cadastro” até o produto ser salvo.');}); setTimeout(fechar, 0); };
+      corpo.append(miniFotos(urls), opc, el('p', 'muted dica', 'Abre o cadastro já com as fotos. Você confere os dados e cadastra; ao salvar, volta para a Esteira onde parou.')); pe.append(a); pintar();
     });
   }
   /* ---- tela da aba Fotos ---- */
-  let CAIXA_VER = 'novas', AVISO_FOTOS = '';
+  let CAIXA_VER = 'novas', AVISO_FOTOS = '', rolagemVolta = null;
   // O servidor aplica o escopo da sessão. Para a equipe, ignora o filtro.
   const rotaCaixa = filtro => '/esteira/caixa?pagina=1&ver=' + filtro;
   async function telaFotos(aviso) {
@@ -1766,7 +1766,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       cx.append(filtro);
     }
     caixaRenderizada.set(cx, chaves);
-    if (!r.itens.length) { if(cx.isConnected && !contextoRecuperado) salvarRetomada();cx.append(el('p', 'muted vazio-cx', gestor ? (CAIXA_VER === 'novas' ? 'Nenhuma foto nova na caixa.' : CAIXA_VER === 'usadas' ? 'Nenhuma foto usada ainda.' : 'Nenhuma foto descartada.') : 'Você ainda não enviou fotos para a caixa.')); return; }
+    if (!r.itens.length) { rolagemVolta = null; if(cx.isConnected && !contextoRecuperado) salvarRetomada();cx.append(el('p', 'muted vazio-cx', gestor ? (CAIXA_VER === 'novas' ? 'Nenhuma foto nova na caixa.' : CAIXA_VER === 'usadas' ? 'Nenhuma foto usada ainda.' : 'Nenhuma foto descartada.') : 'Você ainda não enviou fotos para a caixa.')); return; }
     const todas = r.itens.map((i) => ({ url: i.url, tipo: 'foto' }));
     const lotes = new Map(); r.itens.forEach((i) => { const k = i.lote || 'x' + i.id; if (!lotes.has(k)) lotes.set(k, []); lotes.get(k).push(i); });
     const atualizarBarra = () => {
@@ -1852,6 +1852,10 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       const alvo = primeira && cx.querySelector('[data-caixa="' + primeira.id + '"] button');
       (alvo || mais)?.focus({ preventScroll:true });
       window.scrollTo(0, rolagem);
+    }
+    if (rolagemVolta !== null && cx.isConnected && ABA === 'fotos') {
+      const y = rolagemVolta; rolagemVolta = null;
+      if (window.scrollY < 40) window.scrollTo(0, y);   // só se a pessoa ainda não rolou por conta própria
     }
     if (cx.isConnected && !contextoRecuperado) salvarRetomada();
   }
@@ -2955,7 +2959,11 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
           }
           const completa = dados.has(baseLeitura.fotos) && dados.has(caixa);
           const mudou = !r.revisao || [...dados.values()].some(d => d.revisao !== r.revisao);
-          if (!completa || mudou && !local?.selecao?.length) return abrirAba();
+          if (!completa || mudou && !local?.selecao?.length) {
+            // v7.85.0: na volta do cadastro a lista mudou (fotos usadas); a Caixa vem nova, mas a rolagem volta onde a pessoa estava.
+            rolagemVolta = autorizado && Number(local.rolagem) > 0 ? Number(local.rolagem) : null;
+            return abrirAba();
+          }
         }
         if (!dados.size) return abrirAba();
         // A cópia confirmada alimenta também as próximas trocas de aba,
