@@ -255,7 +255,10 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
 
     private fun externo(endereco: String) {
         val u = Uri.parse(endereco); if (u.scheme !in listOf("https", "http", "tel", "mailto", "whatsapp", "intent")) return
-        runCatching { startActivity(if (u.scheme == "intent") Intent.parseUri(endereco, Intent.URI_INTENT_SCHEME).addCategory(Intent.CATEGORY_BROWSABLE).setComponent(null).setSelector(null) else Intent(Intent.ACTION_VIEW, u)) }
+        runCatching {
+            val i = if (u.scheme == "intent") Intent.parseUri(endereco, Intent.URI_INTENT_SCHEME).apply { addCategory(Intent.CATEGORY_BROWSABLE); component = null; selector = null } else Intent(Intent.ACTION_VIEW, u)
+            startActivity(i)
+        }
     }
 
     override fun onResume() {
