@@ -62,7 +62,11 @@
   function gravarVolta(v) { try { if (typeof sessionStorage === 'undefined') return; if (v) sessionStorage.setItem(VOLTA, v); else sessionStorage.removeItem(VOLTA); } catch (e) { /* conforto */ } }
   function voltarEsteira() {
     // A Gestão pede transição animada entre páginas (nav.js) e a Esteira não: desliga a animação só nesta volta (evita erro de transição cancelada).
-    try { var vt = document.createElement('style'); vt.textContent = '@view-transition{navigation:none}'; document.head.appendChild(vt); } catch (e) { /* segue sem */ }
+    try {
+      Array.prototype.forEach.call(document.querySelectorAll('style'), function (s) { if (s.textContent.indexOf('@view-transition') >= 0) s.textContent = s.textContent.replace(/@view-transition\s*\{\s*navigation\s*:\s*auto\s*;?\s*\}/g, '@view-transition{navigation:none}'); });
+      var vt = document.createElement('style'); vt.textContent = '@view-transition{navigation:none}'; document.head.appendChild(vt);
+    } catch (e) { /* segue sem */ }
+    window.addEventListener('pageswap', function (e) { var t = e && e.viewTransition; if (!t) return; [t.ready, t.finished, t.updateCallbackDone].forEach(function (p) { if (p && p.catch) p.catch(function () {}); }); try { t.skipTransition(); } catch (x) { /* segue */ } }, { once: true });
     var proprio = (typeof history !== 'undefined') && history.length === 1;
     if (proprio) { try { window.close(); } catch (e) { /* segue */ } }
     setTimeout(function () { location.replace('esteira.html'); }, proprio ? 400 : 0);
