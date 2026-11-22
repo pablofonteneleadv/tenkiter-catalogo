@@ -80,7 +80,7 @@
     ],
     "tests/conta_topo_ui.py": [
       "catalogo",
-      "padroes",
+      "esteira",
       "treinamentos"
     ],
     "tests/esteira_fotos_ui.py": [
