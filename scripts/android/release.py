@@ -20,7 +20,11 @@ def main():
  if existing:
   gh('release','download',tag,'--repo',REPO,'--dir',str(folder),'--clobber');print('Reutilizando release verificada da mesma fonte.')
  else:
-  subprocess.run(['gradle','-p','android',':app:testDebugUnitTest',':app:lintDebug',':app:assembleRelease','--console','plain'],cwd=ROOT,check=True)
+  # O Maven Central às vezes não responde: até 3 tentativas antes de reprovar (o Gradle reaproveita o que já fez).
+  for tentativa in (1,2,3):
+   if subprocess.run(['gradle','-p','android',':app:testDebugUnitTest',':app:lintDebug',':app:assembleRelease','--console','plain'],cwd=ROOT).returncode==0:break
+   if tentativa==3:raise SystemExit('Build Android falhou 3 vezes')
+   print(f'Tentativa {tentativa} do build falhou; tentando de novo.',flush=True);import time;time.sleep(20)
   candidates=list((ROOT/'android/app/build/outputs/apk/release').glob('*.apk'))
   if len(candidates)!=1:raise SystemExit('APK release não localizado de forma única')
   apk.write_bytes(candidates[0].read_bytes())

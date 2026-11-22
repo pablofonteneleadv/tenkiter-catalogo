@@ -25,7 +25,13 @@ jobs:
           gradle-version: '8.10.2'
       - name: Compilar APK de teste do PR
         if: github.event_name == 'pull_request'
-        run: gradle -p android :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console plain
+        # O Maven Central às vezes não responde (bibliotecas do Gradle e do Robolectric): tenta de novo antes de reprovar.
+        run: |
+          for t in 1 2 3; do
+            gradle -p android :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console plain && exit 0
+            echo "::warning::Tentativa $t do build Android falhou; tentando de novo (rede do Maven oscila)."; sleep 20
+          done
+          exit 1
       - name: Compilar com a assinatura preservada
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         env:

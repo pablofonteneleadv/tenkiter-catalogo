@@ -2,7 +2,7 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'br.com.tenkitermodas.mensagens'
     compileSdk 35
-    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 31; versionName '2.5.0' }
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 33; versionName '2.5.2' }
     buildFeatures { buildConfig true }
     def shared = new File(rootDir.parentFile, 'common.js').text
     def loginApi = (shared =~ /API_URL_PADRAO="([^"]+)"/)[0][1]
@@ -17,7 +17,7 @@ android {
         unitTests.includeAndroidResources = true
         unitTests.all {
             ['https.proxyHost','https.proxyPort','http.proxyHost','http.proxyPort','javax.net.ssl.trustStore','javax.net.ssl.trustStorePassword'].each { key -> if(System.getProperty(key)) systemProperty key,System.getProperty(key) }
-            systemProperty 'robolectric.dependency.repo.url','https://repo.maven.apache.org/maven2'
+            systemProperty 'robolectric.dependency.repo.url','https://maven-central.storage-download.googleapis.com/maven2'   // espelho do Maven Central (evita 429)
         }
     }
     signingConfigs {
