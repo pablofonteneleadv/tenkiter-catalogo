@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.85.0 — Cadastro pela Esteira volta para a Esteira
+
+- Na aba Fotos da Esteira, “Cadastrar produto novo” abria a Gestão. No app Android não existe outra aba: a Gestão tomava o lugar da Esteira e, a cada produto, era preciso entrar na Esteira de novo.
+- Agora o cadastro aberto pela Esteira lembra de onde veio. Quando o produto (ou os vários produtos) é salvo sem erro, aparece “Produto cadastrado. Voltando para a Esteira…” e a Esteira reabre na aba Fotos, com o filtro e a rolagem onde a pessoa estava.
+- No navegador do computador, se o cadastro abriu em aba própria, essa aba fecha e a Esteira continua na outra.
+- Erro, aviso da conferência ou falta de conexão: o cadastro fica aberto para a pessoa resolver. Cadastro aberto por outro caminho continua como antes.
+- A confirmação “foto usada” para a Esteira segue mesmo com a troca de tela (envio mantido pelo navegador).
+
 ## 7.84.0 — Teto real do Instagram (50 a cada 24 h)
 
 - O Instagram desta conta aceita 50 publicações por API a cada 24 h corridas (conferido na API oficial). O sistema permitia 90/100, então a fila só parava depois da recusa e esperava às cegas (15 → 120 min). Agora o teto é 50 em tudo, e a fila confere a cota oficial perto do limite.

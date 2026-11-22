@@ -280,9 +280,9 @@ with sync_playwright() as p:
         # A API ordena da foto mais nova para a mais antiga. A primeira da lista vira capa.
         pg.click('.cx-item[data-caixa="101"] .cx-sel'); pg.click('.cx-item[data-caixa="102"] .cx-sel')
         pg.click(".cx-barra .cx-novo"); pg.wait_for_selector("#cx-abrir-cadastro", timeout=4000)
-        chk(f"{w}: 'Cadastrar produto novo' abre a Gestão com as fotos (um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=102,101&modo=um" and pg.get_attribute("#cx-abrir-cadastro", "target") == "_blank")
+        chk(f"{w}: 'Cadastrar produto novo' abre a Gestão com as fotos (um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=102,101&modo=um&volta=esteira" and pg.get_attribute("#cx-abrir-cadastro", "target") == "_blank")
         pg.click('.folha .cx-modo[data-modo="varias"]')
-        chk(f"{w}: opção 'Vários produtos' (cada foto vira um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=102,101&modo=varias")
+        chk(f"{w}: opção 'Vários produtos' (cada foto vira um produto)", pg.get_attribute("#cx-abrir-cadastro", "href") == "admin.html?caixaFotos=102,101&modo=varias&volta=esteira")
         shot(pg, f"caixa-cadastro-folha-{w}")
         with ctx.expect_page() as pop: pg.click("#cx-abrir-cadastro")
         pop.value.close()
@@ -340,6 +340,8 @@ def admin_ctx(p, larg=390, alt=844):
     cx = {"itens": {11: {"id": 11, "url": M + "cx11.jpg", "descricao": "vestido azul, P e M", "descricaoLote": "Chegaram hoje", "por": "Bia", "status": "cadastro"}, 12: {"id": 12, "url": M + "cx12.jpg", "descricao": "", "descricaoLote": "Chegaram hoje", "por": "Bia", "status": "cadastro"}, 13: {"id": 13, "url": M + "cx13.jpg", "descricao": "", "descricaoLote": "Chegaram hoje", "por": "Bia", "status": "nova"}}, "usar": [], "lidas": []}
     def hd(route):
         u = route.request.url
+        if u.split("?")[0].endswith("/esteira.html"):   # a Esteira de verdade tem testes próprios; aqui só interessa a volta
+            return route.fulfill(body="<!doctype html><title>Esteira</title><h1 id=esteira-stub>Esteira</h1>", content_type="text/html")
         if route.request.resource_type == "image" and "/m/202611/cx" in u:   # fotos da caixa (cor fixa por foto, só para a evidência)
             return route.fulfill(body=_png_cor([(196, 120, 90), (110, 150, 120), (120, 140, 190)][int(re.search(r"cx(\d+)", u).group(1)) % 3], 120, 150), content_type="image/png")
         if "tenkiter-ig." in u and "/esteira/caixa/" in u:
@@ -360,7 +362,9 @@ with sync_playwright() as p:
     for larg, alt in ((390, 844), (1440, 900)):
         print(f"== Gestão {larg}px: um produto com as fotos da caixa ==")
         b, ctx, pg, st, log, errs, cx = admin_ctx(p, larg, alt)
-        pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12&modo=um")
+        if larg == 390:   # no app Android o cadastro abre na mesma tela da Esteira (sem aba nova)
+            pg.goto(TK_ADMIN + "esteira.html"); pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12&modo=um&volta=esteira")
+        else: pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12&modo=um")
         pg.wait_for_function("(document.getElementById('titulo-form')||{}).textContent==='Produto novo com fotos da caixa'", timeout=20000)
         chk(f"{larg}: abre o cadastro normal já com as 2 fotos (a 1ª como capa)", pg.locator("#galeria-grid .galeria-item").count() == 2 and pg.locator("#galeria-grid .galeria-item.capa").count() == 1 and pg.evaluate("document.getElementById('card-form').open"))
         al = pg.inner_text("#aviso-lote")
@@ -369,7 +373,10 @@ with sync_playwright() as p:
         pg.locator("#aviso-lote").scroll_into_view_if_needed(); pg.wait_for_timeout(300); shot(pg, f"gestao-cadastro-aviso-{larg}")
         if larg == 390:
             preencher(pg, "Vestido azul caixa")
-            pg.click("#btn-salvar"); pg.wait_for_timeout(5000)
+            pg.click("#btn-salvar")
+            try: pg.wait_for_url("**/esteira.html", timeout=15000); voltou = True
+            except Exception: voltou = False
+            chk("aberto pela Esteira: depois de salvo, volta sozinho para a Esteira na mesma tela", voltou and pg.locator("#esteira-stub").count() == 1, pg.url)
             cr = [x for x in log if x.get("action") == "create"]
             chk("produto criado com as fotos da caixa (capa e galeria, sem subir de novo)", len(cr) == 1 and cr[0].get("fotoUrlExistente") == M + "cx11.jpg" and cr[0].get("fotosGaleriaExistentes") == M + "cx12.jpg", cr[:1])
             us = cx["usar"][-1] if cx["usar"] else {}
@@ -391,6 +398,7 @@ with sync_playwright() as p:
         if larg == 390:
             preencher(pg, "Conjunto caixa")
             pg.click("#btn-salvar"); pg.wait_for_timeout(8000)
+            chk("sem vir da Esteira (link sem volta): o cadastro continua aberto na Gestão", "admin.html" in pg.url and pg.locator("#esteira-stub").count() == 0, pg.url)
             cr = [x for x in log if x.get("action") == "create"]
             fotos = sorted((c.get("fotoUrlExistente", "").split("/")[-1], c.get("fotosGaleriaExistentes", "").split("/")[-1]) for c in cr)
             chk("2 produtos: o grupo (capa + galeria) e a foto solta, pelos endereços (sem subir de novo)", len(cr) == 2 and fotos == [("cx11.jpg", "cx12.jpg"), ("cx13.jpg", "")], fotos)

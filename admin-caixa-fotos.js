@@ -18,7 +18,7 @@
       if (!x || !x.k || !Array.isArray(x.ids) || !x.ids.length || !x.produto) return; // conservar registros antigos inválidos, nunca apagar
       if (emVoo[x.k] || Date.now() < (tentarDepois[x.k] || 0)) return;
       emVoo[x.k] = 1;
-      fetch(INSTAGRAM_URL + '/esteira/caixa/usar', { method: 'POST', headers: h, body: JSON.stringify({ ids: x.ids, uso: 'criado', produto: x.produto, produtoNome: x.nome || '' }) })
+      fetch(INSTAGRAM_URL + '/esteira/caixa/usar', { method: 'POST', headers: h, keepalive: true, body: JSON.stringify({ ids: x.ids, uso: 'criado', produto: x.produto, produtoNome: x.nome || '' }) })
         .then(function (r) { if (!r.ok) throw new Error('Confirmação HTTP sem sucesso'); return r.json(); })
         .then(function (j) {
           if (!j || !j.ok) throw new Error('Confirmação não aceita pelo servidor');
@@ -53,8 +53,32 @@
   });
   setTimeout(enviarPend, 4000);
 
+  /* v7.85.0 — volta para a Esteira. No app Android a "outra aba" abre na mesma tela e a pessoa perdia a Esteira a cada produto.
+   * Aberto pela Esteira (&volta=esteira), o cadastro lembra disso nesta aba; quando o lote termina com tudo salvo, avisa e volta.
+   * Aba própria (navegador do computador): fecha e a Esteira, que ficou aberta na outra, segue onde estava. Senão abre a Esteira
+   * nesta tela; ela retoma a aba Fotos, o filtro e a rolagem guardados neste aparelho. Erro, aviso ou sem conexão: fica no cadastro. */
+  var VOLTA = 'tk_caixa_volta_esteira';
+  function lerVolta() { try { return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(VOLTA); } catch (e) { return null; } }
+  function gravarVolta(v) { try { if (typeof sessionStorage === 'undefined') return; if (v) sessionStorage.setItem(VOLTA, v); else sessionStorage.removeItem(VOLTA); } catch (e) { /* conforto */ } }
+  function voltarEsteira() {
+    // A Gestão pede transição animada entre páginas (nav.js) e a Esteira não: desliga a animação só nesta volta (evita erro de transição cancelada).
+    try { var vt = document.createElement('style'); vt.textContent = '@view-transition{navigation:none}'; document.head.appendChild(vt); } catch (e) { /* segue sem */ }
+    var proprio = (typeof history !== 'undefined') && history.length === 1;
+    if (proprio) { try { window.close(); } catch (e) { /* segue */ } }
+    setTimeout(function () { location.replace('esteira.html'); }, proprio ? 400 : 0);
+  }
+  window.addEventListener('tk:fila-terminou', function (ev) {
+    var d = ev && ev.detail; if (!d || !lerVolta()) return;
+    var itens = Array.isArray(d.itens) ? d.itens : [];
+    if (d.restam || !itens.length || !itens.some(function (x) { return !x.edicao && x.caixa; }) || !itens.every(function (x) { return x.estado === 'ok'; })) return;
+    gravarVolta('');
+    aviso((itens.length === 1 ? 'Produto cadastrado.' : itens.length + ' produtos cadastrados.') + ' Voltando para a Esteira…');
+    setTimeout(voltarEsteira, 1500);
+  });
+
   var m = /[?&]caixaFotos=([0-9,]{1,400})/.exec(location.search);
   if (!m) return;
+  if (/[?&]volta=esteira\b/.test(location.search)) gravarVolta(String(Date.now()));
   var ids = m[1].split(',').map(Number).filter(function (n) { return n > 0; }).slice(0, 60);
   var varias = /[?&]modo=varias\b/.test(location.search), tent = 0, pediuLogin = false, buscando = false;
   function limparUrl() { try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* segue */ } }
