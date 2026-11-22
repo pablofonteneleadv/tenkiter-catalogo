@@ -426,12 +426,13 @@ with sync_playwright() as p:
     pg.click("#btn-salvar-proximo")
     try: pg.wait_for_selector("#tkcx-proximas", timeout=20000); abriu = True
     except Exception: abriu = False
+    if abriu:   # 7.88.0: a escolha abre na hora; o salvamento e a lista da caixa chegam logo depois
+        pg.wait_for_selector("#tkcx-salvando.ok", timeout=20000); pg.wait_for_selector("#tkcx-proximas .tkcx-foto", timeout=20000)
     chk("salvou e abriu as próximas fotos da caixa aqui mesmo (sem voltar para a Esteira)", abriu and "admin.html" in pg.url and len([x for x in log if x.get("action") == "create"]) == 1, pg.url)
     if abriu:
         ids = pg.evaluate("[...document.querySelectorAll('#tkcx-proximas .tkcx-foto')].map(b=>Number(b.dataset.id))")
         chk("mostra só fotos novas que ainda não foram usadas (13), não as do produto salvo (11, 12)", ids == [13], ids)
         chk("'Cadastrar' só libera depois de escolher", pg.is_disabled("#tkcx-prox-ok"))
-        pg.wait_for_selector("#tkcx-salvando.ok", timeout=15000)
         chk("a folha mostra o salvamento do anterior e confirma 'salvo' (7.88.0)", "salvo" in pg.inner_text("#tkcx-salvando"))
         chk("fotos inteiras na escolha (sem corte)", pg.evaluate("getComputedStyle(document.querySelector('#tkcx-proximas .tkcx-foto img')).objectFit") == "contain")
         pg.click("#tkcx-proximas .tkcx-zoom"); pg.wait_for_selector("#tkfg.aberto", timeout=4000)
