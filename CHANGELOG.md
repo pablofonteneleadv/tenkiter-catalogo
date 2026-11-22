@@ -2,7 +2,7 @@
 
 ## 7.86.0 — Conta no canto de cima, entrar/sair em todas as telas e "Salvar e cadastrar o próximo"
 
-- **Conta no canto superior direito** da Gestão, Esteira, Currículos e da loja (só para a equipe): mostra quem está entrado e abre “Trocar de conta” e “Sair”. No RH, as duas opções ficam no menu do avatar que já existia ali.
+- **Conta no canto superior direito** da Gestão, Esteira e Currículos: mostra quem está entrado e abre “Trocar de conta” e “Sair”. No RH e na loja, que já tinham a conta no canto direito, “Trocar de conta” entrou nesse menu.
 - **Uma conta para todas as telas do aparelho:** sair ou trocar de conta numa tela vale para todas. As outras abas percebem e se atualizam sozinhas (na hora, se estão na frente; senão, quando voltam). Entrar numa tela faz as outras se atualizarem já entradas. Nunca recarrega no meio de uma gravação.
 - **Salvar e cadastrar o próximo:** no cadastro aberto com fotos da caixa, o botão salva e, em vez de voltar, mostra as fotos novas que ainda estão na caixa. Você toca nas fotos do próximo produto (até 8; a primeira vira a capa) e o cadastro reabre já com elas. Sem fotos novas, volta para a Esteira.
 - **Postagens direto:** `admin.html?abrir=postagens` abre as Postagens (usado pelo atalho do app Android).

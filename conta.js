@@ -246,22 +246,17 @@
   }
 
   /* ---------- v7.86.0 — Conta no canto superior direito (DONO: este arquivo) ----------
-   * Um botão só em todas as telas da equipe (Gestão, Esteira, RH, Currículos e a loja quando é da equipe): mostra quem está
+   * Um botão só nas telas da equipe (Gestão, Esteira, Currículos; RH, loja e candidatura usam o "Minha conta" que já têm): mostra quem está
    * entrado e abre "Trocar de conta" e "Sair". A sessão é uma só no aparelho (tm_session): sair ou trocar aqui vale para
    * todas as telas e abas; as outras percebem e se atualizam quando voltam para a frente. No app Android, avisa o app
    * (TKAndroid.sairConta) para sair também das Mensagens. A página pode:
    *   - pôr <span data-tk-conta-slot></span> onde o botão deve ficar (senão ele fica solto no canto superior direito);
    *   - definir window.TKContaLimpar() para apagar o que for só dela ao sair (sem perguntar nada);
    *   - chamar TKConta.nomeTopo('Nome') quando souber o nome (senão usa o nome guardado pela sessão rápida). */
-  var CH_SESSAO = 'tm_session', EQUIPE_ = ['catalogo_admin', 'catalogo_cadastrar', 'esteira', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais', 'gerir_acessos'];
+  var CH_SESSAO = 'tm_session';
   var nomeDado = '', topoBt = null, topoJan = null, topoPresa = null;
   function sessaoTopo() { try { var s = JSON.parse(localStorage.getItem(CH_SESSAO) || 'null'); return s && s.whatsapp && s.sessao ? s : null; } catch (e) { return null; } }
   function quemTopo() { var s = sessaoTopo(); return s ? String(s.whatsapp) : ''; }
-  function permsTopo() {
-    try { var u = window.TKUsuarioCache && TKUsuarioCache.ler(); if (u && Array.isArray(u.permissoes)) return u.permissoes; } catch (e) { /* segue */ }
-    try { var c = JSON.parse(localStorage.getItem('tm_nav_perms') || 'null'); if (c && c.w === quemTopo() && Array.isArray(c.p)) return c.p; } catch (e) { /* segue */ }
-    return null;
-  }
   function nomeTopoAtual() {
     if (nomeDado) return nomeDado;
     try { var u = window.TKUsuarioCache && TKUsuarioCache.ler(); if (u && u.nome) return u.nome; } catch (e) { /* segue */ }
@@ -270,14 +265,12 @@
   function telaDaLoja() { return /(^|\/)((index|curriculo)\.html)?$/.test(location.pathname); }   // loja e candidatura: só para a equipe
   function mostrarTopo() {
     if (!sessaoTopo() || window.top !== window.self || /[?&]embed=1/.test(location.search) || document.documentElement.getAttribute('data-tk-conta') === 'nao') return false;
-    if (!telaDaLoja()) return true;
-    var p = permsTopo(); return !!(p && p.some(function (k) { return EQUIPE_.indexOf(k) >= 0; }));   // na loja, só para a equipe
+    return !telaDaLoja();   // a loja e a candidatura já têm "Minha conta" no canto direito, com Trocar de conta e Sair
   }
   function cssTopo() {
     if (document.getElementById('tkc-topo-css')) return;
     var s = document.createElement('style'); s.id = 'tkc-topo-css';
     s.textContent = 'button.tkc-topo{width:auto!important;flex:0 0 auto;margin:0;display:inline-flex;align-items:center;gap:6px;min-height:44px;max-width:46vw;padding:0 12px 0 8px;border:1px solid #d8d2c8!important;border-radius:22px!important;background:#fff!important;color:#1a1a1a!important;font:600 .9rem/1.1 inherit;cursor:pointer;white-space:nowrap;box-shadow:none}' +
-      '.header-icones:has(.tkc-topo) #btn-conta-header{display:none!important}' +   /* loja: para a equipe, este botão substitui o "Minha conta" do topo (continua no menu) */
       '.tkc-topo.tkc-solto{position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);right:8px;z-index:var(--z-sticky,20);box-shadow:0 1px 4px rgba(0,0,0,.12)}' +
       '.tkc-topo .tkc-av{flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:#1a1a1a;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800}' +
       '.tkc-topo .tkc-nm{overflow:hidden;text-overflow:ellipsis}' +

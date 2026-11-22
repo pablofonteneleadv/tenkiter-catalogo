@@ -350,7 +350,7 @@
   /* v4.20: a foto/vídeo começa a subir assim que é escolhida; este selo mostra como está */
   .pre-badge { position: absolute; right: 4px; top: 24px; border: 0; font: inherit; font-size: 0.6rem; font-weight: 800; padding: 1px 6px; border-radius: 6px; background: #333; color: #fff; width: auto; min-height: 0; line-height: 1.5; }
   .pre-badge.ok { background: #1b6e3c; } .pre-badge.erro { background: #b3151b; cursor: pointer; } .pre-badge.subindo { background: #0d0d0d; }
-  .pre-badge:disabled { opacity: 1; cursor: default; }
+  .pre-badge:disabled { opacity: 1; cursor: default; pointer-events: none; min-height: 0 !important; }   /* v7.86.0: selo só informativo ("✓ enviada") não é alvo de toque: crescia para 44 px e cobria o centro da foto, que não marcava no "Unir fotos" */
   .pre-badge.pre-inline { position: static; align-self: flex-start; font-size: .75rem; padding: 3px 9px; }
   .galeria-item .mover { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; border-radius: 0 0 6px 6px; overflow: hidden; }
   .galeria-item .mover button { flex: 1; height: 24px; border: none; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 24px; }

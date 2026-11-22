@@ -22,7 +22,7 @@ def chk(nome, cond, det=None):
     if cond: ok += 1; print("  ✔", nome)
     else: falhas.append(nome); print("  ✘", nome, "—", det)
 ANDROID = "window.TKAndroid={abrirModulo:function(h){(window.__abriu=window.__abriu||[]).push(h);return true},sairConta:function(){window.__saiu=(window.__saiu||0)+1}};"
-TELAS = [("admin.html", "Gestão"), ("curriculos.html", "Currículos"), ("index.html", "Loja (equipe)")]
+TELAS = [("admin.html", "Gestão"), ("curriculos.html", "Currículos")]
 
 def novo_ctx(b, larg, alt, sessao=True, extra=None, perms=PERMS_ALL):
     ctx = b.new_context(viewport={"width": larg, "height": alt}, is_mobile=larg < 600, has_touch=larg < 600, service_workers="block")
@@ -97,8 +97,15 @@ with sync_playwright() as p:
     chk("sem sessão: sem botão de conta", pg.locator("#tkc-topo").count() == 0); ctx.close()
     ctx = novo_ctx(b, 390, 844); pg = ctx.new_page(); pg.goto(BASE + "curriculos.html?embed=1&tkapp=1"); pg.wait_for_timeout(2500)
     chk("dentro do app unificado (embed): sem segundo botão", pg.locator("#tkc-topo").count() == 0); ctx.close()
-    ctx = novo_ctx(b, 390, 844, perms=["portal"]); pg = ctx.new_page(); pg.goto(BASE + "index.html"); pg.wait_for_timeout(4000)
-    chk("loja com conta de cliente: sem o botão da equipe", pg.locator("#tkc-topo").count() == 0); ctx.close()
+    ctx = novo_ctx(b, 390, 844); pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.goto(BASE + "index.html"); pg.wait_for_selector("#btn-conta-header", state="visible", timeout=20000); pg.wait_for_timeout(1500)
+    chk("loja: sem segundo botão; o 'Minha conta' do canto direito continua", pg.locator("#tkc-topo").count() == 0 and pg.is_visible("#btn-conta-header"))
+    pg.click("#btn-conta-header"); pg.wait_for_selector("#conta-trocar", state="visible", timeout=6000)
+    pg.screenshot(path=str(EVID / "loja-minha-conta-390.jpg"), type="jpeg", quality=78)
+    chk("loja: Minha conta tem Trocar de conta e Sair da conta", pg.is_visible("#conta-trocar") and pg.is_visible("#conta-sair"))
+    pg.on("dialog", lambda d: d.accept()); pg.click("#conta-trocar"); pg.wait_for_timeout(600)
+    chk("loja: Trocar de conta sai e mostra o Entrar na mesma janela", pg.evaluate("localStorage.getItem('tm_session')") is None and pg.locator("#conta-whats").count() == 1)
+    chk("loja: sem erro de JavaScript", not erros, erros); ctx.close()
 
     print("== app Android (TKAndroid simulado) ==")
     ctx = novo_ctx(b, 390, 844, extra=ANDROID); pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))

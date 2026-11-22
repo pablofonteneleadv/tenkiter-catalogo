@@ -12,6 +12,7 @@
   function lerPend() { try { var l = JSON.parse(localStorage.getItem(CHAVE) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
   function gravarPend(l) { try { localStorage.setItem(CHAVE, JSON.stringify(l.slice(-50))); } catch (e) { /* conforto */ } }
   var emVoo = {}, falhas = {}, tentarDepois = {}, avisouPendencia = false;
+  var usadasAgora = [];
   function enviarPend() {
     var h = cab(), l = lerPend(); if (!h || !l.length || typeof INSTAGRAM_URL === 'undefined') return;
     l.forEach(function (x) {
@@ -49,6 +50,7 @@
     var ids = String(d.rascunhoId).slice(6).split('.').map(Number).filter(function (n) { return n > 0; });
     if (!ids.length || !(d.id || d.codigo)) return;
     var l = lerPend(); l.push({ k: String(d.rascunhoId) + ':' + (d.id || d.codigo), ids: ids, produto: String(d.id || d.codigo), nome: String(d.codigo || '') }); gravarPend(l);
+    usadasAgora = usadasAgora.concat(ids);   // v7.86.0: o "próximo" não oferece de novo as fotos que acabaram de ser usadas
     enviarPend();
   });
   setTimeout(enviarPend, 4000);
@@ -154,11 +156,6 @@
     if (window.TKJanela) presa = TKJanela.prender(jan, { fechar: fecharFolha, camada: 'tkcx-proximas', foco: '.tkcx-foto' });
     pintar();
   }
-  var usadasAgora = [];
-  window.addEventListener('tk:peca-salva', function (ev) {
-    var d = ev && ev.detail; if (!d || !/^caixa:[0-9.]+$/.test(String(d.rascunhoId || ''))) return;
-    String(d.rascunhoId).slice(6).split('.').forEach(function (n) { if (Number(n) > 0) usadasAgora.push(Number(n)); });
-  });
   window.addEventListener('tk:fila-terminou', function (ev) {
     var d = ev && ev.detail; if (!d) return;
     var itens = Array.isArray(d.itens) ? d.itens : [];
