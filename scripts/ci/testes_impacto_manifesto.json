@@ -94,6 +94,12 @@
     "tests/esteira_sessao_renovada_ui.py": [
       "esteira"
     ],
+    "tests/sessao_renovada_telas_ui.py": [
+      "catalogo",
+      "mensagens",
+      "postagens",
+      "treinamentos"
+    ],
     "tests/esteira_lote_arquivo_ui.py": [
       "esteira"
     ],

@@ -472,7 +472,7 @@
     }
 
     // VIT-1/VIT-3 — tamanho em botões dentro do cartão.
-    const tamanhosApresentados = TKTamanhos.cliente(textoPlano(p.Tamanhos || ''), p.Genero);
+    const tamanhosApresentados = (window.TKTamanhos ? TKTamanhos.cliente(textoPlano(p.Tamanhos || ''), p.Genero) : { valores: [], titulo: 'Tamanhos', tipo: '' });
     const tamanhos = tamanhosApresentados.valores;
     if (!esgotado && tamanhos.length && !info.querySelector('.tam-card')) {
       const box = document.createElement('div');
@@ -589,7 +589,7 @@
       bloco.appendChild(box);
     };
 
-    const tamanhosApresentados = TKTamanhos.cliente(textoPlano(p.Tamanhos || ''), p.Genero);
+    const tamanhosApresentados = (window.TKTamanhos ? TKTamanhos.cliente(textoPlano(p.Tamanhos || ''), p.Genero) : { valores: [], titulo: 'Tamanhos', tipo: '' });
     linha('tam', tamanhosApresentados.tipo === 'idade' ? 'Idade' : tamanhosApresentados.tipo === 'numero' ? 'Numeração' : 'Tamanho', tamanhosApresentados.valores);
     linha('cor', 'Cor', listaDeTags(textoPlano(p.Cores || '')));
 

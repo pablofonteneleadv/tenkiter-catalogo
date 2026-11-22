@@ -146,6 +146,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("esteira_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_fotos_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_sessao_renovada_ui.py", lambda o: "FALHAS=0" in o),   # v7.88.1: código de sessão renovado por outra tela não deixa a Esteira em branco
+    ("sessao_renovada_telas_ui.py", lambda o: "FALHAS=0" in o),     # v7.89.1: renovação do login e arquivo de tamanhos ausente não deixam nenhuma tela vazia
     ("conta_topo_ui.py", lambda o: "FALHAS=0" in o),
     ("telas_enxutas_ui.py", lambda o: "FALHAS=0" in o),
     ("familias_varias_ui.py", lambda o: "FALHAS=0" in o),   # v7.89.0: famílias no "vários produtos" e família ao copiar dados   # v7.87.0: Gestão/RH/Esteira mais enxutas no celular e topo do app sem somar a barra de status   # v7.86.0: conta no canto superior direito, sair/entrar em todas as telas, janelas do app   # v7.51.0: aba Fotos da Esteira, caixa de fotos (envio em lote, retomada, gestor) e cadastro na Gestão com as fotos
