@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.87.0 — Telas mais enxutas no celular e topo do app sem faixa vazia
+
+- **Gestão no celular** (proposta aprovada pelo Pablo): some a barra “Atendente: … | Sair” (o nome e o Sair estão no botão de conta do topo), os números viram uma faixa baixa, “O que fazer agora” fica numa linha com 4 botões, sai o atalho “Ferramentas do gestor” repetido e a linha “Gestão & Atendimento do Catálogo”. O primeiro produto da lista já aparece inteiro na primeira tela.
+- **RH no celular:** título menor e sem a frase de explicação. **Esteira:** cartões mais justos.
+- Toques continuam com 44 px, campos com letra 16 e todas as funções; no computador nada muda. Capturas em `docs/ux/telas-enxutas-20261122`.
+- **Topo “flutuante” no app (relato do Pablo no RH):** dentro do app Android da loja, as páginas somavam a barra de status de novo (faixa vazia em cima e o topo cobrindo o título). Agora o recuo do topo é uma variável única (`--tk-seguro-topo`), que vale 0 dentro do app; no navegador continua igual.
+
 ## 7.86.0 — Conta no canto de cima, entrar/sair em todas as telas e "Salvar e cadastrar o próximo"
 
 - **Conta no canto superior direito** da Gestão, Esteira e Currículos: mostra quem está entrado e abre “Trocar de conta” e “Sair”. No RH e na loja, que já tinham a conta no canto direito, “Trocar de conta” entrou nesse menu.

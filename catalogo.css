@@ -661,7 +661,7 @@
 /* Filtros da vitrine: linguagem visual da referencia, sem mudar a logica dos filtros. */
 @media(max-width:600px){
  .filtros.aberto .filtros-extras,.filtros.compacto.aberto .filtros-extras{
-  background:#fff;border-radius:22px 22px 0 0;top:env(safe-area-inset-top,0px);
+  background:#fff;border-radius:22px 22px 0 0;top:var(--tk-seguro-topo,env(safe-area-inset-top,0px));
  }
  .filtros.aberto .fx-topo{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:12px;padding:22px 16px 13px;background:#fff;border-bottom:0;min-height:82px}
  .filtros .fx-topo strong{font-size:1.55rem;font-weight:800;letter-spacing:-.04em;color:#101010}

@@ -15,6 +15,8 @@
  * optional chaining. Nenhuma mudança de comportamento: os mesmos seletores, a mesma ordem e os
  * mesmos efeitos. O arquivo continua sendo um IIFE com 'use strict' (nada vaza para o global).
  * ==================================================================== */
+// v7.87.0: dentro do app Android da loja o topo não soma a barra de status de novo (ver --tk-seguro-topo em tk-padrao.css).
+try { if (/TenkiterAndroid/.test(navigator.userAgent)) document.documentElement.classList.add('tk-app-android'); } catch (e) { /* segue */ }
 (() => {
   'use strict';
 

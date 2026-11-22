@@ -37,7 +37,10 @@ try:
         c=context(b,w,h);pg=c.new_page();errs=[];pg.on('pageerror',lambda e:errs.append(str(e)))
         pg.goto(os.environ['TK_BASE']+'admin.html');pg.wait_for_selector('#lista-produtos .produto')
         shortcut=pg.locator('[data-atalho="ferramentas"]');expect(shortcut).to_have_text(re.compile('Ferramentas do gestor'))
-        shortcut.focus();shortcut.press('Enter');expect(pg.locator('#details-ferramentas')).to_have_attribute('open','')
+        # v7.87.0 (aprovado pelo Pablo): no celular o atalho repetido sai; a faixa "Ferramentas do gestor" logo abaixo abre as mesmas ferramentas pelo teclado.
+        if w<600:expect(shortcut).to_be_hidden();abre=pg.locator('#details-ferramentas > summary');abre.focus();abre.press('Enter')
+        else:shortcut.focus();shortcut.press('Enter')
+        expect(pg.locator('#details-ferramentas')).to_have_attribute('open','')
         assert pg.locator('#details-ferramentas .ferr-txt small').first.evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')>=14
         targets=touch_targets(pg,'#details-ferramentas .ferr-tile,#atalhos-hoje button')
         assert targets and all(t['h']>=44 and t['w']>=44 for t in targets),targets

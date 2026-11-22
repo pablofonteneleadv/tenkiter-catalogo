@@ -75,7 +75,7 @@ button{font-family:inherit;}
 
 /* ---------- top bar ---------- */
 .topbar{
-  position:sticky; top:env(safe-area-inset-top,0px); z-index: var(--z-sticky, 20);
+  position:sticky; top:var(--tk-seguro-topo,env(safe-area-inset-top,0px)); z-index: var(--z-sticky, 20);
   display:flex; align-items:center; justify-content:space-between;
   padding:14px 20px; background:var(--surface); border-bottom:1px solid var(--border);
   gap:12px; flex-wrap:wrap;
@@ -100,7 +100,7 @@ button{font-family:inherit;}
 .shell{flex:1; display:flex; max-width:1180px; margin:0 auto; width:100%;}
 .sidebar{
   width:270px; flex-shrink:0; padding:22px 14px; border-right:1px solid var(--border);
-  position:sticky; top:calc(61px + env(safe-area-inset-top,0px)); align-self:flex-start;
+  position:sticky; top:calc(61px + var(--tk-seguro-topo,env(safe-area-inset-top,0px))); align-self:flex-start;
   max-height:calc(100vh - 61px); overflow-y:auto;
 }
 .main{flex:1; min-width:0; padding:28px 24px 80px;}
@@ -147,6 +147,8 @@ button{font-family:inherit;}
 .hero{margin-bottom:14px;}
 .hero h1{font-size:1.45rem; margin:0 0 3px;}
 .hero p{color:var(--muted); margin:0; font-size:0.98rem;}
+/* v7.87.0 — painel do RH mais enxuto no celular (proposta aprovada pelo Pablo, 22/11/2026): título menor, sem a frase de explicação. */
+@media (max-width:600px){.hero.hero-rh{margin-bottom:6px;padding-top:2px}.hero.hero-rh h1{font-size:1.3rem !important;margin:0}.hero.hero-rh p{display:none}}
 .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px;}
 .card{
   background:var(--surface); border:1px solid var(--border); border-radius:11px; padding:13px 14px;
@@ -518,7 +520,7 @@ details.manual-card[open]>summary::after{content:'▴';}
 <script src="avisos.js?v=7.66.0"></script>
 <script src="rh-permissoes.js?v=7.61.0"></script>
 <link rel="stylesheet" href="janelas.css?v=7.65.0">
-<link rel="stylesheet" href="tk-padrao.css?v=7.65.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.87.0">
 </head>
 <body class="pg-treinamentos">
 
@@ -2376,7 +2378,7 @@ function renderAdminPanel(){
     body = renderTabEquipe();
   }
   return '<div class="admin-shell">' +
-    '<div class="hero"><h1>Painel do RH / Admin</h1><p>Gestão da equipe, acompanhamento das avaliações e configuração dos manuais.</p></div>' +
+    '<div class="hero hero-rh"><h1>Painel do RH / Admin</h1><p>Gestão da equipe, acompanhamento das avaliações e configuração dos manuais.</p></div>' +
     '<nav class="admin-tabs tk-abas" role="tablist" aria-label="Áreas do RH">' + tabsHtml + '</nav>' +
     body +
   '</div>';
@@ -3557,8 +3559,8 @@ function telaSemConexao_(){
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="icones.js?v=7.17.0"></script>
 <script src="nav.js?v=7.86.0" data-ativo="treinamentos"></script>
-<script src="a11y.js?v=7.62.1"></script>
-<script src="conta.js?v=7.86.0"></script>
+<script src="a11y.js?v=7.87.0"></script>
+<script src="conta.js?v=7.87.0"></script>
 <script src="push.js?v=7.63.0"></script>
 </body>
 </html>
