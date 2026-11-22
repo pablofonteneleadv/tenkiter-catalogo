@@ -25,6 +25,7 @@ import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * App único com janelas separadas (2.5.0). Cada área do site tem ícone próprio e abre na sua própria janela do Android
@@ -120,7 +121,7 @@ object JanelasVisiveis {
  * "Arrastar a tela para baixo atualiza", como no Chrome: só quando a página está no topo, sem lista ou janela própria
  * rolada embaixo do dedo, sem janela aberta (fundo travado) e sem gravação em andamento (TKOcupado).
  */
-const val SCRIPT_PUXAR = """(function(){if(window.__tkPuxar)return;window.__tkPuxar=1;
+const val SCRIPT_PUXAR = """(function(){try{document.documentElement.classList.add('tk-app-android')}catch(_){}if(window.__tkPuxar)return;window.__tkPuxar=1;
 function rolado(el){for(;el&&el.nodeType===1&&el!==document.body&&el!==document.documentElement;el=el.parentElement){if(el.scrollTop>0){var o=getComputedStyle(el).overflowY;if(o==='auto'||o==='scroll'||o==='overlay')return true}}return false}
 function pode(t){try{var h=document.documentElement;if(h.classList.contains('tk-travado'))return false;if(getComputedStyle(h).overscrollBehaviorY==='contain')return false;if(document.body&&getComputedStyle(document.body).overscrollBehaviorY==='contain')return false;if(window!==window.top){var se=document.scrollingElement||h;if(se.scrollTop>0)return false}return !rolado(t)}catch(e){return true}}
 addEventListener('touchstart',function(e){try{window.TKAndroid&&TKAndroid.podeAtualizar&&TKAndroid.podeAtualizar(pode(e.target))}catch(_){}},{capture:true,passive:true});})();"""
@@ -175,7 +176,12 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
 
     override fun onNewIntent(i: Intent) {
         super.onNewIntent(i); setIntent(i)
-        enderecoDe(i)?.let { web.loadUrl(it) }   // sem endereço: só volta para a frente, do jeito que estava
+        val u = enderecoDe(i) ?: return   // sem endereço: só volta para a frente, do jeito que estava
+        // 2.5.3: a página já aberta trata o endereço sem recarregar quando sabe (ex.: Gestão abre o cadastro com as fotos da
+        // caixa na hora, em vez de baixar a Gestão inteira de novo a cada produto). Se não souber, carrega como antes.
+        if (Modulo.doSite(web.url) && Modulo.paraUrl(web.url) == modulo) {
+            web.evaluateJavascript("(function(u){try{return !!(window.tkAbrirCaixaFotos&&window.tkAbrirCaixaFotos(u))}catch(e){return false}})(" + JSONObject.quote(u) + ")") { r -> if (r != "true") web.loadUrl(u) }
+        } else web.loadUrl(u)
     }
 
     private fun configurar(w: WebView) {
