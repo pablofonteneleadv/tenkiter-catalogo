@@ -154,7 +154,9 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         ViewCompat.setOnApplyWindowInsetsListener(raiz) { v, i ->
             val barras = i.getInsets(WindowInsetsCompat.Type.systemBars()); val teclado = i.getInsets(WindowInsetsCompat.Type.ime())
-            v.setPadding(barras.left, barras.top, barras.right, maxOf(barras.bottom, teclado.bottom)); i
+            v.setPadding(barras.left, barras.top, barras.right, maxOf(barras.bottom, teclado.bottom))
+            // 2.5.1: a janela já desconta a barra de status; a página não recebe de novo (env(safe-area-inset-top) somava duas vezes e o topo cobria o título).
+            WindowInsetsCompat.CONSUMED
         }
         web = WebView(this)
         configurar(web)
