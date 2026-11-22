@@ -350,7 +350,7 @@
   /* v4.20: a foto/vídeo começa a subir assim que é escolhida; este selo mostra como está */
   .pre-badge { position: absolute; right: 4px; top: 24px; border: 0; font: inherit; font-size: 0.6rem; font-weight: 800; padding: 1px 6px; border-radius: 6px; background: #333; color: #fff; width: auto; min-height: 0; line-height: 1.5; }
   .pre-badge.ok { background: #1b6e3c; } .pre-badge.erro { background: #b3151b; cursor: pointer; } .pre-badge.subindo { background: #0d0d0d; }
-  .pre-badge:disabled { opacity: 1; cursor: default; }
+  .pre-badge:disabled { opacity: 1; cursor: default; pointer-events: none; min-height: 0 !important; }   /* v7.86.0: selo só informativo ("✓ enviada") não é alvo de toque: crescia para 44 px e cobria o centro da foto, que não marcava no "Unir fotos" */
   .pre-badge.pre-inline { position: static; align-self: flex-start; font-size: .75rem; padding: 3px 9px; }
   .galeria-item .mover { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; border-radius: 0 0 6px 6px; overflow: hidden; }
   .galeria-item .mover button { flex: 1; height: 24px; border: none; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 24px; }
@@ -1999,6 +1999,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   document.getElementById('btn-trocar-user').addEventListener('click', identificarFuncionario);
 
+  // v7.86.0: "Sair" / "Trocar de conta" do botão de conta (conta.js) limpa também o PIN desta aba.
+  window.TKContaLimpar = () => { try { sessionStorage.removeItem('tenkiter_admin_pin'); } catch (e) {} };
   document.getElementById('btn-sair').addEventListener('click', () => {
     if (confirm(modoLogin ? 'Sair da conta? Você também sai do portal de treinamento neste aparelho.' : 'Sair do painel? Será preciso digitar o PIN novamente da próxima vez.')) {
       sessionStorage.removeItem('tenkiter_admin_pin');
@@ -6569,7 +6571,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-fila.js?v=7.70.0"></script>
 <script src="admin-mensagens.js?v=7.83.0"></script>
 <script src="admin-instagram.js?v=7.63.0"></script>
-<script src="admin-caixa-fotos.js?v=7.85.0"></script>
+<script src="admin-caixa-fotos.js?v=7.86.0"></script>
 <link rel="stylesheet" href="pedir-fotos.css?v=7.61.0">
 <script src="pedir-fotos.js?v=7.58.1"></script>
 <script src="video-validation.js?v=7.58.1"></script>
@@ -6579,7 +6581,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-fotoia.js?v=7.57.0"></script>
 <script src="admin-enquadrar.js?v=7.83.1"></script>
 <script src="admin-capa-video.js"></script>
-<script src="nav.js?v=7.61.0" data-ativo="gestao"></script>
+<script src="nav.js?v=7.86.0" data-ativo="gestao"></script>
 <script>
 /* v7.19: acabamento das ferramentas do gestor.
  * 1) Títulos das janelas: o emoji do começo vira ícone de linha (os títulos são escritos por vários scripts; aqui só troca a aparência).
@@ -6626,7 +6628,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 })();
 </script>
 <script src="a11y.js?v=7.62.1"></script>
-<script src="conta.js"></script>
+<script src="conta.js?v=7.86.0"></script>
 <script src="push.js?v=7.63.0"></script>
 
 <script>
@@ -6693,6 +6695,15 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       }, 500);
     }
   } catch(e) {}
+  // v7.86.0: admin.html?abrir=postagens abre direto as Postagens (atalho "Postagens" do app Android). Espera o botão liberar pela permissão; o endereço fica, para atualizar reabrir as Postagens.
+  try { if (/[?&]abrir=postagens\b/.test(location.search)) { var tPost = 0, iPost = setInterval(function(){
+    // Só clica quando as Postagens já carregaram (tkPostarPecas e a lista de produtos); confere se o painel abriu e tenta de novo se não abriu.
+    var bt=$('btn-abrir-postagens'), ov=$('overlay-postagens'); tPost++;
+    if (ov && ov.classList.contains('aberto')) { clearInterval(iPost); return; }
+    var pronto = bt && !bt.hidden && !document.body.classList.contains('sem-postador') && typeof window.tkPostarPecas === 'function' && (typeof produtos !== 'undefined') && produtos && produtos.length;
+    if (pronto && (!window.__tkPostClique || Date.now() - window.__tkPostClique > 6000)) { window.__tkPostClique = Date.now(); var d=$('details-ferramentas'); if(d) d.open=true; bt.click(); }   // o painel abre depois de carregar: um clique, e só repete se não abriu em 6 s
+    else if (tPost > 80) { clearInterval(iPost); if (window.TKAviso && getSessao()) TKAviso.info('As Postagens não estão liberadas para a sua conta.'); }
+  }, 500); } } catch(e) {}
   // vindo do catálogo (botão "➕ Cadastrar nova peça"): abre o MESMO cartão de cadastro daqui, sem cópia da função
   try { if (/[?&]novo=1/.test(location.search)) { setTimeout(function(){ var c=$('card-form'); if(c){ c.open=true; c.scrollIntoView({block:'start'}); } try{ history.replaceState(history.state,'',location.pathname); }catch(e){} }, 900); } } catch(e) {}
   // v4.10 (FE-03): mostra "Produtos para aceitar" no menu Cadastrar quando houver algo esperando (a faixa do Instagram é a fonte)

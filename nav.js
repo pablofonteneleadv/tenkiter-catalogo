@@ -318,9 +318,16 @@
   if (_tag) ativoId = _tag.getAttribute('data-ativo') || '';
   // Guarda de saída: a página pode definir window.TKSairBloqueio = function () { return 'texto' | '' }.
   // Se devolver texto (ex.: envios em andamento), tocar na barra pede confirmação antes de sair.
+  // v7.86.0: no app Android cada área tem janela própria. A barra abre (ou traz para a frente) a janela da área,
+  // sem sair desta: o trabalho daqui continua aberto. Fora do app, nada muda.
+  const janelaDoApp = (href) => {
+    try { if (!(window.TKAndroid && typeof window.TKAndroid.abrirModulo === 'function')) return false; return window.TKAndroid.abrirModulo(new URL(href, location.href).href) !== false; } catch (e) { return false; }
+  };
   document.addEventListener('click', (ev) => {
     const a = ev.target?.closest ? ev.target.closest('a[data-nav]') : null;
     if (!a) return;
+    const itApp = a.target !== '_blank' && ITENS.find((x) => x.id === a.dataset.nav);
+    if (itApp && itApp.id !== ativoId && janelaDoApp(itApp.href)) { ev.preventDefault(); ev.stopPropagation(); return; }
     const msg = bloquearSaidaAtiva();
     if (msg && !window.confirm(msg)) { ev.preventDefault(); ev.stopPropagation(); return; }
     if (!appDisponivel() || ev.button > 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || a.target === '_blank') return;
@@ -339,6 +346,7 @@
     if (ev.origin !== location.origin || ev.data?.tipo !== 'tk-app-navegar') return;
     const it = itemDaUrl(ev.data.href || '');
     if (!it || it.id === ativoId) return;
+    if (janelaDoApp(ev.data.href || it.href)) return;
     const msg = bloquearSaidaAtiva();
     if (!msg || window.confirm(msg)) mostrarRota(it, 'push');
   });

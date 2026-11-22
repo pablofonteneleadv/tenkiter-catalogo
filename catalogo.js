@@ -1527,8 +1527,12 @@ try { tkSelExpirar_(); } catch (e) {}
         }
         if (window.TKFotoCliente) corpo.appendChild(TKFotoCliente.bloco());
         const sair = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-sair', text: 'Sair da conta' });
-        sair.addEventListener('click', () => { limparSessao(); if (window.TKUsuarioCache) TKUsuarioCache.limpar(); usuario = null; definirEquipe_(null); atualizarBotao(); fecharConta_(); });
-        corpo.appendChild(sair);
+        // v7.86.0: sair/trocar vale para todas as telas do aparelho (as outras abas se atualizam; no app, sai também das Mensagens).
+        const sairDeTudo_ = () => { limparSessao(); if (window.TKUsuarioCache) TKUsuarioCache.limpar(); try { if (window.TKAndroid && typeof TKAndroid.sairConta === 'function') TKAndroid.sairConta(); } catch (e) {} usuario = null; definirEquipe_(null); atualizarBotao(); };
+        const trocar = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-trocar', text: 'Trocar de conta' });
+        trocar.addEventListener('click', () => { if (!confirm('Trocar de conta? Você sai desta conta em todas as telas deste aparelho e entra com outra.')) return; sairDeTudo_(); aba = 'entrar'; desenhar(); });
+        sair.addEventListener('click', () => { sairDeTudo_(); fecharConta_(); });
+        corpo.appendChild(trocar); corpo.appendChild(sair);
         return;
       }
       corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Minha conta' }));
