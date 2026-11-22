@@ -109,7 +109,7 @@
    if (!k || !valida()) return;
    // Apenas o identificador derivado e a aba ficam fora do IndexedDB.
    // Isso permite validar a sessão enquanto o banco está abrindo.
-   try {localStorage.setItem(chaveAba, JSON.stringify({chave:k, aba:item.aba, em:item.em, filtro:item.filtro}));} catch (_) {}
+   try {localStorage.setItem(chaveAba, JSON.stringify({chave:k, aba:item.aba, em:Math.max(Number(item.em)||0,Number(dica(k)?.em)||0), filtro:item.filtro, rolagem:item.rolagem}));} catch (_) {}
    await transacao('readwrite',st=>{
     if (!valida()) return;
     st.put(item,k);
@@ -128,6 +128,12 @@
    try {if (dica(k)) localStorage.removeItem(chaveAba);} catch (_) {}
    await transacao('readwrite',st=>st.delete(k));
   }
-  return {ler,gravar,limpar,ultimaAba};
+  /** v7.88.0: marca a aba, o filtro e a rolagem na hora em que a pessoa sai da Esteira (vale mesmo se os dados já ficaram velhos).
+   *  Assim, se a tela recarregar (ex.: o Android liberou memória enquanto ela cadastrava na Gestão), volta onde estava. */
+  async function marcarAba(s, aba, filtro, rolagem){
+   const k=await chave(s); if(!k||!aba)return;
+   try {const v=dica(k)||{};localStorage.setItem(chaveAba, JSON.stringify({chave:k, aba, em:Date.now(), filtro:filtro||v.filtro, rolagem:Math.max(0,Math.round(Number(rolagem)||0))}));} catch (_) {}
+  }
+  return {ler,gravar,limpar,ultimaAba,marcarAba};
  };
 })();

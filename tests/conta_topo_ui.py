@@ -112,10 +112,15 @@ with sync_playwright() as p:
 
     print("== atalho Postagens (admin.html?abrir=postagens) ==")
     ctx = novo_ctx(b, 390, 844); pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
-    pg.goto(BASE + "admin.html?abrir=postagens")
+    pg.goto(BASE + "admin.html?abrir=postagens", wait_until="commit")
+    try: pg.wait_for_selector("html.tk-abrindo-postagens #tkcx-espera:not([hidden])", timeout=8000); escondeu = True
+    except Exception: escondeu = False
+    chk("atalho Postagens: a Gestão fica escondida e aparece 'Abrindo as Postagens…' com animação (7.88.0)", escondeu and "Postagens" in pg.inner_text("#tkcx-espera"))
     try: pg.wait_for_selector("#overlay-postagens.aberto", timeout=25000); abriu = True
     except Exception: abriu = False
     chk("abrir=postagens abre o painel de Postagens sozinho", abriu)
+    pg.wait_for_timeout(600)
+    chk("depois que as Postagens abrem, o aviso some e a Gestão volta a existir por trás", pg.evaluate("!document.documentElement.classList.contains('tk-abrindo-postagens') && (!document.getElementById('tkcx-espera') || document.getElementById('tkcx-espera').hidden)"))
     pg.wait_for_timeout(7000)
     chk("o painel continua aberto (não abre e fecha) e o endereço guarda o atalho para atualizar", pg.locator("#overlay-postagens.aberto").count() == 1 and "abrir=postagens" in pg.url, pg.url)
     chk("Postagens: sem erro de JavaScript", not erros, erros); ctx.close()

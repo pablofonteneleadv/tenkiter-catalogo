@@ -306,7 +306,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 <script src="mini-foto.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="catalogo-tecido.js?v=7.83.0"></script>
-<script src="esteira-fluidez.js?v=7.80.0"></script>
+<script src="esteira-fluidez.js?v=7.88.0"></script>
 <script src="esteira-processos.js?v=7.54.0"></script>
 <script>
 (function () {
@@ -394,6 +394,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   }
   function salvarRetomada() {
     const sessao = sessaoAtual, aba = ABA;
+    if (sessao && aba && EU && app.dataset.tela === aba) void retomada.marcarAba(sessao, aba, CAIXA_VER, window.scrollY);
     if (contextoRecuperado || app.dataset.tela!==aba || !acessoTela || diaTela !== diaLoja() || !mesmaConta(sessao) || !EU || !fluidez.pronta(aba) || !fluidez.visivel()) return;
     const paginasCaixa = aba === 'fotos' ? caixaRenderizada.get($('caixa')) : null;
     if (aba === 'fotos' && !paginasCaixa) return;
@@ -482,7 +483,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     fluidez.invalidar(null, tarefa ? leiturasDeTarefa : undefined);
   }
   let ultimoClique=null,interacao=0;document.addEventListener('click',e=>{interacao++;ultimoClique=e.target.closest('button')},true);document.addEventListener('input',()=>{interacao++;},true);document.addEventListener('change',()=>{interacao++;},true);
-  const processos=TKEsteiraProcessos({dono:()=>getSessao()?.whatsapp,worker:workerProcesso,executores:{acao:executarAcao,conferir:executarConferencia,aceitar:executarAceite,fotos:executarFotos,caixa:executarCaixa,colocar:executarColocar,pedido:executarPedido,aplicar:executarAplicacao},aoConcluir:j=>{if(j.tipo==='acao'){invalidarAcao(j.dados.rota);return;}if(j.tipo==='fotos'&&j.dados.tarefas?.length){fluidez.invalidar($('fotos-pedidas'));fluidez.invalidar($('fotos-pedidas-hoje'));document.querySelectorAll('.pedido-fotos[data-produto="'+CSS.escape(j.dados.produto)+'"] [role=status]').forEach(st=>{st.hidden=false;st.textContent=j.resultado.fotos+' fotos adicionadas ao produto. Pedido concluído.'})}if(j.tipo==='colocar'){AVISO_FOTOS=j.dados.urls.length+' foto'+(j.dados.urls.length===1?' colocada':'s colocadas')+' em '+j.dados.produtoNome+'.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}if(j.tipo==='caixa'){AVISO_FOTOS=j.dados.fotos.length+(j.dados.fotos.length===1?' foto enviada':' fotos enviadas')+' para a caixa.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}refrescarDepois();},aoErro:m=>{const e=$('esteira-processos-abrir');if(e)e.title=m}});
+  const processos=TKEsteiraProcessos({dono:()=>getSessao()?.whatsapp,worker:workerProcesso,executores:{acao:executarAcao,conferir:executarConferencia,aceitar:executarAceite,fotos:executarFotos,caixa:executarCaixa,colocar:executarColocar,pedido:executarPedido,aplicar:executarAplicacao},aoConcluir:j=>{if(j.tipo==='acao'){invalidarAcao(j.dados.rota);return;}if(j.tipo==='fotos'&&j.dados.tarefas?.length){fluidez.invalidar($('fotos-pedidas'));fluidez.invalidar($('fotos-pedidas-hoje'));document.querySelectorAll('.pedido-fotos[data-produto="'+CSS.escape(j.dados.produto)+'"] [role=status]').forEach(st=>{st.hidden=false;st.textContent=j.resultado.fotos+' fotos adicionadas ao produto. Pedido concluído.'})}if(j.tipo==='colocar'){AVISO_FOTOS=j.dados.urls.length+' foto'+(j.dados.urls.length===1?' colocada':'s colocadas')+' em '+j.dados.produtoNome+'.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');}if(j.tipo==='caixa'){AVISO_FOTOS=j.dados.fotos.length+(j.dados.fotos.length===1?' foto enviada':' fotos enviadas')+' para a caixa.';const st=$('fotos-status');if(st?.diga)st.diga(AVISO_FOTOS,'ok');/* v7.88.0: em Fotos, a lista mostra as fotos que acabaram de chegar (no mesmo ponto da tela; nunca no meio de uma escolha) */if(ABA==='fotos'&&!document.hidden&&!app.querySelector('.cx-sel[aria-pressed=true]')){rolagemVolta=Math.round(window.scrollY)||null;fluidez.invalidar();void telaFotos(AVISO_FOTOS);}}refrescarDepois();},aoErro:m=>{const e=$('esteira-processos-abrir');if(e)e.title=m}});
   const camposDoBloco=b=>b?JSON.stringify([...b.querySelectorAll('input,textarea,select')].map(e=>[e.id,e.value,e.checked])):'';
   async function srv(rota,corpo){
     if(!corpo){
@@ -2948,6 +2949,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       const filtro = autorizado ? local.filtro : !local ? dica?.filtro : null;
       CAIXA_VER = r.eu.gestorFotos && ['novas','usadas','descartadas'].includes(filtro) ? filtro : 'novas';
       if (local && !autorizado) void retomada.limpar(sessao);
+      if (aba === 'fotos' && !local && dica?.aba === 'fotos' && Number(dica.rolagem) > 0) rolagemVolta = Number(dica.rolagem);   // v7.88.0
       if (!telaAdmin(aba) || r.eu.admin) {
         ABA = aba;
         if (versaoNavegavel === undefined) confirmarAcesso(r);
@@ -3028,6 +3030,15 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   function sessaoMudou() {
     const s = getSessao();
     if (sessaoAtual && s && s.whatsapp === sessaoAtual.whatsapp && s.sessao === sessaoAtual.sessao) return;
+    // v7.88.0: mesma conta, só o código da sessão renovado (outra tela, como a Gestão, conferiu o login): continua na mesma
+    // aba, filtro e rolagem e só atualiza os dados. Antes voltava para "Hoje" e a pessoa se perdia no meio do trabalho.
+    if (sessaoAtual && s && s.whatsapp === sessaoAtual.whatsapp) {
+      sessaoAtual = s;
+      fluidez.invalidar();
+      pedirSincronia(true);
+      void salvarRetomada();
+      return;
+    }
     apagarDadosDaSessao(sessaoAtual);
     sessaoAtual = s;
     ABA = 'hoje'; CAIXA_VER = 'novas'; AVISO_FOTOS = '';
