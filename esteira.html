@@ -41,6 +41,8 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   .cab-voltar { display:inline-flex; align-items:center; min-height:44px; min-width:44px; color:#e6e0d5; text-decoration:none; font-weight:600; font-size:.95rem; }
   .cab h1 { font-family:"Poppins",sans-serif; font-size:1.25rem; margin:0; color:var(--laranja); flex:1; }
   .cab .quem { font-size:.85rem; color:#d9d2c5; }
+  .cab:has(.tkc-topo) .quem { display:none; }   /* v7.86.0: o nome vira o botão da conta (conta.js) */
+  .cab .conta-slot:empty { display:none; }
   /* faixa clara sob o título: as abas seguem o padrão único (.tk-abas em janelas.css) */
   nav.abas { margin:8px calc(-1 * max(16px,env(safe-area-inset-right,0px))) 0 calc(-1 * max(16px,env(safe-area-inset-left,0px))); padding:8px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px)); background:var(--areia); }
   nav.abas.tk-abas.curto { gap:2px; } nav.abas.tk-abas.curto > button { padding:0 5px; min-width:44px; font-size:.86rem; }   /* v7.43.0: abas do Admin no celular (7.51.0: 6 abas com Fotos) */
@@ -289,7 +291,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 </head>
 <body>
 <header>
-  <div class="cab"><a class="cab-voltar" id="esteira-voltar" href="admin.html">‹ Gestão</a><h1>Esteira</h1><span class="quem" id="quem"></span></div>
+  <div class="cab"><a class="cab-voltar" id="esteira-voltar" href="admin.html">‹ Gestão</a><h1>Esteira</h1><span class="quem" id="quem"></span><span class="conta-slot" data-tk-conta-slot></span></div>
   <nav class="abas tk-abas" id="abas" role="tablist" aria-label="Áreas da Esteira" hidden></nav>
 </header>
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
@@ -654,7 +656,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     esq.onclick = async () => {
       esq.disabled = true;
       try {
-        await carregarScript('conta.js');
+        await carregarScript('conta.js?v=7.86.0');
         if (esq.isConnected) TKConta.abrirRecuperar({ identificador:w.value, chamar:d=>apiPost(d), aoEntrar:r=>salvarSessao(r.usuario.whatsapp,r.sessao) });
       } catch (e) {er.hidden=false;er.textContent=e.message;}
       finally {esq.disabled=false;}
@@ -2884,7 +2886,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     acessoTela = r.acesso || null;
     diaTela = r.data || null;
     EU = Object.assign({}, EU || {}, r.eu);
-    $('quem').textContent = EU.nome || '';
+    $('quem').textContent = EU.nome || ''; if (window.TKConta && TKConta.nomeTopo) TKConta.nomeTopo(EU.nome || '');
     desenharAbas();
   }
   /** A busca começada no <head> só serve para a mesma conta, recente e uma única vez. */
@@ -3103,5 +3105,6 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 })();
 </script>
 <script src="a11y.js?v=7.62.1"></script>
+<script src="conta.js?v=7.86.0"></script>
 </body>
 </html>

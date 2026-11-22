@@ -245,5 +245,128 @@
     return f;
   }
 
-  window.TKConta = { ligarCpf: ligarCpf, cpfMask: cpfMask, cpfValido: cpfValido, emailValido: emailValido, nascMask: nascMask, nascValida: nascValida, abrirRecuperar: abrirRecuperar, avisoContaExiste: avisoContaExiste, precisaCpf: precisaCpf, faixaCpf: faixaCpf };
+  /* ---------- v7.86.0 — Conta no canto superior direito (DONO: este arquivo) ----------
+   * Um botão só em todas as telas da equipe (Gestão, Esteira, RH, Currículos e a loja quando é da equipe): mostra quem está
+   * entrado e abre "Trocar de conta" e "Sair". A sessão é uma só no aparelho (tm_session): sair ou trocar aqui vale para
+   * todas as telas e abas; as outras percebem e se atualizam quando voltam para a frente. No app Android, avisa o app
+   * (TKAndroid.sairConta) para sair também das Mensagens. A página pode:
+   *   - pôr <span data-tk-conta-slot></span> onde o botão deve ficar (senão ele fica solto no canto superior direito);
+   *   - definir window.TKContaLimpar() para apagar o que for só dela ao sair (sem perguntar nada);
+   *   - chamar TKConta.nomeTopo('Nome') quando souber o nome (senão usa o nome guardado pela sessão rápida). */
+  var CH_SESSAO = 'tm_session', EQUIPE_ = ['catalogo_admin', 'catalogo_cadastrar', 'esteira', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais', 'gerir_acessos'];
+  var nomeDado = '', topoBt = null, topoJan = null, topoPresa = null;
+  function sessaoTopo() { try { var s = JSON.parse(localStorage.getItem(CH_SESSAO) || 'null'); return s && s.whatsapp && s.sessao ? s : null; } catch (e) { return null; } }
+  function quemTopo() { var s = sessaoTopo(); return s ? String(s.whatsapp) : ''; }
+  function permsTopo() {
+    try { var u = window.TKUsuarioCache && TKUsuarioCache.ler(); if (u && Array.isArray(u.permissoes)) return u.permissoes; } catch (e) { /* segue */ }
+    try { var c = JSON.parse(localStorage.getItem('tm_nav_perms') || 'null'); if (c && c.w === quemTopo() && Array.isArray(c.p)) return c.p; } catch (e) { /* segue */ }
+    return null;
+  }
+  function nomeTopoAtual() {
+    if (nomeDado) return nomeDado;
+    try { var u = window.TKUsuarioCache && TKUsuarioCache.ler(); if (u && u.nome) return u.nome; } catch (e) { /* segue */ }
+    return '';
+  }
+  function telaDaLoja() { return /(^|\/)((index|curriculo)\.html)?$/.test(location.pathname); }   // loja e candidatura: só para a equipe
+  function mostrarTopo() {
+    if (!sessaoTopo() || window.top !== window.self || /[?&]embed=1/.test(location.search) || document.documentElement.getAttribute('data-tk-conta') === 'nao') return false;
+    if (!telaDaLoja()) return true;
+    var p = permsTopo(); return !!(p && p.some(function (k) { return EQUIPE_.indexOf(k) >= 0; }));   // na loja, só para a equipe
+  }
+  function cssTopo() {
+    if (document.getElementById('tkc-topo-css')) return;
+    var s = document.createElement('style'); s.id = 'tkc-topo-css';
+    s.textContent = 'button.tkc-topo{width:auto!important;flex:0 0 auto;margin:0;display:inline-flex;align-items:center;gap:6px;min-height:44px;max-width:46vw;padding:0 12px 0 8px;border:1px solid #d8d2c8!important;border-radius:22px!important;background:#fff!important;color:#1a1a1a!important;font:600 .9rem/1.1 inherit;cursor:pointer;white-space:nowrap;box-shadow:none}' +
+      '.header-icones:has(.tkc-topo) #btn-conta-header{display:none!important}' +   /* loja: para a equipe, este botão substitui o "Minha conta" do topo (continua no menu) */
+      '.tkc-topo.tkc-solto{position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);right:8px;z-index:var(--z-sticky,20);box-shadow:0 1px 4px rgba(0,0,0,.12)}' +
+      '.tkc-topo .tkc-av{flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:#1a1a1a;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800}' +
+      '.tkc-topo .tkc-nm{overflow:hidden;text-overflow:ellipsis}' +
+      '@media (max-width:430px){button.tkc-topo{padding:0 7px;gap:0;min-width:44px;justify-content:center}.tkc-topo .tkc-nm,.tkc-topo .tkc-seta{display:none}}' +
+      '.tkc-menu{position:fixed;top:calc(env(safe-area-inset-top,0px) + 60px);right:8px;z-index:var(--z-dialogo,150);width:min(300px,calc(100vw - 16px));background:#fff;color:#1a1a1a;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:14px;display:flex;flex-direction:column;gap:10px}' +
+      '.tkc-menu .tkc-cab{display:flex;align-items:flex-start;gap:10px;padding-right:48px;min-height:44px}.tkc-menu .tk-fechar{position:absolute;top:8px;right:8px}' +
+      '.tkc-menu .tkc-quem b{display:block;font-size:1rem}.tkc-menu .tkc-quem small{color:#555;font-size:.85rem}' +
+      '.tkc-menu .tkc-dica{margin:0;font-size:.85rem;color:#555}.tkc-menu button.tkc-acao{width:100%;min-height:48px}' +
+      '.tkc-fundo{position:fixed;inset:0;z-index:calc(var(--z-dialogo,150) - 1);background:rgba(0,0,0,.18)}';
+    document.head.appendChild(s);
+  }
+  function iniciais(n) { var p = String(n || '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() : ''; }
+  function mascararWhats(w) { var d = String(w || '').replace(/\D/g, ''); return d.length >= 4 ? '(…) …' + d.slice(-4) : ''; }
+  function pintarTopo() {
+    if (!topoBt) return;
+    var n = nomeTopoAtual(), prim = String(n || '').trim().split(/\s+/)[0] || 'Conta';
+    topoBt.replaceChildren(el('span', { 'class': 'tkc-av', 'aria-hidden': 'true', text: iniciais(n) || '👤' }), el('span', { 'class': 'tkc-nm', text: prim }), el('span', { 'class': 'tkc-seta', 'aria-hidden': 'true', text: '▾' }));
+    topoBt.setAttribute('aria-label', 'Conta' + (n ? ' de ' + n : '') + ': trocar de conta ou sair');
+  }
+  function montarTopo() {
+    var deve = mostrarTopo();
+    if (!deve) { if (topoBt) { topoBt.remove(); topoBt = null; } return; }
+    cssTopo();
+    if (!topoBt) {
+      topoBt = el('button', { type: 'button', 'class': 'tkc-topo', id: 'tkc-topo', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' });
+      topoBt.addEventListener('click', abrirMenuTopo);
+      var slot = document.querySelector('[data-tk-conta-slot]');
+      if (slot) slot.appendChild(topoBt); else { topoBt.classList.add('tkc-solto'); document.body.appendChild(topoBt); }
+    }
+    pintarTopo();
+  }
+  function fecharMenuTopo() { if (window.TKCamadas && TKCamadas.aberta('tkc-conta')) TKCamadas.desempilhar('tkc-conta'); else limparMenuTopo(); }
+  function limparMenuTopo() {
+    if (topoPresa) { topoPresa.soltar(); topoPresa = null; }
+    if (topoJan) { topoJan.remove(); topoJan = null; }
+    var f = document.querySelector('.tkc-fundo'); if (f) f.remove();
+    if (topoBt) topoBt.setAttribute('aria-expanded', 'false');
+  }
+  function abrirMenuTopo() {
+    if (topoJan) return;
+    var n = nomeTopoAtual(), s = sessaoTopo();
+    var fundo = el('div', { 'class': 'tkc-fundo' }); fundo.addEventListener('click', fecharMenuTopo);
+    var jan = el('div', { 'class': 'tkc-menu', id: 'tkc-menu', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'tkc-menu-quem' });
+    var fechar = el('button', { type: 'button', 'class': 'tk-fechar', 'aria-label': 'Fechar', text: '✕' }); fechar.addEventListener('click', fecharMenuTopo);
+    var quem = el('div', { 'class': 'tkc-quem', id: 'tkc-menu-quem' }); quem.appendChild(el('b', { text: n || 'Conta conectada' })); if (s) quem.appendChild(el('small', { text: 'WhatsApp ' + mascararWhats(s.whatsapp) }));
+    var cab = el('div', { 'class': 'tkc-cab' }); cab.appendChild(el('span', { 'class': 'tkc-av', 'aria-hidden': 'true', text: iniciais(n) || '👤' })); cab.appendChild(quem);
+    var trocar = el('button', { type: 'button', 'class': 'tk-btn-sec tkc-acao', id: 'tkc-trocar', text: 'Trocar de conta' });
+    var sair = el('button', { type: 'button', 'class': 'tk-btn-perigo tkc-acao', id: 'tkc-sair', text: 'Sair' });
+    trocar.addEventListener('click', function () { if (window.confirm('Trocar de conta? Você sai desta conta em todas as telas deste aparelho (Gestão, Esteira, Mensagens…) e entra com outra.')) sairTopo(); });
+    sair.addEventListener('click', function () { if (window.confirm('Sair da conta? Você sai em todas as telas deste aparelho (Gestão, Esteira, Mensagens…).')) sairTopo(); });
+    jan.appendChild(fechar); jan.appendChild(cab); jan.appendChild(el('p', { 'class': 'tkc-dica', text: 'A conta vale para todas as telas deste aparelho.' })); jan.appendChild(trocar); jan.appendChild(sair);
+    document.body.appendChild(fundo); document.body.appendChild(jan); topoJan = jan;
+    topoBt.setAttribute('aria-expanded', 'true');
+    if (window.TKCamadas) TKCamadas.empilhar('tkc-conta', limparMenuTopo);
+    if (window.TKJanela) topoPresa = TKJanela.prender(jan, { fechar: fecharMenuTopo, camada: 'tkc-conta', foco: '#tkc-trocar' });
+  }
+  /** Sai da conta em todas as telas: a página limpa o que é dela, a sessão some, o app Android sai das Mensagens. */
+  function sairTopo() {
+    try { if (typeof window.TKContaLimpar === 'function') window.TKContaLimpar(); } catch (e) { /* segue */ }
+    try { if (window.TKUsuarioCache) TKUsuarioCache.limpar(); } catch (e) { /* segue */ }
+    try { localStorage.removeItem('tm_nav_perms'); } catch (e) { /* segue */ }
+    try { if (typeof limparSessao === 'function') limparSessao(); else localStorage.removeItem(CH_SESSAO); } catch (e) { /* segue */ }
+    try { if (window.TKAndroid && typeof TKAndroid.sairConta === 'function') TKAndroid.sairConta(); } catch (e) { /* segue */ }
+    sabido = quemTopo();
+    location.reload();
+  }
+  /* Outra tela ou aba entrou, saiu ou trocou de conta: esta se atualiza (na hora se está na frente; senão, quando voltar).
+   * Troca só do token da mesma conta não recarrega. Nunca recarrega no meio de uma gravação (TKOcupado). */
+  var sabido = quemTopo(), recarregarAo = false;
+  function recarregarQuandoPuder() {
+    if (document.hidden) { recarregarAo = true; return; }
+    if (window.TKOcupado && TKOcupado.pendentes() > 0) { setTimeout(recarregarQuandoPuder, 1000); return; }
+    location.reload();
+  }
+  function conferirOutraTela() {
+    var agora = quemTopo(); if (agora === sabido) { montarTopo(); return; }
+    var antes = sabido; sabido = agora;
+    try { if (window.TKAviso && !document.hidden) TKAviso.info(!agora ? 'Você saiu da conta em outra tela. Atualizando…' : antes ? 'A conta foi trocada em outra tela. Atualizando…' : 'Você entrou em outra tela. Atualizando…'); } catch (e) { /* segue */ }
+    setTimeout(recarregarQuandoPuder, document.hidden ? 0 : 1200);
+  }
+  try {
+    window.addEventListener('storage', function (e) { if (!e || e.key === CH_SESSAO || e.key === null) conferirOutraTela(); });
+    window.addEventListener('tk:sessao', function () { sabido = quemTopo(); montarTopo(); });   // mudou nesta mesma tela
+    document.addEventListener('visibilitychange', function () { if (document.hidden) return; if (recarregarAo) { recarregarAo = false; recarregarQuandoPuder(); } else conferirOutraTela(); });
+    window.addEventListener('pageshow', function (e) { if (e && e.persisted) conferirOutraTela(); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montarTopo); else setTimeout(montarTopo, 0);
+  } catch (e) { /* navegador sem eventos: segue sem o botão */ }
+  function nomeTopo(n) { nomeDado = String(n || '').trim().slice(0, 80); montarTopo(); }
+
+  window.TKConta = { ligarCpf: ligarCpf, cpfMask: cpfMask, cpfValido: cpfValido, emailValido: emailValido, nascMask: nascMask, nascValida: nascValida, abrirRecuperar: abrirRecuperar, avisoContaExiste: avisoContaExiste, precisaCpf: precisaCpf, faixaCpf: faixaCpf,
+    nomeTopo: nomeTopo, atualizarTopo: montarTopo, sair: sairTopo };
 })();

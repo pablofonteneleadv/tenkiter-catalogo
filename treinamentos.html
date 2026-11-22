@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-tk-conta="nao"><!-- v7.86.0: a conta já fica no menu do avatar, no canto superior direito -->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1375,6 +1375,7 @@ function tryRestoreSession(){
 
 function logout(){
   try{ localStorage.removeItem('tm_session'); }catch(e){}
+  try{ if (window.TKAndroid && typeof TKAndroid.sairConta === 'function') TKAndroid.sairConta(); }catch(e){}   // v7.86.0: sai também das outras telas do app
   state.user = null; state.view='login'; state.manual=null;
   conteudoEstado = ''; // a próxima pessoa busca o conteúdo dela
   if (servidorProtegido){ DATA.quizzes = {}; Object.keys(DATA.manuals).forEach(function(k){ DATA.manuals[k] = { parts: [] }; }); }
@@ -1417,6 +1418,7 @@ function renderTopbar(){
           '<button class="avatar-dropdown-item" id="btn-ir-perfil">👤 Perfil' + (comp.pct < 100 ? ' <span class="avatar-dropdown-pct">' + comp.pct + '%</span>' : '') + '</button>' +
           '<a class="avatar-dropdown-item" href="curriculo.html" style="display:block;text-decoration:none">📄 Meu currículo</a>' +
           (temPerm('catalogo_admin') ? '<a class="avatar-dropdown-item" href="admin.html" style="display:block;text-decoration:none">🛍️ Admin do catálogo</a>' : '') +
+          '<button class="avatar-dropdown-item" id="btn-trocar-conta">🔁 Trocar de conta</button>' +
           '<button class="avatar-dropdown-item" id="btn-logout">Sair</button>' +
         '</div>' +
       '</div>' +
@@ -1426,6 +1428,7 @@ function wireTopbar(){
   document.getElementById('brand-home').addEventListener('click', goHome);
   var marca=document.getElementById('brand-home');marca.tabIndex=0;marca.setAttribute('role','button');marca.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();goHome();}});
   document.getElementById('btn-logout').addEventListener('click', logout);
+  document.getElementById('btn-trocar-conta').addEventListener('click', function(){ if (confirm('Trocar de conta? Você sai desta conta em todas as telas deste aparelho (Gestão, Esteira, Mensagens…) e entra com outra.')) logout(); });
   var btnAdmin = document.getElementById('btn-admin-rh');
   if (btnAdmin) btnAdmin.addEventListener('click', openAdminPanel);
   var btnMenu = document.getElementById('btn-avatar-menu');
@@ -3553,9 +3556,9 @@ function telaSemConexao_(){
 <script src="common.js?v=7.59.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script src="icones.js?v=7.17.0"></script>
-<script src="nav.js?v=7.61.0" data-ativo="treinamentos"></script>
+<script src="nav.js?v=7.86.0" data-ativo="treinamentos"></script>
 <script src="a11y.js?v=7.62.1"></script>
-<script src="conta.js"></script>
+<script src="conta.js?v=7.86.0"></script>
 <script src="push.js?v=7.63.0"></script>
 </body>
 </html>

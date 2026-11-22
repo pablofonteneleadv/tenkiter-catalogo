@@ -344,6 +344,8 @@ def admin_ctx(p, larg=390, alt=844):
             return route.fulfill(body="<!doctype html><title>Esteira</title><h1 id=esteira-stub>Esteira</h1>", content_type="text/html")
         if route.request.resource_type == "image" and "/m/202611/cx" in u:   # fotos da caixa (cor fixa por foto, só para a evidência)
             return route.fulfill(body=_png_cor([(196, 120, 90), (110, 150, 120), (120, 140, 190)][int(re.search(r"cx(\d+)", u).group(1)) % 3], 120, 150), content_type="image/png")
+        if "tenkiter-ig." in u and "/esteira/caixa?" in u and route.request.method == "GET":   # v7.86.0: "Salvar e cadastrar o próximo" lê as fotos novas
+            return route.fulfill(json={"ok": True, "gestor": True, "contagem": {"novas": 3}, "itens": [dict(v, lote="L1") for k, v in sorted(cx["itens"].items(), reverse=True)]})
         if "tenkiter-ig." in u and "/esteira/caixa/" in u:
             if "/esteira/caixa/itens" in u:
                 ids = [int(x) for x in re.search(r"ids=([0-9,]+)", u).group(1).split(",")]; cx["lidas"].append(ids)
@@ -406,6 +408,31 @@ with sync_playwright() as p:
         chk(f"{larg}: Gestão (vários) sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
         chk(f"{larg}: sem erro de JavaScript", not errs, errs)
         b.close()
+    print("== Gestão: Salvar e cadastrar o próximo (7.86.0) ==")
+    b, ctx, pg, st, log, errs, cx = admin_ctx(p, 390, 844)
+    pg.goto(TK_ADMIN + "esteira.html"); pg.goto(TK_ADMIN + "admin.html?caixaFotos=11,12&modo=um&volta=esteira")
+    pg.wait_for_selector("#btn-salvar-proximo", timeout=20000)
+    chk("cadastro da caixa tem 'Salvar e cadastrar o próximo' logo abaixo de Cadastrar", pg.evaluate("(()=>{const a=document.getElementById('btn-salvar'),b=document.getElementById('btn-salvar-proximo');return a.nextElementSibling===b&&b.getBoundingClientRect().height>=44})()"))
+    preencher(pg, "Vestido próximo")
+    pg.click("#btn-salvar-proximo")
+    try: pg.wait_for_selector("#tkcx-proximas", timeout=20000); abriu = True
+    except Exception: abriu = False
+    chk("salvou e abriu as próximas fotos da caixa aqui mesmo (sem voltar para a Esteira)", abriu and "admin.html" in pg.url and len([x for x in log if x.get("action") == "create"]) == 1, pg.url)
+    if abriu:
+        ids = pg.evaluate("[...document.querySelectorAll('#tkcx-proximas .tkcx-foto')].map(b=>Number(b.dataset.id))")
+        chk("mostra só fotos novas que ainda não foram usadas (13), não as do produto salvo (11, 12)", ids == [13], ids)
+        chk("'Cadastrar' só libera depois de escolher", pg.is_disabled("#tkcx-prox-ok"))
+        pg.wait_for_timeout(300); shot(pg, "gestao-proximas-390")
+        pg.click('#tkcx-proximas .tkcx-foto[data-id="13"]')
+        chk("escolher numera a foto (1 = capa) e o botão diz quantas", pg.inner_text('#tkcx-proximas .tkcx-foto[data-id="13"] .tkcx-n') == "1" and pg.inner_text("#tkcx-prox-ok") == "Cadastrar com 1 foto")
+        ok_t, ruins = alvos_ok(pg, "#tkcx-proximas button")
+        chk("folha das próximas com alvos de pelo menos 44 px", ok_t, ruins)
+        pg.click("#tkcx-prox-ok")
+        pg.wait_for_function("(document.getElementById('titulo-form')||{}).textContent==='Produto novo com fotos da caixa' && document.querySelectorAll('#galeria-grid .galeria-item').length===1", timeout=20000)
+        chk("o cadastro reabre já com a foto escolhida e a marca 'em cadastro' na caixa", cx["lidas"][-1] == [13] and {"ids": [13], "uso": "cadastro"} in cx["usar"], (cx["lidas"], cx["usar"]))
+        chk("o próximo continua sabendo voltar para a Esteira", pg.evaluate("sessionStorage.getItem('tk_caixa_volta_esteira')") is not None)
+    chk("próximo: sem erro de JavaScript", not errs, errs)
+    b.close()
     print("== Gestão: link quebrado ==")
     b, ctx, pg, st, log, errs, cx = admin_ctx(p)
     cx["itens"] = {}

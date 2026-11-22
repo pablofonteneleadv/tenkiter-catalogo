@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.86.0 — Conta no canto de cima, entrar/sair em todas as telas e "Salvar e cadastrar o próximo"
+
+- **Conta no canto superior direito** da Gestão, Esteira, Currículos e da loja (só para a equipe): mostra quem está entrado e abre “Trocar de conta” e “Sair”. No RH, as duas opções ficam no menu do avatar que já existia ali.
+- **Uma conta para todas as telas do aparelho:** sair ou trocar de conta numa tela vale para todas. As outras abas percebem e se atualizam sozinhas (na hora, se estão na frente; senão, quando voltam). Entrar numa tela faz as outras se atualizarem já entradas. Nunca recarrega no meio de uma gravação.
+- **Salvar e cadastrar o próximo:** no cadastro aberto com fotos da caixa, o botão salva e, em vez de voltar, mostra as fotos novas que ainda estão na caixa. Você toca nas fotos do próximo produto (até 8; a primeira vira a capa) e o cadastro reabre já com elas. Sem fotos novas, volta para a Esteira.
+- **Postagens direto:** `admin.html?abrir=postagens` abre as Postagens (usado pelo atalho do app Android).
+- **Preparação para o app com janelas separadas:** quando o app Android avisa que tem janelas próprias, a barra de baixo abre a janela de cada área em vez de trocar a tela. No navegador, nada muda.
+
 ## 7.85.0 — Cadastro pela Esteira volta para a Esteira
 
 - Na aba Fotos da Esteira, “Cadastrar produto novo” abria a Gestão. No app Android não existe outra aba: a Gestão tomava o lugar da Esteira e, a cada produto, era preciso entrar na Esteira de novo.
