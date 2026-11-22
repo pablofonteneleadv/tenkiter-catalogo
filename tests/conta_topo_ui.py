@@ -107,6 +107,16 @@ with sync_playwright() as p:
     chk("loja: Trocar de conta sai e mostra o Entrar na mesma janela", pg.evaluate("localStorage.getItem('tm_session')") is None and pg.locator("#conta-whats").count() == 1)
     chk("loja: sem erro de JavaScript", not erros, erros); ctx.close()
 
+    print("== atalho Postagens (admin.html?abrir=postagens) ==")
+    ctx = novo_ctx(b, 390, 844); pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.goto(BASE + "admin.html?abrir=postagens")
+    try: pg.wait_for_selector("#overlay-postagens.aberto", timeout=25000); abriu = True
+    except Exception: abriu = False
+    chk("abrir=postagens abre o painel de Postagens sozinho", abriu)
+    pg.wait_for_timeout(7000)
+    chk("o painel continua aberto (não abre e fecha) e o endereço guarda o atalho para atualizar", pg.locator("#overlay-postagens.aberto").count() == 1 and "abrir=postagens" in pg.url, pg.url)
+    chk("Postagens: sem erro de JavaScript", not erros, erros); ctx.close()
+
     print("== app Android (TKAndroid simulado) ==")
     ctx = novo_ctx(b, 390, 844, extra=ANDROID); pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
     pg.goto(BASE + "admin.html"); pg.wait_for_selector("nav.tk-nav a[data-nav=curriculos]", timeout=20000)

@@ -6695,8 +6695,15 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       }, 500);
     }
   } catch(e) {}
-  // v7.86.0: admin.html?abrir=postagens abre direto as Postagens (atalho "Postagens" do app Android). Espera o botão liberar pela permissão.
-  try { if (/[?&]abrir=postagens/.test(location.search)) { var tPost = 0, iPost = setInterval(function(){ var bt=$('btn-abrir-postagens'); tPost++; if (bt && !bt.hidden && !document.body.classList.contains('sem-postador')) { clearInterval(iPost); var d=$('details-ferramentas'); if(d) d.open=true; bt.click(); try{ history.replaceState(history.state,'',location.pathname); }catch(e){} } else if (tPost > 60) { clearInterval(iPost); if (window.TKAviso && getSessao()) TKAviso.info('As Postagens não estão liberadas para a sua conta.'); } }, 500); } } catch(e) {}
+  // v7.86.0: admin.html?abrir=postagens abre direto as Postagens (atalho "Postagens" do app Android). Espera o botão liberar pela permissão; o endereço fica, para atualizar reabrir as Postagens.
+  try { if (/[?&]abrir=postagens\b/.test(location.search)) { var tPost = 0, iPost = setInterval(function(){
+    // Só clica quando as Postagens já carregaram (tkPostarPecas e a lista de produtos); confere se o painel abriu e tenta de novo se não abriu.
+    var bt=$('btn-abrir-postagens'), ov=$('overlay-postagens'); tPost++;
+    if (ov && ov.classList.contains('aberto')) { clearInterval(iPost); return; }
+    var pronto = bt && !bt.hidden && !document.body.classList.contains('sem-postador') && typeof window.tkPostarPecas === 'function' && (typeof produtos !== 'undefined') && produtos && produtos.length;
+    if (pronto && (!window.__tkPostClique || Date.now() - window.__tkPostClique > 6000)) { window.__tkPostClique = Date.now(); var d=$('details-ferramentas'); if(d) d.open=true; bt.click(); }   // o painel abre depois de carregar: um clique, e só repete se não abriu em 6 s
+    else if (tPost > 80) { clearInterval(iPost); if (window.TKAviso && getSessao()) TKAviso.info('As Postagens não estão liberadas para a sua conta.'); }
+  }, 500); } } catch(e) {}
   // vindo do catálogo (botão "➕ Cadastrar nova peça"): abre o MESMO cartão de cadastro daqui, sem cópia da função
   try { if (/[?&]novo=1/.test(location.search)) { setTimeout(function(){ var c=$('card-form'); if(c){ c.open=true; c.scrollIntoView({block:'start'}); } try{ history.replaceState(history.state,'',location.pathname); }catch(e){} }, 900); } } catch(e) {}
   // v4.10 (FE-03): mostra "Produtos para aceitar" no menu Cadastrar quando houver algo esperando (a faixa do Instagram é a fonte)
