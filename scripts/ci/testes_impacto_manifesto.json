@@ -78,6 +78,11 @@
     "tests/esteira_fotos_revisao_ui.py": [
       "esteira"
     ],
+    "tests/telas_enxutas_ui.py": [
+      "catalogo",
+      "esteira",
+      "treinamentos"
+    ],
     "tests/conta_topo_ui.py": [
       "catalogo",
       "esteira",
@@ -583,6 +588,7 @@
     "tests/fotos_postadas_ui.py": "tests/saida/fotos-postadas",
     "tests/esteira_fotos_ui.py": "tests/saida/esteira-fotos",
     "tests/conta_topo_ui.py": "tests/saida/conta-topo",
+    "tests/telas_enxutas_ui.py": "tests/saida/telas-enxutas",
     "tests/esteira_retomada_fotos_ui.py": "tests/saida/esteira-fluidez/fotos-retomada",
     "tests/esteira_primeiro_item_ui.py": "tests/saida/esteira-primeiro-item",
     "tests/esteira_fotos_revisao_ui.py": "tests/saida/esteira-fotos-revisao",

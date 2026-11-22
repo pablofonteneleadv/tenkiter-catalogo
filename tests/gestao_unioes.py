@@ -194,13 +194,13 @@ with sync_playwright() as p:
         chk(f"{w} item 4: a loja guarda o 'quem é você' preso à sessão (sem token, sem senha, sem telefone)", cache and "Ana Lojista" in cache and "tk2.x.y" not in cache and "88999999999" not in cache, cache)
         st["segurar_sessao"] = True   # o servidor de contas fica "lento": a Gestão tem que abrir logada mesmo assim
         pg.goto(BASE + "admin.html"); pg.wait_for_timeout(700)
-        lbl = pg.inner_text("#lbl-funcionario")
+        lbl = pg.text_content("#lbl-funcionario")
         chk(f"{w} item 4: loja → Gestão: em <1 s já aparece 'Atendente: Ana Lojista' (sem 'Anônimo · Identificar-se') com o servidor ainda conferindo", lbl == "Ana Lojista" and not pg.locator("#btn-trocar-user").is_visible() and not pg.locator("#login-overlay.visivel").count() and len(st.get("sessao_pendentes", [])) >= 1, [lbl, len(st.get("sessao_pendentes", []))])
         chk(f"{w} item 4: até o servidor confirmar, ações sensíveis ficam escondidas (excluir de vez, conexões, importar)", pg.evaluate("document.body.classList.contains('sessao-conferindo')") and pg.evaluate("[...document.querySelectorAll('.btn-excluir,#btn-abrir-conexoes')].every(e=>getComputedStyle(e).display==='none')"))
         pg.evaluate("window.scrollTo(0,0)"); evid(pg, "sessao-gestao-instantanea-%d.jpg" % w)
         rt, bd = st["sessao_pendentes"].pop(0); rt.fulfill(json=st["_post"](bd)); st["segurar_sessao"] = False
         pg.wait_for_timeout(800)
-        chk(f"{w} item 4: servidor confirmou → libera tudo (sem recarregar)", not pg.evaluate("document.body.classList.contains('sessao-conferindo')") and pg.inner_text("#lbl-funcionario") == "Ana Lojista")
+        chk(f"{w} item 4: servidor confirmou → libera tudo (sem recarregar)", not pg.evaluate("document.body.classList.contains('sessao-conferindo')") and pg.text_content("#lbl-funcionario") == "Ana Lojista")
         # Gestão → loja
         st["segurar_sessao"] = True
         pg.goto(BASE + "index.html"); pg.wait_for_timeout(700)
@@ -219,11 +219,11 @@ with sync_playwright() as p:
         pg, errs, msgs = pagina(ctx, "admin.html"); pg.wait_for_selector("#lista-produtos .produto"); pg.wait_for_timeout(1200)
         st["segurar_sessao"] = True
         pg.reload(); pg.wait_for_timeout(700)
-        chk(f"{w} item 4: Gestão → Gestão (recarregar) também abre logada na hora", pg.inner_text("#lbl-funcionario") == "Ana Lojista")
+        chk(f"{w} item 4: Gestão → Gestão (recarregar) também abre logada na hora", pg.text_content("#lbl-funcionario") == "Ana Lojista")
         for rt, bd in st.get("sessao_pendentes", []): rt.fulfill(json={"ok": False, "sessaoInvalida": True, "erro": "Sessão expirada."})
         st["sessao_pendentes"] = []; st["segurar_sessao"] = False
         pg.wait_for_timeout(1000)
-        chk(f"{w} item 4: sessão inválida na Gestão → tela de login com 'Sua sessão terminou…'", pg.locator("#login-overlay.visivel").count() == 1 and "sessão terminou" in pg.inner_text("#lo-erro") and pg.inner_text("#lbl-funcionario") == "Anônimo", pg.inner_text("#lo-erro"))
+        chk(f"{w} item 4: sessão inválida na Gestão → tela de login com 'Sua sessão terminou…'", pg.locator("#login-overlay.visivel").count() == 1 and "sessão terminou" in pg.inner_text("#lo-erro") and pg.text_content("#lbl-funcionario") == "Anônimo", pg.inner_text("#lo-erro"))
         evid(pg, "sessao-invalida-gestao-%d.jpg" % w)
         ctx.close()
 

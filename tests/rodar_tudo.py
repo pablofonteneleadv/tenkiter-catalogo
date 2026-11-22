@@ -145,7 +145,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("produtos_busca_esteira_ia.py", lambda o: "PASS 4 viewports:" in o),
     ("esteira_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_fotos_ui.py", lambda o: "FALHAS=0" in o),
-    ("conta_topo_ui.py", lambda o: "FALHAS=0" in o),   # v7.86.0: conta no canto superior direito, sair/entrar em todas as telas, janelas do app   # v7.51.0: aba Fotos da Esteira, caixa de fotos (envio em lote, retomada, gestor) e cadastro na Gestão com as fotos
+    ("conta_topo_ui.py", lambda o: "FALHAS=0" in o),
+    ("telas_enxutas_ui.py", lambda o: "FALHAS=0" in o),   # v7.87.0: Gestão/RH/Esteira mais enxutas no celular e topo do app sem somar a barra de status   # v7.86.0: conta no canto superior direito, sair/entrar em todas as telas, janelas do app   # v7.51.0: aba Fotos da Esteira, caixa de fotos (envio em lote, retomada, gestor) e cadastro na Gestão com as fotos
     ("esteira_retomada_fotos_ui.py", lambda o: "PASS retomada de Fotos e Caixa" in o),
     ("esteira_primeiro_item_ui.py", lambda o: "FALHAS=0" in o),   # v7.79.0: primeiro cartão de Hoje e blocos independentes de Fotos
     ("esteira_fotos_revisao_ui.py", lambda o: "FALHAS=0" in o),   # v7.81.0: revisar fotos antes de adicionar ao produto, com desfazer

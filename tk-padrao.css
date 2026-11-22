@@ -315,3 +315,9 @@ html body :is(.bt, .chips button, .cx-filtro button, .cx-sel, .po-abas button, .
 /* contagem + ordem + limpar filtros: com campo de 16 px a linha passa de 320 px; quebra em vez de alargar a página */
 html body .barra-lista { flex-wrap: wrap; row-gap: 8px; }
 html body .barra-lista #ordem { min-width: 0; max-width: 100%; }
+
+/* v7.87.0 — recuo do topo (barra de status). No navegador e no app instalado pelo Chrome vale o env() do aparelho.
+   No app Android da loja a janela já desconta a barra de status; somar de novo deixava uma faixa vazia e o topo
+   "grudado" cobria o título (relato do Pablo no RH). a11y.js marca html.tk-app-android pelo agente do app. */
+:root { --tk-seguro-topo: env(safe-area-inset-top, 0px); }
+html.tk-app-android { --tk-seguro-topo: 0px; }

@@ -36,7 +36,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   @media (prefers-reduced-motion:reduce) { .esq i { animation:none; } }
   html, body { margin:0; }
   body { font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--areia); color:var(--preto); line-height:1.45; padding-bottom:calc(32px + env(safe-area-inset-bottom,0px)); }
-  header { position:sticky; top:0; z-index:var(--z-sticky,20); background:var(--preto); color:#fff; padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); border-bottom:2px solid var(--laranja); }
+  header { position:sticky; top:0; z-index:var(--z-sticky,20); background:var(--preto); color:#fff; padding:calc(10px + var(--tk-seguro-topo,env(safe-area-inset-top,0px))) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); border-bottom:2px solid var(--laranja); }
   .cab { display:flex; align-items:center; gap:10px; min-height:44px; }
   .cab-voltar { display:inline-flex; align-items:center; min-height:44px; min-width:44px; color:#e6e0d5; text-decoration:none; font-weight:600; font-size:.95rem; }
   .cab h1 { font-family:"Poppins",sans-serif; font-size:1.25rem; margin:0; color:var(--laranja); flex:1; }
@@ -55,6 +55,8 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   #esteira-processos{max-width:728px;margin:12px auto 0;padding:12px 16px;background:var(--branco);border:1px solid var(--linha);border-radius:12px} #esteira-processos>div{display:flex;align-items:center;justify-content:space-between} #esteira-processos button{min-height:44px;min-width:44px;padding:8px 12px;border:1px solid var(--linha);border-radius:8px;background:var(--areia);color:var(--preto)} #esteira-processos>p,#esteira-processos li p{font-size:.85rem;color:var(--suave);margin:6px 0} #esteira-processos ul{max-height:42dvh;overflow:auto;list-style:none;padding:0;margin:0} #esteira-processos li{padding:10px 0;border-top:1px solid var(--linha)}
   .esteira-vista { display:grid; gap:14px; min-width:0; }
   .card { background:var(--branco); border:1px solid var(--linha); border-radius:14px; padding:14px; display:grid; gap:10px; min-width:0; }
+  /* v7.87.0 — Esteira mais enxuta no celular (proposta aprovada pelo Pablo, 22/11/2026): cartões mais justos, títulos menores. */
+  @media (max-width:600px) { main { gap:10px; padding-top:10px; } .card { padding:11px 12px; gap:8px; } .card h2 { font-size:1.05rem; margin:0; } }
   .card h2, .card h3 { margin:0; font-size:1.05rem; }
   .muted { color:var(--suave); font-size:.88rem; }
   .barra { height:9px; background:var(--linha); border-radius:99px; overflow:hidden; }
@@ -290,7 +292,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 .busca-res .t small{display:block;line-height:1.35;margin-top:4px}
 </style>
 <link rel="stylesheet" href="janelas.css?v=7.65.0">
-<link rel="stylesheet" href="tk-padrao.css?v=7.65.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.87.0">
 </head>
 <body>
 <header>
@@ -659,7 +661,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     esq.onclick = async () => {
       esq.disabled = true;
       try {
-        await carregarScript('conta.js?v=7.86.0');
+        await carregarScript('conta.js?v=7.87.0');
         if (esq.isConnected) TKConta.abrirRecuperar({ identificador:w.value, chamar:d=>apiPost(d), aoEntrar:r=>salvarSessao(r.usuario.whatsapp,r.sessao) });
       } catch (e) {er.hidden=false;er.textContent=e.message;}
       finally {esq.disabled=false;}
@@ -3107,7 +3109,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   sessaoMudou();
 })();
 </script>
-<script src="a11y.js?v=7.62.1"></script>
-<script src="conta.js?v=7.86.0"></script>
+<script src="a11y.js?v=7.87.0"></script>
+<script src="conta.js?v=7.87.0"></script>
 </body>
 </html>

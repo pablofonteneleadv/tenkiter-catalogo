@@ -112,7 +112,7 @@
   .sug-cartao small { display: block; padding: 1px 7px 7px; font-size: 0.7rem; color: #625c53; }
   .cp-overlay { align-items: stretch; }
   #overlay-copiar .cp-sheet { position: relative; width: 100%; max-width: 900px; height: 100%; max-height: none; margin: 0 auto; border-radius: 0; padding: 0; animation: none; transform: none; display: flex; flex-direction: column; background: #f6f3ee; overflow: hidden; }
-  .cp-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; padding: env(safe-area-inset-top, 0px) 6px 0 16px; background: #fff; border-bottom: 1px solid #e3ddd3; }
+  .cp-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; padding: var(--tk-seguro-topo,env(safe-area-inset-top,0px)) 6px 0 16px; background: #fff; border-bottom: 1px solid #e3ddd3; }
   .cp-topo strong { font-size: 1.02rem; }
   .cp-ferramentas { background: #fff; padding: 10px 12px 4px; border-bottom: 1px solid #e3ddd3; display: grid; gap: 8px; }
   .cp-ferramentas input { width: 100%; min-height: 46px; border: 1px solid #e3ddd3; border-radius: 8px; padding: 0 12px; font-size: 1rem; background: #fff; }
@@ -730,6 +730,24 @@
   .atalhos-linha { display:flex; flex-wrap:wrap; gap:6px; }
   .atalhos-linha button { width:auto; flex:1 1 auto; padding:9px 12px; font-size:.8rem; min-height:40px; background:#f3f3f3; color:#222; border:1px solid #ddd; border-radius:8px; }
   .atalhos-linha button[hidden] { display:none; }
+  /* v7.87.0 — Gestão mais enxuta no celular (proposta aprovada pelo Pablo, 22/11/2026; capturas em docs/ux/telas-enxutas-20261122). Toques continuam com 44 px. */
+  @media (max-width:600px) {
+    body > header { padding:10px 12px !important; }
+    body > header > p { display:none; }
+    body > main { padding:10px 12px; }
+    body:has(#tkc-topo) .usuario-bar { display:none; }   /* o nome e o Sair já estão no botão de conta do topo (conta.js) */
+    .dashboard { gap:6px; margin-bottom:8px; }
+    .dashboard-card { padding:6px 4px; display:flex; align-items:baseline; justify-content:center; gap:5px; }
+    .dashboard-card span { font-size:.72rem; }
+    .dashboard-card strong { font-size:1.15rem; }
+    .atalhos-hoje { padding:8px; margin-bottom:8px; }
+    .atalhos-hoje > strong { display:none; }
+    #atalhos-hoje .atalhos-linha { display:grid !important; grid-template-columns:repeat(4,1fr) !important; gap:6px !important; }
+    #atalhos-hoje .atalhos-linha button { flex-direction:column; gap:2px; padding:6px 2px !important; font-size:.74rem !important; display:flex; align-items:center; justify-content:center; min-height:58px !important; }   /* sem !important na exibição: o painel simplificado continua escondendo Pedidos e Números */
+    #atalhos-hoje .atalhos-linha button[hidden], #atalhos-hoje .atalhos-linha button[data-atalho="ferramentas"] { display:none !important; }   /* repetia a faixa "Ferramentas do gestor" logo abaixo */
+    .so-largo { display:none; }
+    .card { margin-bottom:10px; }
+  }
   /* v4.18: cores/estampas com texto livre só para Admin total (lista fica com o admin) */
   body.sem-gerir .so-admin-cores { display: none !important; }
   .tecido-ajuda { margin: 4px 0 0; font-size: .82rem; color: #5c5650; }
@@ -1049,7 +1067,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   }
 }
 </style>
-<link rel="stylesheet" href="tk-padrao.css?v=7.65.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.87.0">
 </head>
 <body>
 
@@ -1118,7 +1136,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
   </nav>
 
   <details class="extra ferramentas" id="details-ferramentas">
-    <summary><span class="ic" data-ico="ferramenta">🛠&#65039;</span> Ferramentas do gestor (números, avisos, auditoria, configurações)</summary>
+    <summary><span class="ic" data-ico="ferramenta">🛠&#65039;</span> Ferramentas do gestor<span class="so-largo"> (números, avisos, auditoria, configurações)</span></summary>
   <div class="stats-panel" id="stats-panel">
     <div class="stats-card"><span>Visualizações</span><strong id="stats-views">—</strong></div>
     <div class="stats-card"><span>Cliques no WhatsApp</span><strong id="stats-whats">—</strong></div>
@@ -6627,8 +6645,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   setTimeout(grupos, 0);
 })();
 </script>
-<script src="a11y.js?v=7.62.1"></script>
-<script src="conta.js?v=7.86.0"></script>
+<script src="a11y.js?v=7.87.0"></script>
+<script src="conta.js?v=7.87.0"></script>
 <script src="push.js?v=7.63.0"></script>
 
 <script>
