@@ -20,7 +20,9 @@ object WebKeeper {
     @Volatile var attached=false
     @Volatile var remoteVisible=false
     private val handler=Handler(Looper.getMainLooper())
-    private val pause=Runnable{if(!attached)web?.pauseTimers()}
+    // pauseTimers vale para TODAS as páginas do app: só pausa quando nenhuma janela do site (Gestão, Esteira…) está na frente.
+    private val pause=Runnable{if(!attached&&JanelasVisiveis.quantas==0)web?.pauseTimers()}
+    @Volatile var podePuxar=true
     /** Ações pedidas pelo menu do site (Atualizar app, Permissões do app); a tela aberta no momento responde. */
     @Volatile var actions:((String)->Unit)?=null
     @Volatile var download:((Long,String)->Unit)?=null
@@ -42,6 +44,10 @@ object WebKeeper {
         @JavascriptInterface fun salvarVisualLista(conta:String,visual:String){if(visual !in listOf("dividida","continua"))return;val c=context?.applicationContext?:return;runCatching{if(ReceivedFiles.trusted(web?.url)&&NativeRepository.get(c).store.auth()?.owner==conta)c.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+conta,visual).apply()}}
         @JavascriptInterface fun telaMensagensVisivel()=attached&&remoteVisible
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
+        /** App com janelas (2.5.0): a barra do site abre a janela de cada área; Mensagens continua nesta tela. */
+        @JavascriptInterface fun abrirModulo(endereco:String?):Boolean{val m=Modulo.paraUrl(endereco)?:return false;if(m==Modulo.MENSAGENS)return false;val c=context?.applicationContext?:return false;handler.post{Modulo.abrir(c,m,endereco)};return true}
+        @JavascriptInterface fun sairConta(){handler.post{val c=context?.applicationContext?:return@post;if(ReceivedFiles.trusted(web?.url))ContaApp.sair(c)}}
+        @JavascriptInterface fun podeAtualizar(v:Boolean){podePuxar=v}
         /** Clipe do Mensageiro: o próximo seletor de fotos/vídeos (em até 5 s) abre a gaveta nativa estilo WhatsApp. */
         @JavascriptInterface fun gavetaAnexo(opcoes:String?):Boolean{AttachRequest.set(android.os.SystemClock.elapsedRealtime(),(opcoes?:"{}").take(1000));return true}
     }
@@ -49,6 +55,7 @@ object WebKeeper {
         w.addJavascriptInterface(bridge,"TKAndroid")
         w.settings.apply{javaScriptEnabled=true;domStorageEnabled=true;allowFileAccess=false;allowContentAccess=true;javaScriptCanOpenWindowsAutomatically=false;setSupportMultipleWindows(true);mediaPlaybackRequiresUserGesture=true;mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;cacheMode=WebSettings.LOAD_DEFAULT
             if(!userAgentString.contains("TenkiterAndroid"))userAgentString+=" TenkiterAndroid/2.1"}
+        if(androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))runCatching{androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w,SCRIPT_PUXAR,setOf(Modulo.SITE))}
     }
     /** Abre a página escondida, uma vez por processo, só para quem já entrou no app. */
     fun preload(app:Context){

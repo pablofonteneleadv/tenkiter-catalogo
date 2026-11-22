@@ -20,9 +20,12 @@ import com.onesignal.OneSignal
 import com.onesignal.notifications.INotificationClickEvent
 import com.onesignal.notifications.INotificationClickListener
 import kotlinx.coroutines.*
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import org.json.JSONObject
 
 class MainActivity:Activity(),InboxView.Events {
+    companion object{const val ACAO_ATUALIZAR="br.com.tenkitermodas.mensagens.ATUALIZAR"}
+    private var forcarSessaoWeb=false;private var puxar:SwipeRefreshLayout?=null
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
     private lateinit var repo:NativeRepository
     private lateinit var inbox:InboxView
@@ -71,6 +74,7 @@ class MainActivity:Activity(),InboxView.Events {
         WebKeeper.download={id,name->receivedFiles.choose(id,name)}
         WebKeeper.actions={a->if(a=="lista"){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null;webTarget=0;webRequest="";conversation=0;pendingClick=0;peeking=false;openGeneration++}else if(a=="avisos")notificationSettings() else if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
         render();if(SetupGate.ok(this))full(conversation)else showSetup()
+        if(intent?.action==ACAO_ATUALIZAR)updater.check()
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
     }
     private var setup:SetupGate?=null
@@ -102,7 +106,7 @@ class MainActivity:Activity(),InboxView.Events {
     override fun login(identifier:String,password:String){
         if(syncing)return;syncing=true;inbox.loginState(true);inbox.status("Conferindo seu acesso…")
         scope.launch{
-            try{withContext(Dispatchers.IO){repo.login(identifier,password)};OneSignal.User.pushSubscription.optIn();inbox.reset();BackgroundSync.periodic(this@MainActivity);online=false;render()}
+            try{withContext(Dispatchers.IO){repo.login(identifier,password)};OneSignal.User.pushSubscription.optIn();inbox.reset();BackgroundSync.periodic(this@MainActivity);online=false;forcarSessaoWeb=true;seededSession="";render();deliverWeb()}
             catch(e:Exception){inbox.status(e.message?.take(200)?:"Não foi possível entrar agora.")}
             finally{syncing=false;inbox.loginState(false)}
             if(repo.store.auth()!=null){sync();syncNames()}
@@ -197,9 +201,9 @@ class MainActivity:Activity(),InboxView.Events {
         WebKeeper.configure(w)
         CookieManager.getInstance().setAcceptThirdPartyCookies(w,false)
         w.webViewClient=object:WebViewClient(){
-            override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{if(!r.isForMainFrame)return false;val u=r.url.toString();if(trusted(u))return false;if(r.hasGesture())external(u);return true}
+            override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{if(!r.isForMainFrame)return false;val u=r.url.toString();if(trusted(u))return false;val m=Modulo.paraUrl(u);if(m!=null&&m!=Modulo.MENSAGENS){Modulo.abrir(this@MainActivity,m,u);return true};if(r.hasGesture())external(u);return true}
             override fun onPageStarted(v:WebView,url:String,icon:android.graphics.Bitmap?){webAudio.cancel();AttachRequest.clear();chooser?.onReceiveValue(null);chooser=null}
-            override fun onPageFinished(v:WebView,url:String){if(trusted(url))deliverWeb()}
+            override fun onPageFinished(v:WebView,url:String){puxar?.isRefreshing=false;if(trusted(url)){v.evaluateJavascript(SCRIPT_PUXAR,null);deliverWeb()}}
             override fun onReceivedError(v:WebView,r:WebResourceRequest,e:WebResourceError){if(r.isForMainFrame){Toast.makeText(this@MainActivity,"Sem conexão. Tentando abrir as mensagens de novo…",Toast.LENGTH_LONG).show();handler.postDelayed({web?.reload()},6000)}}
         }
         w.webChromeClient=object:WebChromeClient(){
@@ -216,9 +220,11 @@ class MainActivity:Activity(),InboxView.Events {
                 return try{startActivityForResult(p.createIntent().apply{addCategory(Intent.CATEGORY_OPENABLE)},100);true}catch(_:Exception){cancel();false}
             }
             override fun onPermissionRequest(r:PermissionRequest){runOnUiThread{val origin=Uri.parse(r.origin.toString());if(origin.scheme!="https"||origin.host!="tenkitermodas.com.br"||!r.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)){r.deny();return@runOnUiThread};if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)r.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))else{audioRequest=r;requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),101)}}}
-            override fun onCreateWindow(v:WebView,dialog:Boolean,gesture:Boolean,msg:Message):Boolean{if(!gesture)return false;val child=WebView(this@MainActivity);child.webViewClient=object:WebViewClient(){override fun shouldOverrideUrlLoading(w:WebView,r:WebResourceRequest):Boolean{external(r.url.toString());w.destroy();return true}};(msg.obj as WebView.WebViewTransport).webView=child;msg.sendToTarget();return true}
+            override fun onCreateWindow(v:WebView,dialog:Boolean,gesture:Boolean,msg:Message):Boolean{if(!gesture)return false;val child=WebView(this@MainActivity);child.webViewClient=object:WebViewClient(){override fun shouldOverrideUrlLoading(w:WebView,r:WebResourceRequest):Boolean{val u=r.url.toString();val m=Modulo.paraUrl(u);if(m!=null&&m!=Modulo.MENSAGENS)Modulo.abrir(this@MainActivity,m,u) else external(u);w.destroy();return true}};(msg.obj as WebView.WebViewTransport).webView=child;msg.sendToTarget();return true}
         }
-        panel.addView(w,LinearLayout.LayoutParams(-1,0,1f));webPanel=panel;root.addView(panel,FrameLayout.LayoutParams(-1,-1))
+        // Arrastar a tela para baixo atualiza (como no Chrome), só com a página no topo e nada rolado embaixo do dedo.
+        val srl=SwipeRefreshLayout(this).apply{addView(w,android.view.ViewGroup.LayoutParams(-1,-1));setColorSchemeColors(Color.parseColor("#E67E22"));setOnChildScrollUpCallback{_,_->w.scrollY>0||!WebKeeper.podePuxar};setOnRefreshListener{w.evaluateJavascript("(function(){try{return !!(window.TKOcupado&&TKOcupado.pendentes()>0)}catch(e){return false}})()"){r->if(r=="true"){isRefreshing=false;Toast.makeText(this@MainActivity,"Ainda estou salvando. Espere terminar para atualizar.",Toast.LENGTH_LONG).show()}else{w.reload();handler.postDelayed({isRefreshing=false},15000)}}}}
+        puxar=srl;panel.addView(srl,LinearLayout.LayoutParams(-1,0,1f));webPanel=panel;root.addView(panel,FrameLayout.LayoutParams(-1,-1))
     }
     private fun deliverWeb(){
         val w=web?:return;if(!trusted(w.url))return
@@ -226,7 +232,9 @@ class MainActivity:Activity(),InboxView.Events {
         if(a!=null&&seededSession!=a.session){
             seededSession=a.session
             val json=JSONObject().put("whatsapp",a.owner).put("sessao",a.session).toString()
-            w.evaluateJavascript("(function(){if(localStorage.getItem('tm_session'))return false;localStorage.setItem('tm_session',${JSONObject.quote(json)});location.reload();return true})()"){r->if(r!="true")deliverWeb()};return
+            // Entrou pelo login das Mensagens: o site deste aparelho passa a usar esta conta (todas as janelas se atualizam).
+            val forcar=forcarSessaoWeb;forcarSessaoWeb=false;val q=JSONObject.quote(json)
+            w.evaluateJavascript("(function(f){var c=localStorage.getItem('tm_session');if(c&&!f)return false;if(c===$q)return false;localStorage.setItem('tm_session',$q);location.reload();return true})($forcar)"){r->if(r!="true")deliverWeb()};return
         }
         if(webTarget>0){val id=webTarget;val request=webRequest;w.evaluateJavascript("(function(){if(!window.TKMobileOpenConversation)return false;window.TKMobileOpenConversation($id,$peeking,${JSONObject.quote(request)});return true})()"){r->if(r=="true"&&webTarget==id&&webRequest==request)webTarget=0}}
         importWebSession()
@@ -244,7 +252,8 @@ class MainActivity:Activity(),InboxView.Events {
     private fun showNative(){nativeVisible=true;WebKeeper.remoteVisible=false;web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     private fun closeNativePresence(){if(!::repo.isInitialized)return;val generation=repo.store.generation;val sequence=repo.nextPresenceSequence();scope.launch(Dispatchers.IO){runCatching{repo.presence(0,"oculto",false,sequence){repo.store.generation==generation}}}}
-    override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
+    override fun onNewIntent(i:Intent){super.onNewIntent(i);setIntent(i);if(i.action==ACAO_ATUALIZAR&&::updater.isInitialized)updater.check()}
+    override fun onResume(){super.onResume();activityVisible=true;web?.resumeTimers();WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){if(nativeVisible)closeNativePresence();activityVisible=false;WebKeeper.detach();web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
     override fun onDestroy(){handler.removeCallbacks(ticker);webAudio.cancel();WebKeeper.actions=null;WebKeeper.download=null;runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}

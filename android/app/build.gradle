@@ -2,7 +2,7 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'br.com.tenkitermodas.mensagens'
     compileSdk 35
-    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 30; versionName '2.4.23' }
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 33; versionName '2.5.2' }
     buildFeatures { buildConfig true }
     def shared = new File(rootDir.parentFile, 'common.js').text
     def loginApi = (shared =~ /API_URL_PADRAO="([^"]+)"/)[0][1]
@@ -17,7 +17,7 @@ android {
         unitTests.includeAndroidResources = true
         unitTests.all {
             ['https.proxyHost','https.proxyPort','http.proxyHost','http.proxyPort','javax.net.ssl.trustStore','javax.net.ssl.trustStorePassword'].each { key -> if(System.getProperty(key)) systemProperty key,System.getProperty(key) }
-            systemProperty 'robolectric.dependency.repo.url','https://repo.maven.apache.org/maven2'
+            systemProperty 'robolectric.dependency.repo.url','https://maven-central.storage-download.googleapis.com/maven2'   // espelho do Maven Central (evita 429)
         }
     }
     signingConfigs {
@@ -43,6 +43,9 @@ dependencies {
     implementation 'com.onesignal:OneSignal:5.10.2'
     implementation 'androidx.work:work-runtime-ktx:2.10.0'
     implementation 'androidx.core:core-ktx:1.15.0'
+    // 2.5.0: janelas separadas por área (arrastar para atualizar e script nas telas do site).
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.webkit:webkit:1.12.1'
     // Câmera do anexo estilo WhatsApp (versões estáveis fixas).
     def camerax = '1.4.1'
     implementation "androidx.camera:camera-core:$camerax"
