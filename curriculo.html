@@ -321,17 +321,18 @@ function viewCadastro(aviso) {
     <label class="campo" for="email">E-mail</label><input type="email" id="email" name="email" autocomplete="email" inputmode="email" value="${esc(S.tmp.email || S.email || p.email || '')}" placeholder="voce@exemplo.com">
     <label class="campo" for="nome">Nome completo</label><input type="text" id="nome" name="nome" autocomplete="name" value="${esc(S.tmp.nome || p.nome || '')}">
     <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : normWhats11(S.tmp.whats || S.whats || p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
-    ${S.login ? '<div class="aviso">Você já está logada no nosso site, então não precisa criar senha.</div>' : `<label class="campo" for="senha">Crie uma senha <span class="obs">Mínimo 4 caracteres. É a mesma senha do nosso site: se você já tem cadastro nele, use a sua senha de sempre.</span></label>
+    ${S.login ? '<div class="aviso">Você já está logada no nosso site, então não precisa criar senha.</div>' : `<label class="campo" for="senha">Crie uma senha <span class="obs">Mínimo 8 caracteres. É a mesma senha do nosso site: se você já tem cadastro nele, use a sua senha de sempre.</span></label>
     <input type="password" id="senha" name="senha" autocomplete="new-password" value="${esc(S.tmp.senha || '')}">`}
     <div class="erro oculto" id="erro"></div>
     <button class="btn-p" id="ok">Continuar</button></div>`);
+  if (!S.login && window.TKConta) TKConta.ligarSenha(document.getElementById('senha'));
   const b = document.getElementById('ok');
   b.onclick = () => {
     const email = val('email').toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return erroBox('Digite um e-mail válido.');
     const nome = val('nome'), whats = normWhats11(S.login ? S.login.whatsapp : val('whats')), senha = S.login ? '' : document.getElementById('senha').value;
     if (nome.split(/\s+/).length < 2) return erroBox('Digite seu nome completo.');
     if (whats.length < 10 || whats.length > 13) return erroBox('Digite o WhatsApp com DDD.');
-    if (!S.login && senha.length < 4) return erroBox('A senha precisa ter pelo menos 4 caracteres.');
+    if (!S.login && senha.length < 8) { document.getElementById('senha').focus(); return erroBox('A senha precisa ter pelo menos 8 caracteres.'); }
     S.tmp.email = email; S.tmp.nome = nome; S.tmp.whats = whats; S.tmp.senha = senha; S.email = email;
     viewMoradia('');
   };
@@ -830,6 +831,6 @@ function viewFim() {
 <script src="nav.js?v=7.86.0" data-ativo="candidatura"></script>
 <script src="a11y.js?v=7.87.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
-<script src="conta.js?v=7.87.0"></script>
+<script src="conta.js?v=7.92.0"></script>
 </body>
 </html>

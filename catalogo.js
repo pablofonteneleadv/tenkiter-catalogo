@@ -1551,9 +1551,10 @@ try { tkSelExpirar_(); } catch (e) {}
       const emailNovo = el('input', { type: 'email', id: 'conta-email', placeholder: 'E-mail (opcional)', autocomplete: 'email' });
       const cpfNovo = el('input', { type: 'text', id: 'conta-cpf', placeholder: 'CPF (opcional)' });
       if (window.TKConta) TKConta.ligarCpf(cpfNovo);
-      const senha = el('input', { type: 'password', id: 'conta-senha', placeholder: aba === 'criar' ? 'Crie uma senha (mín. 4)' : 'Senha', autocomplete: aba === 'criar' ? 'new-password' : 'current-password' });
+      const senha = el('input', { type: 'password', id: 'conta-senha', placeholder: aba === 'criar' ? 'Crie uma senha (mín. 8)' : 'Senha', autocomplete: aba === 'criar' ? 'new-password' : 'current-password' });
       if (aba === 'criar') corpo.appendChild(nome);
       corpo.appendChild(whats); corpo.appendChild(senha);
+      if (aba === 'criar' && window.TKConta && TKConta.ligarSenha) TKConta.ligarSenha(senha);
       if (aba === 'criar') {
         corpo.appendChild(emailNovo); corpo.appendChild(cpfNovo);
         corpo.appendChild(el('p', { className: 'conta-opc-txt', text: 'E-mail e CPF são opcionais. Se quiser informar, você poderá entrar também por eles e recuperar a senha sozinho(a) se esquecer.' }));
@@ -1563,7 +1564,7 @@ try { tkSelExpirar_(); } catch (e) {}
       async function enviar() {
         const erroEl = document.getElementById('conta-erro');
         if (!whats.value || !senha.value || (aba === 'criar' && !nome.value.trim())) { erroEl.textContent = 'Preencha todos os campos.'; return; }
-        if (aba === 'criar' && senha.value.length < 4) { erroEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
+        if (aba === 'criar' && senha.value.length < 8) { erroEl.textContent = 'A senha precisa ter pelo menos 8 caracteres.'; senha.focus(); return; }
         if (aba === 'criar' && cpfNovo.value && window.TKConta && !TKConta.cpfValido(cpfNovo.value)) { erroEl.textContent = 'CPF inválido. Confira os 11 números (ou deixe em branco).'; return; }
         ok.disabled = true; const rotulo = ok.textContent; ok.textContent = 'Aguarde…';
         const r = aba === 'criar' ? await registrarClienteApi(nome.value.trim(), whats.value, senha.value, { cpf: cpfNovo.value, email: emailNovo.value }) : await entrarComSenha(whats.value, senha.value);

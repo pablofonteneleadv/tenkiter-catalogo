@@ -49,6 +49,31 @@
     var dia = +m[1], mes = +m[2], ano = +m[3];
     return mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31 && ano >= 1900 && ano <= new Date().getFullYear();
   }
+  /* v7.92.0 — Senha nova: conferência no próprio campo (pedido do Pablo, 24/11/2026). O servidor exige 8 caracteres;
+   * antes as telas diziam 4 e só no fim (ou no servidor) a pessoa descobria. Mostra quantos faltam enquanto digita. */
+  var SENHA_MIN = 8;
+  function senhaOk(v) { return String(v || '').length >= SENHA_MIN; }
+  function ligarSenha(input) {
+    if (!input || input.getAttribute('data-tkc-senha')) return null;
+    input.setAttribute('data-tkc-senha', '1'); input.setAttribute('minlength', String(SENHA_MIN));
+    var dica = document.createElement('div'); dica.className = 'tkc-senha-dica'; dica.setAttribute('aria-live', 'polite');
+    if (!input.id) input.id = 'tkc-senha-' + Math.random().toString(36).slice(2, 8);
+    dica.id = input.id + '-dica'; input.setAttribute('aria-describedby', dica.id);
+    function pintar() {
+      var n = String(input.value || '').length, falta = SENHA_MIN - n;
+      dica.classList.toggle('tkc-senha-ok', falta <= 0);
+      dica.textContent = falta <= 0 ? '✓ Senha com ' + SENHA_MIN + ' ou mais caracteres' : (n ? 'Faltam ' + falta + ' caractere' + (falta > 1 ? 's' : '') + ' (mínimo ' + SENHA_MIN + ')' : 'Mínimo ' + SENHA_MIN + ' caracteres');
+      input.setAttribute('aria-invalid', n && falta > 0 ? 'true' : 'false');
+    }
+    if (!document.getElementById('tkc-senha-css')) {
+      var st = document.createElement('style'); st.id = 'tkc-senha-css';
+      st.textContent = '.tkc-senha-dica{font-size:.82rem;color:var(--laranja-txt);margin:4px 0 8px}.tkc-senha-dica.tkc-senha-ok{color:#0f6a40}';
+      document.head.appendChild(st);
+    }
+    input.insertAdjacentElement('afterend', dica);
+    input.addEventListener('input', pintar); pintar();
+    return dica;
+  }
   function ligarCpf(input) {
     if (!input || input.getAttribute('data-tkc-cpf')) return;
     input.setAttribute('data-tkc-cpf', '1'); input.setAttribute('inputmode', 'numeric'); input.setAttribute('maxlength', '14'); input.setAttribute('autocomplete', 'off');
@@ -362,6 +387,6 @@
   } catch (e) { /* navegador sem eventos: segue sem o botão */ }
   function nomeTopo(n) { nomeDado = String(n || '').trim().slice(0, 80); montarTopo(); }
 
-  window.TKConta = { ligarCpf: ligarCpf, cpfMask: cpfMask, cpfValido: cpfValido, emailValido: emailValido, nascMask: nascMask, nascValida: nascValida, abrirRecuperar: abrirRecuperar, avisoContaExiste: avisoContaExiste, precisaCpf: precisaCpf, faixaCpf: faixaCpf,
+  window.TKConta = { SENHA_MIN: SENHA_MIN, senhaOk: senhaOk, ligarSenha: ligarSenha, ligarCpf: ligarCpf, cpfMask: cpfMask, cpfValido: cpfValido, emailValido: emailValido, nascMask: nascMask, nascValida: nascValida, abrirRecuperar: abrirRecuperar, avisoContaExiste: avisoContaExiste, precisaCpf: precisaCpf, faixaCpf: faixaCpf,
     nomeTopo: nomeTopo, atualizarTopo: montarTopo, sair: sairTopo };
 })();

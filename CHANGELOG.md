@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.92.0 — Senha nova: mínimo de 8 conferido no próprio campo
+
+- **Relato do Pablo:** o currículo dizia "Mínimo 4 caracteres", mas no final só aceitava 8 e obrigava a voltar.
+- O servidor já exigia 8 em todo o site; as telas é que diziam 4. Corrigido no currículo, em Minha conta (Criar conta) da loja, no cadastro do Treinamento e nas telas da gestão (nova conta, trocar senha).
+- **Conferência enquanto digita** (componente único `TKConta.ligarSenha` em `conta.js`): logo abaixo do campo aparece "Mínimo 8 caracteres", "Faltam N caracteres" ou "✓ Senha com 8 ou mais caracteres". Se tentar seguir com menos, explica na hora e volta o cursor para a senha.
+- **Teste novo:** `senha_minima_ui.py` (19).
+
 ## 7.91.0 — Currículo: Instagram confirmado pelo Direct da loja
 
 - **Pedido do Pablo:** muitas candidatas escreviam o @ errado. Agora:

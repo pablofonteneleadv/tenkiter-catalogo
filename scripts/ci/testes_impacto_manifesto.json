@@ -53,6 +53,10 @@
       "catalogo",
       "ci"
     ],
+    "tests/senha_minima_ui.py": [
+      "catalogo",
+      "treinamentos"
+    ],
     "tests/curriculo_instagram_ui.py": [
       "treinamentos",
       "mensagens"
