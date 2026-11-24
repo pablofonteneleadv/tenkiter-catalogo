@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.91.0 — Currículo: Instagram confirmado pelo Direct da loja
+
+- **Pedido do Pablo:** muitas candidatas escreviam o @ errado. Agora:
+  - **o campo limpa sozinho** enquanto ela digita ou cola (link do perfil, espaço, acento, @ repetido) e mostra o que arrumou;
+  - **confirmação pelo Direct:** aparece um código (ex.: TK-AB2CD3); ela toca em "Copiar código e abrir o Direct", cola e envia para a loja. O @ e a foto vêm do próprio Instagram, então não tem como ser engano. A tela mostra a foto e o @ e ela confirma "Sim, sou eu". Se a página recarregar ao voltar do Instagram, continua no mesmo código.
+  - **a loja responde sozinha** no Direct (mensagem automática, avisa que ela já está concorrendo e que não precisa responder) e a **conversa é encerrada** (não aparece na fila de quem atende, mas fica salva para todos verem).
+  - Quem não consegue agora pode continuar sem confirmar; no card de Currículos aparece **IG ✓** (confirmado, com a data) ou **IG ?** (só digitado).
+- **Servidor das Mensagens (Worker):** rota pública `/cv/ig` (cria código aleatório com limite por IP e informa se chegou) e reconhecimento do código nas mensagens do Zernio; a foto e "segue a loja" do remetente passam a ser guardadas no aviso.
+- **Depende do servidor RH 3.36** (publicação manual) para gravar o Instagram confirmado no currículo.
+- **Testes:** `curriculo_instagram_ui.py` (19) e bloco novo em `worker_mensagens_conversa.js` (469).
+
 ## 7.90.0 — Currículos: candidata não trava na foto; CPF e zoom no card
 
 - **Relato do Pablo:** várias candidatas dizem que não conseguem continuar depois da foto, mas a foto aparece no card.

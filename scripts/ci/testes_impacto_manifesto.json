@@ -53,6 +53,10 @@
       "catalogo",
       "ci"
     ],
+    "tests/curriculo_instagram_ui.py": [
+      "treinamentos",
+      "mensagens"
+    ],
     "tests/curriculo_foto_trava_ui.py": [
       "treinamentos"
     ],

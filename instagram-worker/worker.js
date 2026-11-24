@@ -5082,7 +5082,8 @@ async function rotaZernio_(env, req, url, ctx) {
     if(z&&conta&&String(conta)!==String(z.conta.id))return resp(200,{ok:true,ignorado:true});
     const dados={event:b.event,account:{accountId:b.account?.accountId||b.account?.id||''},message:{}};
     for(const k of ['platform','platformMessageId','id','conversationId','direction','text','sentAt'])if(k in m)dados.message[k]=String(m[k]||'');
-    dados.message.sender=Object.fromEntries(['id','name','username'].filter(k=>m.sender?.[k]!=null).map(k=>[k,String(m.sender[k])]));
+    dados.message.sender=Object.fromEntries(['id','name','username','picture'].filter(k=>m.sender?.[k]!=null).map(k=>[k,String(m.sender[k]).slice(0,1000)]));
+    if(typeof m.sender?.instagramProfile?.isFollower==='boolean')dados.message.sender.instagramProfile={isFollower:m.sender.instagramProfile.isFollower};   // v7.91.0: foto e "segue a loja" para a confirmação da candidata
     dados.message.attachments=(Array.isArray(m.attachments)?m.attachments:[]).slice(0,20).map(a=>Object.fromEntries(['type','originalType','url'].filter(k=>a?.[k]!=null).map(k=>[k,String(a[k])])));
     const sr=m.storyReply||m.metadata?.storyReply;
     if(sr)dados.message.storyReply=Object.fromEntries(['storyUrl','storyId'].filter(k=>sr[k]!=null).map(k=>[k,String(sr[k])]));
@@ -5114,6 +5115,74 @@ async function processarFilaZernio_(env){
   }
 }
 const ZERNIO_TIPO_ = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', sticker: 'figurinha', share: 'compartilhamento' };
+/* ---- v7.91.0: Instagram da candidata confirmado pelo Direct (pedido do Pablo, 24/11/2026) ----
+ * O currículo pede um código (POST /cv/ig) e a candidata o envia no Direct da loja. Quando a mensagem chega pelo Zernio,
+ * o @ e a foto vêm do próprio Instagram: não há como digitar errado. A loja responde sozinha (mensagem automática) e a
+ * conversa é encerrada (fica salva, some da fila de quem atende). GET /cv/ig?c=TK-XXXXXX devolve se já chegou.
+ * Público por natureza (a candidata ainda não tem acesso às Mensagens): só cria código aleatório e lê o resultado do
+ * próprio código; limite por IP. O RH confere o código no servidor antes de gravar no currículo. */
+const CV_IG_ALFA_ = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', CV_IG_RE_ = /\bTK-?([A-HJ-NP-Z2-9]{6})\b/i;
+async function cvIgTabela_(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS cv_ig (codigo TEXT PRIMARY KEY, criado TEXT NOT NULL, ip TEXT NOT NULL DEFAULT '', confirmado_em TEXT NOT NULL DEFAULT '', usuario TEXT NOT NULL DEFAULT '', nome TEXT NOT NULL DEFAULT '', foto TEXT NOT NULL DEFAULT '', segue INTEGER NOT NULL DEFAULT -1, conversa INTEGER NOT NULL DEFAULT 0)").run();
+}
+async function rotaCvIg_(env, req, url, J) {
+  await cvIgTabela_(env);
+  if (req.method === 'POST') {
+    const ip = String(req.headers.get('CF-Connecting-IP') || '').slice(0, 64);
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM cv_ig WHERE ip=? AND criado>=?').bind(ip, new Date(Date.now() - 3600000).toISOString()).first();
+    if (n && Number(n.n) >= 20) return J({ ok: false, erro: 'Muitos códigos pedidos agora. Espere alguns minutos e tente de novo.' }, 429);
+    await env.DB.prepare('DELETE FROM cv_ig WHERE criado<?').bind(new Date(Date.now() - 30 * DIA_MS_).toISOString()).run();
+    let codigo = '';
+    for (let t = 0; t < 5 && !codigo; t++) {
+      const c = Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => CV_IG_ALFA_[x % CV_IG_ALFA_.length]).join('');
+      const r = await env.DB.prepare('INSERT OR IGNORE INTO cv_ig (codigo, criado, ip) VALUES (?, ?, ?)').bind(c, agora(), ip).run();
+      if (r.meta && r.meta.changes === 1) codigo = c;
+    }
+    if (!codigo) return J({ ok: false, erro: 'Não consegui criar o código agora. Tente de novo.' }, 503);
+    const z = await zernioCfg_(env);
+    return J({ ok: true, codigo: 'TK-' + codigo, loja: z && z.conta && z.conta.usuario ? String(z.conta.usuario).replace(/^@/, '') : '', direct: !!z });
+  }
+  if (req.method === 'GET') {
+    const m = CV_IG_RE_.exec(String(url.searchParams.get('c') || ''));
+    if (!m) return J({ ok: false, erro: 'Código inválido.' }, 400);
+    const x = await env.DB.prepare('SELECT confirmado_em, usuario, nome, foto, segue FROM cv_ig WHERE codigo=?').bind(m[1].toUpperCase()).first();
+    if (!x) return J({ ok: false, erro: 'Código não encontrado. Peça um novo.' }, 404);
+    return J({ ok: true, confirmado: !!x.confirmado_em, usuario: x.usuario, nome: x.nome, foto: x.foto, segue: Number(x.segue), em: x.confirmado_em });
+  }
+  return J({ ok: false, erro: 'Método não aceito.' }, 405);
+}
+/** Mensagem do Direct com um código TK-XXXXXX válido: grava o @ e a foto, responde uma vez e encerra a conversa. true = era código. */
+async function confirmarCvIg_(env, z, m, snd, cid) {
+  const mt = CV_IG_RE_.exec(String(m.texto || '')); if (!mt) return false;
+  await cvIgTabela_(env);
+  const codigo = mt[1].toUpperCase();
+  const existe = await env.DB.prepare('SELECT confirmado_em, usuario FROM cv_ig WHERE codigo=? AND criado>=?').bind(codigo, new Date(Date.now() - 7 * DIA_MS_).toISOString()).first();
+  if (!existe) return false;                                                    // código de outra coisa ou vencido: conversa segue normal
+  let usuario = String(snd.username || '').replace(/^@/, '').slice(0, 60), nome = String(snd.name || '').slice(0, 80);
+  let foto = /^https:\/\//i.test(String(snd.picture || '')) ? String(snd.picture).slice(0, 1000) : '';
+  const pf = snd.instagramProfile || {}, segue = pf.isFollower === true ? 1 : pf.isFollower === false ? 0 : -1;
+  if ((!usuario || !foto) && cid) {                                             // o aviso nem sempre traz a foto: a conversa no Zernio traz
+    const r = await zernioApi_(z.chave, 'GET', '/inbox/conversations/' + encodeURIComponent(cid) + '?accountId=' + encodeURIComponent(z.conta.id), null, 8000);
+    const c = (r.ok && r.j && (r.j.conversation || r.j.data || r.j)) || {};
+    if (!usuario) usuario = String(c.participantUsername || '').replace(/^@/, '').slice(0, 60);
+    if (!nome) nome = String(c.participantName || '').slice(0, 80);
+    if (!foto && /^https:\/\//i.test(String(c.participantPicture || ''))) foto = String(c.participantPicture).slice(0, 1000);
+  }
+  if (!usuario) return false;
+  if (existe.confirmado_em) return existe.usuario === usuario;                 // mandou o mesmo código de novo: não responde outra vez
+  const conv = Number(m._conversaId) || 0;
+  const up = await env.DB.prepare("UPDATE cv_ig SET confirmado_em=?, usuario=?, nome=?, foto=?, segue=?, conversa=? WHERE codigo=? AND confirmado_em=''").bind(agora(), usuario, nome, foto, segue, conv, codigo).run();
+  if (!up.meta || up.meta.changes !== 1 || !conv) return true;
+  const primeiro = nome.trim().split(/\s+/)[0] || '';
+  const texto = 'Oi' + (primeiro ? ', ' + primeiro : '') + '! Recebemos o seu código: o seu Instagram (@' + usuario + ') está confirmado no seu currículo da TENKiTER Modas e você já está concorrendo às nossas vagas. Se o seu perfil combinar com uma vaga, chamamos você pelo WhatsApp.\n\nEsta é uma mensagem automática: não precisa responder. 💛';
+  const idLocal = 'cvig' + Array.from(crypto.getRandomValues(new Uint8Array(10)), (x) => x.toString(16).padStart(2, '0')).join('');
+  try { await responderMensagem_(env, 'auto', { conversa: conv, texto: texto, idLocal: idLocal }); } catch (e) { /* sem resposta, a conversa ainda é encerrada: o currículo já está confirmado */ }
+  const t = agora();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO msg_encerramento (conversa_id, canal, pessoa, contato, motivo, em, por) SELECT id, canal, pessoa, contato, 'concluido', ?, 'auto' FROM msg_conversa WHERE id=? AND encerrada_em='' AND grupo=0").bind(t, conv),
+    env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo='concluido', nao_lidas=0, reaberta_em='', atualizada_em=? WHERE id=? AND encerrada_em='' AND grupo=0").bind(t, t, conv)]);
+  return true;
+}
 async function processarEventoZernio_(env, b, basico=false) {
   const z = await zernioCfg_(env), msg = (b && b.message) || {}; if (!z || msg.platform !== 'instagram') return false;
   const contaEv = b.account && (b.account.accountId || b.account.id); if (contaEv && String(contaEv) !== z.conta.id) return false;
@@ -5132,6 +5201,7 @@ async function processarEventoZernio_(env, b, basico=false) {
     midiaUrl: mime && a0 && /^https:\/\//i.test(String(a0.url || '')) ? String(a0.url) : '', midiaMime: mime, midiaSeg: 0, ctxTipo: '', ctxRef: '', ctxUrl: '', ctxPost: 0 };
   if (!m.extId) return false;
   const nova = await gravarMensagem_(env, 'instagram', m);
+  if (nova && entrada) { let cv = false; try { cv = await confirmarCvIg_(env, z, m, snd, cid); } catch (e) { cv = false; } if (cv) m._bloquearAuto = true; }   // v7.91.0: código da candidata
   if(basico){
     await guardarEntrada_(env,'zernio-contexto','instagram',b);
     if(nova)await agendarAuto_(null,env,'instagram',m);
@@ -6853,6 +6923,7 @@ export default {
     if (url.pathname === '/catalogo/composicoes' && req.method === 'GET') { try { return J({ ok: true, composicoes: await composicoesFotoIA_(env) }); } catch (e) { return J({ ok: false, erro: 'As composições não responderam agora.' }, 503); } }
     if (url.pathname === '/familias') { try { return await rotaFamiliasPublica_(env, req, h); } catch (e) { return J({ ok: false, erro: 'As famílias de peças não responderam agora.' }, 503); } }   // v7.44.0: pública, sem sessão
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
+    if (url.pathname === '/cv/ig') { try { return await rotaCvIg_(env, req, url, J); } catch (e) { return J({ ok: false, erro: 'Não consegui conferir o Instagram agora. Tente de novo.' }, 503); } }   // v7.91.0: pública (candidata)
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {
       const resposta = await rotaWebhookMensagens_(env, req, url, ctx);
