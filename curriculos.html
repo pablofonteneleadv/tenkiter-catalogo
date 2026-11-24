@@ -45,6 +45,8 @@
   .oculto { display:none !important; }
   html.embed header, html.embed .nav-inferior { display:none; } html.embed body { padding-bottom:0; background:transparent; } html.embed main { padding:0; max-width:none; }
   .det img { background:#f5f1e8; }
+  .cv-foto { position:relative; display:block; width:160px; max-width:100%; margin:10px 0; padding:0; border:0; background:none; cursor:zoom-in; min-height:44px; min-width:44px; }
+  .cv-foto .cv-lupa { position:absolute; right:6px; bottom:6px; background:rgba(0,0,0,.6); color:#fff; border-radius:99px; font-size:.8rem; padding:3px 6px; line-height:1; }
   .det .acoes a { min-height:44px; display:inline-flex; align-items:center; }
   .topo > div { min-width:0; }
   .nome { overflow-wrap:anywhere; }
@@ -151,7 +153,7 @@ async function iniciar() {
   const r = pListaCv ? await pListaCv : await chamar('curriculos_listar');
   pListaCv = null;
   if (!r.ok) return falhaInicial(r.semPermissao ? 'Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".' : r.erro);
-  novos = r.curriculos; STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
+  novos = etapasReais(r.curriculos); STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
   const abrir = (new URLSearchParams(location.search).get('abrir') || '').replace(/\D/g, '');
   const irParaAntigos = new URLSearchParams(location.search).get('aba') === 'antigos';
   if (abrir) { busca = abrir; }
@@ -165,7 +167,7 @@ async function iniciar() {
 }
 async function carregarNovos() {
   const r = await chamar('curriculos_listar'); if (!r.ok) return erro(r.erro);
-  novos = r.curriculos; STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
+  novos = etapasReais(r.curriculos); STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
 }
 async function carregarAntigos(tudo) {
   // Escalonado: sem busca e sem "tudo", o servidor já devolve só um pedaço recente (rápido) --
@@ -284,12 +286,17 @@ function buscarAntigosComDebounce() {
   clearTimeout(buscaAntigosTimer);
   buscaAntigosTimer = setTimeout(() => carregarAntigos(), 350);
 }
+/* v7.90.0: a etapa "Foto" só muda no servidor quando a pessoa avança; se a foto já chegou, ela está nas perguntas. */
+function etapasReais(lista) {
+  return (Array.isArray(lista) ? lista : []).map(r => (r && r.Etapa === 'Foto' && r.FotoUrl) ? Object.assign({}, r, { Etapa: 'Perfil' }) : r);
+}
+function ampliarFoto(url) { if (url && window.TKFotoGrande) TKFotoGrande.abrir({ itens: [{ url, tipo: 'foto' }], indice: 0 }); }
 function tagEtapa(r) {
   const c = r.Etapa === 'Enviado' ? 'ok' : (r.Etapa === 'Menor de 18' ? 'ru' : 'al');
   return `<span class="tag ${c}">${E(r.Etapa)}</span>`;
 }
 const CAMPOS = [
-  ['Contato', [['WhatsApp', 'WhatsApp'], ['Email', 'E-mail'], ['Instagram', 'Instagram'], ['Nascimento', 'Nascimento'], ['Idade', 'Idade'], ['Moradia', 'Onde mora'], ['Chegada', 'Como chegaria'], ['AgendadoEm', 'Agendado para']]],
+  ['Contato', [['WhatsApp', 'WhatsApp'], ['CPF', 'CPF'], ['Email', 'E-mail'], ['Instagram', 'Instagram'], ['Nascimento', 'Nascimento'], ['Idade', 'Idade'], ['Moradia', 'Onde mora'], ['Chegada', 'Como chegaria'], ['AgendadoEm', 'Agendado para']]],
   ['Vaga e condições', [['Vaga', 'Vaga'], ['Salario', 'Salário esperado'], ['Inicio', 'Pode começar'], ['Ritmo', 'Trabalha no horário do comércio'], ['Horario', 'Horário disponível'], ['ForaHorario', 'Fora do horário comercial'], ['Impedimento', 'Impedimento de horário']]],
   ['Experiência', [['JaTrabalhou', 'Já trabalhou'], ['UltEmpresa', 'Última empresa'], ['UltFuncao', 'Função'], ['UltMeses', 'Meses'], ['UltMotivo', 'Motivo da saída'], ['TiposEmpresa', 'Tipos de empresa'], ['Tarefas', 'Tarefas'], ['Liderou', 'Já liderou'], ['LiderQuantos', 'Liderança'], ['Referencia', 'Referência'], ['RefContato', 'Contato da referência']]],
   ['Estudos e perfil', [['Escolaridade', 'Escolaridade'], ['Cursos', 'Cursos'], ['Q_Troca', 'Cliente irritado (troca)'], ['Q_Troco', 'Colega errando o troco'], ['Q_Meta', 'Meta longe'], ['Q_TresClientes', 'Três clientes juntos'], ['Motiva', 'O que motiva'], ['Situacao', 'Problema que resolveu'], ['PorQue', 'Por que a TENKiTER']]],
@@ -420,7 +427,7 @@ function itemNovo(r) {
   const paradaTxt = (diasParada !== null && diasParada >= 3) ? ` <span class="tag al" style="padding:1px 7px">⏳ ${diasParada}d parada</span>` : '';
   const etapaBloqueiaCobranca = r.Etapa === 'Enviado' || r.Etapa === 'Menor de 18';
   d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img ${atribSrc(fotoUrlOk(r.FotoUrl))} onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${criadoTxt ? 'Cadastrada ' + criadoTxt + ' · ' : ''}${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}${paradaTxt}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span>${desistiuAntes(r) ? ' <span class="tag ru">↩️ já desistiu antes</span>' : ''}</div></div>
-    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img ${atribSrc(fotoUrlOk(r.FotoUrl))} onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">Cobrar currículo</a>` : ''}</div>
+    <div class="det">${r.FotoUrl ? `<button type="button" class="cv-foto" data-k="ampliar" aria-label="Ampliar a foto de ${E(primeiroNome(r.Nome))}"><img ${atribSrc(fotoUrlOk(r.FotoUrl))} onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"><span class="cv-lupa" aria-hidden="true">🔍</span></button>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">Cobrar currículo</a>` : ''}</div>
     ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
     <div class="linha" style="align-items:center;justify-content:space-between;gap:8px"><div class="grupo" style="margin-top:0;grid-column:auto;flex:1 1 auto">Treinamento</div><button type="button" class="sec" data-k="atualizar-treino" style="min-height:44px;min-width:0;flex:0 0 auto">Atualizar</button></div><div data-k="treino" style="margin:4px 0 12px">Abra o card para ver.</div>
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
@@ -432,6 +439,8 @@ function itemNovo(r) {
     <dl>${dl}</dl>${historicoHtml(r)}</div>`;
   /* abrir o card SEMPRE carrega o treinamento (também quando abre sozinho pelo link ?abrir=: antes ficava em "Abra o card pra ver.") */
   d._abrir = () => { d.classList.add('aberto'); carregarTreino(r, d.querySelector('[data-k=treino]')); };
+  const amp = d.querySelector('[data-k=ampliar]');
+  if (amp) amp.onclick = () => { const im = amp.querySelector('img'); ampliarFoto(im && (im.currentSrc || im.src)); };
   d.querySelector('[data-k=atualizar-treino]').onclick = () => carregarTreino(r, d.querySelector('[data-k=treino]'));
   d.querySelector('.topo').onclick = () => {
     if (d.classList.contains('aberto')) d.classList.remove('aberto'); else d._abrir();
