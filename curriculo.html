@@ -97,6 +97,13 @@ const OP = {
 
 /* ==== utilidades ==== */
 const $app = document.getElementById('app');
+/* v7.90.0: guarda o login no aparelho logo depois do cadastro. Antes não guardava: se a página recarregasse
+ * (comum ao abrir a câmera em celular simples), a candidata voltava ao começo, caía no site de treinamento pedindo
+ * senha e se perdia. Agora a página recarrega e retoma sozinha na mesma etapa. */
+function guardarLogin() {
+  if (!S.whats || !S.sessao) return;
+  try { localStorage.setItem('tm_session', JSON.stringify({ whatsapp: S.whats, sessao: S.sessao })); S.login = { whatsapp: S.whats, sessao: S.sessao }; } catch (e) { /* sem armazenamento: segue sem lembrar */ }
+}
 function loginLocal() { try { const x = JSON.parse(localStorage.getItem('tm_session') || 'null'); return x && x.whatsapp && x.sessao ? x : null; } catch (e) { return null; } }
 const S = { login: loginLocal(), fotoUrl: '', enviado: false, email: '', cvToken: '', prefill: {}, nome: '', whats: '', sessao: '', d: {}, desafio: null, trocou: false, passo: 0, tmp: {} };
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -260,12 +267,13 @@ function abrirRecuperarCurriculo(ident) {
 }
 function entrarRetomada(r) {
   S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || ''; S.enviado = !!r.enviado; if (r.email) S.email = r.email;
+  guardarLogin();
   S.d = dadosDoServidor(r.dados || {});
   if (r.status === 'Desistiu') return viewDesistiu();
   if (r.menor) return viewMenor();
   if (r.etapa === 'Instagram' || r.etapa === 'Sem Instagram') return viewInstagram(S.d.instagram || '');
   if (r.etapa === 'Foto') return viewFoto();
-  S.passo = 0; viewPerfil();
+  S.passo = S.enviado ? 0 : rascunhoPasso(); viewPerfil();
 }
 /* ==== quem marcou "desistiu" antes: oferece reativar o próprio currículo ==== */
 function viewDesistiu() {
@@ -399,6 +407,7 @@ function viewFinalizar(aviso) {
     }
     if (!r.ok) return erroBox(r.erro);
     S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || '';
+    guardarLogin();
     if (r.menor) return viewMenor();
     viewInstagram((S.prefill || {}).instagram || '');
   };
@@ -446,7 +455,7 @@ function viewInstagram(inicial, msg) {
     const ig = val('insta'); if (!ig) return erroBox('Digite seu @ do Instagram.');
     carregando(b, true); const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, instagram: ig }); carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
-    S.d.instagram = ig; if (S.fotoUrl) { S.passo = S.passoSalvo != null ? S.passoSalvo : 0; viewPerfil(); } else viewFoto();
+    S.d.instagram = ig; if (S.fotoUrl) { S.passo = S.passoSalvo != null ? S.passoSalvo : rascunhoPasso(); viewPerfil(); } else viewFoto();
   };
   document.getElementById('sem').onclick = async () => {
     const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, semInstagram: true });
@@ -467,37 +476,85 @@ function reduzirImagem(arquivo, maxLado, qualidade) {
     img.src = url;
   });
 }
+/* v7.90.0 — Foto sem travar (relato do Pablo, 24/11/2026: várias candidatas "não passam da foto", mas a foto chega).
+ * A foto chegava ao servidor e a resposta se perdia no caminho (internet fraca): o botão Continuar seguia apagado e a
+ * pessoa enviava de novo (10 de 56 enviaram 2 ou 3 vezes). Agora: aviso claro enquanto envia, limite de tempo,
+ * conferência no servidor quando a resposta não chega, e a tela segue sozinha quando a foto é aceita. */
+async function fotoJaNoServidor() {
+  const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
+  return !!(st && st.ok && Array.isArray(st.faltando) && st.faltando.indexOf('Foto de perfil') === -1 && st.estado !== 'menor');
+}
+async function seguirDepoisDaFoto() {
+  if (S.enviado) { // currículo já enviado antes: só faltava a foto
+    const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
+    if (st.ok && st.estado === 'completo') return viewFim();
+  }
+  S.passo = S.passoSalvo != null ? S.passoSalvo : rascunhoPasso(); viewPerfil();
+}
 function viewFoto(msg) {
   tela(`${progresso(28)}<div class="card">
     <h2>Sua foto de perfil</h2>
     <p class="sub">A foto é obrigatória no currículo. Envie uma foto <b>atual do seu rosto</b>, com boa luz. Não precisa ser de corpo inteiro.</p>
     <div style="text-align:center;margin:10px 0">
-      <div id="prev" style="width:150px;height:150px;border-radius:50%;background:#eee;margin:0 auto 12px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:2.4rem">${S.fotoUrl ? `<img src="${esc(S.fotoUrl)}" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover" alt="">` : '📷'}</div>
+      <div id="prev" style="width:150px;height:150px;border-radius:50%;background:#eee;margin:0 auto 12px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:2.4rem">📷</div>
       <input type="file" id="arq" accept="image/*" hidden>
       <button class="btn-s" id="esc" style="margin-top:0">${S.fotoUrl ? 'Trocar foto' : 'Escolher foto'}</button>
     </div>
+    <div class="aviso oculto" id="foto-st" role="status" aria-live="polite"></div>
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
-    <button class="btn-p" id="ok" ${S.fotoUrl ? '' : 'disabled'}>Continuar</button></div>`);
-  document.getElementById('esc').onclick = () => document.getElementById('arq').click();
+    <button class="btn-p" id="ok">Continuar</button></div>`);
+  const st = document.getElementById('foto-st');
+  // Prévia montada pelo DOM (sem interpolar src); 'servidor' = foto confirmada lá, sem endereço aqui.
+  const prev = (src, fraca) => {
+    const box = document.getElementById('prev'); if (!box) return;
+    if (!src || !/^(https:|data:image\/)/.test(src)) { box.textContent = S.fotoUrl ? '✅' : '📷'; return; }
+    const im = document.createElement('img'); im.alt = ''; im.referrerPolicy = 'no-referrer';
+    im.style.cssText = 'width:100%;height:100%;object-fit:cover' + (fraca ? ';opacity:.55' : ''); im.src = src;
+    box.textContent = ''; box.appendChild(im);
+  };
+  prev(S.fotoUrl);
+  const aviso = t => { st.innerHTML = t; st.classList.toggle('oculto', !t); };
+  let enviando = false;
+  document.getElementById('esc').onclick = () => { if (!enviando) document.getElementById('arq').click(); };
   document.getElementById('arq').onchange = async e => {
-    const f = e.target.files && e.target.files[0]; if (!f) return; erroBox('');
-    const bt = document.getElementById('esc'); carregando(bt, true);
+    const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || enviando) return; erroBox('');
+    const bt = document.getElementById('esc'), ok = document.getElementById('ok');
+    enviando = true; carregando(bt, true); ok.disabled = true;
+    aviso('⏳ <b>Enviando sua foto…</b> Pode levar até 30 segundos. Não feche esta tela.');
+    let dataUrl = '';
     try {
-      const dataUrl = await reduzirImagem(f, 640, 0.82);
-      const r = await api('enviar_foto_perfil', { whatsapp: S.whats, senha: S.sessao, tipo: 'perfil', fotoBase64: dataUrl });
-      if (!r.ok) throw new Error(TKPadrao.erro(r, 'Não foi possível enviar a foto agora.'));
-      S.fotoUrl = r.url; document.getElementById('prev').innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover" alt="">`;
-      document.getElementById('ok').disabled = false;
-    } catch (x) { erroBox(x.message === 'imagem' ? 'Não foi possível ler essa imagem. Tente outra foto.' : x.message); }
-    carregando(bt, false); bt.textContent = 'Trocar foto';
+      dataUrl = await reduzirImagem(f, 640, 0.82);
+      prev(dataUrl, true);
+      const r = await Promise.race([
+        api('enviar_foto_perfil', { whatsapp: S.whats, senha: S.sessao, tipo: 'perfil', fotoBase64: dataUrl }),
+        new Promise(ok2 => setTimeout(() => ok2({ ok: false, demorou: true }), 45000))
+      ]);
+      let aceita = !!(r && r.ok);
+      // A resposta não chegou (internet fraca)? A foto pode ter chegado mesmo assim: confere antes de pedir de novo.
+      if (!aceita && (!r || r.demorou || /conex/i.test(r.erro || ''))) aceita = await fotoJaNoServidor();
+      if (!aceita) throw new Error(r && r.demorou ? 'A internet está lenta e a foto não chegou. Toque em "Escolher foto" e tente de novo.' : TKPadrao.erro(r, 'Não foi possível enviar a foto agora. Tente de novo.'));
+      S.fotoUrl = (r && r.url) || dataUrl;
+      prev(dataUrl);
+      aviso('✅ <b>Foto enviada!</b> Indo para as perguntas…');
+      enviando = false; carregando(bt, false); bt.textContent = 'Trocar foto'; ok.disabled = false;
+      setTimeout(() => { if (document.getElementById('foto-st') === st) seguirDepoisDaFoto(); }, 1200);
+      return;
+    } catch (x) {
+      aviso('');
+      prev(S.fotoUrl);
+      erroBox(x.message === 'imagem' ? 'Essa foto não abriu aqui. Escolha outra foto (ou tire um print da foto e envie o print).' : x.message);
+    }
+    enviando = false; carregando(bt, false); bt.textContent = S.fotoUrl ? 'Trocar foto' : 'Escolher foto'; ok.disabled = false;
   };
   document.getElementById('ok').onclick = async () => {
-    if (!S.fotoUrl) return erroBox('Envie sua foto para continuar.');
-    if (S.enviado) { // currículo já enviado antes: só faltava a foto
-      const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
-      if (st.ok && st.estado === 'completo') return viewFim();
+    if (enviando) return;
+    if (!S.fotoUrl) {
+      const b = document.getElementById('ok'); carregando(b, true);
+      const tem = await fotoJaNoServidor(); carregando(b, false);
+      if (!tem) return erroBox('Falta a sua foto. Toque em "Escolher foto" e escolha uma foto do seu rosto.');
+      S.fotoUrl = 'servidor';
     }
-    S.passo = S.passoSalvo != null ? S.passoSalvo : 0; viewPerfil();
+    seguirDepoisDaFoto();
   };
 }
 function viewSemInstagram() {
@@ -513,6 +570,7 @@ function viewSemInstagram() {
 /* ==== 5. perfil (blocos B a F) ==== */
 const PASSOS = ['Vaga e horários', 'Experiência', 'Estudos e perfil', 'Para finalizar'];
 function viewPerfil(msg) {
+  rascunhoAplicar();
   const d = S.d, p = S.passo;
   msg = msg || '';
   let corpo = '';
@@ -571,11 +629,11 @@ function viewPerfil(msg) {
     <button class="btn-p" id="ok">${p === PASSOS.length - 1 ? 'Enviar currículo' : 'Continuar'}</button>
     ${p > 0 ? '<button class="btn-s" id="volta">Voltar</button>' : ''}</div>`);
   condicionais();
-  if (p > 0) document.getElementById('volta').onclick = () => { coletar(); S.passo--; viewPerfil(); };
+  if (p > 0) document.getElementById('volta').onclick = () => { coletar(); S.passo--; rascunhoSalvar(); viewPerfil(); };
   const b = document.getElementById('ok');
   b.onclick = async () => {
     coletar(); const e = validarPasso(p); if (e) return erroBox(e);
-    if (p < PASSOS.length - 1) { S.passo++; return viewPerfil(); }
+    if (p < PASSOS.length - 1) { S.passo++; rascunhoSalvar(); return viewPerfil(); }
     if (!S.fotoUrl) return travaFinal('foto');
     carregando(b, true); const r = await api('curriculo_finalizar', { whatsapp: S.whats, sessao: S.sessao, dados: S.d }); carregando(b, false);
     if (!r.ok) { if (/foto de perfil/i.test(r.erro || '')) return travaFinal('foto'); if (/Instagram/i.test(r.erro || '')) return travaFinal('insta'); return erroBox(r.erro); }
@@ -633,7 +691,22 @@ function validarPasso(p) {
   return '';
 }
 
+/* v7.90.0 — Rascunho das respostas neste aparelho (7 dias): se a página recarregar (câmera, falta de memória,
+ * internet), a pessoa volta para a mesma etapa com o que já respondeu. Apagado ao enviar o currículo. */
+const RASC_DIAS = 7;
+function rascChave() { return 'tk_cv_rasc_' + String(S.whats || ''); }
+function rascunhoSalvar() { if (!S.whats) return; try { localStorage.setItem(rascChave(), JSON.stringify({ em: Date.now(), passo: S.passo, d: S.d })); } catch (e) { /* aparelho sem espaço: segue sem rascunho */ } }
+function rascunhoLer() { try { const x = JSON.parse(localStorage.getItem(rascChave()) || 'null'); return x && x.d && Date.now() - Number(x.em || 0) < RASC_DIAS * 864e5 ? x : null; } catch (e) { return null; } }
+function rascunhoPasso() { const x = rascunhoLer(); return x ? Math.max(0, Math.min(PASSOS.length - 1, Number(x.passo) || 0)) : 0; }
+function rascunhoAplicar() {
+  if (S.rascAplicado === S.whats) return; S.rascAplicado = S.whats;
+  const x = rascunhoLer(); if (!x) return;
+  Object.keys(x.d).forEach(k => { const v = S.d[k]; if (v == null || v === '' || (Array.isArray(v) && !v.length)) S.d[k] = x.d[k]; });
+}
+function rascunhoApagar() { try { localStorage.removeItem(rascChave()); } catch (e) { /* nada a apagar */ } }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && document.querySelector('#app [name="situacao"], #app [name="vaga"], #app [name="jaTrabalhou"], #app [name="origem"]')) { coletar(); rascunhoSalvar(); } });
 function viewFim() {
+  rascunhoApagar();
   tela(`${progresso(100)}<div class="card grande">
     <div class="emoji">✅</div>
     <h2>Currículo enviado!</h2>

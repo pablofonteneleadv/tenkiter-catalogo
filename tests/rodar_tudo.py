@@ -146,6 +146,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("esteira_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_fotos_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_sessao_renovada_ui.py", lambda o: "FALHAS=0" in o),   # v7.88.1: código de sessão renovado por outra tela não deixa a Esteira em branco
+    ("curriculo_foto_trava_ui.py", lambda o: "FALHAS=0" in o),      # v7.90.0: candidata não trava na foto; CPF e zoom no card de Currículos
     ("sessao_renovada_telas_ui.py", lambda o: "FALHAS=0" in o),     # v7.89.1: renovação do login e arquivo de tamanhos ausente não deixam nenhuma tela vazia
     ("conta_topo_ui.py", lambda o: "FALHAS=0" in o),
     ("telas_enxutas_ui.py", lambda o: "FALHAS=0" in o),

@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.90.0 — Currículos: candidata não trava na foto; CPF e zoom no card
+
+- **Relato do Pablo:** várias candidatas dizem que não conseguem continuar depois da foto, mas a foto aparece no card.
+- **O que os dados mostraram:** a foto chegava ao servidor; 10 de 56 candidatas recentes enviaram a mesma foto 2 ou 3 vezes em segundos (a confirmação não chegava ao celular e o botão Continuar ficava apagado). E o formulário não guardava o login: se a página recarregasse ao abrir a câmera (comum em celular simples), a pessoa voltava ao começo e caía no site de treinamento pedindo senha.
+- **Correções na candidatura:** aviso "Enviando sua foto… não feche esta tela"; se a resposta não chega, o site confere no servidor antes de pedir de novo; com a foto aceita, segue sozinho para as perguntas; Continuar nunca fica apagado (explica o que falta); foto que o celular não abre pede outra foto ou um print; o login fica guardado no aparelho e as respostas ficam salvas como rascunho (7 dias), então recarregar volta para a mesma etapa.
+- **Currículos (RH):** CPF no card (só aparece para quem tem a permissão de dados pessoais, depois do servidor RH 3.36); tocar na foto abre a foto grande com zoom; quem já enviou a foto aparece como "Perfil" (antes ficava "Foto"), e o "Cobrar currículo" fala das perguntas.
+- **Teste novo:** `curriculo_foto_trava_ui.py` (23 verificações; na versão anterior falha).
+
 ## 7.89.1 — Tela vazia no app: conferência de todas as áreas
 
 - **Pergunta do Pablo:** a tela cinza/vazia aparecia também em outros ícones, não só na Esteira.

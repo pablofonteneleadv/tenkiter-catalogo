@@ -53,6 +53,9 @@
       "catalogo",
       "ci"
     ],
+    "tests/curriculo_foto_trava_ui.py": [
+      "treinamentos"
+    ],
     "tests/curriculos_lento.py": [
       "treinamentos"
     ],
