@@ -18,7 +18,7 @@ FOTO = AQUI / "_foto_teste.png"; FOTO.write_bytes(PNG)
 LOGIN = "localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999990001', sessao:'tk2.cand.ok'}));"
 def resp(route, corpo):
     route.fulfill(status=200, content_type="application/json", headers={"access-control-allow-origin": "*"}, body=json.dumps(corpo))
-RETOMAR = {"ok": True, "menor": False, "nome": "Maria Teste", "whatsapp": "88999990001", "sessao": "tk2.cand.ok", "etapa": "Foto", "enviado": False, "status": "Novo", "fotoUrl": "", "dados": {"Instagram": "@maria"}}
+RETOMAR = {"ok": True, "menor": False, "nome": "Maria Teste", "whatsapp": "88999990001", "sessao": "tk2.cand.ok", "etapa": "Foto", "enviado": False, "status": "Novo", "fotoUrl": "", "dados": {"Instagram": "@maria", "InstagramConfirmado": "2026-11-24T10:00:00Z"}, "perfil": {"altura": "1,65", "peso": "60", "cep": "63700-000", "endereco": "Rua A, 1", "bairro": "Centro", "cidade": "Crateús", "estado": "CE", "fotoCorpoUrl": ""}}
 
 def candidata(b, est, login=True):
     ctx = b.new_context(viewport={"width": 360, "height": 740}, is_mobile=True, has_touch=True, service_workers="block")
@@ -30,7 +30,7 @@ def candidata(b, est, login=True):
         a = json.loads(r.post_data or "{}").get("action"); est.setdefault("vistos", []).append(a)
         if a == "curriculo_retomar": return resp(route, dict(RETOMAR, fotoUrl=est.get("foto_servidor", ""), etapa="Perfil" if est.get("foto_servidor") else "Foto"))
         if a == "enviar_foto_perfil":
-            est["envios"] = est.get("envios", 0) + 1
+            est["envios"] = est.get("envios", 0) + 1; est.setdefault("tipos", []).append(json.loads(r.post_data or "{}").get("tipo"))
             if est.get("resposta_perdida"): est["foto_servidor"] = "https://lh3.googleusercontent.com/d/x"; return route.abort()
             if est.get("falha_real"): return route.abort()
             est["foto_servidor"] = "https://lh3.googleusercontent.com/d/x"; return resp(route, {"ok": True, "url": est["foto_servidor"]})
@@ -51,17 +51,23 @@ with sync_playwright() as p:
     chk("abre direto no passo da foto (login guardado)", "foto" in h2(pg).lower(), h2(pg))
     chk("Continuar não fica apagado", not pg.locator("#ok").is_disabled())
     pg.set_input_files("#arq", str(FOTO)); pg.wait_for_timeout(3500)
-    chk("confere no servidor e segue sozinha para as perguntas", h2(pg) == "Vaga e horários", [h2(pg), pg.inner_text("#app")[:200]])
+    chk("confere no servidor e aceita a foto (sem pedir de novo)", "Foto do rosto enviada" in pg.inner_text("#app"), pg.inner_text("#app")[:200])
+    pg.click("#ok"); pg.wait_for_timeout(600)
+    chk("Continuar leva às perguntas", h2(pg) == "Vaga e horários", [h2(pg), pg.inner_text("#app")[:200]])
     chk("enviou a foto uma vez só", est.get("envios") == 1, est.get("envios"))
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
 
-    print("== Envio normal: mostra 'Foto enviada' e segue sozinha ==")
+    print("== Envio normal: rosto e corpo inteiro ==")
     est = {}
     ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#arq", state="attached", timeout=15000)
     pg.set_input_files("#arq", str(FOTO)); pg.wait_for_timeout(300)
-    chk("aviso 'Foto enviada' aparece", "Foto enviada" in pg.inner_text("#app"), pg.inner_text("#app")[:200])
-    pg.wait_for_timeout(1800)
-    chk("seguiu para 'Vaga e horários'", h2(pg) == "Vaga e horários", h2(pg)); ctx.close()
+    pg.wait_for_timeout(300)
+    chk("aviso pede a de corpo inteiro depois do rosto", "corpo inteiro" in pg.inner_text("#foto-st"), pg.inner_text("#app")[:200])
+    chk("a foto do rosto está marcada como obrigatória", "Rosto (obrigatória)" in pg.inner_text("#app") and "obrigat" not in pg.inner_text("#app").split("Corpo inteiro")[1].lower())
+    pg.set_input_files("#arq-corpo", str(FOTO)); pg.wait_for_timeout(800)
+    chk("foto de corpo inteiro sobe com tipo 'corpo'", est.get("tipos", [])[-1:] == ["corpo"], est.get("tipos"))
+    pg.click("#ok"); pg.wait_for_timeout(600)
+    chk("Continuar segue para 'Vaga e horários'", h2(pg) == "Vaga e horários", h2(pg)); ctx.close()
 
     print("== Foto não chegou de verdade: explica e deixa tentar de novo ==")
     est = {"falha_real": True}

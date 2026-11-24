@@ -53,6 +53,9 @@
       "catalogo",
       "ci"
     ],
+    "tests/curriculo_perfil_unificado_ui.py": [
+      "treinamentos"
+    ],
     "tests/senha_minima_ui.py": [
       "catalogo",
       "treinamentos"

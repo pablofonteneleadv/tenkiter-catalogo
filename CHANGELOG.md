@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.93.0 — Perfil dentro do currículo e Instagram confirmado obrigatório
+
+- **Pedido do Pablo:** confundia ver "Complete seu perfil" ao lado de "Currículo completo", e quem deixava a confirmação do Instagram para depois ficava sem o Instagram certo. "O objetivo é ter o Instagram correto do candidato."
+- **O currículo pede tudo que o perfil precisa:**
+  - **Suas fotos:** rosto (obrigatória, escrito na tela) e corpo inteiro (pedida junto, sem dizer que é opcional).
+  - **Seus dados:** altura, peso e endereço; o CEP preenche rua, bairro, cidade e estado sozinho (ViaCEP), e a pessoa só coloca o número.
+- **Instagram confirmado é obrigatório:** saiu o "continuar sem confirmar". Se precisar sair, o mesmo link volta para o mesmo código.
+- **Quem já tinha enviado e falta algo** (Instagram sem confirmar, fotos ou dados) vai direto ao que falta e termina na tela de enviado.
+- **Portal do Treinamento:** quem tem currículo vê só o aviso do currículo (com o que falta), não mais "Complete seu perfil".
+- **Servidor RH 3.37** (publicação manual): o currículo só fica completo com o Instagram confirmado e os dados do perfil; retomar devolve esses dados; salvar o perfil lê a planilha uma vez.
+- **Testes:** `curriculo_perfil_unificado_ui.py` (12); `curriculo_foto_trava_ui.py` (26) e `curriculo_instagram_ui.py` (20) atualizados para o fluxo novo.
+
 ## 7.92.0 — Senha nova: mínimo de 8 conferido no próprio campo
 
 - **Relato do Pablo:** o currículo dizia "Mínimo 4 caracteres", mas no final só aceitava 8 e obrigava a voltar.
