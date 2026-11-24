@@ -1224,6 +1224,7 @@ function renderCadastro(){
   document.getElementById('link-login').addEventListener('click', function(e){ e.preventDefault(); renderLogin(); });
   document.getElementById('cad-btn').addEventListener('click', doCadastro);
   document.getElementById('cad-senha').addEventListener('keydown', function(e){ if(e.key==='Enter') doCadastro(); });
+  if (window.TKConta && TKConta.ligarSenha) TKConta.ligarSenha(document.getElementById('cad-senha'));   // v7.92.0: mínimo 8 conferido no campo
   wireInstagramField(document.getElementById('cad-instagram'));
   wireDataNascimentoField(document.getElementById('cad-nascimento'));
   if (window.TKConta) TKConta.ligarCpf(document.getElementById('cad-cpf'));
@@ -1278,7 +1279,7 @@ async function doCadastro(){
   var err = document.getElementById('login-error');
   err.style.display = 'none';
   if(!nome || !whatsapp || !senha){ err.textContent = 'Preencha nome, WhatsApp e senha.'; err.style.display='block'; return; }
-  if(senha.length < 4){ err.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; err.style.display='block'; return; }
+  if(senha.length < 8){ err.textContent = 'A senha precisa ter pelo menos 8 caracteres.'; err.style.display='block'; document.getElementById('cad-senha').focus(); return; }
   if(dataNascimento && !dataNascimentoValida(dataNascimento)){
     err.textContent = 'Data de nascimento inválida. Use o formato dd/mm/aaaa.'; err.style.display='block'; return;
   }
@@ -2469,7 +2470,7 @@ function wireTabEquipe(){
   document.querySelectorAll('#app .admin-reset-pass').forEach(function(btn){
     btn.addEventListener('click', async function(){
       var whats = btn.closest('tr').getAttribute('data-whats');
-      var nova = await TKAviso.pedirSenha({ titulo: 'Nova senha', texto: 'Nova senha para ' + whats + ' (mínimo 4 caracteres). Ela é guardada sem aparecer na tela.' });
+      var nova = await TKAviso.pedirSenha({ titulo: 'Nova senha', texto: 'Nova senha para ' + whats + ' (mínimo 8 caracteres). Ela é guardada sem aparecer na tela.' });
       if (nova === null) return;
       var resp = await submitResult({
         action:'resetar_senha_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
@@ -3312,7 +3313,7 @@ function renderTabAcessos(){
     '<div class="ac-ordem"><label>Ordenar: <select id="ac-ordem" class="admin-sel"><option value="nome"' + (a.ordem === 'nome' ? ' selected' : '') + '>Nome (A–Z)</option><option value="novos"' + (a.ordem === 'novos' ? ' selected' : '') + '>Cadastro: mais recentes</option><option value="antigos"' + (a.ordem === 'antigos' ? ' selected' : '') + '>Cadastro: mais antigos</option></select></label> ' +
       '<label>Currículo: <select id="ac-fcv" class="admin-sel"><option value="todos"' + (a.fCv === 'todos' ? ' selected' : '') + '>Todos</option><option value="com"' + (a.fCv === 'com' ? ' selected' : '') + '>Só quem já fez</option><option value="andamento"' + (a.fCv === 'andamento' ? ' selected' : '') + '>Só em andamento</option><option value="sem"' + (a.fCv === 'sem' ? ' selected' : '') + '>Só quem não fez</option></select></label></div></details>' +
     '<div class="ac-form" id="ac-form-nova"' + (a.criando ? '' : ' hidden') + '>' +
-      '<input id="ac-n-nome" placeholder="Nome"><input id="ac-n-whats" placeholder="WhatsApp com DDD" inputmode="tel"><input id="ac-n-senha" placeholder="Senha (mín. 4)">' +
+      '<input id="ac-n-nome" placeholder="Nome"><input id="ac-n-whats" placeholder="WhatsApp com DDD" inputmode="tel"><input id="ac-n-senha" placeholder="Senha (mín. 8)">' +
       '<select id="ac-n-perfil" class="admin-sel">' + perfOpts + '</select>' +
       '<button type="button" class="admin-mini-btn" id="ac-n-salvar">Criar</button>' +
     '</div>' +
@@ -3350,7 +3351,7 @@ function wireTabAcessos(){
   if (salvar) salvar.addEventListener('click', async function(){
     var nome = document.getElementById('ac-n-nome').value.trim(), w = normWhats(document.getElementById('ac-n-whats').value),
         senha = document.getElementById('ac-n-senha').value, perfil = document.getElementById('ac-n-perfil').value;
-    if (!nome || !w || senha.length < 4){ avisar('Preencha nome, WhatsApp e uma senha de pelo menos 4 caracteres.'); return; }
+    if (!nome || !w || senha.length < 8){ avisar('Preencha nome, WhatsApp e uma senha de pelo menos 8 caracteres.'); return; }
     salvar.disabled = true;
     var r = await acessosReq({ action: 'acessos_criar', nome: nome, whatsappNovo: w, senhaNova: senha, perfil: perfil });
     salvar.disabled = false;
@@ -3416,7 +3417,7 @@ function wireTabAcessos(){
       avisar(ativoAgora ? 'Pessoa desativada.' : 'Pessoa reativada.'); carregarAcessos(); return;
     }
     if (btn.classList.contains('ac-reset')){
-      var nova = await TKAviso.pedirSenha({ titulo: 'Nova senha', texto: 'Nova senha para ' + p.nome + ' (mínimo 4 caracteres). Ela é guardada sem aparecer na tela.' });
+      var nova = await TKAviso.pedirSenha({ titulo: 'Nova senha', texto: 'Nova senha para ' + p.nome + ' (mínimo 8 caracteres). Ela é guardada sem aparecer na tela.' });
       if (nova === null) return;
       var r2 = await acessosReq({ action: 'resetar_senha_user', whatsappAlvo: p.whatsapp, novaSenha: nova });
       avisar(r2 && r2.ok ? 'Senha redefinida.' : ((r2 && r2.erro) || 'Não foi possível resetar.'));
@@ -3560,7 +3561,7 @@ function telaSemConexao_(){
 <script src="icones.js?v=7.17.0"></script>
 <script src="nav.js?v=7.86.0" data-ativo="treinamentos"></script>
 <script src="a11y.js?v=7.87.0"></script>
-<script src="conta.js?v=7.87.0"></script>
+<script src="conta.js?v=7.92.0"></script>
 <script src="push.js?v=7.63.0"></script>
 </body>
 </html>

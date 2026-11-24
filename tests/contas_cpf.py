@@ -104,7 +104,7 @@ with sync_playwright() as p:
     pg.goto(BASE+"treinamentos.html"); pg.wait_for_timeout(1200); pg.click("#link-cadastro"); pg.wait_for_timeout(300)
     chk("CPF e e-mail aparecem como opcionais","opcional" in pg.inner_text("#app").lower() and pg.locator("#cad-cpf").count()==1)
     axe(pg,"cadastro com CPF/e-mail opcionais")
-    pg.fill("#cad-nome","Bia"); pg.fill("#cad-whats","88977776666"); pg.fill("#cad-senha","1234"); pg.fill("#cad-cpf","123"); pg.click("#cad-btn"); pg.wait_for_timeout(300)
+    pg.fill("#cad-nome","Bia"); pg.fill("#cad-whats","88977776666"); pg.fill("#cad-senha","12345678"); pg.fill("#cad-cpf","123"); pg.click("#cad-btn"); pg.wait_for_timeout(300)
     chk("CPF incompleto é barrado",("cpf inválido" in pg.inner_text("#login-error").lower()),pg.inner_text("#login-error"))
     pg.fill("#cad-cpf",CPF_OK); pg.click("#cad-btn"); pg.wait_for_timeout(900)
     chk("conta que já existe vira cartão com Entrar / Esqueci a senha",pg.locator(".tkc-exist").count()==1 and pg.locator(".tkc-exist button").count()==2)
