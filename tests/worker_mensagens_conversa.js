@@ -757,6 +757,41 @@ function d1() {
   chk('mensagem do Direct entra no canal Instagram com o nome do cliente', zr1.r.status === 200 && zc1 && zc1.nome === 'Bia Lima' && !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_txt' AND texto='Oi, quanto custa?' AND direcao='entrada'").first()), zc1);
   await zPost(zEv());
   chk('o mesmo aviso repetido (o Zernio tenta até 7 vezes) não duplica', (await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='mid_txt'").first()).n === 1);
+  // v7.91.0: Instagram da candidata confirmado pelo Direct (código TK-XXXXXX) — resposta automática e conversa encerrada
+  {
+    const fCv = globalThis.fetch, cvEnvios = []; let cvDetalhe = 0;
+    globalThis.fetch = async (u, init) => {
+      u = String(u);
+      if (/\/inbox\/conversations\/conv_cv\d?\/messages$/.test(u)) { cvEnvios.push(JSON.parse(init.body)); return new Response(JSON.stringify({ success: true, data: { messageId: 'mid_cvout_' + cvEnvios.length } })); }
+      if (/\/inbox\/conversations\/conv_cv\d?\/messages\?/.test(u)) return new Response(JSON.stringify({ messages: [] }));
+      if (/\/inbox\/conversations\/conv_cv2\?/.test(u)) { cvDetalhe++; return new Response(JSON.stringify({ participantUsername: 'joana.cv', participantName: 'Joana', participantPicture: 'https://cdn.fake/joana.jpg' })); }
+      return fCv(u, init);
+    };
+    const cvPede = async () => (await w.fetch(new Request('https://ig.test/cv/ig', { method: 'POST', headers: { Origin: O, 'CF-Connecting-IP': '10.0.0.9', 'Content-Type': 'text/plain' }, body: '{}' }), env, {})).json();
+    const cvLe = async (c) => (await w.fetch(new Request('https://ig.test/cv/ig?c=' + encodeURIComponent(c), { headers: { Origin: O } }), env, {})).json();
+    const cv1 = await cvPede();
+    chk('currículo pede um código TK- sem login, com o @ da loja para abrir o Direct', cv1.ok && /^TK-[A-HJ-NP-Z2-9]{6}$/.test(cv1.codigo) && cv1.loja === 'tenkitermodasceara' && cv1.direct === true, cv1);
+    chk('antes da mensagem o código ainda não está confirmado', (await cvLe(cv1.codigo)).confirmado === false);
+    chk('código inexistente: erro em português', (await cvLe('TK-ZZZZZZ')).ok === false);
+    await zPost(zEv({ id: 'zcv1', conversationId: 'conv_cv', platformMessageId: 'mid_cv1', text: 'meu código ' + cv1.codigo.toLowerCase(), sender: { id: 'IGSID_CV', name: 'Maria Candidata', username: 'maria.cand', picture: 'https://cdn.fake/maria.jpg', instagramProfile: { isFollower: true } }, sentAt: new Date().toISOString() }));
+    const cvR1 = await cvLe(cv1.codigo);
+    chk('mensagem com o código confirma o @ e a foto vindos do Instagram', cvR1.confirmado && cvR1.usuario === 'maria.cand' && cvR1.foto === 'https://cdn.fake/maria.jpg' && cvR1.segue === 1, cvR1);
+    chk('a loja responde sozinha uma vez, avisando que é automática e que já está concorrendo', cvEnvios.length === 1 && /automática/.test(cvEnvios[0].message) && /concorrendo/.test(cvEnvios[0].message) && /@maria\.cand/.test(cvEnvios[0].message), cvEnvios);
+    const cvConv = await DB.prepare("SELECT id, encerrada_em, encerrada_motivo, nao_lidas FROM msg_conversa WHERE canal='instagram' AND contato='IGSID_CV'").first();
+    chk('a conversa fica encerrada (sai da fila) e salva', cvConv && cvConv.encerrada_em !== '' && cvConv.encerrada_motivo === 'concluido' && cvConv.nao_lidas === 0, cvConv);
+    chk('o encerramento fica no histórico como automático', !!(await DB.prepare("SELECT 1 FROM msg_encerramento WHERE conversa_id=? AND por='auto'").bind(cvConv.id).first()));
+    chk('a mensagem dela continua na conversa', !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_cv1' AND conversa_id=?").bind(cvConv.id).first()));
+    await zPost(zEv({ id: 'zcv1b', conversationId: 'conv_cv', platformMessageId: 'mid_cv1b', text: cv1.codigo, sender: { id: 'IGSID_CV', name: 'Maria Candidata', username: 'maria.cand' }, sentAt: new Date().toISOString() }));
+    chk('mandar o mesmo código de novo não gera outra resposta', cvEnvios.length === 1, cvEnvios.length);
+    const cv2 = await cvPede();
+    await zPost(zEv({ id: 'zcv2', conversationId: 'conv_cv2', platformMessageId: 'mid_cv2', text: cv2.codigo, sender: { id: 'IGSID_CV2' }, sentAt: new Date().toISOString() }));
+    const cvR2 = await cvLe(cv2.codigo);
+    chk('sem @ no aviso: busca o @ e a foto na conversa do Zernio', cvDetalhe === 1 && cvR2.confirmado && cvR2.usuario === 'joana.cv' && cvR2.foto === 'https://cdn.fake/joana.jpg', [cvDetalhe, cvR2]);
+    await zPost(zEv({ id: 'zcv3', conversationId: 'conv_cv3', platformMessageId: 'mid_cv3', text: 'oi, vi o código TK-ABCDEF no story', sender: { id: 'IGSID_CV3', name: 'Cliente', username: 'cliente.x' }, sentAt: new Date().toISOString() }));
+    const cvConv3 = await DB.prepare("SELECT encerrada_em FROM msg_conversa WHERE contato='IGSID_CV3'").first();
+    chk('código que o site não criou: conversa segue normal (aberta, sem resposta de candidatura)', cvConv3 && cvConv3.encerrada_em === '' && cvEnvios.length === 2, [cvConv3, cvEnvios.length]);
+    globalThis.fetch = fCv;
+  }
   await DB.prepare("INSERT INTO postagem (tipo, modo, midias, agendado_em, status, ig_id, publicado_em, canal) VALUES ('story','auto','[{\"url\":\"https://tenkiter-midia.fake/m/s1.jpg\",\"tipo\":\"imagem\"}]', '2026-10-27T10:00:00Z', 'publicado', 'IGSTORY1', '2026-10-27T10:00:00Z', 'ambos')").run();
   const poId = (await DB.prepare("SELECT id FROM postagem WHERE ig_id='IGSTORY1'").first()).id;
   await zPost(zEv({ id: 'z2', platformMessageId: 'mid_story', text: 'valor?' }));
