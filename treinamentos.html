@@ -1744,6 +1744,7 @@ async function carregarAvisoCurriculo(){
   if (!state.user) return;
   var slot = document.getElementById('cv-slot');
   if (slot) slot.innerHTML = cvBannerHtml(state.cvStatus && state.cvStatus.r); // já mostra algo na hora
+  esconderPerfilSeTemCurriculo_(state.cvStatus && state.cvStatus.r);
   var st = state.cvStatus;
   if (!st || Date.now() - st.t > 60000){
     var r = await submitResult({ action:'curriculo_status', whatsapp: state.user.whatsapp, sessao: state.user.password });
@@ -1752,6 +1753,14 @@ async function carregarAvisoCurriculo(){
   slot = document.getElementById('cv-slot');
   if (!slot || (state.view !== 'home' && state.view !== 'semacesso')) return;
   slot.innerHTML = cvBannerHtml(st.r);
+  esconderPerfilSeTemCurriculo_(st.r);
+}
+/* v7.93.0 (pedido do Pablo): o perfil agora é pedido dentro do currículo. Quem tem currículo vê só o aviso do currículo
+ * (com o que falta), nunca "Complete seu perfil" ao lado de "Currículo completo". */
+function esconderPerfilSeTemCurriculo_(r){
+  if (!r || !r.ok || !r.estado || r.estado === 'nenhum') return;
+  var b = document.getElementById('perfil-banner'); if (b) b.remove();
+  document.querySelectorAll('.avatar-badge').forEach(function(x){ x.remove(); });
 }
 
 /* ---------------- manual view ---------------- */

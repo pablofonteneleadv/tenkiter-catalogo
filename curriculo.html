@@ -269,13 +269,12 @@ function entrarRetomada(r) {
   S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || ''; S.enviado = !!r.enviado; if (r.email) S.email = r.email;
   guardarLogin();
   S.d = dadosDoServidor(r.dados || {});
+  S.igConfirmado = !!(r.dados && r.dados.InstagramConfirmado);
+  S.perfil = r.perfil || null;   // v7.93.0 (servidor RH 3.37): dados do perfil que o currículo pede
   if (r.status === 'Desistiu') return viewDesistiu();
   if (r.menor) return viewMenor();
-  // v7.91.0: voltou do Instagram (a página recarregou) com um código pendente: continua esperando a confirmação
-  if (r.etapa !== 'Sem Instagram' && igCodGuardado() && !(r.dados && r.dados.InstagramConfirmado)) return viewConfirmaIg();
-  if (r.etapa === 'Instagram' || r.etapa === 'Sem Instagram') return viewInstagram(S.d.instagram || '');
-  if (r.etapa === 'Foto') return viewFoto();
-  S.passo = S.enviado ? 0 : rascunhoPasso(); viewPerfil();
+  if (r.etapa === 'Sem Instagram') return viewInstagram('');
+  proximaEtapa();
 }
 /* ==== quem marcou "desistiu" antes: oferece reativar o próprio currículo ==== */
 function viewDesistiu() {
@@ -464,10 +463,7 @@ async function igCv(metodo, codigo) {
     return await r.json();
   } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
 }
-function seguirDepoisDoInstagram() {
-  igCodApagar();
-  if (S.fotoUrl) { S.passo = S.passoSalvo != null ? S.passoSalvo : rascunhoPasso(); viewPerfil(); } else viewFoto();
-}
+function seguirDepoisDoInstagram() { igCodApagar(); proximaEtapa(); }
 function viewInstagram(inicial, msg) {
   tela(`${progresso(25)}<div class="card">
     <h2>Seu Instagram</h2>
@@ -507,7 +503,7 @@ async function viewConfirmaIg(msg) {
     <div class="aviso oculto" id="ig-st" role="status" aria-live="polite" style="margin-top:12px"></div>
     <div id="ig-achou"></div>
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
-    <button class="btn-s" id="ig-depois">Não consigo agora, continuar sem confirmar</button></div>`);
+    <p class="sub" style="margin-top:12px">Se precisar sair, volte por este mesmo link: o código continua valendo.</p></div>`);
   const tela0 = document.getElementById('ig-cod'), st = document.getElementById('ig-st'), abrir = document.getElementById('ig-abrir');
   const aviso = t => { st.innerHTML = t; st.classList.toggle('oculto', !t); };
   let atual = igCodGuardado();
@@ -526,7 +522,6 @@ async function viewConfirmaIg(msg) {
     window.open(linkDirect, '_blank', 'noopener');
   };
   if (atual.abriu) aviso('⏳ Esperando o código chegar no Direct… Se ainda não enviou, toque no botão acima.');
-  document.getElementById('ig-depois').onclick = () => { igCodApagar(); seguirDepoisDoInstagram(); };
   const esperar = async () => {
     if (!document.body.contains(tela0)) return;
     const r = await igCv('GET', atual.codigo);
@@ -540,7 +535,6 @@ function mostrarAchado(codigo, r) {
   const box = document.getElementById('ig-achou'); if (!box) return;
   document.getElementById('ig-st').classList.add('oculto');
   document.getElementById('ig-abrir').classList.add('oculto');
-  const dep = document.getElementById('ig-depois'); if (dep) dep.classList.add('oculto');
   box.innerHTML = `<div style="display:flex;gap:12px;align-items:center;background:#e8f5ec;border-radius:12px;padding:12px;margin:10px 0">
       <div id="ig-foto" style="width:64px;height:64px;border-radius:50%;background:#ddd;overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.6rem">👤</div>
       <div><b>@${esc(r.usuario)}</b>${r.nome ? '<br>' + esc(r.nome) : ''}<br><span class="sub">Recebemos seu código ✓</span></div></div>
@@ -572,85 +566,156 @@ function reduzirImagem(arquivo, maxLado, qualidade) {
     img.src = url;
   });
 }
-/* v7.90.0 — Foto sem travar (relato do Pablo, 24/11/2026: várias candidatas "não passam da foto", mas a foto chega).
- * A foto chegava ao servidor e a resposta se perdia no caminho (internet fraca): o botão Continuar seguia apagado e a
- * pessoa enviava de novo (10 de 56 enviaram 2 ou 3 vezes). Agora: aviso claro enquanto envia, limite de tempo,
- * conferência no servidor quando a resposta não chega, e a tela segue sozinha quando a foto é aceita. */
+/* v7.93.0 — Perfil dentro do currículo (pedido do Pablo, 24/11/2026): o currículo pede tudo que o "Meu perfil" precisa,
+ * para não ficar "perfil pendente" com "currículo completo". Ordem: Instagram confirmado → fotos (rosto obrigatória e corpo
+ * inteiro) → seus dados (altura, peso e endereço) → perguntas. Quem já enviou e só falta algo vai direto ao que falta. */
+const PERFIL_DADOS = ['altura', 'peso', 'cep', 'endereco', 'bairro', 'cidade', 'estado'];
+function faltaDadosPerfil() { const p = S.perfil; return !p || PERFIL_DADOS.some(k => !String(p[k] || '').trim()); }
+async function proximaEtapa() {
+  if (!S.d.instagram) return viewInstagram('');
+  if (!S.igConfirmado) return viewConfirmaIg();
+  if (!S.fotoUrl) return viewFoto();
+  if (faltaDadosPerfil()) return viewDados();
+  if (S.enviado) { // currículo já enviado antes: só faltava algo do perfil
+    const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
+    if (st.ok && st.estado === 'completo') return viewFim();
+  }
+  S.passo = S.passoSalvo != null ? S.passoSalvo : (S.enviado ? 0 : rascunhoPasso()); viewPerfil();
+}
+/* Foto que sobe para o servidor com aviso, limite de tempo e conferência quando a resposta não chega (v7.90.0). */
 async function fotoJaNoServidor() {
   const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
   return !!(st && st.ok && Array.isArray(st.faltando) && st.faltando.indexOf('Foto de perfil') === -1 && st.estado !== 'menor');
 }
-async function seguirDepoisDaFoto() {
-  if (S.enviado) { // currículo já enviado antes: só faltava a foto
-    const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
-    if (st.ok && st.estado === 'completo') return viewFim();
-  }
-  S.passo = S.passoSalvo != null ? S.passoSalvo : rascunhoPasso(); viewPerfil();
-}
+function seguirDepoisDaFoto() { return proximaEtapa(); }
 function viewFoto(msg) {
   tela(`${progresso(28)}<div class="card">
-    <h2>Sua foto de perfil</h2>
-    <p class="sub">A foto é obrigatória no currículo. Envie uma foto <b>atual do seu rosto</b>, com boa luz. Não precisa ser de corpo inteiro.</p>
-    <div style="text-align:center;margin:10px 0">
-      <div id="prev" style="width:150px;height:150px;border-radius:50%;background:#eee;margin:0 auto 12px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:2.4rem">📷</div>
-      <input type="file" id="arq" accept="image/*" hidden>
-      <button class="btn-s" id="esc" style="margin-top:0">${S.fotoUrl ? 'Trocar foto' : 'Escolher foto'}</button>
+    <h2>Suas fotos</h2>
+    <p class="sub">A <b>foto do rosto é obrigatória</b>: atual, com boa luz. Envie também uma de corpo inteiro.</p>
+    <div style="display:flex;gap:14px;justify-content:center;align-items:flex-start;margin:10px 0;flex-wrap:wrap">
+      <div style="text-align:center;flex:1 1 130px;max-width:170px">
+        <div id="prev" style="width:120px;height:120px;border-radius:50%;background:#eee;margin:0 auto 8px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:2rem">📷</div>
+        <b style="font-size:.9rem">Rosto (obrigatória)</b>
+        <input type="file" id="arq" accept="image/*" hidden>
+        <button class="btn-s" id="esc" style="margin-top:6px">${S.fotoUrl ? 'Trocar foto' : 'Escolher foto'}</button>
+      </div>
+      <div style="text-align:center;flex:1 1 130px;max-width:170px">
+        <div id="prev-corpo" style="width:96px;height:120px;border-radius:12px;background:#eee;margin:0 auto 8px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:2rem">🧍</div>
+        <b style="font-size:.9rem">Corpo inteiro</b>
+        <input type="file" id="arq-corpo" accept="image/*" hidden>
+        <button class="btn-s" id="esc-corpo" style="margin-top:6px">${S.perfil && S.perfil.fotoCorpoUrl ? 'Trocar foto' : 'Escolher foto'}</button>
+      </div>
     </div>
     <div class="aviso oculto" id="foto-st" role="status" aria-live="polite"></div>
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
     <button class="btn-p" id="ok">Continuar</button></div>`);
   const st = document.getElementById('foto-st');
   // Prévia montada pelo DOM (sem interpolar src); 'servidor' = foto confirmada lá, sem endereço aqui.
-  const prev = (src, fraca) => {
-    const box = document.getElementById('prev'); if (!box) return;
-    if (!src || !/^(https:|data:image\/)/.test(src)) { box.textContent = S.fotoUrl ? '✅' : '📷'; return; }
+  const prev = (id, src, fraca, vazio) => {
+    const box = document.getElementById(id); if (!box) return;
+    if (!src || !/^(https:|data:image\/)/.test(src)) { box.textContent = vazio; return; }
     const im = document.createElement('img'); im.alt = ''; im.referrerPolicy = 'no-referrer';
     im.style.cssText = 'width:100%;height:100%;object-fit:cover' + (fraca ? ';opacity:.55' : ''); im.src = src;
     box.textContent = ''; box.appendChild(im);
   };
-  prev(S.fotoUrl);
+  prev('prev', S.fotoUrl, false, S.fotoUrl ? '✅' : '📷');
+  prev('prev-corpo', S.perfil && S.perfil.fotoCorpoUrl, false, S.perfil && S.perfil.fotoCorpoUrl ? '✅' : '🧍');
   const aviso = t => { st.innerHTML = t; st.classList.toggle('oculto', !t); };
-  let enviando = false;
-  document.getElementById('esc').onclick = () => { if (!enviando) document.getElementById('arq').click(); };
-  document.getElementById('arq').onchange = async e => {
-    const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || enviando) return; erroBox('');
-    const bt = document.getElementById('esc'), ok = document.getElementById('ok');
-    enviando = true; carregando(bt, true); ok.disabled = true;
-    aviso('⏳ <b>Enviando sua foto…</b> Pode levar até 30 segundos. Não feche esta tela.');
-    let dataUrl = '';
-    try {
-      dataUrl = await reduzirImagem(f, 640, 0.82);
-      prev(dataUrl, true);
-      const r = await Promise.race([
-        api('enviar_foto_perfil', { whatsapp: S.whats, senha: S.sessao, tipo: 'perfil', fotoBase64: dataUrl }),
-        new Promise(ok2 => setTimeout(() => ok2({ ok: false, demorou: true }), 45000))
-      ]);
-      let aceita = !!(r && r.ok);
-      // A resposta não chegou (internet fraca)? A foto pode ter chegado mesmo assim: confere antes de pedir de novo.
-      if (!aceita && (!r || r.demorou || /conex/i.test(r.erro || ''))) aceita = await fotoJaNoServidor();
-      if (!aceita) throw new Error(r && r.demorou ? 'A internet está lenta e a foto não chegou. Toque em "Escolher foto" e tente de novo.' : TKPadrao.erro(r, 'Não foi possível enviar a foto agora. Tente de novo.'));
-      S.fotoUrl = (r && r.url) || dataUrl;
-      prev(dataUrl);
-      aviso('✅ <b>Foto enviada!</b> Indo para as perguntas…');
-      enviando = false; carregando(bt, false); bt.textContent = 'Trocar foto'; ok.disabled = false;
-      setTimeout(() => { if (document.getElementById('foto-st') === st) seguirDepoisDaFoto(); }, 1200);
-      return;
-    } catch (x) {
-      aviso('');
-      prev(S.fotoUrl);
-      erroBox(x.message === 'imagem' ? 'Essa foto não abriu aqui. Escolha outra foto (ou tire um print da foto e envie o print).' : x.message);
-    }
-    enviando = false; carregando(bt, false); bt.textContent = S.fotoUrl ? 'Trocar foto' : 'Escolher foto'; ok.disabled = false;
+  let enviando = 0;
+  const ligar = (tipo, idArq, idBt, idPrev, vazio) => {
+    document.getElementById(idBt).onclick = () => { if (!enviando) document.getElementById(idArq).click(); };
+    document.getElementById(idArq).onchange = async e => {
+      const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || enviando) return; erroBox('');
+      const bt = document.getElementById(idBt), ok = document.getElementById('ok');
+      enviando++; carregando(bt, true); ok.disabled = true;
+      aviso('⏳ <b>Enviando sua foto…</b> Pode levar até 30 segundos. Não feche esta tela.');
+      let dataUrl = '';
+      try {
+        dataUrl = await reduzirImagem(f, tipo === 'corpo' ? 960 : 640, 0.82);
+        prev(idPrev, dataUrl, true, vazio);
+        const r = await Promise.race([
+          api('enviar_foto_perfil', { whatsapp: S.whats, senha: S.sessao, tipo, fotoBase64: dataUrl }),
+          new Promise(ok2 => setTimeout(() => ok2({ ok: false, demorou: true }), 45000))
+        ]);
+        let aceita = !!(r && r.ok);
+        // A resposta não chegou (internet fraca)? A foto do rosto pode ter chegado mesmo assim: confere antes de pedir de novo.
+        if (!aceita && tipo === 'perfil' && (!r || r.demorou || /conex/i.test(r.erro || ''))) aceita = await fotoJaNoServidor();
+        if (!aceita) throw new Error(r && r.demorou ? 'A internet está lenta e a foto não chegou. Toque em "Escolher foto" e tente de novo.' : TKPadrao.erro(r, 'Não foi possível enviar a foto agora. Tente de novo.'));
+        if (tipo === 'corpo') { S.perfil = Object.assign({}, S.perfil, { fotoCorpoUrl: (r && r.url) || dataUrl }); }
+        else S.fotoUrl = (r && r.url) || dataUrl;
+        prev(idPrev, dataUrl, false, vazio);
+        const temCorpo = !!(S.perfil && S.perfil.fotoCorpoUrl);
+        aviso(tipo === 'perfil' && !temCorpo ? '✅ <b>Foto do rosto enviada!</b> Agora envie a de corpo inteiro e toque em Continuar.' : '✅ <b>Foto enviada!</b> Toque em Continuar.');
+        bt.textContent = 'Trocar foto';
+      } catch (x) {
+        aviso('');
+        prev(idPrev, tipo === 'corpo' ? (S.perfil && S.perfil.fotoCorpoUrl) : S.fotoUrl, false, vazio);
+        erroBox(x.message === 'imagem' ? 'Essa foto não abriu aqui. Escolha outra foto (ou tire um print da foto e envie o print).' : x.message);
+      }
+      enviando--; carregando(bt, false); if (!/Trocar/.test(bt.textContent)) bt.textContent = 'Escolher foto'; ok.disabled = false;
+      if (tipo === 'corpo' ? (S.perfil && S.perfil.fotoCorpoUrl) : S.fotoUrl) bt.textContent = 'Trocar foto';
+    };
   };
+  ligar('perfil', 'arq', 'esc', 'prev', '📷');
+  ligar('corpo', 'arq-corpo', 'esc-corpo', 'prev-corpo', '🧍');
   document.getElementById('ok').onclick = async () => {
     if (enviando) return;
     if (!S.fotoUrl) {
       const b = document.getElementById('ok'); carregando(b, true);
       const tem = await fotoJaNoServidor(); carregando(b, false);
-      if (!tem) return erroBox('Falta a sua foto. Toque em "Escolher foto" e escolha uma foto do seu rosto.');
+      if (!tem) return erroBox('Falta a foto do rosto. Toque em "Escolher foto" e escolha uma foto atual do seu rosto.');
       S.fotoUrl = 'servidor';
     }
-    seguirDepoisDaFoto();
+    proximaEtapa();
+  };
+}
+/* Seus dados (o mesmo do "Meu perfil"): altura, peso e endereço. O CEP preenche rua, bairro, cidade e estado. */
+function viewDados(msg) {
+  const p = S.perfil || {};
+  const campo = (id, rot, extra) => `<label class="campo" for="${id}">${rot}</label><input type="text" id="${id}" name="${id}" value="${esc(p[id] || '')}" ${extra || ''}>`;
+  tela(`${progresso(29)}<div class="card">
+    <h2>Seus dados</h2>
+    <p class="sub">Para o seu cadastro na loja.</p>
+    <div style="display:flex;gap:10px"><div style="flex:1">${campo('altura', 'Altura', 'inputmode="decimal" placeholder="Ex: 1,65"')}</div><div style="flex:1">${campo('peso', 'Peso (kg)', 'inputmode="decimal" placeholder="Ex: 68"')}</div></div>
+    ${campo('cep', 'CEP', 'inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="postal-code"')}
+    <p class="sub oculto" id="cep-st" role="status" aria-live="polite" style="margin:4px 0 0"></p>
+    ${campo('endereco', 'Endereço (rua e número)', 'autocomplete="street-address"')}
+    ${campo('bairro', 'Bairro')}
+    <div style="display:flex;gap:10px"><div style="flex:3">${campo('cidade', 'Cidade', 'autocomplete="address-level2"')}</div><div style="flex:1">${campo('estado', 'Estado', 'maxlength="2" placeholder="CE" autocapitalize="characters" autocomplete="address-level1"')}</div></div>
+    <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
+    <button class="btn-p" id="ok">Continuar</button></div>`);
+  const cep = document.getElementById('cep'), cst = document.getElementById('cep-st');
+  let ultimo = '';
+  cep.addEventListener('input', async () => {
+    const d = cep.value.replace(/\D/g, '').slice(0, 8);
+    cep.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+    if (d.length !== 8 || d === ultimo) return; ultimo = d;
+    cst.textContent = 'Buscando o endereço…'; cst.classList.remove('oculto');
+    try {
+      const r = await (await fetch('https://viacep.com.br/ws/' + d + '/json/')).json();
+      if (!r || r.erro) { cst.textContent = 'Não achamos esse CEP. Confira os números ou preencha o endereço abaixo.'; return; }
+      const por = (id, v) => { const el = document.getElementById(id); if (v && !el.value.trim()) el.value = v; };
+      por('endereco', r.logradouro ? r.logradouro + ', ' : ''); por('bairro', r.bairro); por('cidade', r.localidade); por('estado', r.uf);
+      cst.textContent = 'Endereço encontrado. Confira e coloque o número da casa.';
+      const e = document.getElementById('endereco'); e.focus(); try { e.setSelectionRange(e.value.length, e.value.length); } catch (x) { /* campo sem seleção */ }
+    } catch (x) { cst.textContent = 'Sem conexão para buscar o CEP. Preencha o endereço abaixo.'; }
+  });
+  const b = document.getElementById('ok');
+  b.onclick = async () => {
+    const v = id => document.getElementById(id).value.trim();
+    let alt = v('altura').replace(',', '.'); const pes = v('peso').replace(',', '.');
+    if (!alt || isNaN(+alt)) return erroBox('Digite sua altura (ex.: 1,65).');
+    if (+alt > 3) alt = String(+alt / 100);   // digitou em centímetros (165)
+    if (+alt < 1 || +alt > 2.3) return erroBox('Confira a altura (ex.: 1,65).');
+    if (!pes || isNaN(+pes) || +pes < 30 || +pes > 250) return erroBox('Digite seu peso em kg (ex.: 68).');
+    if (v('cep').replace(/\D/g, '').length !== 8) return erroBox('Digite o CEP com 8 números.');
+    if (!/\d/.test(v('endereco'))) return erroBox('Coloque a rua e o número da casa (ex.: Rua Tal, 120).');
+    if (!v('bairro') || !v('cidade')) return erroBox('Preencha o bairro e a cidade.');
+    if (!/^[A-Za-z]{2}$/.test(v('estado'))) return erroBox('Digite a sigla do estado (ex.: CE).');
+    const campos = { altura: (+alt).toFixed(2).replace('.', ','), peso: String(Math.round(+pes)), cep: v('cep'), endereco: v('endereco').replace(/,\s*$/, ''), bairro: v('bairro'), cidade: v('cidade'), estado: v('estado').toUpperCase() };
+    carregando(b, true); const r = await api('atualizar_perfil', { whatsapp: S.whats, senha: S.sessao, campos }); carregando(b, false);
+    if (!r.ok) return erroBox(TKPadrao.erro(r, 'Não foi possível salvar agora. Tente de novo.'));
+    S.perfil = Object.assign({}, S.perfil, campos); proximaEtapa();
   };
 }
 function viewSemInstagram() {
@@ -732,7 +797,13 @@ function viewPerfil(msg) {
     if (p < PASSOS.length - 1) { S.passo++; rascunhoSalvar(); return viewPerfil(); }
     if (!S.fotoUrl) return travaFinal('foto');
     carregando(b, true); const r = await api('curriculo_finalizar', { whatsapp: S.whats, sessao: S.sessao, dados: S.d }); carregando(b, false);
-    if (!r.ok) { if (/foto de perfil/i.test(r.erro || '')) return travaFinal('foto'); if (/Instagram/i.test(r.erro || '')) return travaFinal('insta'); return erroBox(r.erro); }
+    if (!r.ok) {
+      if (/foto de perfil/i.test(r.erro || '')) return travaFinal('foto');
+      if (/confirmar o Instagram/i.test(r.erro || '')) { S.passoSalvo = S.passo; S.igConfirmado = false; return viewConfirmaIg(); }
+      if (/seus dados/i.test(r.erro || '')) { S.passoSalvo = S.passo; S.perfil = Object.assign({}, S.perfil, { altura: '' }); return viewDados(r.erro); }
+      if (/Instagram/i.test(r.erro || '')) return travaFinal('insta');
+      return erroBox(r.erro);
+    }
     viewFim();
   };
 }
