@@ -757,6 +757,31 @@ function d1() {
   chk('mensagem do Direct entra no canal Instagram com o nome do cliente', zr1.r.status === 200 && zc1 && zc1.nome === 'Bia Lima' && !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_txt' AND texto='Oi, quanto custa?' AND direcao='entrada'").first()), zc1);
   await zPost(zEv());
   chk('o mesmo aviso repetido (o Zernio tenta até 7 vezes) não duplica', (await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='mid_txt'").first()).n === 1);
+  // v7.96.0: perfil do Instagram enquanto a candidata digita (prévia pública do link, sem login)
+  {
+    const fPf = globalThis.fetch; let pfChamadas = 0;
+    globalThis.fetch = async (u, init) => {
+      u = String(u);
+      if (u.startsWith('https://www.instagram.com/')) {
+        pfChamadas++;
+        const ua = (init && init.headers && init.headers['User-Agent']) || '';
+        if (u === 'https://www.instagram.com/maria.cv/' && /facebookexternalhit/.test(ua)) return new Response('<html><head><title>x</title><meta property="og:title" content="Maria Cand&#xed;da (&#064;maria.cv) &#x2022; Instagram photos and videos" /><meta property="og:image" content="https://scontent.cdninstagram.com/m.jpg?a=1&amp;b=2" /><meta property="og:description" content="1,234 Followers, 10 Following, 52 Posts - See Instagram photos" /></head></html>');
+        return new Response('<html><head><title>Instagram</title></head></html>');
+      }
+      return fPf(u, init);
+    };
+    const pf = async (q, ip) => { const r = await w.fetch(new Request('https://ig.test/cv/ig-perfil?u=' + encodeURIComponent(q), { headers: { Origin: O, 'CF-Connecting-IP': ip || '10.0.0.7' } }), env, {}); return { s: r.status, j: await r.json() }; };
+    const p1 = await pf('@Maria.CV');
+    chk('perfil existente: nome, foto e seguidores vindos da prévia pública', p1.j.ok && p1.j.existe === true && p1.j.usuario === 'maria.cv' && p1.j.nome === 'Maria Candída' && p1.j.foto === 'https://scontent.cdninstagram.com/m.jpg?a=1&b=2' && p1.j.seguidores === '1,234' && p1.j.publicacoes === '52', p1.j);
+    const antes = pfChamadas, p1b = await pf('maria.cv');
+    chk('segunda consulta do mesmo @ vem guardada (não vai ao Instagram)', p1b.j.existe === true && p1b.j.guardado === true && pfChamadas === antes, [p1b.j, pfChamadas, antes]);
+    const p2 = await pf('nao.existe_zz');
+    chk('perfil inexistente: existe=false, sem erro', p2.j.ok && p2.j.existe === false, p2.j);
+    chk('@ com caractere proibido é recusado sem consultar', (await pf('maria silva')).s === 400);
+    let ultimo = 0; for (let i = 0; i < 61; i++) ultimo = (await pf('rl' + i, '10.9.9.9')).s;
+    chk('limite de consultas por IP (60 em 10 min)', ultimo === 429, ultimo);
+    globalThis.fetch = fPf;
+  }
   // v7.91.0: Instagram da candidata confirmado pelo Direct (código TK-XXXXXX) — resposta automática e conversa encerrada
   {
     const fCv = globalThis.fetch, cvEnvios = []; let cvDetalhe = 0;
