@@ -48,7 +48,7 @@ with sync_playwright() as p:
         chk(f"'{digitado}' vira {esperado}", pg.input_value("#insta") == esperado, pg.input_value("#insta"))
     chk("avisa o que foi arrumado", "Arrumamos" in pg.inner_text("#insta-dica"))
     print("== Confirmação pelo Direct ==")
-    pg.fill("#insta", "@maria.errada"); pg.click("#ok"); pg.wait_for_selector("#ig-cod", timeout=10000); pg.wait_for_timeout(600)
+    pg.fill("#insta", "@maria.errada"); pg.click("#ig-direct"); pg.wait_for_selector("#ig-cod", timeout=10000); pg.wait_for_timeout(600)
     chk("mostra o código grande", pg.inner_text("#ig-cod") == "TK-AB2CD3", pg.inner_text("#ig-cod"))
     pg.click("#ig-abrir"); pg.wait_for_timeout(300)
     chk("abre o Direct da loja", pg.evaluate("window.__aberto") == "https://ig.me/m/tenkitermodasceara", pg.evaluate("window.__aberto"))
@@ -66,12 +66,23 @@ with sync_playwright() as p:
     chk("segue para as perguntas", h2(pg) == "Vaga e horários", h2(pg))
     chk("código pendente apagado do aparelho", pg.evaluate("localStorage.getItem('tk_cv_igcod_88999990001')") is None)
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
-    print("== Sem atalho para pular a confirmação (o objetivo é o Instagram certo) ==")
+    print("== Confirmar com um toque (sem Direct) ==")
     est = {}
     ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
-    pg.fill("#insta", "@maria"); pg.click("#ok"); pg.wait_for_selector("#ig-cod", timeout=10000); pg.wait_for_timeout(500)
-    chk("não há botão para continuar sem confirmar", pg.locator("#ig-depois").count() == 0 and "sem confirmar" not in pg.inner_text("#app"))
-    chk("explica que dá para voltar depois pelo mesmo link", "mesmo link" in pg.inner_text("#app"))
+    pg.fill("#insta", "@Maria.Silva")
+    chk("mostra o link para abrir o próprio perfil", pg.get_attribute("#ig-ver", "href") == "https://www.instagram.com/maria.silva/" and pg.locator("#ig-conf").is_visible(), pg.get_attribute("#ig-ver", "href"))
+    chk("botão principal é 'É o meu Instagram'", "É o meu Instagram" in pg.inner_text("#ok"))
+    pg.click("#ok"); pg.wait_for_timeout(800)
+    ult = [a for a in est["acoes"] if a.get("action") == "curriculo_instagram"][-1]
+    chk("grava o @ com a confirmação da própria candidata", ult.get("instagram") == "@maria.silva" and ult.get("euConfirmo") is True and not ult.get("igCodigo"), ult)
+    chk("segue sem passar pelo Direct", h2(pg) == "Vaga e horários" and est.get("codigos") is None, [h2(pg), est.get("codigos")])
+    chk("sem erro de JavaScript", not erros, erros); ctx.close()
+    print("== Do Direct dá para voltar e confirmar com um toque ==")
+    est = {}
+    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
+    pg.fill("#insta", "@maria"); pg.click("#ig-direct"); pg.wait_for_selector("#ig-voltar", timeout=10000)
+    pg.click("#ig-voltar"); pg.wait_for_selector("#insta", timeout=5000)
+    chk("voltou para a tela do @ com o que tinha digitado", pg.input_value("#insta") == "@maria", pg.input_value("#insta"))
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
 
     print("== RH: selo do Instagram no card ==")
@@ -80,9 +91,12 @@ with sync_playwright() as p:
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
     base = {"Status": "Novo", "Criado": "2026-11-22T12:00:00Z", "Etapa": "Enviado", "Historico": ""}
     CVS = [dict(base, CvId="A", Nome="Ana Confirmada", WhatsApp="88999990001", Instagram="@ana", InstagramConfirmado="2026-11-24T10:00:00Z"),
-           dict(base, CvId="B", Nome="Bia Digitou", WhatsApp="88999990002", Instagram="@bia")]
+           dict(base, CvId="B", Nome="Bia Digitou", WhatsApp="88999990002", Instagram="@bia"),
+           dict(base, CvId="C", Nome="Cris Direct", WhatsApp="88999990003", Instagram="@cris", InstagramConfirmado="2026-11-24T10:00:00Z", InstagramCodigo="TK-AB2CD3"),
+           dict(base, CvId="D", Nome="Dani Outra", WhatsApp="88999990004", Instagram="@dani", InstagramConfirmado="2026-11-24T10:00:00Z", InstagramCodigo="TK-ZZ2ZZ3")]
     def hh(route):
         r = route.request
+        if "/cv/ig" in r.url: return resp(route, {"ok": True, "confirmado": True, "usuario": "cris" if "AB2CD3" in r.url else "outra.conta"})
         if r.method != "POST": return route.fallback()
         try: a = json.loads(r.post_data or "{}").get("action")
         except Exception: return route.fallback()
@@ -90,10 +104,13 @@ with sync_playwright() as p:
         if a == "curriculos_treinamento": return resp(route, {"ok": True, "acessoConferido": True, "leitura": [], "resultados": []})
         return route.fallback()
     pg.route("**/*", hh); pg.goto(BASE + "curriculos.html"); pg.wait_for_selector(".item", timeout=15000)
-    tx = [pg.locator(".item").nth(i).locator(".topo").inner_text() for i in range(2)]
-    chk("confirmada mostra 'IG ✓'; só digitado mostra 'IG ?'", "IG ✓" in tx[0] and "IG ?" in tx[1], tx)
-    pg.locator(".item .topo").first.click(); pg.wait_for_timeout(300)
-    chk("detalhe mostra a data da confirmação", "Instagram confirmado em" in pg.locator(".item dl").first.inner_text())
+    pg.wait_for_timeout(1200)
+    tx = [pg.locator(".item", has_text=n).locator(".topo").inner_text() for n in ("Ana Confirmada", "Bia Digitou", "Cris Direct", "Dani Outra")]
+    chk("confirmada pela candidata 'IG ✓'; só digitado 'IG ?'", "IG ✓" in tx[0] and "Direct" not in tx[0] and "IG ?" in tx[1], tx)
+    chk("código do Direct que bate com a conta: 'IG ✓ Direct'", "IG ✓ Direct" in tx[2], tx[2])
+    chk("código do Direct de outra conta: 'IG ?'", "IG ?" in tx[3] and "Direct" not in tx[3], tx[3])
+    pg.locator(".item", has_text="Ana Confirmada").locator(".topo").click(); pg.wait_for_timeout(300)
+    chk("detalhe mostra a data da confirmação", "Instagram confirmado em" in pg.locator(".item", has_text="Ana Confirmada").locator("dl").inner_text())
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
     b.close()
 print("OK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))

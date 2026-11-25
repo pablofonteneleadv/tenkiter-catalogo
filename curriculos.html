@@ -292,8 +292,20 @@ function etapasReais(lista) {
 }
 function ampliarFoto(url) { if (url && window.TKFotoGrande) TKFotoGrande.abrir({ itens: [{ url, tipo: 'foto' }], indice: 0 }); }
 /* v7.91.0: Instagram confirmado pelo Direct da loja (o @ veio do próprio Instagram) ou só digitado. */
+const IG_CV = 'https://tenkiter-ig.distkrpconfeccoes.workers.dev/cv/ig';
+/* v7.94.0: com código do Direct, o card confere no servidor das Mensagens se o código chegou da mesma conta (selo "IG ✓ Direct");
+ * sem código, a própria candidata confirmou ao abrir o perfil ("IG ✓"). */
+async function conferirIgDirect(r, el) {
+  try {
+    const x = await (await fetch(IG_CV + '?c=' + encodeURIComponent(r.InstagramCodigo))).json();
+    const bate = x && x.ok && x.confirmado && String(r.Instagram || '').replace(/^@/, '').toLowerCase() === String(x.usuario || '').toLowerCase();
+    el.textContent = bate ? 'IG ✓ Direct' : 'IG ?'; el.className = 'tag ' + (bate ? 'ok' : 'al');
+    el.title = bate ? 'O código chegou pelo Direct desta conta' : 'O código não conferiu com esta conta';
+  } catch (e) { /* sem rede: fica o selo simples */ }
+}
 function tagIg(r) {
-  if (r.InstagramConfirmado) return ` <span class="tag ok" title="Instagram confirmado pelo Direct em ${E(fmtData(r.InstagramConfirmado))}" aria-label="Instagram confirmado">IG ✓</span>`;
+  if (r.InstagramConfirmado && r.InstagramCodigo) return ` <span class="tag ok" data-igcod="${E(r.InstagramCodigo)}" title="Conferindo o código do Direct" aria-label="Instagram confirmado">IG ✓</span>`;
+  if (r.InstagramConfirmado) return ` <span class="tag ok" title="A candidata confirmou o Instagram em ${E(fmtData(r.InstagramConfirmado))}" aria-label="Instagram confirmado pela candidata">IG ✓</span>`;
   return r.Instagram && r.Etapa !== 'Menor de 18' ? ' <span class="tag al" title="Instagram digitado, sem confirmação pelo Direct" aria-label="Instagram não confirmado">IG ?</span>' : '';
 }
 function tagEtapa(r) {
@@ -446,6 +458,7 @@ function itemNovo(r) {
   d._abrir = () => { d.classList.add('aberto'); carregarTreino(r, d.querySelector('[data-k=treino]')); };
   const amp = d.querySelector('[data-k=ampliar]');
   if (amp) amp.onclick = () => { const im = amp.querySelector('img'); ampliarFoto(im && (im.currentSrc || im.src)); };
+  const igTag = d.querySelector('[data-igcod]'); if (igTag) conferirIgDirect(r, igTag);
   d.querySelector('[data-k=atualizar-treino]').onclick = () => carregarTreino(r, d.querySelector('[data-k=treino]'));
   d.querySelector('.topo').onclick = () => {
     if (d.classList.contains('aberto')) d.classList.remove('aberto'); else d._abrir();
