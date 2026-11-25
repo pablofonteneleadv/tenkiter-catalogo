@@ -53,6 +53,9 @@
       "catalogo",
       "ci"
     ],
+    "tests/sem_troca_inicio_ui.py": [
+      "treinamentos"
+    ],
     "tests/curriculo_perfil_unificado_ui.py": [
       "treinamentos"
     ],

@@ -46,6 +46,7 @@ Antes de desenhar, leia `docs/ia/padroes-site.md`: para cada tema (janelas, apar
 - O estado vazio, erro, espera ou sucesso deixa a pessoa sem próxima ação clara.
 - O resultado parece um conjunto de componentes prontos sem relação com a linguagem visual TENKiTER.
 - A tela ocupa espaço que não ajuda (decisão do Pablo, 22/11/2026, regra “Compacto por padrão” em `docs/ia/padroes-site.md`): botão sozinho numa linha quando cabe ao lado de outro, contagem ou rótulo em duas linhas sem necessidade, texto que repete o título, explicação longa sempre visível. Compare com a versão anterior e corte antes de entregar, mantendo os 44 px de toque.
+- A tela troca de conteúdo depois de aberta (decisão do Pablo, 25/11/2026, regra “Sem troca ao carregar” em `docs/ia/padroes-site.md`): aviso ou cartão provisório que some ou muda quando o servidor responde, bloco que empurra o conteúdo para baixo. A primeira pintura tem de ser a definitiva (usar o último resultado guardado no aparelho e trocar só se mudou); conferir com servidor lento de propósito e registrar o que apareceu desde o primeiro instante.
 
 ## Critério contra resultado genérico
 
