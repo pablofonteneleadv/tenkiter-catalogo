@@ -1,5 +1,9 @@
 # Changelog
 
+## 7.96.2 — Site na Cloudflare aplica os cabeçalhos
+
+- O wrangler 3 publicava o `_headers` como arquivo comum (cabeçalhos de segurança e `no-store` do `version.json` não eram aplicados). A publicação do site passa a usar o wrangler 4.50.0, que aplica as regras.
+
 ## 7.96.1 — Site também publicado na Cloudflare
 
 - **Motivo:** o Render ficou sem minutos de montagem no mês (gastos por um serviço antigo, o Chatwoot, que tentava montar e falhava ~10 vezes por dia). O site da loja leva ~30 s por montagem.
