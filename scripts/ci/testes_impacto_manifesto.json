@@ -53,6 +53,10 @@
       "catalogo",
       "ci"
     ],
+    "tests/app_atualizacao_obrigatoria_ui.py": [
+      "push",
+      "catalogo"
+    ],
     "tests/sem_troca_inicio_ui.py": [
       "treinamentos"
     ],

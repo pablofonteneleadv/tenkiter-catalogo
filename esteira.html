@@ -665,7 +665,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     esq.onclick = async () => {
       esq.disabled = true;
       try {
-        await carregarScript('conta.js?v=7.92.0');
+        await carregarScript('conta.js?v=7.96.0');
         if (esq.isConnected) TKConta.abrirRecuperar({ identificador:w.value, chamar:d=>apiPost(d), aoEntrar:r=>salvarSessao(r.usuario.whatsapp,r.sessao) });
       } catch (e) {er.hidden=false;er.textContent=e.message;}
       finally {esq.disabled=false;}
@@ -3122,6 +3122,6 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
 })();
 </script>
 <script src="a11y.js?v=7.87.0"></script>
-<script src="conta.js?v=7.92.0"></script>
+<script src="conta.js?v=7.96.0"></script>
 </body>
 </html>

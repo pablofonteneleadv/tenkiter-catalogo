@@ -146,6 +146,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("esteira_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_fotos_ui.py", lambda o: "FALHAS=0" in o),
     ("esteira_sessao_renovada_ui.py", lambda o: "FALHAS=0" in o),   # v7.88.1: código de sessão renovado por outra tela não deixa a Esteira em branco
+    ("app_atualizacao_obrigatoria_ui.py", lambda o: "FALHAS=0" in o), # v7.96.0: app desatualizado trava até atualizar
     ("sem_troca_inicio_ui.py", lambda o: "FALHAS=0" in o),          # v7.95.0: a tela inicial do Treinamento nasce definitiva (sem aviso provisório)
     ("curriculo_perfil_unificado_ui.py", lambda o: "FALHAS=0" in o), # v7.93.0: perfil pedido dentro do currículo; Instagram confirmado obrigatório
     ("senha_minima_ui.py", lambda o: "FALHAS=0" in o),              # v7.92.0: senha nova com mínimo 8 conferida no campo

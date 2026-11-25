@@ -23,6 +23,12 @@ def candidata(b, est):
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
     def h(route):
         r = route.request; u = r.url
+        if "/cv/ig-perfil" in u:
+            q = u.split("u=")[-1]
+            if q in ("maria.silva", "maria.certa", "maria"): return resp(route, {"ok": True, "existe": True, "usuario": q, "nome": "Maria Silva", "foto": "https://scontent.cdninstagram.com/v/m.jpg", "seguidores": "1.234"})
+            if est.get("perfil_fora"): return resp(route, {"ok": False, "erro": "fora"})
+            if est.get("sem_previa"): return resp(route, {"ok": True, "existe": False, "usuario": q, "semPrevia": True})
+            return resp(route, {"ok": True, "existe": False, "usuario": q})
         if "/cv/ig" in u:
             est.setdefault("worker", []).append(r.method)
             if r.method == "POST": est["codigos"] = est.get("codigos", 0) + 1; return resp(route, {"ok": True, "codigo": "TK-AB2CD3", "loja": "tenkitermodasceara", "direct": True})
@@ -70,13 +76,42 @@ with sync_playwright() as p:
     est = {}
     ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
     pg.fill("#insta", "@Maria.Silva")
-    chk("mostra o link para abrir o próprio perfil", pg.get_attribute("#ig-ver", "href") == "https://www.instagram.com/maria.silva/" and pg.locator("#ig-conf").is_visible(), pg.get_attribute("#ig-ver", "href"))
+    pg.wait_for_timeout(1200)
+    chk("mostra o perfil para conferir (cartão ou link)", pg.get_attribute("#ig-ver", "href") == "https://www.instagram.com/maria.silva/" and (pg.locator("#ig-conf").is_visible() or pg.locator("#ig-sou").count() == 1), pg.get_attribute("#ig-ver", "href"))
     chk("botão principal é 'É o meu Instagram'", "É o meu Instagram" in pg.inner_text("#ok"))
     pg.click("#ok"); pg.wait_for_timeout(800)
     ult = [a for a in est["acoes"] if a.get("action") == "curriculo_instagram"][-1]
     chk("grava o @ com a confirmação da própria candidata", ult.get("instagram") == "@maria.silva" and ult.get("euConfirmo") is True and not ult.get("igCodigo"), ult)
     chk("segue sem passar pelo Direct", h2(pg) == "Vaga e horários" and est.get("codigos") is None, [h2(pg), est.get("codigos")])
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
+    print("== Enquanto digita aparece o perfil com foto: 'Sou eu' ==")
+    est = {}
+    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
+    pg.locator("#insta").press_sequentially("@maria.silva", delay=30); pg.wait_for_selector("#ig-sou", timeout=5000)
+    t = pg.inner_text("#ig-achado")
+    chk("cartão com @, nome e seguidores", "@maria.silva" in t and "Maria Silva" in t and "1.234 seguidores" in t, t)
+    chk("cartão com a foto do perfil", pg.locator("#ig-av img").count() == 1)
+    pg.click("#ig-sou"); pg.wait_for_timeout(800)
+    ult = [a for a in est["acoes"] if a.get("action") == "curriculo_instagram"][-1]
+    chk("'Sou eu' grava o @ confirmado e segue", ult.get("instagram") == "@maria.silva" and ult.get("euConfirmo") is True and h2(pg) == "Vaga e horários", [ult, h2(pg)])
+    chk("sem erro de JavaScript", not erros, erros); ctx.close()
+    print("== @ que não existe: avisa e só segue no segundo toque ==")
+    est = {}
+    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
+    pg.locator("#insta").press_sequentially("@maria.erradaa", delay=30); pg.wait_for_timeout(1500)
+    chk("mostra 'Não achamos' na hora", "Não achamos @maria.erradaa" in pg.inner_text("#ig-achado"), pg.inner_text("#ig-achado"))
+    pg.click("#ok"); pg.wait_for_timeout(400)
+    chk("primeiro toque avisa e não grava", "toque de novo" in pg.inner_text("#erro") and not [a for a in est.get("acoes", []) if a.get("action") == "curriculo_instagram"], pg.inner_text("#erro"))
+    pg.click("#ok"); pg.wait_for_timeout(800)
+    chk("segundo toque segue (o Instagram pode ter falhado)", h2(pg) == "Vaga e horários", h2(pg))
+    chk("sem erro de JavaScript", not erros, erros); ctx.close()
+    print("== Serviço de perfil fora do ar: tela continua como antes ==")
+    est = {"sem_previa": True}   # como na nuvem hoje: o Instagram não entrega a prévia
+    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
+    pg.locator("#insta").press_sequentially("@zezinho", delay=30); pg.wait_for_timeout(1500)
+    chk("mostra o link para abrir o perfil e deixa seguir", pg.locator("#ig-conf").is_visible() and pg.inner_text("#ig-achado").strip() == "", pg.inner_text("#ig-achado"))
+    chk("sem erro de JavaScript", not erros, erros); ctx.close()
+
     print("== Do Direct dá para voltar e confirmar com um toque ==")
     est = {}
     ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)

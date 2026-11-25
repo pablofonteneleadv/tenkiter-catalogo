@@ -390,3 +390,52 @@
   window.TKConta = { SENHA_MIN: SENHA_MIN, senhaOk: senhaOk, ligarSenha: ligarSenha, ligarCpf: ligarCpf, cpfMask: cpfMask, cpfValido: cpfValido, emailValido: emailValido, nascMask: nascMask, nascValida: nascValida, abrirRecuperar: abrirRecuperar, avisoContaExiste: avisoContaExiste, precisaCpf: precisaCpf, faixaCpf: faixaCpf,
     nomeTopo: nomeTopo, atualizarTopo: montarTopo, sair: sairTopo };
 })();
+
+/* v7.96.0 — App desatualizado não funciona até atualizar (pedido do Pablo, 25/11/2026: "obrigar a atualizar, invalidar
+ * versão antiga até atualizar"). Vale para todo app que abre o site (as versões já instaladas também, pela ponte TKAndroid
+ * que elas têm: versao() e atualizar()). Compara com a versão publicada em /android/latest.json (campo "minimo" se existir,
+ * senão a versão mais nova). A última versão conhecida fica guardada no aparelho para a trava já nascer com a tela
+ * (regra "Sem troca ao carregar"); a consulta só atualiza esse valor. Sem rede e sem nada guardado: não trava. */
+(function () {
+  'use strict';
+  if (!/TenkiterAndroid/.test(navigator.userAgent || '')) return;
+  var ponte = window.TKAndroid;
+  if (!ponte || typeof ponte.versao !== 'function') return;
+  var atual = ''; try { atual = String(ponte.versao() || ''); } catch (e) { return; }
+  if (!atual) return;
+  var CH = 'tk_app_minimo_v1';
+  function partes(v) { return String(v || '').split(/[.\-]/).map(function (n) { return parseInt(n, 10) || 0; }); }
+  function menor(a, b) { var x = partes(a), y = partes(b); for (var i = 0; i < Math.max(x.length, y.length); i++) { var d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0; } return false; }
+  function travar(info) {
+    if (document.getElementById('tk-app-velho')) return;
+    var monta = function () {
+      if (document.getElementById('tk-app-velho') || !document.body) return;
+      var d = document.createElement('div'); d.id = 'tk-app-velho'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'tk-app-velho-t');
+      d.style.cssText = 'position:fixed;inset:0;z-index:var(--z-sobre-tudo);background:var(--preto);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:14px;font-family:inherit';
+      var h = document.createElement('h2'); h.id = 'tk-app-velho-t'; h.textContent = 'Atualize o aplicativo'; h.style.cssText = 'margin:0;font-size:1.4rem;color:#fff';
+      var p = document.createElement('p'); p.style.cssText = 'margin:0;max-width:340px;line-height:1.45;color:#ddd';
+      p.textContent = 'Esta versão (' + atual + ') não funciona mais. Toque em Atualizar e instale a versão ' + info.versao + ' para continuar.';
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Atualizar agora';
+      b.style.cssText = 'min-height:48px;min-width:220px;border:0;border-radius:12px;background:var(--laranja);color:var(--preto);font-weight:800;font-size:1.05rem;cursor:pointer';
+      b.onclick = function () { try { ponte.atualizar(); } catch (e) { if (info.url) location.href = info.url; } };
+      d.appendChild(h); d.appendChild(p); d.appendChild(b);
+      if (/^https:\/\/github\.com\/pablofonteneleadv\/tenkiter-catalogo\/releases\/download\//.test(info.url || '')) {
+        var a = document.createElement('a'); a.href = info.url; a.textContent = 'Não abriu? Baixar o instalador'; a.style.cssText = 'color:#f5c08a;min-height:44px;display:inline-flex;align-items:center';
+        d.appendChild(a);
+      }
+      document.body.appendChild(d); document.documentElement.classList.add('tk-travado');
+      setTimeout(function () { try { b.focus(); } catch (e) { /* sem foco */ } }, 50);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+    };
+    if (document.body) monta(); else document.addEventListener('DOMContentLoaded', monta);
+  }
+  var guardado = null; try { guardado = JSON.parse(localStorage.getItem(CH) || 'null'); } catch (e) { guardado = null; }
+  if (guardado && guardado.versao && menor(atual, guardado.versao)) travar(guardado);
+  fetch('/android/latest.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (!j || !j.versionName) return;
+    var info = { versao: String(j.minimo || j.versionName), url: String(j.url || '') };
+    try { localStorage.setItem(CH, JSON.stringify(info)); } catch (e) { /* sem espaço */ }
+    if (menor(atual, info.versao)) travar(info);
+    else { var v = document.getElementById('tk-app-velho'); if (v) { v.remove(); document.documentElement.classList.remove('tk-travado'); } }
+  }).catch(function () { /* sem rede: fica o que se sabia */ });
+})();
