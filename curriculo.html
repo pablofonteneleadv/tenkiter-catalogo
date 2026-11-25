@@ -585,7 +585,7 @@ function reduzirImagem(arquivo, maxLado, qualidade) {
 /* v7.93.0 — Perfil dentro do currículo (pedido do Pablo, 24/11/2026): o currículo pede tudo que o "Meu perfil" precisa,
  * para não ficar "perfil pendente" com "currículo completo". Ordem: Instagram confirmado → fotos (rosto obrigatória e corpo
  * inteiro) → seus dados (altura, peso e endereço) → perguntas. Quem já enviou e só falta algo vai direto ao que falta. */
-const PERFIL_DADOS = ['altura', 'peso', 'cep', 'endereco', 'bairro', 'cidade', 'estado'];
+const PERFIL_DADOS = ['endereco', 'bairro', 'cidade', 'estado'];   // v7.95.0: altura, peso e CEP são opcionais (pedido do Pablo)
 function faltaDadosPerfil() { const p = S.perfil; return !p || PERFIL_DADOS.some(k => !String(p[k] || '').trim()); }
 async function proximaEtapa() {
   if (!S.d.instagram) return viewInstagram('');
@@ -696,7 +696,7 @@ function viewDados(msg) {
     ${campo('cep', 'CEP', 'inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="postal-code"')}
     <p class="sub oculto" id="cep-st" role="status" aria-live="polite" style="margin:4px 0 0"></p>
     ${campo('endereco', 'Endereço (rua e número)', 'autocomplete="street-address"')}
-    ${campo('bairro', 'Bairro')}
+    ${campo('bairro', 'Bairro ou distrito')}
     <div style="display:flex;gap:10px"><div style="flex:3">${campo('cidade', 'Cidade', 'autocomplete="address-level2"')}</div><div style="flex:1">${campo('estado', 'Estado', 'maxlength="2" placeholder="CE" autocapitalize="characters" autocomplete="address-level1"')}</div></div>
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
     <button class="btn-p" id="ok">Continuar</button></div>`);
@@ -720,15 +720,15 @@ function viewDados(msg) {
   b.onclick = async () => {
     const v = id => document.getElementById(id).value.trim();
     let alt = v('altura').replace(',', '.'); const pes = v('peso').replace(',', '.');
-    if (!alt || isNaN(+alt)) return erroBox('Digite sua altura (ex.: 1,65).');
-    if (+alt > 3) alt = String(+alt / 100);   // digitou em centímetros (165)
-    if (+alt < 1 || +alt > 2.3) return erroBox('Confira a altura (ex.: 1,65).');
-    if (!pes || isNaN(+pes) || +pes < 30 || +pes > 250) return erroBox('Digite seu peso em kg (ex.: 68).');
-    if (v('cep').replace(/\D/g, '').length !== 8) return erroBox('Digite o CEP com 8 números.');
-    if (!/\d/.test(v('endereco'))) return erroBox('Coloque a rua e o número da casa (ex.: Rua Tal, 120).');
-    if (!v('bairro') || !v('cidade')) return erroBox('Preencha o bairro e a cidade.');
+    // v7.95.0: altura, peso e CEP são opcionais; se preencher, confere
+    if (alt) { if (isNaN(+alt)) return erroBox('Confira a altura (ex.: 1,65) ou deixe em branco.'); if (+alt > 3) alt = String(+alt / 100); if (+alt < 1 || +alt > 2.3) return erroBox('Confira a altura (ex.: 1,65) ou deixe em branco.'); }
+    if (pes && (isNaN(+pes) || +pes < 30 || +pes > 250)) return erroBox('Confira o peso em kg (ex.: 68) ou deixe em branco.');
+    const cepD = v('cep').replace(/\D/g, '');
+    if (cepD && cepD.length !== 8) return erroBox('O CEP tem 8 números. Confira ou deixe em branco.');
+    if (!v('endereco').replace(/,\s*$/, '')) return erroBox('Escreva o endereço (rua e número, ou sítio/localidade).');
+    if (!v('bairro') || !v('cidade')) return erroBox('Preencha o bairro ou distrito e a cidade.');
     if (!/^[A-Za-z]{2}$/.test(v('estado'))) return erroBox('Digite a sigla do estado (ex.: CE).');
-    const campos = { altura: (+alt).toFixed(2).replace('.', ','), peso: String(Math.round(+pes)), cep: v('cep'), endereco: v('endereco').replace(/,\s*$/, ''), bairro: v('bairro'), cidade: v('cidade'), estado: v('estado').toUpperCase() };
+    const campos = { altura: alt ? (+alt).toFixed(2).replace('.', ',') : '', peso: pes ? String(Math.round(+pes)) : '', cep: cepD ? v('cep') : '', endereco: v('endereco').replace(/,\s*$/, ''), bairro: v('bairro'), cidade: v('cidade'), estado: v('estado').toUpperCase() };
     carregando(b, true); const r = await api('atualizar_perfil', { whatsapp: S.whats, senha: S.sessao, campos }); carregando(b, false);
     if (!r.ok) return erroBox(TKPadrao.erro(r, 'Não foi possível salvar agora. Tente de novo.'));
     S.perfil = Object.assign({}, S.perfil, campos); proximaEtapa();

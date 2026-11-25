@@ -528,7 +528,7 @@ details.manual-card[open]>summary::after{content:'▴';}
 
 <script id="app-data" type="application/json">{"manuals": {}, "titles": {"1": "TM Funcionário Iniciando", "2": "TM Funcionário Estágio", "3": "TM Funcionário Avançado"}, "blurbs": {"1": "Leitura rápida para quem vai ser entrevistado.", "2": "O manual completo de operação do dia a dia.", "3": "Responsabilidades ampliadas de apoio e coordenação."}, "quizzes": {}, "roster": [], "appsScriptUrl": "https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec", "appsScriptToken": "tenkiter2026"}</script>
 <script src="tm-verificado.js?v=7.61.0"></script>
-<script src="tutorial-app.js?v=7.66.0"></script>
+<script src="tutorial-app.js?v=7.95.0"></script>
 <script>
 (function(){
 "use strict";
@@ -656,7 +656,7 @@ var PERFIL_CAMPOS = [
   { chave: 'instagram', label: 'Instagram' },
   { chave: 'cep', label: 'CEP' },
   { chave: 'endereco', label: 'Endereço' },
-  { chave: 'bairro', label: 'Bairro' },
+  { chave: 'bairro', label: 'Bairro ou distrito' },
   { chave: 'cidade', label: 'Cidade' },
   { chave: 'estado', label: 'Estado' },
   { chave: 'altura', label: 'Altura' },
@@ -1404,6 +1404,28 @@ function avatarHtml(user, size){
   }
   return '<span class="' + cls + ' avatar-fallback">' + esc(avatarIniciais(user.name)) + '</span>';
 }
+/* v7.95.0 — Sem troca ao carregar (regra do Pablo, 25/11/2026: "nunca aparecer uma tela e depois outra").
+ * O resultado do currículo fica guardado no aparelho e a tela inicial já nasce com o aviso certo; a conferência no
+ * servidor só troca algo se mudou de verdade. Sem resultado guardado (primeiro acesso), o espaço fica reservado e vazio
+ * em vez de mostrar um aviso provisório. "Complete seu perfil" só aparece para quem NÃO tem currículo. */
+function cvChave_(){ return 'tk_cv_st_' + String((state.user && state.user.whatsapp) || ''); }
+function cvStatusConhecido_(){
+  if (state.cvStatus && state.cvStatus.r) return state.cvStatus;
+  try { var x = JSON.parse(localStorage.getItem(cvChave_()) || 'null'); if (x && x.r && x.r.ok) { state.cvStatus = { t: 0, r: x.r }; return state.cvStatus; } } catch (e) { /* sem guardado */ }
+  return null;
+}
+function cvGuardar_(r){ try { if (r && r.ok) localStorage.setItem(cvChave_(), JSON.stringify({ t: Date.now(), r: { ok: true, estado: r.estado, faltando: r.faltando || [] } })); } catch (e) { /* sem espaço: segue */ } }
+function perfilAvisoVisivel_(){
+  var st = cvStatusConhecido_();
+  return perfilCompletude(state.user).pct < 100 && !!(st && st.r && st.r.estado === 'nenhum');
+}
+function bannerPerfilHtml_(){
+  var comp = perfilCompletude(state.user);
+  return '<div class="perfil-banner" id="perfil-banner">' +
+    '<span>📋 Complete seu perfil (' + comp.pct + '% preenchido) — leva menos de um minuto.</span>' +
+    '<a href="#" id="link-completar-perfil" class="btn btn-primary btn-sm">Completar perfil</a>' +
+  '</div>';
+}
 function renderTopbar(){
   var isAdmin = temGestao();
   var comp = perfilCompletude(state.user);
@@ -1414,7 +1436,7 @@ function renderTopbar(){
       '<div class="avatar-menu-wrap">' +
         '<button class="avatar-menu-btn" id="btn-avatar-menu" aria-label="Menu do funcionário">' +
           avatarHtml(state.user, 'sm') +
-          (comp.pct < 100 ? '<span class="avatar-badge" title="Complete seu perfil"></span>' : '') +
+          (perfilAvisoVisivel_() ? '<span class="avatar-badge" title="Complete seu perfil"></span>' : '') +
         '</button>' +
         '<div class="avatar-dropdown" id="avatar-dropdown" hidden>' +
           '<div class="avatar-dropdown-name">' + esc(state.user.name) + '</div>' +
@@ -1531,7 +1553,7 @@ function renderPerfil(){
     '<h3 class="perfil-secao">Endereço</h3>' +
     campo('perfil-cep', 'CEP', u.cep, 'text', ' placeholder="00000-000"') +
     campo('perfil-endereco', 'Endereço (rua e número)', u.endereco, 'text') +
-    campo('perfil-bairro', 'Bairro', u.bairro, 'text') +
+    campo('perfil-bairro', 'Bairro ou distrito', u.bairro, 'text') +
     campo('perfil-cidade', 'Cidade', u.cidade, 'text') +
     campo('perfil-estado', 'Estado', u.estado, 'text', ' maxlength="2" placeholder="CE"') +
     '<button class="btn btn-primary" id="perfil-salvar" style="margin-top:16px">Salvar alterações</button>' +
@@ -1681,18 +1703,13 @@ function goHome(){
       ) : '<div class="progress-label">Produto ao Admin total pra liberar este manual</div>') +
     '</div>';
   }).join('');
-  var comp = perfilCompletude(state.user);
-  var bannerPerfil = comp.pct < 100
-    ? '<div class="perfil-banner" id="perfil-banner">' +
-        '<span>📋 Complete seu perfil (' + comp.pct + '% preenchido) — leva menos de um minuto.</span>' +
-        '<a href="#" id="link-completar-perfil" class="btn btn-primary btn-sm">Completar perfil</a>' +
-      '</div>'
-    : '';
+  var stCv = cvStatusConhecido_();
+  var bannerPerfil = perfilAvisoVisivel_() ? bannerPerfilHtml_() : '';
   app.innerHTML = renderTopbar() +
     '<div class="shell"><div class="main" style="max-width:900px">' +
       bannerPerfil +
       '<div class="hero"><h1>Oi, ' + esc(state.user.name) + '!</h1><p>' + (state.user.perfil ? ('Seu perfil: ' + esc(state.user.perfil) + '. ') : ('Seu nível de acesso é ' + state.user.level + '. ')) + 'Escolha um manual para continuar.</p></div>' +
-      '<div id="cv-slot"></div>' +
+      '<div id="cv-slot">' + (stCv ? cvBannerHtml(stCv.r) : '') + '</div>' +
       '<div id="tut-aluno-slot"></div>' +
       '<div class="cards">' + (cards || '<p class="sub">Nenhum manual disponível ainda.</p>') + '</div>' +
     '</div></div>';
@@ -1743,24 +1760,30 @@ function cvBannerHtml(r){
 async function carregarAvisoCurriculo(){
   if (!state.user) return;
   var slot = document.getElementById('cv-slot');
-  if (slot) slot.innerHTML = cvBannerHtml(state.cvStatus && state.cvStatus.r); // já mostra algo na hora
-  esconderPerfilSeTemCurriculo_(state.cvStatus && state.cvStatus.r);
+  var conhecido = cvStatusConhecido_();
+  if (slot && conhecido && !slot.innerHTML) slot.innerHTML = cvBannerHtml(conhecido.r);   // semacesso: mesmo aviso guardado
   var st = state.cvStatus;
   if (!st || Date.now() - st.t > 60000){
     var r = await submitResult({ action:'curriculo_status', whatsapp: state.user.whatsapp, sessao: state.user.password });
-    st = { t: Date.now(), r: (r && r.ok) ? r : null }; state.cvStatus = st;
+    if (r && r.ok) { st = { t: Date.now(), r: r }; state.cvStatus = st; cvGuardar_(r); }
+    else if (!conhecido) { st = { t: Date.now(), r: null }; state.cvStatus = st; }   // sem rede e sem guardado: cartão padrão
+    else st = conhecido;                                                                // sem rede: fica o que já está na tela
   }
   slot = document.getElementById('cv-slot');
   if (!slot || (state.view !== 'home' && state.view !== 'semacesso')) return;
-  slot.innerHTML = cvBannerHtml(st.r);
-  esconderPerfilSeTemCurriculo_(st.r);
+  var html = cvBannerHtml(st.r);
+  if (slot.innerHTML !== html) slot.innerHTML = html;   // só troca se mudou de verdade
+  ajustarAvisoPerfil_();
 }
 /* v7.93.0 (pedido do Pablo): o perfil agora é pedido dentro do currículo. Quem tem currículo vê só o aviso do currículo
  * (com o que falta), nunca "Complete seu perfil" ao lado de "Currículo completo". */
-function esconderPerfilSeTemCurriculo_(r){
-  if (!r || !r.ok || !r.estado || r.estado === 'nenhum') return;
-  var b = document.getElementById('perfil-banner'); if (b) b.remove();
-  document.querySelectorAll('.avatar-badge').forEach(function(x){ x.remove(); });
+function ajustarAvisoPerfil_(){
+  var quer = perfilAvisoVisivel_(), b = document.getElementById('perfil-banner');
+  if (!quer) { if (b) b.remove(); document.querySelectorAll('.avatar-badge').forEach(function(x){ x.remove(); }); return; }
+  if (b) return;
+  var main = document.querySelector('#app .main'); if (!main) return;
+  main.insertAdjacentHTML('afterbegin', bannerPerfilHtml_());   // só no primeiro acesso de quem não tem currículo
+  var l = document.getElementById('link-completar-perfil'); if (l) l.addEventListener('click', function(e){ e.preventDefault(); openPerfil(); });
 }
 
 /* ---------------- manual view ---------------- */

@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.95.0 — Treinamento sem troca ao abrir; altura, peso e CEP opcionais
+
+- **Relato do Pablo:** ao abrir o Treinamento aparecia primeiro "Complete seu perfil" e "Faça seu currículo" e só depois a tela certa ("Currículo completo"). "Isso não pode acontecer, nunca."
+- **Correção:** a tela inicial nasce com o último resultado guardado no aparelho (currículo e cursos interativos) e só troca se algo mudou de verdade. No primeiro acesso, o espaço fica vazio até a resposta (nada de aviso provisório). "Complete seu perfil" só aparece para quem não tem currículo.
+- **Regra nova "Sem troca ao carregar"** (decisão do Pablo) em `docs/ia/padroes-site.md`, no portão da skill de estética e nas regras do Cofre: a primeira pintura de toda tela é a definitiva.
+- **Seus dados do currículo:** altura, peso e CEP opcionais (o CEP continua preenchendo o endereço se a pessoa usar); obrigatórios só endereço, **bairro ou distrito**, cidade e estado. Endereço do interior sem número (ex.: "Sítio Boa Vista") é aceito.
+- **Depende do servidor RH 3.39** (publicação manual) para o currículo ficar completo sem altura, peso e CEP.
+- **Testes:** `sem_troca_inicio_ui.py` (11; na versão anterior falha) e `curriculo_perfil_unificado_ui.py` (15).
+
 ## 7.94.0 — Instagram confirmado com um toque (Direct opcional)
 
 - **Relato do Pablo:** na confirmação pelo Direct aparecia "Não consegui conferir a confirmação agora" e muita gente travava ou desistia nessa etapa.

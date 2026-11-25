@@ -48,13 +48,26 @@ with sync_playwright() as p:
     pg.locator("#cep").press_sequentially("63700000", delay=10); pg.wait_for_timeout(800)
     chk("o CEP preenche rua, bairro, cidade e estado", pg.input_value("#bairro") == "Centro" and pg.input_value("#cidade") == "Crateús" and pg.input_value("#estado") == "CE" and pg.input_value("#endereco").startswith("Rua Firmino Rosa"), [pg.input_value("#endereco"), pg.input_value("#cidade")])
     chk("o CEP fica com o traço", pg.input_value("#cep") == "63700-000", pg.input_value("#cep"))
-    pg.click("#ok"); pg.wait_for_timeout(300)
-    chk("sem o número da casa explica", "número" in pg.inner_text("#erro"), pg.inner_text("#erro"))
+    pg.fill("#endereco", ""); pg.click("#ok"); pg.wait_for_timeout(300)
+    chk("sem endereço explica", "endereço" in pg.inner_text("#erro").lower(), pg.inner_text("#erro"))
+    chk("rótulo é 'Bairro ou distrito'", "Bairro ou distrito" in pg.inner_text("#app"))
     pg.fill("#endereco", "Rua Firmino Rosa, 120"); pg.click("#ok"); pg.wait_for_timeout(1200)
     sal = [a for a in est["acoes"] if a.get("action") == "atualizar_perfil"]
     c = sal[-1]["campos"] if sal else {}
     chk("salva no perfil: altura em metros, peso, endereço completo", c.get("altura") == "1,65" and c.get("peso") == "63" and c.get("endereco") == "Rua Firmino Rosa, 120" and c.get("estado") == "CE", c)
     chk("já enviado e agora completo: termina na tela de enviado", "enviado" in pg.inner_text("#app").lower(), pg.inner_text("#app")[:160])
+    chk("sem erro de JavaScript", not erros, erros); ctx.close()
+
+    print("== Altura, peso e CEP são opcionais ==")
+    est["perfil"] = {"altura": "", "peso": "", "cep": "", "endereco": "", "bairro": "", "cidade": "", "estado": "", "fotoCorpoUrl": ""}; est["acoes"] = []
+    ctx = b.new_context(viewport={"width": 360, "height": 740}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script(LOGIN); ctx.add_init_script("window.open=function(){return null};")
+    pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e))); ctx.route("**/*", h)
+    pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000); pg.click("#ok"); pg.wait_for_selector("#cep", timeout=10000)
+    pg.fill("#endereco", "Sítio Boa Vista"); pg.fill("#bairro", "Distrito de Ibiapaba"); pg.fill("#cidade", "Crateús"); pg.fill("#estado", "ce")
+    pg.click("#ok"); pg.wait_for_timeout(1200)
+    c = [a for a in est["acoes"] if a.get("action") == "atualizar_perfil"][-1]["campos"]
+    chk("passa sem altura, peso e CEP (e sem número no endereço do interior)", c.get("altura") == "" and c.get("peso") == "" and c.get("cep") == "" and c.get("endereco") == "Sítio Boa Vista" and c.get("estado") == "CE", c)
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
 
     print("== Portal: quem tem currículo não vê 'Complete seu perfil' ==")
