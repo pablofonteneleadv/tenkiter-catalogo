@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.94.0 — Instagram confirmado com um toque (Direct opcional)
+
+- **Relato do Pablo:** na confirmação pelo Direct aparecia "Não consegui conferir a confirmação agora" e muita gente travava ou desistia nessa etapa.
+- **Causa do erro:** o servidor das Mensagens recebeu o código, respondeu e encerrou a conversa, mas a consulta do servidor RH ao servidor das Mensagens falhou. O RH 3.38 não depende mais dela.
+- **Novo jeito:** ela digita o @ (o campo continua limpando sozinho), toca em "abrir @fulana no Instagram" para conferir o próprio perfil e confirma em "É o meu Instagram, continuar". O Direct continua como opção ("Prefere confirmar pelo Direct da loja?"), com volta para o toque único.
+- **Buscar contas enquanto digita (com foto):** testado e não é possível de graça; o Instagram bloqueia as consultas sem login e os serviços que fazem isso são pagos.
+- **Currículos (RH):** "IG ✓" (confirmado pela candidata), "IG ✓ Direct" (o código chegou pelo Direct da mesma conta, conferido na hora) ou "IG ?".
+- **Depende do servidor RH 3.38** (publicação manual).
+
 ## 7.93.0 — Perfil dentro do currículo e Instagram confirmado obrigatório
 
 - **Pedido do Pablo:** confundia ver "Complete seu perfil" ao lado de "Currículo completo", e quem deixava a confirmação do Instagram para depois ficava sem o Instagram certo. "O objetivo é ter o Instagram correto do candidato."
