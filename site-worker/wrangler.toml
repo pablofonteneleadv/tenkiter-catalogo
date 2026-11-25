@@ -1,0 +1,12 @@
+# Site da loja (tenkitermodas.com.br) servido pela Cloudflare: só arquivos estáticos, sem código.
+# Pedido do Pablo (25/11/2026): o Render ficou sem minutos de montagem; a Cloudflare não cobra nem limita montagem.
+# O conteúdo é o mesmo .public-site do Render (lista explícita em scripts/deploy/public-files.json) mais o _headers
+# gerado por scripts/deploy/cf_site_headers.py. O domínio entra em "routes" quando a zona estiver ativa na Cloudflare.
+name = "tenkiter-site"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[assets]
+directory = "../.public-site"
+not_found_handling = "404-page"
+html_handling = "auto-trailing-slash"

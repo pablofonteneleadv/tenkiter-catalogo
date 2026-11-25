@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.96.1 — Site também publicado na Cloudflare
+
+- **Motivo:** o Render ficou sem minutos de montagem no mês (gastos por um serviço antigo, o Chatwoot, que tentava montar e falhava ~10 vezes por dia). O site da loja leva ~30 s por montagem.
+- **O que muda:** cada publicação agora também sobe o site para a Cloudflare (`tenkiter-site`, só arquivos estáticos, grátis e sem limite de montagem), com a mesma lista de arquivos e os mesmos cabeçalhos do Render (`scripts/deploy/cf_site_headers.py` gera o `_headers` a partir de `render_headers.py`). O deploy confere o commit no ar, os cabeçalhos e que arquivos internos dão 404.
+- **Próximo passo:** apontar o domínio tenkitermodas.com.br para a Cloudflare (troca dos servidores DNS no registro.br, feita pelo Pablo) e ligar o domínio no `site-worker/wrangler.toml`.
+
 ## 7.96.0 — App: atualização obrigatória e ícone do Treinamento (APK 2.5.4); perfil do Instagram ao digitar
 
 - **Atualização obrigatória (pedido do Pablo):** app com versão mais antiga que a publicada mostra a tela "Atualize o aplicativo" por cima de tudo, sem fechar, com "Atualizar agora" (atualizador do próprio app) e link para baixar o instalador. Vale também para os apps já instalados (pela ponte que eles têm). A versão publicada fica guardada no aparelho, então a trava já nasce com a tela. Navegador comum nunca trava.

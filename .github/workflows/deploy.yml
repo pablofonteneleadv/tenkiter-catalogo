@@ -59,6 +59,50 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
   # ------------------------------------------------------------- Site (Render)
+  # 25/11/2026 (pedido do Pablo): o site também é publicado na Cloudflare (sem limite de montagem). Enquanto o domínio
+  # não apontar para lá, fica em tenkiter-site.distkrpconfeccoes.workers.dev; mesmo conteúdo e cabeçalhos do Render.
+  site_cloudflare:
+    name: Publicar site na Cloudflare
+    runs-on: ubuntu-24.04
+    needs: [ci, android_release]
+    environment: producao
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Montar o site (mesma lista e mesmos cabeçalhos do Render)
+        env:
+          RENDER_GIT_COMMIT: ${{ github.sha }}
+          RENDER_GIT_BRANCH: main
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/deploy/build_version.sh
+          TK_BUILD_ROOT=.public-site python3 scripts/deploy/cf_site_headers.py
+      - name: Publicar tenkiter-site (wrangler deploy)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: site-worker
+          command: deploy
+      - name: Conferir o site na Cloudflare (commit no ar e cabeçalhos)
+        env:
+          COMMIT_ESPERADO: ${{ github.sha }}
+        run: |
+          base=https://tenkiter-site.distkrpconfeccoes.workers.dev
+          v=''
+          for i in $(seq 1 18); do
+            v=$(curl -s "$base/version.json?t=$i" | python3 -c "import json,sys;print(json.load(sys.stdin).get('commit',''))" 2>/dev/null || true)
+            if [ "$v" = "$COMMIT_ESPERADO" ]; then echo "Site na Cloudflare com o commit $v"; break; fi
+            sleep 10
+          done
+          [ "$v" = "$COMMIT_ESPERADO" ] || { echo "::error::O site na Cloudflare não confirmou o commit (no ar: '$v')."; exit 1; }
+          curl -sI "$base/version.json" | grep -qi "cache-control: no-store" || { echo "::error::version.json sem no-store"; exit 1; }
+          curl -sI "$base/" | grep -qi "x-content-type-options: nosniff" || { echo "::error::cabeçalho nosniff ausente"; exit 1; }
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$base/tests/mock.py"); [ "$code" = "404" ] || { echo "::error::arquivo interno respondeu $code"; exit 1; }
+          echo "Cabeçalhos e arquivos internos conferidos."
+
   deploy:
     name: Publicar no Render
     runs-on: ubuntu-24.04
