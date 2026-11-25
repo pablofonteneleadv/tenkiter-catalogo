@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.95.1 — Consulta do perfil do Instagram (servidor das Mensagens)
+
+- Rota pública `/cv/ig-perfil?u=` no Worker: lê a prévia pública do perfil (a mesma que o WhatsApp mostra quando se cola um link do Instagram) e devolve nome, foto e seguidores, sem login e sem custo. Guarda 1 dia por @ e limita 60 consultas por IP a cada 10 minutos. Base para mostrar o perfil enquanto a candidata digita (próxima versão).
+- Teste: bloco novo em `worker_mensagens_conversa.js` (474).
+
 ## 7.95.0 — Treinamento sem troca ao abrir; altura, peso e CEP opcionais
 
 - **Relato do Pablo:** ao abrir o Treinamento aparecia primeiro "Complete seu perfil" e "Faça seu currículo" e só depois a tela certa ("Currículo completo"). "Isso não pode acontecer, nunca."

@@ -5115,6 +5115,48 @@ async function processarFilaZernio_(env){
   }
 }
 const ZERNIO_TIPO_ = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', sticker: 'figurinha', share: 'compartilhamento' };
+/* ---- v7.96.0: perfil do Instagram enquanto a candidata digita (pedido do Pablo, 25/11/2026) ----
+ * Sem login e sem custo: a página pública do perfil entrega a prévia de link (og:title, og:image, og:description) aos
+ * robôs de prévia (WhatsApp, Facebook). Daqui só sai nome, foto e contagem de seguidores, como na prévia de um link.
+ * Guarda 1 dia por @ (menos consultas ao Instagram) e limita por IP. existe:false = página sem prévia (perfil não existe
+ * ou o Instagram não respondeu a prévia): a tela pede para conferir, sem travar. */
+const IG_PERFIL_UA_ = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+function igEntidades_(t) {
+  return String(t || '').replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+    .replace(/&quot;/g, '"').replace(/&#039;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+function igMeta_(html, prop) {
+  const m = new RegExp('<meta[^>]+property="og:' + prop + '"[^>]+content="([^"]*)"', 'i').exec(html) || new RegExp('<meta[^>]+content="([^"]*)"[^>]+property="og:' + prop + '"', 'i').exec(html);
+  return m ? igEntidades_(m[1]) : '';
+}
+async function rotaIgPerfil_(env, req, url, J) {
+  if (req.method !== 'GET') return J({ ok: false, erro: 'Método não aceito.' }, 405);
+  const u = String(url.searchParams.get('u') || '').trim().replace(/^@+/, '').toLowerCase();
+  if (!/^[a-z0-9._]{1,30}$/.test(u)) return J({ ok: false, erro: 'Digite só letras, números, ponto e _.' }, 400);
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS ig_perfil (usuario TEXT PRIMARY KEY, em INTEGER NOT NULL, dados TEXT NOT NULL)").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS ig_perfil_ip (ip TEXT NOT NULL, em INTEGER NOT NULL)").run();
+  const agoraMs = Date.now(), guardado = await env.DB.prepare('SELECT em, dados FROM ig_perfil WHERE usuario=?').bind(u).first();
+  if (guardado && agoraMs - Number(guardado.em) < 86400000) { try { return J(Object.assign({ ok: true, guardado: true }, JSON.parse(guardado.dados))); } catch (e) { /* refaz */ } }
+  const ip = String(req.headers.get('CF-Connecting-IP') || '').slice(0, 64);
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM ig_perfil_ip WHERE ip=? AND em>=?').bind(ip, agoraMs - 600000).first();
+  if (n && Number(n.n) >= 60) return J({ ok: false, erro: 'Muitas consultas agora. Espere um pouco e tente de novo.' }, 429);
+  await env.DB.batch([env.DB.prepare('INSERT INTO ig_perfil_ip (ip, em) VALUES (?, ?)').bind(ip, agoraMs), env.DB.prepare('DELETE FROM ig_perfil_ip WHERE em<?').bind(agoraMs - 3600000)]);
+  let html = '', status = 0;
+  try {
+    const r = await fetch('https://www.instagram.com/' + encodeURIComponent(u) + '/', { headers: { 'User-Agent': IG_PERFIL_UA_, 'Accept-Language': 'pt-BR,pt;q=0.9' }, redirect: 'follow', signal: AbortSignal.timeout(8000) });
+    status = r.status; html = (await r.text()).slice(0, 400000);
+  } catch (e) { return J({ ok: false, erro: 'O Instagram não respondeu agora.' }, 503); }
+  const titulo = igMeta_(html, 'title');
+  const m = /^(.*?)\s*\(@([a-z0-9._]+)\)/i.exec(titulo);
+  let dados;
+  if (m && m[2].toLowerCase() === u) {
+    const desc = igMeta_(html, 'description'), seg = /([\d.,]+[KMkm]?)\s+(Followers|seguidores)/i.exec(desc), pubs = /([\d.,]+[KMkm]?)\s+(Posts|publica)/i.exec(desc);
+    const foto = igMeta_(html, 'image');
+    dados = { existe: true, usuario: u, nome: m[1].trim().slice(0, 80), foto: /^https:\/\//.test(foto) ? foto.slice(0, 1000) : '', seguidores: seg ? seg[1] : '', publicacoes: pubs ? pubs[1] : '' };
+  } else dados = { existe: false, usuario: u, semPrevia: status !== 404 };
+  await env.DB.prepare('INSERT INTO ig_perfil (usuario, em, dados) VALUES (?, ?, ?) ON CONFLICT(usuario) DO UPDATE SET em=excluded.em, dados=excluded.dados').bind(u, dados.existe ? agoraMs : agoraMs - 86400000 + 1800000, JSON.stringify(dados)).run();
+  return J(Object.assign({ ok: true }, dados));
+}
 /* ---- v7.91.0: Instagram da candidata confirmado pelo Direct (pedido do Pablo, 24/11/2026) ----
  * O currículo pede um código (POST /cv/ig) e a candidata o envia no Direct da loja. Quando a mensagem chega pelo Zernio,
  * o @ e a foto vêm do próprio Instagram: não há como digitar errado. A loja responde sozinha (mensagem automática) e a
@@ -6923,6 +6965,7 @@ export default {
     if (url.pathname === '/catalogo/composicoes' && req.method === 'GET') { try { return J({ ok: true, composicoes: await composicoesFotoIA_(env) }); } catch (e) { return J({ ok: false, erro: 'As composições não responderam agora.' }, 503); } }
     if (url.pathname === '/familias') { try { return await rotaFamiliasPublica_(env, req, h); } catch (e) { return J({ ok: false, erro: 'As famílias de peças não responderam agora.' }, 503); } }   // v7.44.0: pública, sem sessão
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
+    if (url.pathname === '/cv/ig-perfil') { try { return await rotaIgPerfil_(env, req, url, J); } catch (e) { return J({ ok: false, erro: 'Não consegui ver o perfil agora.' }, 503); } }   // v7.96.0: pública (candidata digitando o @)
     if (url.pathname === '/cv/ig') { try { return await rotaCvIg_(env, req, url, J); } catch (e) { return J({ ok: false, erro: 'Não consegui conferir o Instagram agora. Tente de novo.' }, 503); } }   // v7.91.0: pública (candidata)
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {
