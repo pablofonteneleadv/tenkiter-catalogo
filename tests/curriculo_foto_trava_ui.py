@@ -105,7 +105,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     ctx.add_init_script(SESSION); install(ctx, perms=PERMS_ALL, versao="4.1", protegido=True)
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
-    CV = {"CvId": "CV1", "Nome": "Maria Teste", "WhatsApp": "88999990001", "Status": "Novo", "Criado": "2026-11-22T12:00:00Z", "Etapa": "Foto",
+    CV = {"CvId": "CV1", "Nome": "Maria Teste", "WhatsApp": "88999990001", "Status": "Novo", "Criado": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "Etapa": "Foto",
           "Historico": "", "FotoUrl": "https://lh3.googleusercontent.com/d/abc", "CPF": "529.982.247-25"}
     def h(route):
         r = route.request
@@ -117,7 +117,8 @@ with sync_playwright() as p:
         return route.fallback()
     pg.route("**/*", h); pg.route("**/lh3.googleusercontent.com/**", lambda r: r.fulfill(status=200, content_type="image/png", body=PNG))
     pg.goto(BASE + "curriculos.html"); pg.wait_for_selector(".item", timeout=15000)
-    chk("etapa 'Foto' com foto já enviada aparece como 'Perfil'", pg.locator(".item .topo .tag").first.inner_text() == "Perfil", pg.locator(".item .topo .tag").first.inner_text())
+    tags = pg.locator(".item .topo .tag").all_inner_texts()   # data de hoje: sem "dias parada"; confere entre as etiquetas
+    chk("etapa 'Foto' com foto já enviada aparece como 'Perfil'", "Perfil" in tags and "Foto" not in tags, tags)
     pg.click(".item .topo"); pg.wait_for_timeout(400)
     dl = pg.inner_text(".item dl")
     chk("CPF aparece no card aberto", "CPF" in dl and "529.982.247-25" in dl, dl[:200])
