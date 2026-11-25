@@ -86,6 +86,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: site-worker
           command: deploy
+          wranglerVersion: '4.50.0'   # o wrangler 3 publica o _headers como arquivo em vez de aplicar as regras
       - name: Conferir o site na Cloudflare (commit no ar e cabeçalhos)
         env:
           COMMIT_ESPERADO: ${{ github.sha }}
