@@ -28,6 +28,7 @@ with sync_playwright() as p:
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
     def h(route):
         r = route.request; u = r.url
+        if "/cv/ig-perfil" in u: return resp(route, {"ok": True, "existe": False, "semPrevia": True})   # como na nuvem hoje
         if "/cv/ig" in u:
             if r.method == "POST": return resp(route, {"ok": True, "codigo": "TK-AB2CD3", "loja": "tenkitermodasceara"})
             return resp(route, {"ok": True, "confirmado": True, "usuario": "maria.certa", "nome": "Maria", "foto": ""})

@@ -39,7 +39,8 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
     PRINCIPAL("principal", "Principal", "/index.html"),
     POSTAGENS("postagens", "Postagens", "/admin.html?abrir=postagens"),
     RH("rh", "RH", "/treinamentos.html?painel=rh"),
-    CURRICULOS("curriculos", "Currículos", "/curriculos.html");
+    CURRICULOS("curriculos", "Currículos", "/curriculos.html"),
+    TREINAMENTO("treinamento", "Treinamento", "/treinamentos.html");   // 2.5.4: manual/dúvidas da equipe (pedido do Pablo)
 
     val url: String get() = SITE + caminho
     val classe: Class<out Activity>
@@ -51,6 +52,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
             POSTAGENS -> JanelaPostagens::class.java
             RH -> JanelaRh::class.java
             CURRICULOS -> JanelaCurriculos::class.java
+            TREINAMENTO -> JanelaTreinamento::class.java
         }
 
     companion object {
@@ -79,7 +81,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
                 }
                 "/esteira.html" -> ESTEIRA
                 "", "/", "/index.html" -> PRINCIPAL
-                "/treinamentos.html" -> RH
+                "/treinamentos.html" -> if (parametro(u.rawQuery, "painel") == "rh") RH else TREINAMENTO
                 "/curriculos.html" -> CURRICULOS
                 else -> null
             }
@@ -307,3 +309,4 @@ class JanelaPrincipal : JanelaActivity(Modulo.PRINCIPAL)
 class JanelaPostagens : JanelaActivity(Modulo.POSTAGENS)
 class JanelaRh : JanelaActivity(Modulo.RH)
 class JanelaCurriculos : JanelaActivity(Modulo.CURRICULOS)
+class JanelaTreinamento : JanelaActivity(Modulo.TREINAMENTO)

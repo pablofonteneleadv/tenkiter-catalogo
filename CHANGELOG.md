@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.96.0 — App: atualização obrigatória e ícone do Treinamento (APK 2.5.4); perfil do Instagram ao digitar
+
+- **Atualização obrigatória (pedido do Pablo):** app com versão mais antiga que a publicada mostra a tela "Atualize o aplicativo" por cima de tudo, sem fechar, com "Atualizar agora" (atualizador do próprio app) e link para baixar o instalador. Vale também para os apps já instalados (pela ponte que eles têm). A versão publicada fica guardada no aparelho, então a trava já nasce com a tela. Navegador comum nunca trava.
+- **APK 2.5.4:** ícone novo **Treinamento** (manual e dúvidas da equipe, `treinamentos.html`); o RH continua no ícone RH.
+- **Pasta com os ícones:** o Android não deixa um app criar pasta na tela inicial (quem organiza é o próprio celular); fica como está, agrupado à mão.
+- **Instagram ao digitar:** a tela já mostra o cartão do perfil (foto, nome, seguidores, "Sou eu") quando o servidor das Mensagens consegue a prévia pública do Instagram. Hoje o Instagram não entrega essa prévia para servidores de nuvem, então a tela segue com "abrir o perfil" e "É o meu Instagram".
+- **Testes:** `app_atualizacao_obrigatoria_ui.py` (12) e `curriculo_instagram_ui.py` (36).
+
 ## 7.95.1 — Consulta do perfil do Instagram (servidor das Mensagens)
 
 - Rota pública `/cv/ig-perfil?u=` no Worker: lê a prévia pública do perfil (a mesma que o WhatsApp mostra quando se cola um link do Instagram) e devolve nome, foto e seguidores, sem login e sem custo. Guarda 1 dia por @ e limita 60 consultas por IP a cada 10 minutos. Base para mostrar o perfil enquanto a candidata digita (próxima versão).

@@ -473,6 +473,7 @@ function viewInstagram(inicial, msg) {
     <label class="campo" for="insta">Seu @ do Instagram</label>
     <input type="text" id="insta" name="insta" placeholder="@seuusuario" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" value="${esc(limparInsta(inicial))}">
     <p class="sub" id="insta-dica" style="margin-top:6px">Só letras, números, ponto e _ (como aparece no seu perfil).</p>
+    <div id="ig-achado" role="status" aria-live="polite"></div>
     <div id="ig-conf" class="aviso oculto" style="margin-top:4px">Confira se é você: <a id="ig-ver" href="#" target="_blank" rel="noopener" style="font-weight:700"></a></div>
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
     <button class="btn-p" id="ok">É o meu Instagram, continuar</button>
@@ -485,12 +486,38 @@ function viewInstagram(inicial, msg) {
     conf.classList.toggle('oculto', ig.length < 3);
     if (ig.length >= 3) { ver.textContent = 'abrir ' + ig + ' no Instagram ↗'; ver.href = 'https://www.instagram.com/' + encodeURIComponent(ig.slice(1)) + '/'; }
   };
+  /* v7.96.0 (pedido do Pablo): enquanto digita, aparece o perfil do Instagram com foto, nome e seguidores (prévia pública
+   * do link, consultada pelo servidor das Mensagens). Ela toca em "Sou eu" e segue: escolheu vendo a foto, é de propósito.
+   * Se o serviço não responder, a tela continua funcionando como antes (abrir o perfil e confirmar). */
+  const achado = document.getElementById('ig-achado'), ok = document.getElementById('ok');
+  let pedido = 0, temporizador = null, naoAchou = '', avisouNaoAchou = '';
+  const pintarCartao = (x) => {
+    achado.innerHTML = `<div style="display:flex;gap:12px;align-items:center;background:#e8f5ec;border-radius:12px;padding:10px 12px;margin:8px 0">
+        <div id="ig-av" style="width:56px;height:56px;border-radius:50%;background:#ddd;overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.4rem">👤</div>
+        <div style="flex:1;min-width:0"><b>@${esc(x.usuario)}</b>${x.nome ? '<br>' + esc(x.nome) : ''}${x.seguidores ? '<br><span class="sub" style="margin:0">' + esc(x.seguidores) + ' seguidores</span>' : ''}</div>
+        <button type="button" class="btn-p" id="ig-sou" style="width:auto;margin:0;padding:10px 14px;flex:none">Sou eu</button></div>`;
+    const av0 = document.getElementById('ig-av');
+    if (av0 && /^https:\/\//.test(String(x.foto || ''))) { const im = document.createElement('img'); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.style.cssText = 'width:100%;height:100%;object-fit:cover'; im.onerror = () => im.remove(); im.src = x.foto; const av = document.getElementById('ig-av'); av.textContent = ''; av.appendChild(im); }
+    document.getElementById('ig-sou').onclick = () => ok.click();
+  };
+  const procurar = async () => {
+    const ig = limparInsta(campo.value), u = ig.slice(1), meu = ++pedido;
+    if (u.length < 3) { achado.innerHTML = ''; return; }
+    achado.innerHTML = '<p class="sub" style="margin:6px 0">🔎 Procurando ' + esc(ig) + ' no Instagram…</p>';
+    let x = null; try { x = await (await fetch(IG_CV + '-perfil?u=' + encodeURIComponent(u))).json(); } catch (e) { x = null; }
+    if (meu !== pedido || !document.body.contains(achado)) return;   // continuou digitando ou já saiu da tela: vale a última consulta
+    naoAchou = '';
+    if (!x || !x.ok || (!x.existe && x.semPrevia)) { achado.innerHTML = ''; conf.classList.remove('oculto'); return; }   // serviço fora ou Instagram sem prévia: segue como antes
+    if (x.existe) { pintarCartao(x); conf.classList.add('oculto'); }
+    else { naoAchou = ig; achado.innerHTML = '<p class="erro" style="margin:6px 0">Não achamos ' + esc(ig) + ' no Instagram. Confira se o @ está certo.</p>'; conf.classList.remove('oculto'); }
+  };
   campo.addEventListener('input', () => {
     const antes = campo.value, limpo = limparInsta(antes);
     if (limpo !== antes && !(antes === '@')) { campo.value = limpo; dica.innerHTML = 'Arrumamos o que não pode ter no @. Confira: <b>' + esc(limpo || '@') + '</b>'; }
-    mostrarVer();
+    mostrarVer(); conf.classList.add('oculto');
+    clearTimeout(temporizador); temporizador = setTimeout(procurar, 600);
   });
-  mostrarVer();
+  mostrarVer(); conf.classList.add('oculto'); if (limparInsta(campo.value).length > 3) procurar();
   const salvarIg = async (b, extra) => {
     const ig = limparInsta(campo.value); campo.value = ig;
     if (!ig || ig.length < 2) { erroBox('Digite seu @ do Instagram.'); return ''; }
@@ -499,7 +526,11 @@ function viewInstagram(inicial, msg) {
     S.d.instagram = ig; return ig;
   };
   const b = document.getElementById('ok');
-  b.onclick = async () => { if (await salvarIg(b, { euConfirmo: true })) { S.igConfirmado = true; seguirDepoisDoInstagram(); } };
+  b.onclick = async () => {
+    const ig = limparInsta(campo.value);
+    if (naoAchou && naoAchou === ig && avisouNaoAchou !== ig) { avisouNaoAchou = ig; return erroBox('Não achamos ' + ig + ' no Instagram. Confira o @. Se estiver certo, toque de novo para continuar.'); }
+    if (await salvarIg(b, { euConfirmo: true })) { S.igConfirmado = true; seguirDepoisDoInstagram(); }
+  };
   document.getElementById('ig-direct').onclick = async (e) => { e.preventDefault(); if (await salvarIg(b)) viewConfirmaIg(); };
   document.getElementById('sem').onclick = async () => {
     const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, semInstagram: true });
@@ -918,6 +949,6 @@ function viewFim() {
 <script src="nav.js?v=7.86.0" data-ativo="candidatura"></script>
 <script src="a11y.js?v=7.87.0"></script>
 <script src="padrao-dados.js?v=7.57.0"></script>
-<script src="conta.js?v=7.92.0"></script>
+<script src="conta.js?v=7.96.0"></script>
 </body>
 </html>

@@ -39,5 +39,8 @@
         <activity android:name=".JanelaCurriculos" android:exported="true" android:label="Currículos" android:icon="@drawable/ic_janela_curriculos" android:launchMode="singleTask" android:taskAffinity="${applicationId}.curriculos" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
+        <activity android:name=".JanelaTreinamento" android:exported="true" android:label="Treinamento" android:icon="@drawable/ic_janela_treinamento" android:launchMode="singleTask" android:taskAffinity="${applicationId}.treinamento" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
     </application>
 </manifest>
