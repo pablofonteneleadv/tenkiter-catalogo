@@ -51,7 +51,8 @@ with sync_playwright() as p:
             chk("voltar para UM produto: passo 1 'Fotos do produto (0 de 20)' sem a explicação do lote", pg.locator("#galeria-box .dica-midia-expansivel").is_visible() and pg.locator("#passo-fotos-nome").inner_text() == "Fotos do produto" and not pg.locator("#passo-fotos-varias").is_visible() and pg.locator("#galeria-contador").inner_text() == "(0 de 20)", pg.locator("#galeria-contador").inner_text())
         if w == 390:
             pg.set_input_files("#galeria-input", [{"name": "foto%d.png" % i, "mimeType": "image/png", "buffer": PNG} for i in range(21)])
-            pg.wait_for_timeout(1800)
+            try: pg.wait_for_function("document.getElementById('galeria-contador').textContent === '(20 de 20)'", timeout=20000)
+            except Exception: pass
             chk("um produto: aceita 20 fotos e recusa a 21ª sem perder as anteriores", pg.locator("#galeria-contador").inner_text() == "(20 de 20)" and pg.locator("#galeria-input").is_disabled(), pg.locator("#galeria-contador").inner_text())
         chk("sem erros de JavaScript", not erros, erros)
         ctx.close()
