@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.96.4 — App 2.5.6: um ícone só, com janelinha de áreas e menu de segurar
+
+- **Pedido do Pablo:** em vez de 8 ícones soltos (o Android não deixa o app criar pasta), fica **um ícone "TENKiTER Gestão"** (o nome separa o app da equipe do app de clientes):
+  - **um toque** abre na hora uma janelinha com as áreas (Mensagens, Gestão, Esteira, Postagens, Treinamento, RH, Currículos, Principal); tocar fora fecha;
+  - **segurar** o ícone mostra o menu do Android com as áreas (o celular mostra as que couberem) e dá para arrastar uma área para a tela.
+- Os ícones antigos de cada área somem da tela inicial depois da atualização (cada área continua abrindo na própria janela).
+- **Notificações:** o toque na notificação continua abrindo a conversa nas Mensagens (agora tratado pelo app, não pelo ícone principal).
+- Limitação: não testado em aparelho; conferir o toque numa notificação depois de instalar.
+
 ## 7.96.3 — Domínio tenkitermodas.com.br ligado ao site na Cloudflare
 
 - A zona do domínio está ativa na Cloudflare (servidores trocados no registro.br em 25/11). O `tenkiter-site` ganha as rotas `tenkitermodas.com.br/*` e `www.tenkitermodas.com.br/*`. Elas passam a valer quando os registros A e www estiverem com a nuvem laranja (Proxied); com a nuvem cinza, o domínio continua indo ao Render (volta imediata).
