@@ -46,7 +46,7 @@ class SetupGate(private val activity:Activity,private val close:()->Unit,private
         if(reviewing)item("Câmera para fotos e vídeos","Usada somente ao gravar. Ative Câmera em Permissões do aplicativo.",activity.checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){
             runCatching{activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+activity.packageName)))}}
         if(reviewing)list.addView(TextView(activity).apply{text="Fotos e arquivos são escolhidos pelo seletor do Android. Não é necessário liberar acesso geral ao armazenamento.";textSize=15f;setTextColor(Color.parseColor("#5C524B"));setPadding(0,dp(8),0,dp(16))})
-        if(XIAOMI)item("Início automático (Xiaomi)","Recomendado: ligue \"Início automático\" para o TENKiTER Mensagens.",null){
+        if(XIAOMI)item("Início automático (Xiaomi)","Recomendado: ligue \"Início automático\" para o TENKiTER Gestão.",null){
             val miui=Intent().setClassName("com.miui.securitycenter","com.miui.permcenter.autostart.AutoStartManagementActivity")
             runCatching{activity.startActivity(miui)}.onFailure{runCatching{activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+activity.packageName)))}}}
         if(ok(activity)&&reviewing)list.addView(Button(activity).apply{text="Voltar às mensagens";isAllCaps=false;textSize=16f;minimumHeight=dp(48);setTextColor(Color.WHITE)
