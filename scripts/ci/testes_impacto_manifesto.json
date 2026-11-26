@@ -277,6 +277,9 @@
     "tests/app_notificacao_espiar_abre.py": [
       "mensagens"
     ],
+    "tests/app_espiar_tempo.py": [
+      "mensagens"
+    ],
     "tests/mensagens_velocidade_ui.py": [
       "mensagens"
     ],

@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.96.12 — Espiar da notificação abre mais rápido
+
+- **Pedido do Pablo (26/11):** "quando aperta Espiar demora muito para entrar". No app recém-aberto, a tela de Mensagens esperava a resposta dos direitos de acesso (pedida só 0,3 s depois de abrir) e depois uma pausa fixa de 0,5 s antes de abrir a conversa. Agora: os direitos da última conferência ficam guardados no aparelho, por pessoa e sessão, e valem na hora (o servidor confere de novo em seguida e em todo pedido); a conferência sai já ao abrir; a conversa é entregue assim que a tela abre.
+- Medida no simulador (acesso em 0,8 s): de 1,5–2,7 s para ~0,4 s na primeira vez e ~0,17 s nas seguintes. Teste novo `tests/app_espiar_tempo.py`.
+
 ## 7.96.11 — Instagram do currículo: só escrever o @
 
 - **Pedido do Pablo (26/11):** as candidatas não entendiam abrir o próprio perfil para conferir, o código no Direct nem a prévia do perfil. A tela volta a ser só o campo do @ (obrigatório) com **Continuar** e "Não tenho Instagram", sem nenhuma validação nem consulta ao Instagram. Link colado ainda vira @ e espaços são tirados.
