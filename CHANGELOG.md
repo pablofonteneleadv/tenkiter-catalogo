@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.96.13 — Envio de fotos da Esteira volta sozinho quando a internet volta
+
+- **Relato do Pablo (26/11):** os envios de fotos da Talita para a caixa ficaram parados em "Sem conexão" (20 e 17 fotos) até alguém tocar em "Tentar de novo". O servidor de fotos estava normal (outras pessoas enviaram no mesmo dia); o envio de foto era o único ponto da Esteira em que a falha de rede não era marcada como de rede, então a fila tratava como erro definitivo.
+- Agora: uma nova tentativa em 1,5 s para oscilação curta; se seguir sem rede, a falha é marcada como de rede e a fila tenta de novo sozinha (30 s, 1, 2, 4… até 10 min) e quando a conexão volta. Processos antigos parados em "Sem conexão" também voltam sozinhos. Erros do servidor (foto recusada etc.) continuam esperando a pessoa. Texto: "Sem internet para enviar agora. As fotos ficam guardadas neste aparelho e sobem sozinhas quando a conexão voltar." `esteira-processos.js?v=7.96.13`.
+- Teste novo `tests/esteira_processos_rede.py`.
+
 ## 7.96.12 — Espiar da notificação abre mais rápido
 
 - **Pedido do Pablo (26/11):** "quando aperta Espiar demora muito para entrar". No app recém-aberto, a tela de Mensagens esperava a resposta dos direitos de acesso (pedida só 0,3 s depois de abrir) e depois uma pausa fixa de 0,5 s antes de abrir a conversa. Agora: os direitos da última conferência ficam guardados no aparelho, por pessoa e sessão, e valem na hora (o servidor confere de novo em seguida e em todo pedido); a conferência sai já ao abrir; a conversa é entregue assim que a tela abre.
