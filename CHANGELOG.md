@@ -1,6 +1,6 @@
 # Changelog
 
-## 7.96.4 — App 2.5.5: um ícone só, com janelinha de áreas e menu de segurar
+## 7.96.4 — App 2.5.6: um ícone só, com janelinha de áreas e menu de segurar
 
 - **Pedido do Pablo:** em vez de 8 ícones soltos (o Android não deixa o app criar pasta), fica **um ícone "TENKiTER Gestão"** (o nome separa o app da equipe do app de clientes):
   - **um toque** abre na hora uma janelinha com as áreas (Mensagens, Gestão, Esteira, Postagens, Treinamento, RH, Currículos, Principal); tocar fora fecha;
