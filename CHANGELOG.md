@@ -1,9 +1,31 @@
 # Changelog
 
-## 7.96.6 — Espiar da notificação abre a conversa
+## 7.96.9 — Espiar da notificação abre a conversa
 
 - **Relato do Pablo (26/11):** no app 2.5.6, tocar em **Espiar** na notificação abria a lista de Mensagens, não a conversa. Com o app recém-aberto, os direitos de acesso ainda chegavam do servidor quando o pedido da notificação era entregue; a abertura era recusada e o pedido se perdia. Agora o pedido fica guardado e é tentado de novo (por até 20 s) até a conversa abrir, espiando ou não. Vale também para "Abrir conversa". Sem APK novo: a correção está no site.
 - Teste novo `tests/app_notificacao_espiar_abre.py` (falhava antes, passa agora) com acesso lento e rápido, Espiar e Abrir.
+
+## 7.96.8 — 📎 das Mensagens no app volta a funcionar (páginas .html sem redirecionar)
+
+- **Relato do Pablo (26/11):** o 📎 não abria nada no app. Causa: desde a troca para a Cloudflare, `/admin.html` era redirecionado para `/admin`, e o app só confia na página `/admin.html` (recusava o seletor de arquivos; a entrega da conversa ao tocar na notificação também dependia disso). Agora `html_handling = "none"`: todas as páginas abrem em `.html`, como no Render. A raiz `/` passa por um script mínimo (`site-worker/index.js`, só para `/`) que entrega o `index.html` com os cabeçalhos de segurança. Sem APK novo.
+- A publicação confere que `/admin.html` responde 200 sem redirecionar e que `/` responde 200.
+- `verificar_android_manifesto.py` manda User-Agent: sem ele a proteção da Cloudflare respondia 403 e a conferência do atualizador do app acusava falha com o manifesto certo no ar (2.5.6, no-store).
+
+## 7.96.7 — Aviso da senha legível no modo escuro; teste da Esteira sem falso alarme
+
+- O aviso "Faltam N caracteres" da senha (7.92.0) usava o laranja de texto do tema claro; no Treinamento em modo escuro o contraste ficava baixo (axe). Agora usa a cor de destaque de cada tema (`--accent-txt`/`--good-text`, com o laranja de sempre nas outras telas). `conta.js?v=7.96.7`.
+- `tests/esteira_retomada_fotos_ui.py` contava a medida anônima de velocidade (`/esteira/medida`) como escrita de dado da Esteira; agora a trata como telemetria, como já faz `esteira_primeiro_item_ui.py`. As duas falhas apareceram no portão do Deploy da #519.
+
+## 7.96.6 — Feeds e mapa do site aceitam parâmetro; conferência do deploy sem falso alarme
+
+- As rotas do `tenkiter-og` para `/feed.csv`, `/feed.xml` e `/sitemap.xml` não casavam com endereço com parâmetro (`?t=`, `?utm=`): davam 404. Agora têm `*` no fim e também valem no `www`.
+- `verificar_arquivos_internos.py` manda User-Agent: com o domínio na Cloudflare, pedido sem identificação levava 403 da proteção contra robôs e a conferência acusava falha sem motivo (os arquivos internos seguem em 404).
+
+## 7.96.5 — Render retirado: publicação e conferências só na Cloudflare
+
+- **Pedido do Pablo:** o Render não serve mais (o site está no Worker `tenkiter-site` desde 7.96.3). Saem do `deploy.yml` os passos e o job do Render (diagnóstico de distribuição, garantia de build, cabeçalhos e rotas internas do Render) e os scripts `scripts/deploy/render_*.py`/`.sh` e `diagnostico_distribuicao.py`.
+- O job de conferência vira "Conferir site publicado (Cloudflare)": commit no `/version.json`, cabeçalhos, arquivos internos fechados (domínio e workers.dev) e, novo, **links de peça, mapa do site e feeds no domínio** (`/feed.csv`, `/feed.xml`, `/sitemap.xml` com 200 e o primeiro `/p/` com `og:title`).
+- Testes (`auditoria_interna`, `distribuicao_cache`) deixam de conferir arquivos do Render e passam a conferir o `_headers` da Cloudflare. Documentação (README, CI-CD, deploy, canário, og-worker) atualizada; referências antigas marcadas como históricas.
 
 ## 7.96.4 — App 2.5.6: um ícone só, com janelinha de áreas e menu de segurar
 

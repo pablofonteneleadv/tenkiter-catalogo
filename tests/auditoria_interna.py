@@ -102,24 +102,6 @@ class AuditTests(unittest.TestCase):
             load('write_version').write_version(output)
             self.assertEqual(json.loads(output.read_text())['branch'], 'ia/"teste')
 
-    def test_render_configuration_must_be_read_back(self):
-        config = {'serviceDetails': {'buildCommand': 'old', 'publishPath': './'}}
-        calls = []
-        def request(method, body=None):
-            calls.append(method)
-            if body:
-                config['serviceDetails'].update(body['serviceDetails'])
-            return config
-        load('render_config').ensure(request, 'build', '.public-site')
-        self.assertEqual(calls, ['GET', 'PATCH', 'GET'])
-        calls.clear()
-        load('render_config').ensure(request, 'build', '.public-site')
-        self.assertEqual(calls, ['GET'])
-
-    def test_render_ignored_patch_blocks_deployment(self):
-        with self.assertRaises(ValueError):
-            load('render_config').ensure(lambda *_: {'serviceDetails': {}}, 'build', '.public-site')
-
     def test_missing_backend_has_explicit_skip_and_strict_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = dict(os.environ, TK_COFRE_DIR=tmp)
@@ -168,26 +150,16 @@ class AuditTests(unittest.TestCase):
             self.assertNotIn(sentinel, result.stdout + result.stderr)
             self.assertIn('conteúdo omitido', result.stdout)
 
-    def test_render_headers_are_additive_and_idempotent(self):
-        module = load('render_headers')
-        legacy = {'path': '/legado', 'name': 'X-Legado', 'value': 'preservar'}
-        rows = [legacy.copy()]
-        def request(suffix, body=None):
-            if body: rows.append(body.copy())
-            return [{'header': r} for r in rows]
-        self.assertEqual(module.ensure(request), 6)
-        self.assertEqual(module.ensure(request), 0)
-        self.assertIn(legacy, rows)
-        self.assertFalse(any(r['name'] == 'Permissions-Policy' for r in rows))
-
-    def test_render_headers_conflict_prevents_writes(self):
-        module = load('render_headers')
-        writes = []
-        def request(suffix, body=None):
-            if body: writes.append(body)
-            return [{'header': {'path': '/*', 'name': 'X-Frame-Options', 'value': 'DENY'}}]
-        with self.assertRaises(ValueError): module.ensure(request)
-        self.assertEqual(writes, [])
+    def test_cloudflare_headers_file_has_security_and_no_store(self):
+        module = load('cf_site_headers')
+        with tempfile.TemporaryDirectory() as tmp:
+            module.RAIZ = Path(tmp)
+            self.assertEqual(module.gerar(), 6)
+            texto = (Path(tmp) / '_headers').read_text(encoding='utf-8')
+        self.assertIn('/*\n  X-Content-Type-Options: nosniff', texto)
+        self.assertIn('/version.json\n  Cache-Control: no-store', texto)
+        self.assertIn('/android/latest.json\n  Cache-Control: no-store, max-age=0', texto)
+        self.assertNotIn('Permissions-Policy', texto)
 
     def test_python_only_preflight_does_not_require_or_execute_node(self):
         with tempfile.TemporaryDirectory() as tmp:

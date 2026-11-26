@@ -1,5 +1,8 @@
 # CI/CD e Deploy — TENKiTER Modas
 
+> **26/11/2026 — o Render foi retirado.** O site é publicado pelo Worker `tenkiter-site` (Cloudflare, rotas `tenkitermodas.com.br/*` e `www`), no job `site_cloudflare` do `deploy.yml`; `/p/*`, `/sitemap.xml` e os feeds saem do `tenkiter-og` por rotas do domínio. As referências ao Render abaixo são históricas, não requisitos.
+
+
 Documentação operacional do pipeline. Cobre os itens **INFRA-01** (pipeline de CI/CD),
 **INFRA-02** (deploy confiável) e **INFRA-08** (versionamento) do plano de ação.
 

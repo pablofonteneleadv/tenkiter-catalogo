@@ -1,7 +1,7 @@
 name: Workers (Cloudflare)
 
 # Publica os Workers da Cloudflare. Fica SEPARADO do deploy do site de proposito:
-# o site (Render) e os Workers tem ciclos de vida diferentes, e um deploy de
+# o site (Worker tenkiter-site) e os Workers tem ciclos de vida diferentes, e um deploy de
 # Worker nao deve depender do build do catalogo.
 #
 # O deploy.yml é o único gatilho automático de publicação em main.

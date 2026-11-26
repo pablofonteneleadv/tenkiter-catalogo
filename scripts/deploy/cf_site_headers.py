@@ -1,10 +1,15 @@
-"""Gera .public-site/_headers para o site na Cloudflare com as MESMAS regras que o Render recebe (render_headers.py)."""
+"""Gera .public-site/_headers do site na Cloudflare (fonte única das regras de cabeçalho do site; o Render foi retirado em 26/11/2026)."""
 import os
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from render_headers import HEADERS  # noqa: E402  (fonte única das regras)
+HEADERS = [
+    {'path': '/*', 'name': 'X-Content-Type-Options', 'value': 'nosniff'},
+    {'path': '/*', 'name': 'X-Frame-Options', 'value': 'SAMEORIGIN'},
+    {'path': '/*', 'name': 'Referrer-Policy', 'value': 'strict-origin-when-cross-origin'},
+    {'path': '/*', 'name': 'Strict-Transport-Security', 'value': 'max-age=31536000'},
+    {'path': '/version.json', 'name': 'Cache-Control', 'value': 'no-store'},
+    {'path': '/android/latest.json', 'name': 'Cache-Control', 'value': 'no-store, max-age=0'},
+]
 
 RAIZ = Path(os.environ.get('TK_BUILD_ROOT') or Path(__file__).resolve().parents[2] / '.public-site')
 

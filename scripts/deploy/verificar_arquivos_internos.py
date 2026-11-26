@@ -3,7 +3,7 @@ import urllib.error
 import urllib.request
 
 PATHS = ('scripts/deploy/build_version.sh', 'tests/mock.py', 'lotes-a-c.patch', 'tenkiter-arquivos-modificadosok.zip')
-HOSTS = ('https://tenkitermodas.com.br/', 'https://tenkiter-catalogo.onrender.com/')
+HOSTS = ('https://tenkitermodas.com.br/', 'https://tenkiter-site.distkrpconfeccoes.workers.dev/')
 
 
 def check(opener=urllib.request.urlopen):
@@ -11,7 +11,9 @@ def check(opener=urllib.request.urlopen):
     for host in HOSTS:
         for path in PATHS:
             try:
-                with opener(urllib.request.Request(host + path, headers={'Cache-Control': 'no-cache'}), timeout=25) as response:
+                # 7.96.8: com o domínio na Cloudflare, pedido sem User-Agent leva 403 da proteção contra robôs (não diz nada do arquivo).
+                headers = {'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0 (compatible; TENKiTER-conferencia-deploy)'}
+                with opener(urllib.request.Request(host + path, headers=headers), timeout=25) as response:
                     status = response.status
             except urllib.error.HTTPError as error:
                 status = error.code
@@ -26,7 +28,7 @@ def check(opener=urllib.request.urlopen):
 if __name__ == '__main__':
     try:
         check()
-        print('Arquivos internos: 404/410 confirmados no domínio da loja e no Render.')
+        print('Arquivos internos: 404/410 confirmados no domínio da loja e no site da Cloudflare.')
     except Exception as error:
         print('::error::' + str(error))
         raise SystemExit(1)
