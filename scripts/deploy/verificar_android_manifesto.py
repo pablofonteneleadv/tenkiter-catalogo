@@ -9,7 +9,7 @@ def main():
  if local.get('versionCode',0)>expected['versionCode']:raise ValueError('Manifesto local aponta para release ainda não publicada')
  for n in range(max(1,a.attempts)):
   try:
-   req=urllib.request.Request(a.site.rstrip('/')+'/android/latest.json',headers={'Cache-Control':'no-cache','Accept':'application/json'})
+   req=urllib.request.Request(a.site.rstrip('/')+'/android/latest.json',headers={'Cache-Control':'no-cache','Accept':'application/json','User-Agent':'Mozilla/5.0 (compatible; TENKiTER-conferencia-deploy)'})
    with urllib.request.urlopen(req,timeout=15) as r:
     raw=r.read(32769)
     if len(raw)>32768:raise ValueError('manifesto grande demais')
