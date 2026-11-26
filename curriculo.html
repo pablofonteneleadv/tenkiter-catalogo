@@ -443,161 +443,35 @@ function viewMenor() {
 }
 
 /* ==== 4. Instagram obrigatório ==== */
-/* v7.91.0 (pedido do Pablo, 24/11/2026): muitas candidatas escreviam o @ errado. Agora (1) o campo limpa sozinho enquanto
- * ela digita (link colado, espaço, acento, @ repetido) e (2) ela confirma mandando um código no Direct da loja: o @ e a
- * foto vêm do próprio Instagram, sem erro de digitação. A loja responde sozinha e a conversa é encerrada. */
-const IG_CV = 'https://tenkiter-ig.distkrpconfeccoes.workers.dev/cv/ig';
-function limparInsta(v) {
+/* v7.96.7 (pedido do Pablo, 26/11/2026): sem conferência nenhuma. As candidatas não entendiam o link para abrir o próprio perfil,
+ * o código no Direct nem a prévia do perfil. Volta a ser só escrever o @ (obrigatório) e continuar. O servidor do RH (3.37+)
+ * exige "Instagram confirmado"; o Continuar manda euConfirmo, então não precisa publicar Apps Script novo. */
+function limparInsta(v) {   // só arruma o que nunca faz parte de um @ (link colado, espaços, @ repetido); não recusa nada
   let s = String(v || '').trim();
   const m = s.match(/instagram\.com\/([A-Za-z0-9._]+)/i); if (m) s = m[1];
-  s = s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^@+/, '').replace(/\s+/g, '').replace(/[^A-Za-z0-9._]/g, '').toLowerCase().slice(0, 30);
+  s = s.replace(/^@+/, '').replace(/\s+/g, '');
   return s ? '@' + s : '';
 }
-function chaveIgCod() { return 'tk_cv_igcod_' + String(S.whats || ''); }
-function igCodGuardado() { try { const x = JSON.parse(localStorage.getItem(chaveIgCod()) || 'null'); return x && x.codigo && Date.now() - Number(x.em || 0) < 6 * 864e5 ? x : null; } catch (e) { return null; } }
-function igCodGuardar(x) { try { localStorage.setItem(chaveIgCod(), JSON.stringify(Object.assign({ em: Date.now() }, x))); } catch (e) { /* sem armazenamento */ } }
-function igCodApagar() { try { localStorage.removeItem(chaveIgCod()); } catch (e) { /* nada */ } }
-async function igCv(metodo, codigo) {
-  try {
-    const r = await fetch(IG_CV + (codigo ? '?c=' + encodeURIComponent(codigo) : ''), { method: metodo, headers: metodo === 'POST' ? { 'Content-Type': 'text/plain' } : {}, body: metodo === 'POST' ? '{}' : undefined });
-    return await r.json();
-  } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
-}
-function seguirDepoisDoInstagram() { igCodApagar(); proximaEtapa(); }
-/* v7.94.0 (relato do Pablo, 25/11/2026): muita gente travava no Direct. Agora ela abre o próprio perfil para conferir e
- * confirma com um toque ("É o meu Instagram"); o Direct continua como opção para quem quiser o selo do Instagram verificado. */
 function viewInstagram(inicial, msg) {
   tela(`${progresso(25)}<div class="card">
     <h2>Seu Instagram</h2>
     <p class="sub">O Instagram é obrigatório para concluir o currículo: é por lá que conhecemos você melhor.</p>
     <label class="campo" for="insta">Seu @ do Instagram</label>
-    <input type="text" id="insta" name="insta" placeholder="@seuusuario" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" value="${esc(limparInsta(inicial))}">
-    <p class="sub" id="insta-dica" style="margin-top:6px">Só letras, números, ponto e _ (como aparece no seu perfil).</p>
-    <div id="ig-achado" role="status" aria-live="polite"></div>
-    <div id="ig-conf" class="aviso oculto" style="margin-top:4px">Confira se é você: <a id="ig-ver" href="#" target="_blank" rel="noopener" style="font-weight:700"></a></div>
+    <input type="text" id="insta" name="insta" placeholder="@seuusuario" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(limparInsta(inicial))}">
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
-    <button class="btn-p" id="ok">É o meu Instagram, continuar</button>
-    <button class="btn-s" id="sem">Não tenho Instagram</button>
-    <p class="sub" style="margin-top:12px;text-align:center"><a href="#" id="ig-direct">Prefere confirmar pelo Direct da loja?</a></p></div>`);
-  const campo = document.getElementById('insta'), dica = document.getElementById('insta-dica');
-  const conf = document.getElementById('ig-conf'), ver = document.getElementById('ig-ver');
-  const mostrarVer = () => {
-    const ig = limparInsta(campo.value);
-    conf.classList.toggle('oculto', ig.length < 3);
-    if (ig.length >= 3) { ver.textContent = 'abrir ' + ig + ' no Instagram ↗'; ver.href = 'https://www.instagram.com/' + encodeURIComponent(ig.slice(1)) + '/'; }
-  };
-  /* v7.96.0 (pedido do Pablo): enquanto digita, aparece o perfil do Instagram com foto, nome e seguidores (prévia pública
-   * do link, consultada pelo servidor das Mensagens). Ela toca em "Sou eu" e segue: escolheu vendo a foto, é de propósito.
-   * Se o serviço não responder, a tela continua funcionando como antes (abrir o perfil e confirmar). */
-  const achado = document.getElementById('ig-achado'), ok = document.getElementById('ok');
-  let pedido = 0, temporizador = null, naoAchou = '', avisouNaoAchou = '';
-  const pintarCartao = (x) => {
-    achado.innerHTML = `<div style="display:flex;gap:12px;align-items:center;background:#e8f5ec;border-radius:12px;padding:10px 12px;margin:8px 0">
-        <div id="ig-av" style="width:56px;height:56px;border-radius:50%;background:#ddd;overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.4rem">👤</div>
-        <div style="flex:1;min-width:0"><b>@${esc(x.usuario)}</b>${x.nome ? '<br>' + esc(x.nome) : ''}${x.seguidores ? '<br><span class="sub" style="margin:0">' + esc(x.seguidores) + ' seguidores</span>' : ''}</div>
-        <button type="button" class="btn-p" id="ig-sou" style="width:auto;margin:0;padding:10px 14px;flex:none">Sou eu</button></div>`;
-    const av0 = document.getElementById('ig-av');
-    if (av0 && /^https:\/\//.test(String(x.foto || ''))) { const im = document.createElement('img'); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.style.cssText = 'width:100%;height:100%;object-fit:cover'; im.onerror = () => im.remove(); im.src = x.foto; const av = document.getElementById('ig-av'); av.textContent = ''; av.appendChild(im); }
-    document.getElementById('ig-sou').onclick = () => ok.click();
-  };
-  const procurar = async () => {
-    const ig = limparInsta(campo.value), u = ig.slice(1), meu = ++pedido;
-    if (u.length < 3) { achado.innerHTML = ''; return; }
-    achado.innerHTML = '<p class="sub" style="margin:6px 0">🔎 Procurando ' + esc(ig) + ' no Instagram…</p>';
-    let x = null; try { x = await (await fetch(IG_CV + '-perfil?u=' + encodeURIComponent(u))).json(); } catch (e) { x = null; }
-    if (meu !== pedido || !document.body.contains(achado)) return;   // continuou digitando ou já saiu da tela: vale a última consulta
-    naoAchou = '';
-    if (!x || !x.ok || (!x.existe && x.semPrevia)) { achado.innerHTML = ''; conf.classList.remove('oculto'); return; }   // serviço fora ou Instagram sem prévia: segue como antes
-    if (x.existe) { pintarCartao(x); conf.classList.add('oculto'); }
-    else { naoAchou = ig; achado.innerHTML = '<p class="erro" style="margin:6px 0">Não achamos ' + esc(ig) + ' no Instagram. Confira se o @ está certo.</p>'; conf.classList.remove('oculto'); }
-  };
-  campo.addEventListener('input', () => {
-    const antes = campo.value, limpo = limparInsta(antes);
-    if (limpo !== antes && !(antes === '@')) { campo.value = limpo; dica.innerHTML = 'Arrumamos o que não pode ter no @. Confira: <b>' + esc(limpo || '@') + '</b>'; }
-    mostrarVer(); conf.classList.add('oculto');
-    clearTimeout(temporizador); temporizador = setTimeout(procurar, 600);
-  });
-  mostrarVer(); conf.classList.add('oculto'); if (limparInsta(campo.value).length > 3) procurar();
-  const salvarIg = async (b, extra) => {
-    const ig = limparInsta(campo.value); campo.value = ig;
-    if (!ig || ig.length < 2) { erroBox('Digite seu @ do Instagram.'); return ''; }
-    carregando(b, true); const r = await api('curriculo_instagram', Object.assign({ whatsapp: S.whats, sessao: S.sessao, instagram: ig }, extra || {})); carregando(b, false);
-    if (!r.ok) { erroBox(r.erro); return ''; }
-    S.d.instagram = ig; return ig;
-  };
+    <button class="btn-p" id="ok">Continuar</button>
+    <button class="btn-s" id="sem">Não tenho Instagram</button></div>`);
   const b = document.getElementById('ok');
   b.onclick = async () => {
-    const ig = limparInsta(campo.value);
-    if (naoAchou && naoAchou === ig && avisouNaoAchou !== ig) { avisouNaoAchou = ig; return erroBox('Não achamos ' + ig + ' no Instagram. Confira o @. Se estiver certo, toque de novo para continuar.'); }
-    if (await salvarIg(b, { euConfirmo: true })) { S.igConfirmado = true; seguirDepoisDoInstagram(); }
+    const ig = limparInsta(val('insta')); if (!ig) return erroBox('Digite seu @ do Instagram.');
+    carregando(b, true); const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, instagram: ig, euConfirmo: true }); carregando(b, false);
+    if (!r.ok) return erroBox(r.erro);
+    S.d.instagram = ig; S.igConfirmado = true; proximaEtapa();
   };
-  document.getElementById('ig-direct').onclick = async (e) => { e.preventDefault(); if (await salvarIg(b)) viewConfirmaIg(); };
   document.getElementById('sem').onclick = async () => {
     const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, semInstagram: true });
     if (!r.ok) return erroBox(r.erro);
     viewSemInstagram();
-  };
-}
-/* Confirmação pelo Direct: mostra o código, copia, abre o Direct da loja e espera a mensagem chegar (consulta a cada 4 s). */
-async function viewConfirmaIg(msg) {
-  tela(`${progresso(27)}<div class="card">
-    <h2>Confirme seu Instagram</h2>
-    <p class="sub">Para não ter engano no seu @, mande este código no <b>Direct</b> da loja. É só colar e enviar.</p>
-    <div id="ig-cod" style="font-size:1.9rem;font-weight:800;letter-spacing:.12em;text-align:center;background:#f5f1e8;border-radius:12px;padding:14px;margin:10px 0">…</div>
-    <button class="btn-p" id="ig-abrir" disabled>Copiar código e abrir o Direct</button>
-    <div class="aviso oculto" id="ig-st" role="status" aria-live="polite" style="margin-top:12px"></div>
-    <div id="ig-achou"></div>
-    <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
-    <button class="btn-s" id="ig-voltar">Voltar e confirmar sem o Direct</button></div>`);
-  const tela0 = document.getElementById('ig-cod'), st = document.getElementById('ig-st'), abrir = document.getElementById('ig-abrir');
-  document.getElementById('ig-voltar').onclick = () => { igCodApagar(); viewInstagram(S.d.instagram || ''); };
-  const aviso = t => { st.innerHTML = t; st.classList.toggle('oculto', !t); };
-  let atual = igCodGuardado();
-  if (!atual) {
-    const r = await igCv('POST');
-    if (!document.body.contains(tela0)) return;
-    if (!r.ok) { tela0.textContent = '—'; erroBox(r.erro || 'Não consegui criar o código agora.'); return; }
-    atual = { codigo: r.codigo, loja: r.loja || 'tenkitermodasceara' }; igCodGuardar(atual);
-  }
-  tela0.textContent = atual.codigo; abrir.disabled = false;
-  const linkDirect = 'https://ig.me/m/' + encodeURIComponent(atual.loja || 'tenkitermodasceara');
-  abrir.onclick = async () => {
-    try { await navigator.clipboard.writeText(atual.codigo); } catch (e) { /* sem área de transferência: o código está na tela */ }
-    aviso('📋 Código copiado. No Direct, <b>cole e envie</b>. Depois volte para esta tela: ela confirma sozinha.');
-    igCodGuardar(Object.assign({}, atual, { abriu: true }));
-    window.open(linkDirect, '_blank', 'noopener');
-  };
-  if (atual.abriu) aviso('⏳ Esperando o código chegar no Direct… Se ainda não enviou, toque no botão acima.');
-  const esperar = async () => {
-    if (!document.body.contains(tela0)) return;
-    const r = await igCv('GET', atual.codigo);
-    if (!document.body.contains(tela0)) return;
-    if (r && r.ok && r.confirmado && r.usuario) return mostrarAchado(atual.codigo, r);
-    setTimeout(esperar, document.visibilityState === 'visible' ? 4000 : 8000);
-  };
-  setTimeout(esperar, 1500);
-}
-function mostrarAchado(codigo, r) {
-  const box = document.getElementById('ig-achou'); if (!box) return;
-  document.getElementById('ig-st').classList.add('oculto');
-  document.getElementById('ig-abrir').classList.add('oculto');
-  const vt = document.getElementById('ig-voltar'); if (vt) vt.classList.add('oculto');
-  box.innerHTML = `<div style="display:flex;gap:12px;align-items:center;background:#e8f5ec;border-radius:12px;padding:12px;margin:10px 0">
-      <div id="ig-foto" style="width:64px;height:64px;border-radius:50%;background:#ddd;overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.6rem">👤</div>
-      <div><b>@${esc(r.usuario)}</b>${r.nome ? '<br>' + esc(r.nome) : ''}<br><span class="sub">Recebemos seu código ✓</span></div></div>
-    <p class="sub">${S.d.instagram && S.d.instagram.replace(/^@/, '') !== r.usuario ? 'Você tinha digitado <b>' + esc(S.d.instagram) + '</b>. Vamos usar o Instagram que mandou o código.' : 'É você?'}</p>
-    <button class="btn-p" id="ig-sim">Sim, sou eu. Continuar</button>`;
-  if (/^https:\/\//.test(String(r.foto || ''))) {
-    const im = document.createElement('img'); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.style.cssText = 'width:100%;height:100%;object-fit:cover';
-    im.onerror = () => { im.remove(); }; im.src = r.foto; const f = document.getElementById('ig-foto'); f.textContent = ''; f.appendChild(im);
-  }
-  const sim = document.getElementById('ig-sim');
-  sim.onclick = async () => {
-    carregando(sim, true);
-    const x = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, instagram: '@' + r.usuario, igCodigo: codigo });
-    carregando(sim, false);
-    if (!x.ok) return erroBox(x.erro);
-    S.d.instagram = '@' + r.usuario; S.igConfirmado = true; seguirDepoisDoInstagram();
   };
 }
 /* ==== 4b. foto de perfil (obrigatória) ==== */
@@ -620,7 +494,7 @@ const PERFIL_DADOS = ['endereco', 'bairro', 'cidade', 'estado'];   // v7.95.0: a
 function faltaDadosPerfil() { const p = S.perfil; return !p || PERFIL_DADOS.some(k => !String(p[k] || '').trim()); }
 async function proximaEtapa() {
   if (!S.d.instagram) return viewInstagram('');
-  if (!S.igConfirmado) return igCodGuardado() ? viewConfirmaIg() : viewInstagram(S.d.instagram || '');
+  if (!S.igConfirmado) return viewInstagram(S.d.instagram || '');
   if (!S.fotoUrl) return viewFoto();
   if (faltaDadosPerfil()) return viewDados();
   if (S.enviado) { // currículo já enviado antes: só faltava algo do perfil
@@ -846,7 +720,7 @@ function viewPerfil(msg) {
     carregando(b, true); const r = await api('curriculo_finalizar', { whatsapp: S.whats, sessao: S.sessao, dados: S.d }); carregando(b, false);
     if (!r.ok) {
       if (/foto de perfil/i.test(r.erro || '')) return travaFinal('foto');
-      if (/confirmar o Instagram/i.test(r.erro || '')) { S.passoSalvo = S.passo; S.igConfirmado = false; return viewInstagram(S.d.instagram || '', r.erro); }
+      if (/confirmar o Instagram/i.test(r.erro || '')) { S.passoSalvo = S.passo; S.igConfirmado = false; return viewInstagram(S.d.instagram || '', 'Confira seu @ do Instagram e toque em Continuar.'); }
       if (/seus dados/i.test(r.erro || '')) { S.passoSalvo = S.passo; S.perfil = Object.assign({}, S.perfil, { altura: '' }); return viewDados(r.erro); }
       if (/Instagram/i.test(r.erro || '')) return travaFinal('insta');
       return erroBox(r.erro);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.96.11 — Instagram do currículo: só escrever o @
+
+- **Pedido do Pablo (26/11):** as candidatas não entendiam abrir o próprio perfil para conferir, o código no Direct nem a prévia do perfil. A tela volta a ser só o campo do @ (obrigatório) com **Continuar** e "Não tenho Instagram", sem nenhuma validação nem consulta ao Instagram. Link colado ainda vira @ e espaços são tirados.
+- O servidor do RH (3.37+) exige a marca de Instagram confirmado; o Continuar manda `euConfirmo`, então não precisa publicar Apps Script novo.
+- Currículos (RH): sem os selos "IG ✓"/"IG ?"; fica só o "IG ✓ Direct" de quem confirmou pelo Direct antes.
+
 ## 7.96.10 — Endereços sem .html voltam para a página certa
 
 - **Relato do Pablo (26/11):** no app, "Atualizar" (versão nova do site) abria "Não achamos essa página". Entre 25 e 26/11 o site redirecionava `/admin.html` para `/admin`; o app guardou esse endereço, e desde a 7.96.8 (páginas só em `.html`) ele não existe mais. Agora `/admin`, `/curriculo` e as demais páginas sem `.html` (e com `/` no fim) levam (301) para a página `.html`, mantendo os parâmetros. A publicação confere `/admin?app=mensagens` → `/admin.html?app=mensagens`.
