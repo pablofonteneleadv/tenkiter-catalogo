@@ -20,9 +20,13 @@ workers_dev = true
 routes = [
   { pattern = "tenkitermodas.com.br/p/*", zone_name = "tenkitermodas.com.br" },
   { pattern = "www.tenkitermodas.com.br/p/*", zone_name = "tenkitermodas.com.br" },
-  { pattern = "tenkitermodas.com.br/sitemap.xml", zone_name = "tenkitermodas.com.br" },
-  { pattern = "tenkitermodas.com.br/feed.csv", zone_name = "tenkitermodas.com.br" },
-  { pattern = "tenkitermodas.com.br/feed.xml", zone_name = "tenkitermodas.com.br" },
+  # 7.96.8: o "*" final deixa passar endereço com parâmetro (?t=, ?utm=...); sem ele a rota não casava e dava 404.
+  { pattern = "tenkitermodas.com.br/sitemap.xml*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "tenkitermodas.com.br/feed.csv*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "tenkitermodas.com.br/feed.xml*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "www.tenkitermodas.com.br/sitemap.xml*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "www.tenkitermodas.com.br/feed.csv*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "www.tenkitermodas.com.br/feed.xml*", zone_name = "tenkitermodas.com.br" },
 ]
 
 # Cache de borda da lista de peças (FE-01, v3.10 do worker.js): serve /lista.json do KV

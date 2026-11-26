@@ -11,7 +11,9 @@ def check(opener=urllib.request.urlopen):
     for host in HOSTS:
         for path in PATHS:
             try:
-                with opener(urllib.request.Request(host + path, headers={'Cache-Control': 'no-cache'}), timeout=25) as response:
+                # 7.96.8: com o domínio na Cloudflare, pedido sem User-Agent leva 403 da proteção contra robôs (não diz nada do arquivo).
+                headers = {'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0 (compatible; TENKiTER-conferencia-deploy)'}
+                with opener(urllib.request.Request(host + path, headers=headers), timeout=25) as response:
                     status = response.status
             except urllib.error.HTTPError as error:
                 status = error.code
