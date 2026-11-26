@@ -60,6 +60,8 @@ def contexto(chromium, perfil, largura, altura, estado, atraso=0):
         req = rota.request
         url = urlsplit(req.url)
         if req.method != "GET":
+            if url.path.endswith("/esteira/medida"):   # medida anônima de velocidade (telemetria), não grava dado da Esteira
+                return rota.fulfill(json={"ok": True})
             estado["escritas"].append(url.path)
             return rota.abort()
         caminho = url.path.rsplit("/", 1)[-1]
