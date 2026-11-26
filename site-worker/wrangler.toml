@@ -4,6 +4,7 @@
 # gerado por scripts/deploy/cf_site_headers.py. Domínio ligado por rotas (26/11/2026, zona ativa na Cloudflare): o site
 # passa a ser servido daqui quando os registros A e www estão com a nuvem laranja (Proxied); nuvem cinza = volta ao Render.
 name = "tenkiter-site"
+main = "index.js"
 compatibility_date = "2026-11-01"
 workers_dev = true
 routes = [
@@ -13,5 +14,9 @@ routes = [
 
 [assets]
 directory = "../.public-site"
+binding = "ASSETS"
 not_found_handling = "404-page"
-html_handling = "auto-trailing-slash"
+# Páginas continuam em .html (o app confere /admin.html); sem redirecionar para endereço sem extensão.
+html_handling = "none"
+# "/" entrega o index.html; os nomes sem .html voltam para a página .html (ver site-worker/index.js).
+run_worker_first = ["/", "/admin", "/admin/", "/curriculo", "/curriculo/", "/curriculos", "/curriculos/", "/esteira", "/esteira/", "/exclusao-dados", "/exclusao-dados/", "/fotos-ia", "/fotos-ia/", "/index", "/index/", "/manual", "/manual/", "/privacidade", "/privacidade/", "/treinamento-cadastro-simulacao", "/treinamento-cadastro-simulacao/", "/treinamentos", "/treinamentos/", "/verificar", "/verificar/"]
