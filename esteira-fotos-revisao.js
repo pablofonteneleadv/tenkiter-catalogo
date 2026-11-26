@@ -4,11 +4,11 @@
  * Carregado sob demanda pela Esteira (não pesa na abertura). Nada é enviado aqui: devolve as fotos revisadas a quem chamou.
  *
  *   const rev = TKRevisaoFotos({ el, bt, abrirFolha, abrirGaleria, impressao, enquadrar, linhaStatus });
- *   const r = await rev.abrir({ produto:{nome,codigo}, atuais:[urls]|Promise, pedido:['No pano'], arquivos:[File], max:8, modo:'caixa'? });
+ *   const r = await rev.abrir({ produto:{nome,codigo}, atuais:[urls]|Promise, pedido:['No pano'], arquivos:[File], max:20, modo:'caixa'? });
  *   r === null (cancelou) | { itens:[{ arquivo:Blob|File, hash }], capaIdx:-1|n }   // capaIdx = posição da nova capa na lista final
  *
  * Ferramentas por foto: capa, mover (‹ ›), girar 90°, enquadrar 4:5 (janela já usada no cadastro da Gestão) e tirar.
- * Fotos repetidas são avisadas e ficam de fora. O limite de 8 fotos por produto é respeitado já aqui.
+ * Fotos repetidas são avisadas e ficam de fora. O limite de 20 fotos por produto é respeitado já aqui.
  * modo:'caixa' (v7.82.0): revisão das fotos do envio para a caixa: sem produto, sem capa e sem "Como está hoje"; confirmar só devolve as fotos. */
 (function () {
   'use strict';
@@ -55,7 +55,7 @@
       return new Promise(function (resolve) {
         var caixa = op.modo === 'caixa';
         var itens = [], capaId = null, seq = 0, atuais = [], fim = false, confirmou = false, ocupado = 0;
-        var atuaisPronto = caixa, max = op.max || 8, dica = null, grade = null, bOk = null, rodape = null, aviso = null, atualBox = null;
+        var atuaisPronto = caixa, max = op.max || 20, dica = null, grade = null, bOk = null, rodape = null, aviso = null, atualBox = null;
         var arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
 
         function vagas() { return Math.max(0, max - atuais.length - itens.length); }

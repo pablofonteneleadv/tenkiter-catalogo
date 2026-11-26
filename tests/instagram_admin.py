@@ -137,29 +137,29 @@ with sync_playwright() as p:
     chk("sem erro de JavaScript", not errs, errs)
     b.close()
 
-    print("== Juntar passando do limite (8 fotos / 1 vídeo): a pessoa escolhe ==")
+    print("== Juntar passando do limite (20 fotos / 1 vídeo): a pessoa escolhe ==")
     b, pg, st, log, errs = novo(p)
     st["ig"]["rasc"][1]["grupo"] = "nao_produto"
     H = "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/"
     def mm(pref, n, tipo="foto"): return {"id": "%s%d" % (pref, n), "tipo": tipo, "url": H + "%s%d.%s" % (pref, n, "mp4" if tipo == "video" else "jpg"), "mini": H + "%s%d.jpg" % (pref, n), "capa": False}
-    st["ig"]["rasc"].append({"id": 3, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "P3", "permalink": "", "publicadoEm": "2026-10-09T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mm("c", i) for i in range(5)]})
+    st["ig"]["rasc"].append({"id": 3, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "P3", "permalink": "", "publicadoEm": "2026-10-09T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mm("c", i) for i in range(19)]})
     st["ig"]["rasc"].append({"id": 4, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "P4", "permalink": "", "publicadoEm": "2026-10-08T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mm("d", i) for i in range(3)] + [mm("v", 0, "video"), mm("v", 1, "video")]})
     abrir_importador(pg); pg.wait_for_selector(".ig-card")
     for i in range(3): pg.locator(".ig-selr").nth(i).check()
     pg.click("[data-ig=juntarMarcados]"); pg.wait_for_selector(".ig-esc")
     cont = lambda: pg.locator("#ig-esc-cont").inner_text()
-    chk("abre a escolha (12 mídias passam do limite) com contador 8/8 e 1/1", "Fotos 8/8" in cont() and "Vídeo 1/1" in cont(), cont())
-    chk("mostra todas as mídias dos 3 posts", pg.locator(".ig-esc").count() == 12, pg.locator(".ig-esc").count())
+    chk("abre a escolha (26 mídias passam do limite) com contador 20/20 e 1/1", "Fotos 20/20" in cont() and "Vídeo 1/1" in cont(), cont())
+    chk("mostra todas as mídias dos 3 posts", pg.locator(".ig-esc").count() == 26, pg.locator(".ig-esc").count())
     axe(pg, "juntar-escolha")
     pg.locator(".ig-esc:not(:checked)").first.click(); pg.wait_for_timeout(300)
-    chk("não deixa passar de 8 fotos", "Fotos 8/8" in cont() and pg.locator(".ig-esc:checked").count() == 9, (cont(), pg.locator(".ig-esc:checked").count()))
+    chk("não deixa passar de 20 fotos", "Fotos 20/20" in cont() and pg.locator(".ig-esc:checked").count() == 21, (cont(), pg.locator(".ig-esc:checked").count()))
     pg.locator(".ig-esc:checked").nth(0).click(); pg.wait_for_timeout(300)
-    chk("desmarcar uma foto baixa o contador", "Fotos 7/8" in cont(), cont())
+    chk("desmarcar uma foto baixa o contador", "Fotos 19/20" in cont(), cont())
     pg.click("[data-ig=juntarEscolhidas]"); pg.wait_for_selector(".ig-msg.ok:has-text('Pronto')", timeout=15000)
     destino = next(x for x in st["ig"]["rasc"] if x["id"] == 1)
     fotos = [m for m in destino["midias"] if m["tipo"] != "video"]; vids = [m for m in destino["midias"] if m["tipo"] == "video"]
-    chk("produto final respeita o limite: no máx. 8 fotos e 1 vídeo", len(fotos) <= 8 and len(vids) <= 1 and len(fotos) >= 7, (len(fotos), len(vids)))
-    chk("o que passou do limite virou mídia solta (removerMidia), nada se perdeu", len(st["ig"].get("removidas", [])) == 12 - len(destino["midias"]) and len(st["ig"].get("removidas", [])) >= 3, st["ig"].get("removidas"))
+    chk("produto final respeita o limite: no máx. 20 fotos e 1 vídeo", len(fotos) <= 20 and len(vids) <= 1 and len(fotos) >= 19, (len(fotos), len(vids)))
+    chk("o que passou do limite virou mídia solta (removerMidia), nada se perdeu", len(st["ig"].get("removidas", [])) == 26 - len(destino["midias"]) and len(st["ig"].get("removidas", [])) >= 3, st["ig"].get("removidas"))
     chk("sem erro de JavaScript", not errs, errs)
     b.close()
 
