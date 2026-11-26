@@ -1,10 +1,15 @@
 # Site da loja (tenkitermodas.com.br) servido pela Cloudflare: só arquivos estáticos, sem código.
 # Pedido do Pablo (25/11/2026): o Render ficou sem minutos de montagem; a Cloudflare não cobra nem limita montagem.
 # O conteúdo é o mesmo .public-site do Render (lista explícita em scripts/deploy/public-files.json) mais o _headers
-# gerado por scripts/deploy/cf_site_headers.py. O domínio entra em "routes" quando a zona estiver ativa na Cloudflare.
+# gerado por scripts/deploy/cf_site_headers.py. Domínio ligado por rotas (26/11/2026, zona ativa na Cloudflare): o site
+# passa a ser servido daqui quando os registros A e www estão com a nuvem laranja (Proxied); nuvem cinza = volta ao Render.
 name = "tenkiter-site"
 compatibility_date = "2026-11-01"
 workers_dev = true
+routes = [
+  { pattern = "tenkitermodas.com.br/*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "www.tenkitermodas.com.br/*", zone_name = "tenkitermodas.com.br" },
+]
 
 [assets]
 directory = "../.public-site"

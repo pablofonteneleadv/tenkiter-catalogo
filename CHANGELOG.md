@@ -1,5 +1,9 @@
 # Changelog
 
+## 7.96.3 — Domínio tenkitermodas.com.br ligado ao site na Cloudflare
+
+- A zona do domínio está ativa na Cloudflare (servidores trocados no registro.br em 25/11). O `tenkiter-site` ganha as rotas `tenkitermodas.com.br/*` e `www.tenkitermodas.com.br/*`. Elas passam a valer quando os registros A e www estiverem com a nuvem laranja (Proxied); com a nuvem cinza, o domínio continua indo ao Render (volta imediata).
+
 ## 7.96.2 — Site na Cloudflare aplica os cabeçalhos
 
 - O wrangler 3 publicava o `_headers` como arquivo comum (cabeçalhos de segurança e `no-store` do `version.json` não eram aplicados). A publicação do site passa a usar o wrangler 4.50.0, que aplica as regras.
