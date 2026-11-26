@@ -1,12 +1,9 @@
 name: Deploy
 
-# Deploy confiável: só depois do CI verde, com trigger explícito na API do Render,
-# acompanhamento até "live", invalidação do CDN pelo Render, publicação dos Workers
-# e verificação no ar.
-#
-# Por que não usar o autoDeploy do Render: ele depende de webhook e falha em silêncio
-# (o próprio projeto documenta isso). Aqui o deploy é um passo do CI, com código de
-# saída — se falhar, o workflow fica vermelho e ninguém acha que publicou.
+# Deploy confiável: só depois do CI verde. O site (arquivos estáticos) é publicado na Cloudflare
+# (Worker de assets tenkiter-site, domínio tenkitermodas.com.br), junto com os Workers e o instalador
+# Android, e depois conferido no ar. Se algo falhar, o workflow fica vermelho e ninguém acha que publicou.
+# O Render foi retirado em 26/11/2026 (pedido do Pablo; sem minutos de montagem e sem uso).
 on:
   push:
     branches: [main]
@@ -25,23 +22,6 @@ concurrency:
   cancel-in-progress: false   # nunca cancelar um deploy em andamento
 
 jobs:
-  diagnostico_distribuicao:
-    name: Diagnóstico somente leitura da distribuição
-    if: github.event_name == 'workflow_dispatch' && inputs.motivo == 'diagnostico-distribuicao'
-    runs-on: ubuntu-24.04
-    environment: producao
-    steps:
-      - uses: actions/checkout@v6
-      - name: Conferir configuração efetiva sem imprimir credenciais
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: python3 scripts/deploy/diagnostico_distribuicao.py
-
-  # Reaproveita o portão de qualidade antes de tocar em produção.
   ci:
     if: github.event_name != 'workflow_dispatch' || inputs.motivo != 'diagnostico-distribuicao'
     name: Portão de qualidade
@@ -58,9 +38,9 @@ jobs:
       ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
-  # ------------------------------------------------------------- Site (Render)
+  # ------------------------------------------------------------- Site (Cloudflare)
   # 25/11/2026 (pedido do Pablo): o site também é publicado na Cloudflare (sem limite de montagem). Enquanto o domínio
-  # não apontar para lá, fica em tenkiter-site.distkrpconfeccoes.workers.dev; mesmo conteúdo e cabeçalhos do Render.
+  # é o único caminho do site; o endereço direto é tenkiter-site.distkrpconfeccoes.workers.dev.
   site_cloudflare:
     name: Publicar site na Cloudflare
     runs-on: ubuntu-24.04
@@ -71,7 +51,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
-      - name: Montar o site (mesma lista e mesmos cabeçalhos do Render)
+      - name: Montar o site (lista explícita de arquivos e cabeçalhos)
         env:
           RENDER_GIT_COMMIT: ${{ github.sha }}
           RENDER_GIT_BRANCH: main
@@ -104,45 +84,30 @@ jobs:
           code=$(curl -s -o /dev/null -w "%{http_code}" "$base/tests/mock.py"); [ "$code" = "404" ] || { echo "::error::arquivo interno respondeu $code"; exit 1; }
           echo "Cabeçalhos e arquivos internos conferidos."
 
+  # 26/11/2026 (pedido do Pablo): o Render foi retirado. O site sai do job site_cloudflare; aqui ficam as provas públicas.
   deploy:
-    name: Publicar no Render
+    name: Conferir site publicado (Cloudflare)
     runs-on: ubuntu-24.04
-    needs: [ci, android_release]
+    needs: [site_cloudflare, workers]
     environment: producao
     steps:
       - uses: actions/checkout@v6
 
-      # Sem o buildCommand certo, o Render publica o version.json do repositorio
-      # (commit vazio) e a etapa 4/4 nunca consegue confirmar o commit no ar.
-      # Roda ANTES do deploy e exige confirmação do build e diretório público.
-      - name: Confirmar build e diretório público do Render
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-        run: bash scripts/deploy/render_garantir_build.sh
+      # 26/11/2026: links de peça, mapa e feeds são servidos pelo tenkiter-og por rotas do domínio (antes, Rewrites do Render).
+      # Quebraram uma vez na troca de hospedagem sem ninguém ver: agora é conferido em todo deploy.
+      - name: Conferir links de peça, mapa do site e feeds no domínio
+        run: |
+          set -e
+          base=https://tenkitermodas.com.br
+          for u in feed.csv feed.xml sitemap.xml; do
+            c=$(curl -s -o /dev/null -w "%{http_code}" "$base/$u?t=$(date +%s)")
+            [ "$c" = "200" ] || { echo "::error::$u respondeu $c (deveria vir do tenkiter-og)"; exit 1; }
+          done
+          peca=$(curl -s "$base/sitemap.xml" | grep -o "$base/p/[^<]*" | head -1)
+          [ -n "$peca" ] || { echo "::error::o sitemap não lista nenhuma peça"; exit 1; }
+          curl -s "$peca" | grep -q 'og:title' || { echo "::error::$peca sem miniatura (og:title)"; exit 1; }
+          echo "Links de peça, mapa e feeds OK ($peca)."
 
-      - name: Confirmar segurança estática e cache dos manifestos
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-        run: python3 scripts/deploy/render_android_headers.py
-
-      - name: Proteger URLs internas publicadas anteriormente
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-        run: python3 scripts/deploy/render_internal_routes.py
-
-      - name: Disparar e acompanhar o deploy no Render
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-          SITE_URL: https://tenkitermodas.com.br/
-          COMMIT_ESPERADO: ${{ github.sha }}
-        run: bash scripts/deploy/render_deploy.sh
-
-      # DNS externo e CDN do Render: não há zona própria aplicável ao purge.
-      # O Render invalida seu CDN no deploy; as provas do conteúdo continuam obrigatórias.
       - name: Conferir site publicado e impedir exposição de artefatos antigos
         if: always() && !cancelled()
         env:
@@ -278,10 +243,8 @@ jobs:
             echo "### Componentes da publicação"
             echo "| Componente | Resultado do job |"
             echo "|---|---|"
-            echo "| Site Render e verificações públicas | $SITE_RESULTADO |"
+            echo "| Site (Cloudflare) e verificações públicas | $SITE_RESULTADO |"
             echo "| Três Workers e suas verificações | $WORKERS_RESULTADO |"
             echo "| Distribuição Android | $ANDROID_RESULTADO |"
-            echo "| Purge Cloudflare do domínio | Não executado: nenhuma zona própria aplicável identificada |"
             echo ""
-            echo "A invalidação do CDN do site é feita pelo Render no deploy. O resultado acima não é comprovação de purge Cloudflare."
           } >> "$GITHUB_STEP_SUMMARY"

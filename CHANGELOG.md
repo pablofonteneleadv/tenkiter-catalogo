@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.96.5 — Render retirado: publicação e conferências só na Cloudflare
+
+- **Pedido do Pablo:** o Render não serve mais (o site está no Worker `tenkiter-site` desde 7.96.3). Saem do `deploy.yml` os passos e o job do Render (diagnóstico de distribuição, garantia de build, cabeçalhos e rotas internas do Render) e os scripts `scripts/deploy/render_*.py`/`.sh` e `diagnostico_distribuicao.py`.
+- O job de conferência vira "Conferir site publicado (Cloudflare)": commit no `/version.json`, cabeçalhos, arquivos internos fechados (domínio e workers.dev) e, novo, **links de peça, mapa do site e feeds no domínio** (`/feed.csv`, `/feed.xml`, `/sitemap.xml` com 200 e o primeiro `/p/` com `og:title`).
+- Testes (`auditoria_interna`, `distribuicao_cache`) deixam de conferir arquivos do Render e passam a conferir o `_headers` da Cloudflare. Documentação (README, CI-CD, deploy, canário, og-worker) atualizada; referências antigas marcadas como históricas.
+
 ## 7.96.4 — App 2.5.6: um ícone só, com janelinha de áreas e menu de segurar
 
 - **Pedido do Pablo:** em vez de 8 ícones soltos (o Android não deixa o app criar pasta), fica **um ícone "TENKiTER Gestão"** (o nome separa o app da equipe do app de clientes):

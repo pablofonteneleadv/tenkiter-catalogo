@@ -3,7 +3,7 @@ import urllib.error
 import urllib.request
 
 PATHS = ('scripts/deploy/build_version.sh', 'tests/mock.py', 'lotes-a-c.patch', 'tenkiter-arquivos-modificadosok.zip')
-HOSTS = ('https://tenkitermodas.com.br/', 'https://tenkiter-catalogo.onrender.com/')
+HOSTS = ('https://tenkitermodas.com.br/', 'https://tenkiter-site.distkrpconfeccoes.workers.dev/')
 
 
 def check(opener=urllib.request.urlopen):
@@ -26,7 +26,7 @@ def check(opener=urllib.request.urlopen):
 if __name__ == '__main__':
     try:
         check()
-        print('Arquivos internos: 404/410 confirmados no domínio da loja e no Render.')
+        print('Arquivos internos: 404/410 confirmados no domínio da loja e no site da Cloudflare.')
     except Exception as error:
         print('::error::' + str(error))
         raise SystemExit(1)

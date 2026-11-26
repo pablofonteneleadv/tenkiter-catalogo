@@ -1,7 +1,7 @@
 # TENKiTER Modas — Catálogo Digital
 
-Catálogo online da TENKiTER Modas (Crateús, CE), hospedado no Render:
-**https://tenkiter-catalogo.onrender.com/**
+Catálogo online da TENKiTER Modas (Crateús, CE), hospedado na Cloudflare (Worker de assets `tenkiter-site`, publicado pelo `deploy.yml`):
+**https://tenkitermodas.com.br/**
 
 ## Arquivos
 
@@ -14,7 +14,7 @@ Catálogo online da TENKiTER Modas (Crateús, CE), hospedado no Render:
 **Scripts compartilhados**
 - **`common.js`** — configuração e funções compartilhadas (URL da API, endereço público do site, desconto à vista, número de WhatsApp da loja, favoritos, sacola, fila offline, formatação de preço, miniaturas, lista rápida). **Qualquer mudança nesses valores deve ser feita só aqui.**
 - **`pedido.js`** (sacola com formulário, pedido enviado, acompanhar pedido, favoritos, compartilhar seleção), **`meta.js`** (Pixel da Meta — desligado até haver ID e aceite do visitante), **`pwa.js`** + **`push.js`** + **`OneSignalSDKWorker.js`** (instalar o app, avisos push e cache offline; um único service worker; guia dos avisos em **`LEIA-ME-AVISOS.md`**), **`nav.js`** (barra inferior), **`a11y.js`** (acessibilidade: foco, Esc, Tab preso nas janelas).
-- **`site.webmanifest`**, ícones, **`robots.txt`**. O `sitemap.xml` e o feed (`/feed.csv`, `/feed.xml`) **não são arquivos do site**: o Render repassa (Rewrite) para o Worker `tenkiter-og`, que monta tudo com as peças ativas — ver `og-worker/LEIA-ME.md`.
+- **`site.webmanifest`**, ícones, **`robots.txt`**. O `sitemap.xml` e o feed (`/feed.csv`, `/feed.xml`) **não são arquivos do site**: rotas do domínio na Cloudflare levam ao Worker `tenkiter-og`, que monta tudo com as peças ativas — ver `og-worker/LEIA-ME.md`.
 
 **Fora do site**
 - **`og-worker/`** — Worker da Cloudflare (miniatura e dados do Google por peça, mapa do site, catálogo para Meta/Google, lista rápida). Guia: `og-worker/LEIA-ME.md`.
@@ -27,11 +27,11 @@ O backend são dois Google Apps Script (Web App), um para o **catálogo** (plani
 
 > ⚠️ **Atenção**: `index.html` e `admin.html` devem sempre usar a mesma `API_URL` (a de `common.js`). Se algum dia precisar apontar para uma nova implantação do Apps Script, troque só ali — nunca crie uma URL diferente em outro arquivo, senão o cadastro e o catálogo público passam a ler/escrever planilhas diferentes.
 >
-> A `API_URL` é só o backend de dados — **nunca** deve ser usada para montar um link a ser compartilhado com o cliente (WhatsApp, Stories, etc.). Todo link compartilhável usa a constante `SITE_URL` (o endereço do site no Render), também em `common.js`.
+> A `API_URL` é só o backend de dados — **nunca** deve ser usada para montar um link a ser compartilhado com o cliente (WhatsApp, Stories, etc.). Todo link compartilhável usa a constante `SITE_URL` (o endereço do site, https://tenkitermodas.com.br/), também em `common.js`.
 
 ## Como editar
 
-O frontend é HTML/CSS/JS puro, sem compilação ou dependências de aplicação; o pipeline apenas prepara os arquivos da distribuição estática. Edite numa branch, abra o PR e, com o check **Portão de qualidade** verde, faça o merge na `main`. O deploy é automático pelo GitHub: o merge aciona `.github/workflows/deploy.yml`, que publica o site (Render) e os três Workers (Cloudflare) e confirma o commit no ar em `/version.json` (passo a passo em `CLAUDE.md` e `docs/CI-CD.md`). Antes de cada merge cria-se um ponto de restauração (`backup/pre-<tema>-<data>`). **O build publica somente os arquivos declarados em `scripts/deploy/public-files.json`, preparados em `.public-site/`.** Testes, ferramentas e documentos de trabalho ficam fora do site.
+O frontend é HTML/CSS/JS puro, sem compilação ou dependências de aplicação; o pipeline apenas prepara os arquivos da distribuição estática. Edite numa branch, abra o PR e, com o check **Portão de qualidade** verde, faça o merge na `main`. O deploy é automático pelo GitHub: o merge aciona `.github/workflows/deploy.yml`, que publica o site e os três Workers na Cloudflare e confirma o commit no ar em `/version.json` (passo a passo em `CLAUDE.md` e `docs/CI-CD.md`). Antes de cada merge cria-se um ponto de restauração (`backup/pre-<tema>-<data>`). **O build publica somente os arquivos declarados em `scripts/deploy/public-files.json`, preparados em `.public-site/`.** Testes, ferramentas e documentos de trabalho ficam fora do site.
 
 **Os backends em Apps Script não sobem sozinhos**: cole o arquivo `.gs.txt` novo no editor do Apps Script e use *Gerenciar implantações → editar → Nova versão* (guia: [operação privada](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/infra-backup-testes.md)). O CI de cada PR roda a parte rápida dos testes; a bateria completa (`python3 tests/rodar_tudo.py`, Playwright) roda à noite e sob pedido.
 

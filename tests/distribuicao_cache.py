@@ -95,36 +95,6 @@ class DistributionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 p.payload(target)
 
-    def test_routes_are_additive_and_idempotent(self):
-        m = load('render_internal_routes')
-        original = {'source': '/p/*', 'destination': 'https://worker/p/*', 'type': 'rewrite'}
-        rows = [original.copy()]
-        def request(suffix, body=None):
-            if body is not None:
-                rows.append(body.copy())
-                return body
-            return [{'route': row} for row in rows]
-        self.assertEqual(m.ensure(request), len(m.SOURCES))
-        self.assertEqual(m.ensure(request), 0)
-        self.assertEqual(rows[0], original)
-        for source in ('/*', '/p/*', '/feed.csv', '/android/*', '/index.html'):
-            self.assertNotIn(source, m.SOURCES)
-
-    def test_conflicting_route_blocks_before_any_write(self):
-        m = load('render_internal_routes')
-        calls = []
-        def request(suffix, body=None):
-            if body is not None:
-                calls.append(body)
-            return [{'route': {'source': m.SOURCES[-1], 'destination': '/existing', 'type': 'rewrite'}}]
-        with self.assertRaises(ValueError):
-            m.ensure(request)
-        self.assertEqual(calls, [])
-
-    def test_missing_confirmation_is_failure(self):
-        with self.assertRaises(ValueError):
-            load('render_internal_routes').ensure(lambda *args: [])
-
     def test_only_absent_statuses_satisfy_negative_verification(self):
         m = load('verificar_arquivos_internos')
         for status in (404, 410):

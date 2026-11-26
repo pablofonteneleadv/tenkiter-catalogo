@@ -1,3 +1,5 @@
+> **26/11/2026 — o Render foi retirado.** O site é publicado pelo Worker `tenkiter-site` (Cloudflare, rotas `tenkitermodas.com.br/*` e `www`), no job `site_cloudflare` do `deploy.yml`; `/p/*`, `/sitemap.xml` e os feeds saem do `tenkiter-og` por rotas do domínio. As referências ao Render abaixo são históricas, não requisitos.
+
 > Revisão vigente em05/11/2026: DNS externo, CDN Render e Workers em workers.dev. O purge foi retirado do deploy em7.54.5; referências históricas ao purge abaixo não são requisitos atuais.
 
 # Relatório — INFRA-01, INFRA-02 e INFRA-08

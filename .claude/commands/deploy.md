@@ -22,9 +22,9 @@ O deploy deste repo (TENKiTER catálogo) é **automático pelo GitHub**: o merge
    `main` (`git push origin <sha-da-main>:refs/heads/backup/pre-<tema>-<data>`).
 3. Dê `git push` da branch, abra o PR (`gh api`) e aguarde o check **Portão de qualidade** ficar verde.
 4. Faça o merge (squash) na `main`. O `deploy.yml` publica sozinho.
-5. Aguarde o término do workflow `Deploy`. Nos jobs, `Publicar no Render + Cloudflare` e os três `Publicar tenkiter-*` (Workers) têm que estar `success` — `skipped` é falha silenciosa. Depois confira o site no ar: `curl` em
-   `https://tenkiter-catalogo.onrender.com/version.json` (campo `commit` = commit do merge) e em
-   `https://tenkiter-catalogo.onrender.com/<arquivo>` com `grep` numa string que só existe nesta mudança.
+5. Aguarde o término do workflow `Deploy`. Nos jobs, `Publicar site na Cloudflare`, `Conferir site publicado (Cloudflare)` e os três `Publicar tenkiter-*` (Workers) têm que estar `success` — `skipped` é falha silenciosa. Depois confira o site no ar: `curl` em
+   `https://tenkitermodas.com.br/version.json` (campo `commit` = commit do merge) e em
+   `https://tenkitermodas.com.br/<arquivo>` com `grep` numa string que só existe nesta mudança.
 6. Antes de editar qualquer backend: compare `?action=versao` ao vivo com o `.gs.txt` do cofre `Tenkiter-cofre` (o maior vence; se o ao vivo for maior, peça o arquivo ao Pablo). Se algum `.gs.txt` (Apps Script) foi alterado: isso **não é publicado por este
    comando** — avise que o Pablo precisa colar manualmente no editor do Apps Script e clicar em
    "Nova versão", e que depois disso dá para validar via `curl ?action=versao`.
