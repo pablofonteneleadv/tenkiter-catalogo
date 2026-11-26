@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.96.6 — Feeds e mapa do site aceitam parâmetro; conferência do deploy sem falso alarme
+
+- As rotas do `tenkiter-og` para `/feed.csv`, `/feed.xml` e `/sitemap.xml` não casavam com endereço com parâmetro (`?t=`, `?utm=`): davam 404. Agora têm `*` no fim e também valem no `www`.
+- `verificar_arquivos_internos.py` manda User-Agent: com o domínio na Cloudflare, pedido sem identificação levava 403 da proteção contra robôs e a conferência acusava falha sem motivo (os arquivos internos seguem em 404).
+
 ## 7.96.5 — Render retirado: publicação e conferências só na Cloudflare
 
 - **Pedido do Pablo:** o Render não serve mais (o site está no Worker `tenkiter-site` desde 7.96.3). Saem do `deploy.yml` os passos e o job do Render (diagnóstico de distribuição, garantia de build, cabeçalhos e rotas internas do Render) e os scripts `scripts/deploy/render_*.py`/`.sh` e `diagnostico_distribuicao.py`.
