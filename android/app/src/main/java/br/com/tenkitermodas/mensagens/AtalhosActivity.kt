@@ -44,7 +44,7 @@ class AtalhosActivity : Activity() {
             background = GradientDrawable().apply { setColor(Color.parseColor("#10100E")); cornerRadii = floatArrayOf(dp(22).toFloat(), dp(22).toFloat(), dp(22).toFloat(), dp(22).toFloat(), 0f, 0f, 0f, 0f) }
         }
         caixa.addView(TextView(this).apply {
-            text = "TENKiTER"; setTextColor(Color.parseColor("#E67E22")); textSize = 18f; typeface = Typeface.DEFAULT_BOLD
+            text = "TENKiTER Gestão"; setTextColor(Color.parseColor("#E67E22")); textSize = 18f; typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(6), 0, 0, dp(10))
         })
         val grade = GridLayout(this).apply { columnCount = 4 }

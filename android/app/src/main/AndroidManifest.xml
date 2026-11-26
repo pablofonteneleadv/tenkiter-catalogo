@@ -43,7 +43,7 @@
             <!-- 2.5.5: sem ícone próprio; abre pelo ícone TENKiTER (toque ou segurar) -->
         </activity>
         <!-- 2.5.5 (pedido do Pablo): um ícone só. Toque = janelinha de áreas; segurar = menu do Android. -->
-        <activity android:name=".AtalhosActivity" android:exported="true" android:label="TENKiTER" android:icon="@drawable/ic_launcher" android:theme="@style/AtalhosTheme" android:taskAffinity="${applicationId}.atalhos" android:excludeFromRecents="true" android:noHistory="true">
+        <activity android:name=".AtalhosActivity" android:exported="true" android:label="${appLabel}" android:icon="@drawable/ic_launcher" android:theme="@style/AtalhosTheme" android:taskAffinity="${applicationId}.atalhos" android:excludeFromRecents="true" android:noHistory="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/atalhos"/>
         </activity>
