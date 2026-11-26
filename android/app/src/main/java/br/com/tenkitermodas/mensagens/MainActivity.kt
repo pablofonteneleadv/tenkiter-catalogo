@@ -24,7 +24,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import org.json.JSONObject
 
 class MainActivity:Activity(),InboxView.Events {
-    companion object{const val ACAO_ATUALIZAR="br.com.tenkitermodas.mensagens.ATUALIZAR"}
+    companion object{const val ACAO_ATUALIZAR="br.com.tenkitermodas.mensagens.ATUALIZAR";const val EXTRA_CONVERSA="br.com.tenkitermodas.mensagens.CONVERSA";const val EXTRA_ESPIAR="br.com.tenkitermodas.mensagens.ESPIAR"}
     private var forcarSessaoWeb=false;private var puxar:SwipeRefreshLayout?=null
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
     private lateinit var repo:NativeRepository
@@ -70,6 +70,7 @@ class MainActivity:Activity(),InboxView.Events {
         inbox=InboxView(this,this);administration=NativeAdministration(this,scope,repo,{select(it)},{render()});tools=NativeTools(this,scope,repo,{conversation},{online&&!peeking},{inbox.insert(it)},{render()},{select(it)},{full(it)},{ids,action->inbox.selectionDone();if(conversation in ids&&action in listOf("nao_lidas","encerrar"))back()},{action,id->when(action){"pessoa"->administration.person(id);"settings"->administration.settings();"copy"->administration.copyConversation(id);"export"->administration.exportForm(id,inbox.channelCode())}});root.addView(inbox,FrameLayout.LayoutParams(-1,-1));setContentView(root)
         ContextCompat.registerReceiver(this,changes,IntentFilter(NativeRepository.CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
         OneSignal.Notifications.addClickListener(clicks)
+        intent?.getLongExtra(EXTRA_CONVERSA,0L)?.takeIf{it>0&&pendingClick<=0}?.let{pendingClick=it;pendingPeek=intent.getBooleanExtra(EXTRA_ESPIAR,false)}   // 2.5.5: veio do toque na notificação
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
         WebKeeper.download={id,name->receivedFiles.choose(id,name)}
         WebKeeper.actions={a->if(a=="lista"){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null;webTarget=0;webRequest="";conversation=0;pendingClick=0;peeking=false;openGeneration++}else if(a=="avisos")notificationSettings() else if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
@@ -252,7 +253,7 @@ class MainActivity:Activity(),InboxView.Events {
     private fun showNative(){nativeVisible=true;WebKeeper.remoteVisible=false;web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     private fun closeNativePresence(){if(!::repo.isInitialized)return;val generation=repo.store.generation;val sequence=repo.nextPresenceSequence();scope.launch(Dispatchers.IO){runCatching{repo.presence(0,"oculto",false,sequence){repo.store.generation==generation}}}}
-    override fun onNewIntent(i:Intent){super.onNewIntent(i);setIntent(i);if(i.action==ACAO_ATUALIZAR&&::updater.isInitialized)updater.check()}
+    override fun onNewIntent(i:Intent){super.onNewIntent(i);setIntent(i);if(i.action==ACAO_ATUALIZAR&&::updater.isInitialized)updater.check();val c=i.getLongExtra(EXTRA_CONVERSA,0L);if(c>0&&::inbox.isInitialized&&c!=conversation){peeking=i.getBooleanExtra(EXTRA_ESPIAR,false);conversation=c;openGeneration++;if(setup==null)full(conversation);sync()}}
     override fun onResume(){super.onResume();activityVisible=true;web?.resumeTimers();WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){if(nativeVisible)closeNativePresence();activityVisible=false;WebKeeper.detach();web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
     override fun onDestroy(){handler.removeCallbacks(ticker);webAudio.cancel();WebKeeper.actions=null;WebKeeper.download=null;runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
