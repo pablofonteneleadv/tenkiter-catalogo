@@ -1124,7 +1124,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
         const fs = [...arq.files].filter((f) => /^image\//.test(f.type)); arq.value = ''; if (!fs.length) return;
         bF.disabled = true;
         let rev = null;
-        try { rev = await revisarFotos({ produto: { nome: t.produtoNome || ('Produto ' + t.produto), codigo: t.produtoCodigo }, atuais: fotosAtuais(t.produto, t.produtoFoto), arquivos: fs, max: 8 }); }
+        try { rev = await revisarFotos({ produto: { nome: t.produtoNome || ('Produto ' + t.produto), codigo: t.produtoCodigo }, atuais: fotosAtuais(t.produto, t.produtoFoto), arquivos: fs, max: 20 }); }
         catch (e) { bF.disabled = false; return msg(e.message || 'Não consegui abrir a revisão das fotos.', 'erro'); }
         if (!rev) { bF.disabled = false; return; }
         enviarFotosRevisadas({ produto: t.produto, nome: t.produtoNome, titulo: 'Adicionar fotos: ' + t.titulo, rev, st: { diga: (x, c) => msg(x, c || 'muted') },
@@ -1382,7 +1382,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   let revisaoFotos = null;
   async function revisarFotos(op) {
     if (!revisaoFotos) {
-      await carregarScript('esteira-fotos-revisao.js?v=7.82.0');
+      await carregarScript('esteira-fotos-revisao.js?v=7.96.14');
       revisaoFotos = TKRevisaoFotos({
         el, bt, abrirFolha, abrirGaleria, impressao, linhaStatus,
         enquadrar: async (o) => {
@@ -1444,7 +1444,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       const fs = [...arq.files].filter((f) => /^image\//.test(f.type)); arq.value = ''; if (!fs.length) return;
       bAdd.disabled = bOk.disabled = true;
       let rev = null;
-      try { rev = await revisarFotos({ produto: { nome: pd.nome || ('Produto ' + pd.produto), codigo: pd.codigo }, atuais: fotosAtuais(pd.produto, pd.foto), pedido: pd.itens.flatMap((it) => it.rotulos || []), arquivos: fs, max: 8 }); }
+      try { rev = await revisarFotos({ produto: { nome: pd.nome || ('Produto ' + pd.produto), codigo: pd.codigo }, atuais: fotosAtuais(pd.produto, pd.foto), pedido: pd.itens.flatMap((it) => it.rotulos || []), arquivos: fs, max: 20 }); }
       catch (e) { bAdd.disabled = bOk.disabled = false; return st.diga(e.message || 'Não consegui abrir a revisão das fotos.', 'erro'); }
       if (!rev) { bAdd.disabled = bOk.disabled = false; return; }
       enviarFotosRevisadas({ produto: pd.produto, nome: pd.nome, titulo: 'Fotos pedidas: ' + (pd.nome || pd.produto), rev, tarefas: ids, st,
@@ -1593,7 +1593,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
     const antes = [x.Foto_URL].concat(lista(x.Fotos_Galeria)).map((u) => String(u || '').trim()).filter(urlOk);
     const base=processo?await processo.etapa('fotos-originais',async()=>({antes})): {antes};
     const novas = urls.filter((u) => !antes.includes(u));
-    if (antes.length + novas.length > 8) throw new Error('O produto já tem ' + antes.length + ' fotos e o limite é 8. Escolha até ' + Math.max(0, 8 - antes.length) + ', ou tire fotos antigas pelo cadastro.');
+    if (antes.length + novas.length > 20) throw new Error('O produto já tem ' + antes.length + ' fotos e o limite é 20. Escolha até ' + Math.max(0, 20 - antes.length) + ', ou tire fotos antigas pelo cadastro.');
     let capa = String(x.Foto_URL || '').trim(), gal = lista(x.Fotos_Galeria);
     if (capaUrl && novas.includes(capaUrl)) { if (capa) gal = [capa].concat(gal); capa = capaUrl; gal = gal.concat(novas.filter((u) => u !== capaUrl)); }
     else { const resto = novas.slice(); if (!capa) capa = resto.shift() || ''; gal = gal.concat(resto); }
@@ -1615,7 +1615,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
         boxAlvo.replaceChildren(); busca.hidden = !!alvo; bOk.disabled = !alvo;
         if (!alvo) return;
         const n = [alvo.Foto_URL].concat(lista(alvo.Fotos_Galeria)).filter(urlOk).length;
-        boxAlvo.append(pecaEscolhida(alvo, () => { alvo = null; capa = ''; pintar(); busca.focar(); }, el('small', '', n ? 'Tem ' + n + (n === 1 ? ' foto' : ' fotos') + '; cabem mais ' + Math.max(0, 8 - n) + '.' : 'Ainda sem foto: a primeira vira a capa.')));
+        boxAlvo.append(pecaEscolhida(alvo, () => { alvo = null; capa = ''; pintar(); busca.focar(); }, el('small', '', n ? 'Tem ' + n + (n === 1 ? ' foto' : ' fotos') + '; cabem mais ' + Math.max(0, 20 - n) + '.' : 'Ainda sem foto: a primeira vira a capa.')));
         if (ehInativo(alvo)) boxAlvo.append(el('p', 'aviso al', 'Este produto está arquivado: as fotos entram, mas ele continua fora do site.'));
         if (n) {
           const cp = el('div', 'chips cx-capa'); cp.setAttribute('role', 'group'); cp.setAttribute('aria-label', 'Capa do produto');
@@ -1638,13 +1638,13 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   function abrirCadastroNovo(itens, aoTerminar) {
     abrirFolha('esteira-caixa-cadastro', 'Cadastrar produto novo', ({ corpo, pe, fechar }) => {
       const urls = itens.map((i) => i.url), ids = itens.map((i) => i.id).join(',');
-      let modo = itens.length > 8 ? 'varias' : 'um';
+      let modo = itens.length > 20 ? 'varias' : 'um';
       const opc = el('div', 'cx-modos'); opc.setAttribute('role', 'group'); opc.setAttribute('aria-label', 'Como cadastrar');
       const a = el('a', 'bt laranja', 'Abrir o cadastro'); a.id = 'cx-abrir-cadastro'; a.target = '_blank'; a.rel = 'noopener';
       const pintar = () => {
         opc.replaceChildren();
-        [['um', 'Um produto com estas fotos', itens.length > 8 ? 'Cabem até 8 fotos num produto.' : (itens.length === 1 ? 'A foto vira a capa.' : 'A primeira vira a capa.')], ['varias', 'Vários produtos', 'Cada foto vira um produto, com os mesmos dados.']].forEach(([v, t, d]) => {
-          const b = el('button', 'cx-modo'); b.type = 'button'; b.dataset.modo = v; b.setAttribute('aria-pressed', String(modo === v)); b.disabled = (v === 'um' && itens.length > 8) || (v === 'varias' && itens.length < 2);
+        [['um', 'Um produto com estas fotos', itens.length > 20 ? 'Cabem até 20 fotos num produto.' : (itens.length === 1 ? 'A foto vira a capa.' : 'A primeira vira a capa.')], ['varias', 'Vários produtos', 'Cada foto vira um produto, com os mesmos dados.']].forEach(([v, t, d]) => {
+          const b = el('button', 'cx-modo'); b.type = 'button'; b.dataset.modo = v; b.setAttribute('aria-pressed', String(modo === v)); b.disabled = (v === 'um' && itens.length > 20) || (v === 'varias' && itens.length < 2);
           b.append(el('b', '', t), el('small', '', d)); b.onclick = () => { modo = v; pintar(); }; opc.append(b);
         });
         a.href = 'admin.html?caixaFotos=' + ids + '&modo=' + modo + '&volta=esteira';
@@ -2049,7 +2049,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
   }
   /** Fotos pela câmera ou galeria: mesmo envio da preparação (reduz e sobe ao servidor de fotos); o endereço entra em `urls`. */
   function campoFotos(urls, rotulo, max) {
-    const box = el('div', 'campo-fotos'), st = linhaStatus(), lim = max || 8;
+    const box = el('div', 'campo-fotos'), st = linhaStatus(), lim = max || 20;
     const arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
     const b = bt(rotulo || 'Adicionar fotos', '', () => arq.click()); b.title = 'Câmera ou galeria';
     const pintar = () => { box.replaceChildren(miniFotos(urls, (k) => { urls.splice(k, 1); pintar(); }), b, arq, st); b.hidden = urls.length >= lim; };
@@ -2337,7 +2337,7 @@ window.__esteiraPre={url:u,whats:s.whatsapp,sessao:s.sessao,em:Date.now(),p:fetc
       const cK = campoChips('Cores', L.cores, x.cores, { id: 'novo-cores', vazio: 'Escolher cores' });
       const iX = campoChips('Tecido (opcional, pode marcar mais de um)', L.tecidos, x.tecido, { id: 'novo-tecido', vazio: 'Sem tecido informado' }), lX = iX;
       const st = linhaStatus();
-      corpo.append(lN, lC, lG, lP, cT, cK, lX, el('p', 'muted', 'Falta uma opção? Ela é criada na Gestão pelo Admin total; aqui só se escolhe.'), el('h3', '', 'Fotos do fornecedor'), el('p', 'muted', 'A primeira vira a capa no catálogo. A equipe usa as fotos para reconhecer o produto na chegada.'), campoFotos(x.fotos, 'Adicionar fotos do fornecedor', 8), st);
+      corpo.append(lN, lC, lG, lP, cT, cK, lX, el('p', 'muted', 'Falta uma opção? Ela é criada na Gestão pelo Admin total; aqui só se escolhe.'), el('h3', '', 'Fotos do fornecedor'), el('p', 'muted', 'A primeira vira a capa no catálogo. A equipe usa as fotos para reconhecer o produto na chegada.'), campoFotos(x.fotos, 'Adicionar fotos do fornecedor', 20), st);
       const ok = bt(it ? 'Salvar produto' : 'Incluir no pedido', 'laranja', () => {
         Object.assign(x, { nome: iN.value.trim(), categoria: iC.value, genero: iG.value, preco: iP.value.trim(), tamanhos: cT.valor(), cores: cK.valor(), tecido: iX.valor() });
         if (!x.nome) { st.diga('Informe o nome do produto.', 'erro'); return iN.focus(); }

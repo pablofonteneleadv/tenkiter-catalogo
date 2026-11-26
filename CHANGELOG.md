@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.96.14 — 20 fotos por produto em todo o site
+
+- **Relato do Pablo (26/11):** na Esteira, "Colocar fotos num produto" dizia "Tem 8 fotos; cabem mais 0", embora o limite já tivesse sido aumentado. O servidor do catálogo já aceita 20 fotos desde a 4.31 (conferido no ar: `catalogo-4.31`), mas a PR #451, que levava o mesmo limite às telas, ficou em conflito e nunca entrou. Esta versão refaz a #451 sobre a main atual.
+- Limite de 20 fotos por produto (capa + 19) no cadastro (`MAX_GALERIA`), Cadastrar vários, importação do Instagram, Caixa de fotos da Gestão e Esteira (colocar num produto, revisão antes de enviar, pedido de fotos, fotos do fornecedor). `admin-instagram.js`, `admin-caixa-fotos.js` e `esteira-fotos-revisao.js` com `?v=7.96.14`.
+- Testes ajustados ao novo limite.
+
 ## 7.96.13 — Envio de fotos da Esteira volta sozinho quando a internet volta
 
 - **Relato do Pablo (26/11):** os envios de fotos da Talita para a caixa ficaram parados em "Sem conexão" (20 e 17 fotos) até alguém tocar em "Tentar de novo". O servidor de fotos estava normal (outras pessoas enviaram no mesmo dia); o envio de foto era o único ponto da Esteira em que a falha de rede não era marcada como de rede, então a fila tratava como erro definitivo.

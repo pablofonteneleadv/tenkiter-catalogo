@@ -179,7 +179,7 @@
     var st = document.createElement('p'); st.className = 'tkcx-salvando'; st.id = 'tkcx-salvando'; st.setAttribute('role', 'status'); st.setAttribute('aria-live', 'polite');
     var stTxt = document.createElement('span'); st.appendChild(roda()); st.appendChild(stTxt);
     stTxt.textContent = 'Salvando “' + (nomeSalvando || 'o produto') + '”… enquanto isso, escolha as fotos do próximo.';
-    var dica = document.createElement('p'); dica.className = 'tkcx-dica'; dica.textContent = 'Toque nas fotos do mesmo produto, até 8; a primeira vira a capa. Toque na lupa para ver a foto inteira.';
+    var dica = document.createElement('p'); dica.className = 'tkcx-dica'; dica.textContent = 'Toque nas fotos do mesmo produto, até 20; a primeira vira a capa. Toque na lupa para ver a foto inteira.';
     var grade = document.createElement('div'); grade.className = 'tkcx-grade';
     var carregando = document.createElement('div'); carregando.className = 'tkcx-carregando'; carregando.appendChild(roda()); carregando.appendChild(document.createTextNode('Carregando as fotos da caixa…'));
     grade.appendChild(carregando);
@@ -207,7 +207,7 @@
         var sm = document.createElement('small'); sm.textContent = desc || (x.por ? 'Por ' + esc(x.por) : 'Sem descrição'); b.appendChild(sm);
         b.addEventListener('click', function () {
           var id = Number(x.id), k = escolhidas.indexOf(id);
-          if (k >= 0) escolhidas.splice(k, 1); else if (escolhidas.length < 8) escolhidas.push(id); else aviso('Cabem até 8 fotos num produto.');
+          if (k >= 0) escolhidas.splice(k, 1); else if (escolhidas.length < 20) escolhidas.push(id); else aviso('Cabem até 20 fotos num produto.');
           pintar();
         });
         var z = document.createElement('button'); z.type = 'button'; z.className = 'tkcx-zoom'; z.textContent = '🔍'; z.setAttribute('aria-label', 'Ver a foto ' + (i + 1) + ' inteira');
@@ -346,9 +346,9 @@
           var b = document.getElementById('btn-salvar'); if (b) b.textContent = 'Cadastrar os ' + itens.length + ' produtos';
           var al = document.getElementById('aviso-lote'); if (al) { al.hidden = false; al.textContent = 'Preencha os dados uma vez: ao cadastrar, cada uma das ' + itens.length + ' fotos vira um produto com estas informações. ' + txt; }
         } else {
-          window.tkAceitarRascunho({ id: 'caixa:' + itens.slice(0, 8).map(function (x) { return x.id; }).join('.'), legenda: '', midias: itens.slice(0, 8).map(function (x, k) { return { tipo: 'foto', url: x.url, capa: k === 0 }; }) });
+          window.tkAceitarRascunho({ id: 'caixa:' + itens.slice(0, 20).map(function (x) { return x.id; }).join('.'), legenda: '', midias: itens.slice(0, 20).map(function (x, k) { return { tipo: 'foto', url: x.url, capa: k === 0 }; }) });
           var t2 = document.getElementById('titulo-form'); if (t2) t2.textContent = 'Produto novo com fotos da caixa';
-          var al2 = document.getElementById('aviso-lote'); if (al2) { al2.hidden = false; al2.textContent = txt + (itens.length > 8 ? ' Só as 8 primeiras entraram (limite por produto).' : ''); }
+          var al2 = document.getElementById('aviso-lote'); if (al2) { al2.hidden = false; al2.textContent = txt + (itens.length > 20 ? ' Só as 20 primeiras entraram (limite por produto).' : ''); }
         }
         ligarBotoes();
         fim('');
