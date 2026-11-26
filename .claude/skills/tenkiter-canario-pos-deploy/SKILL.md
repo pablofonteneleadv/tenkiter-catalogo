@@ -30,4 +30,4 @@ Lista `OK` / `FALHOU` por item, com horário, commit conferido e, no que falhou,
 
 ## Repetir
 
-Em mudança de risco alto, repita os itens 2 e 6 depois de 10 e de 30 minutos (Render serve com `s-maxage=300`, e a borda da Cloudflare pode segurar a versão antiga por alguns minutos). O workflow `saude-publica.yml` já roda a cada 5 minutos e cobre os itens 2 e 3 continuamente.
+Em mudança de risco alto, repita os itens 2 e 6 depois de 10 e de 30 minutos (o site é servido pela Cloudflare, Worker de assets `tenkiter-site`, e a borda pode segurar a versão antiga por alguns minutos). O workflow `saude-publica.yml` já roda a cada 5 minutos e cobre os itens 2 e 3 continuamente.

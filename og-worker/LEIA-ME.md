@@ -22,7 +22,7 @@ Qualquer outro caminho redireciona para a loja. Se o Apps Script estiver fora do
 2. Confira no navegador (troque `TK-0001` por um código que exista):
    - `https://tenkiter-og.distkrpconfeccoes.workers.dev/p/TK-0001` (deve redirecionar para o catálogo; "ver código-fonte" mostra `application/ld+json`);
    - `.../sitemap.xml`, `.../feed.csv`, `.../lista.json`.
-3. **Render → o site estático → Redirects/Rewrites** — **JÁ CRIADAS em 10/10/2026** (`/p/*`, `/feed.csv`, `/feed.xml`, `/sitemap.xml`; pela API: `POST https://api.render.com/v1/services/srv-dasa63fpn0mc73fh8fgg/routes` com `{"type":"rewrite","source":...,"destination":...}`). Se precisar refazer, do tipo **Rewrite**:
+3. **(Histórico, até 26/11/2026) Render → o site estático → Redirects/Rewrites** — hoje são rotas do Worker no domínio (`og-worker/wrangler.toml`, `routes`) — **JÁ CRIADAS em 10/10/2026** (`/p/*`, `/feed.csv`, `/feed.xml`, `/sitemap.xml`; pela API: `POST https://api.render.com/v1/services/srv-dasa63fpn0mc73fh8fgg/routes` com `{"type":"rewrite","source":...,"destination":...}`). Se precisar refazer, do tipo **Rewrite**:
    - `/feed.csv` → `https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv`
    - `/feed.xml` → `https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.xml`
    - `/sitemap.xml` → `https://tenkiter-og.distkrpconfeccoes.workers.dev/sitemap.xml` — **o `sitemap.xml` estático NÃO pode existir no repositório** (arquivo estático ganha da regra Rewrite: confirmado em 10/10/2026). Abra `https://tenkitermodas.com.br/sitemap.xml` e confira se listou as peças.
