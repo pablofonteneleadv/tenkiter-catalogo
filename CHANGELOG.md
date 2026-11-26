@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.96.9 — Espiar da notificação abre a conversa
+
+- **Relato do Pablo (26/11):** no app 2.5.6, tocar em **Espiar** na notificação abria a lista de Mensagens, não a conversa. Com o app recém-aberto, os direitos de acesso ainda chegavam do servidor quando o pedido da notificação era entregue; a abertura era recusada e o pedido se perdia. Agora o pedido fica guardado e é tentado de novo (por até 20 s) até a conversa abrir, espiando ou não. Vale também para "Abrir conversa". Sem APK novo: a correção está no site.
+- Teste novo `tests/app_notificacao_espiar_abre.py` (falhava antes, passa agora) com acesso lento e rápido, Espiar e Abrir.
+
 ## 7.96.8 — 📎 das Mensagens no app volta a funcionar (páginas .html sem redirecionar)
 
 - **Relato do Pablo (26/11):** o 📎 não abria nada no app. Causa: desde a troca para a Cloudflare, `/admin.html` era redirecionado para `/admin`, e o app só confia na página `/admin.html` (recusava o seletor de arquivos; a entrega da conversa ao tocar na notificação também dependia disso). Agora `html_handling = "none"`: todas as páginas abrem em `.html`, como no Render. A raiz `/` passa por um script mínimo (`site-worker/index.js`, só para `/`) que entrega o `index.html` com os cabeçalhos de segurança. Sem APK novo.
