@@ -115,7 +115,7 @@ class AppUpdater(private val activity:Activity,private val scope:CoroutineScope)
     private fun install(file:File,r:Release){
         if(!activity.packageManager.canRequestPackageInstalls()){
             prefs.edit().putBoolean("installAfterPermission",true).apply()
-            AlertDialog.Builder(activity).setTitle("Permitir esta atualização").setMessage("Na próxima tela, permita que TENKiTER Mensagens instale aplicativos. Depois volte para concluir a instalação.")
+            AlertDialog.Builder(activity).setTitle("Permitir esta atualização").setMessage("Na próxima tela, permita que TENKiTER Gestão instale aplicativos. Depois volte para concluir a instalação.")
                 .setPositiveButton("Abrir permissão"){_,_->activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+activity.packageName)))}.setNegativeButton("Cancelar"){_,_->prefs.edit().remove("installAfterPermission").apply()}.show();return
         }
         scope.launch{
