@@ -274,6 +274,9 @@
     "tests/app_mensagens_acesso_lento.py": [
       "mensagens"
     ],
+    "tests/app_notificacao_espiar_abre.py": [
+      "mensagens"
+    ],
     "tests/mensagens_velocidade_ui.py": [
       "mensagens"
     ],
