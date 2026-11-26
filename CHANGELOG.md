@@ -1,10 +1,15 @@
 # Changelog
 
-## 7.96.14 — 20 fotos por produto em todo o site
+## 7.96.15 — 20 fotos por produto em todo o site
 
 - **Relato do Pablo (26/11):** na Esteira, "Colocar fotos num produto" dizia "Tem 8 fotos; cabem mais 0", embora o limite já tivesse sido aumentado. O servidor do catálogo já aceita 20 fotos desde a 4.31 (conferido no ar: `catalogo-4.31`), mas a PR #451, que levava o mesmo limite às telas, ficou em conflito e nunca entrou. Esta versão refaz a #451 sobre a main atual.
-- Limite de 20 fotos por produto (capa + 19) no cadastro (`MAX_GALERIA`), Cadastrar vários, importação do Instagram, Caixa de fotos da Gestão e Esteira (colocar num produto, revisão antes de enviar, pedido de fotos, fotos do fornecedor). `admin-instagram.js`, `admin-caixa-fotos.js` e `esteira-fotos-revisao.js` com `?v=7.96.14`.
+- Limite de 20 fotos por produto (capa + 19) no cadastro (`MAX_GALERIA`), Cadastrar vários, importação do Instagram, Caixa de fotos da Gestão e Esteira (colocar num produto, revisão antes de enviar, pedido de fotos, fotos do fornecedor). `admin-instagram.js`, `admin-caixa-fotos.js` e `esteira-fotos-revisao.js` com `?v=7.96.15`.
 - Testes ajustados ao novo limite.
+
+## 7.96.14 — Medida do tempo de abertura de cada área (fase 0 do app 2.6)
+
+- Preparação da reforma do app (troca de pessoa com PIN, painel inteligente, voltar para onde estava): antes de mexer na velocidade, medir. Novo `medida-abertura.js` nas páginas da equipe (Gestão, Mensagens, Postagens, Esteira, Treinamento/RH, Currículos e Principal): depois de abrir, manda ao servidor das Mensagens (`POST /app/medida`) só números — área, app ou navegador, abertura nova/recarga/volta, tempos de carregamento, versões e um código aleatório do aparelho (para comparar os 3 celulares da loja). Sem WhatsApp, sessão ou nome; só com a equipe logada (cliente no catálogo não manda nada); listas fixas e limites no servidor; apagadas depois de 45 dias; trava de 5.000 por dia.
+- Testes novos: `tests/worker_app_medida.js` (14) e `tests/medida_abertura_ui.py` (19). Sem mudança visível.
 
 ## 7.96.13 — Envio de fotos da Esteira volta sozinho quando a internet volta
 
