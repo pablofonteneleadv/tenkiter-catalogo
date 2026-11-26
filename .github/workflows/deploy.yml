@@ -82,6 +82,9 @@ jobs:
           curl -sI "$base/version.json" | grep -qi "cache-control: no-store" || { echo "::error::version.json sem no-store"; exit 1; }
           curl -sI "$base/" | grep -qi "x-content-type-options: nosniff" || { echo "::error::cabeçalho nosniff ausente"; exit 1; }
           code=$(curl -s -o /dev/null -w "%{http_code}" "$base/tests/mock.py"); [ "$code" = "404" ] || { echo "::error::arquivo interno respondeu $code"; exit 1; }
+          # O app só confia em /admin.html (📎 e notificação): a página tem de abrir assim, sem redirecionar para /admin.
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$base/admin.html?app=mensagens"); [ "$code" = "200" ] || { echo "::error::/admin.html respondeu $code (deve ser 200, sem redirecionar)"; exit 1; }
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$base/"); [ "$code" = "200" ] || { echo "::error::a página inicial respondeu $code"; exit 1; }
           echo "Cabeçalhos e arquivos internos conferidos."
 
   # 26/11/2026 (pedido do Pablo): o Render foi retirado. O site sai do job site_cloudflare; aqui ficam as provas públicas.

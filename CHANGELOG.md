@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.96.8 — 📎 das Mensagens no app volta a funcionar (páginas .html sem redirecionar)
+
+- **Relato do Pablo (26/11):** o 📎 não abria nada no app. Causa: desde a troca para a Cloudflare, `/admin.html` era redirecionado para `/admin`, e o app só confia na página `/admin.html` (recusava o seletor de arquivos; a entrega da conversa ao tocar na notificação também dependia disso). Agora `html_handling = "none"`: todas as páginas abrem em `.html`, como no Render. A raiz `/` passa por um script mínimo (`site-worker/index.js`, só para `/`) que entrega o `index.html` com os cabeçalhos de segurança. Sem APK novo.
+- A publicação confere que `/admin.html` responde 200 sem redirecionar e que `/` responde 200.
+- `verificar_android_manifesto.py` manda User-Agent: sem ele a proteção da Cloudflare respondia 403 e a conferência do atualizador do app acusava falha com o manifesto certo no ar (2.5.6, no-store).
+
 ## 7.96.7 — Aviso da senha legível no modo escuro; teste da Esteira sem falso alarme
 
 - O aviso "Faltam N caracteres" da senha (7.92.0) usava o laranja de texto do tema claro; no Treinamento em modo escuro o contraste ficava baixo (axe). Agora usa a cor de destaque de cada tema (`--accent-txt`/`--good-text`, com o laranja de sempre nas outras telas). `conta.js?v=7.96.7`.
