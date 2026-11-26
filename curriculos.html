@@ -305,8 +305,7 @@ async function conferirIgDirect(r, el) {
 }
 function tagIg(r) {
   if (r.InstagramConfirmado && r.InstagramCodigo) return ` <span class="tag ok" data-igcod="${E(r.InstagramCodigo)}" title="Conferindo o código do Direct" aria-label="Instagram confirmado">IG ✓</span>`;
-  if (r.InstagramConfirmado) return ` <span class="tag ok" title="A candidata confirmou o Instagram em ${E(fmtData(r.InstagramConfirmado))}" aria-label="Instagram confirmado pela candidata">IG ✓</span>`;
-  return r.Instagram && r.Etapa !== 'Menor de 18' ? ' <span class="tag al" title="Instagram digitado, sem confirmação pelo Direct" aria-label="Instagram não confirmado">IG ?</span>' : '';
+  return '';   // v7.96.7: o @ é só digitado (sem conferência); selo só para quem confirmou pelo Direct antes
 }
 function tagEtapa(r) {
   const c = r.Etapa === 'Enviado' ? 'ok' : (r.Etapa === 'Menor de 18' ? 'ru' : 'al');

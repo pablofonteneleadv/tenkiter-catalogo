@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""v7.91.0 — Instagram da candidata: limpeza do @ enquanto digita e confirmação pelo Direct da loja (código TK-XXXXXX).
-Pedido do Pablo (24/11/2026): muitas escreviam o @ errado. Tudo simulado: Apps Script e Worker são rotas falsas."""
+"""v7.96.7 — Instagram da candidata: só escrever o @ (obrigatório), sem conferência. Pedido do Pablo (26/11/2026): o link para
+abrir o perfil, o código no Direct e a prévia confundiam as candidatas. Tudo simulado: Apps Script e Worker são rotas falsas."""
 import os, sys, json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -46,78 +46,26 @@ def h2(pg): return pg.evaluate("(document.querySelector('#app h2')||{}).innerTex
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
-    print("== Limpeza do @ enquanto digita ==")
+    print("== Tela simples: só o @ e Continuar ==")
     est = {}
     ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
-    for digitado, esperado in (("https://www.instagram.com/Maria.Silva_?igsh=abc", "@maria.silva_"), ("@@maria silva", "@mariasilva"), ("@Mária-Silvã", "@mariasilva")):
-        pg.fill("#insta", digitado)  # colar dispara um input só
-        chk(f"'{digitado}' vira {esperado}", pg.input_value("#insta") == esperado, pg.input_value("#insta"))
-    chk("avisa o que foi arrumado", "Arrumamos" in pg.inner_text("#insta-dica"))
-    print("== Confirmação pelo Direct ==")
-    pg.fill("#insta", "@maria.errada"); pg.click("#ig-direct"); pg.wait_for_selector("#ig-cod", timeout=10000); pg.wait_for_timeout(600)
-    chk("mostra o código grande", pg.inner_text("#ig-cod") == "TK-AB2CD3", pg.inner_text("#ig-cod"))
-    pg.click("#ig-abrir"); pg.wait_for_timeout(300)
-    chk("abre o Direct da loja", pg.evaluate("window.__aberto") == "https://ig.me/m/tenkitermodasceara", pg.evaluate("window.__aberto"))
-    chk("explica: cole e envie, depois volte", "cole e envie" in pg.inner_text("#ig-st"), pg.inner_text("#ig-st"))
-    print("== A página recarrega ao voltar do Instagram ==")
-    pg.reload(); pg.wait_for_selector("#ig-cod", timeout=15000); pg.wait_for_timeout(500)
-    chk("volta para a confirmação com o MESMO código (sem pedir outro)", pg.inner_text("#ig-cod") == "TK-AB2CD3" and est.get("codigos") == 1, [pg.inner_text("#ig-cod"), est.get("codigos")])
-    est["chegou"] = True; pg.wait_for_selector("#ig-sim", timeout=12000)
-    t = pg.inner_text("#ig-achou")
-    chk("o código chegou: mostra o @ verdadeiro, o nome e a foto", "@maria.certa" in t and "Maria Silva" in t and pg.locator("#ig-foto img").count() == 1, t)
-    chk("avisa que o digitado era diferente", "@maria.errada" in t, t)
-    pg.click("#ig-sim"); pg.wait_for_timeout(800)
-    ult = [a for a in est["acoes"] if a.get("action") == "curriculo_instagram"][-1]
-    chk("grava no currículo o @ do Instagram com o código", ult.get("instagram") == "@maria.certa" and ult.get("igCodigo") == "TK-AB2CD3", ult)
-    chk("segue para as perguntas", h2(pg) == "Vaga e horários", h2(pg))
-    chk("código pendente apagado do aparelho", pg.evaluate("localStorage.getItem('tk_cv_igcod_88999990001')") is None)
-    chk("sem erro de JavaScript", not erros, erros); ctx.close()
-    print("== Confirmar com um toque (sem Direct) ==")
-    est = {}
-    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
-    pg.fill("#insta", "@Maria.Silva")
-    pg.wait_for_timeout(1200)
-    chk("mostra o perfil para conferir (cartão ou link)", pg.get_attribute("#ig-ver", "href") == "https://www.instagram.com/maria.silva/" and (pg.locator("#ig-conf").is_visible() or pg.locator("#ig-sou").count() == 1), pg.get_attribute("#ig-ver", "href"))
-    chk("botão principal é 'É o meu Instagram'", "É o meu Instagram" in pg.inner_text("#ok"))
+    chk("sem link para abrir o perfil, sem Direct e sem prévia", pg.locator("#ig-ver, #ig-direct, #ig-achado, #ig-conf").count() == 0)
+    chk("botão principal é 'Continuar'", pg.inner_text("#ok").strip() == "Continuar", pg.inner_text("#ok"))
+    pg.click("#ok"); pg.wait_for_timeout(300)
+    chk("vazio: pede para digitar e não grava", "Digite seu @" in pg.inner_text("#erro") and not [a for a in est.get("acoes", []) if a.get("action") == "curriculo_instagram"], pg.inner_text("#erro"))
+    pg.locator("#insta").press_sequentially("@Maria.Silva", delay=20); pg.wait_for_timeout(900)
+    chk("enquanto digita nada muda nem é consultado", pg.input_value("#insta") == "@Maria.Silva" and not est.get("worker"), [pg.input_value("#insta"), est.get("worker")])
     pg.click("#ok"); pg.wait_for_timeout(800)
     ult = [a for a in est["acoes"] if a.get("action") == "curriculo_instagram"][-1]
-    chk("grava o @ com a confirmação da própria candidata", ult.get("instagram") == "@maria.silva" and ult.get("euConfirmo") is True and not ult.get("igCodigo"), ult)
-    chk("segue sem passar pelo Direct", h2(pg) == "Vaga e horários" and est.get("codigos") is None, [h2(pg), est.get("codigos")])
+    chk("grava o @ como escrito (sem validar) e segue", ult.get("instagram") == "@Maria.Silva" and ult.get("euConfirmo") is True and h2(pg) == "Vaga e horários", [ult, h2(pg)])
+    chk("nenhuma consulta ao Instagram", not est.get("worker"), est.get("worker"))
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
-    print("== Enquanto digita aparece o perfil com foto: 'Sou eu' ==")
+    print("== Link colado vira @ ==")
     est = {}
     ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
-    pg.locator("#insta").press_sequentially("@maria.silva", delay=30); pg.wait_for_selector("#ig-sou", timeout=5000)
-    t = pg.inner_text("#ig-achado")
-    chk("cartão com @, nome e seguidores", "@maria.silva" in t and "Maria Silva" in t and "1.234 seguidores" in t, t)
-    chk("cartão com a foto do perfil", pg.locator("#ig-av img").count() == 1)
-    pg.click("#ig-sou"); pg.wait_for_timeout(800)
+    pg.fill("#insta", "https://www.instagram.com/maria_ok?igsh=abc"); pg.click("#ok"); pg.wait_for_timeout(800)
     ult = [a for a in est["acoes"] if a.get("action") == "curriculo_instagram"][-1]
-    chk("'Sou eu' grava o @ confirmado e segue", ult.get("instagram") == "@maria.silva" and ult.get("euConfirmo") is True and h2(pg) == "Vaga e horários", [ult, h2(pg)])
-    chk("sem erro de JavaScript", not erros, erros); ctx.close()
-    print("== @ que não existe: avisa e só segue no segundo toque ==")
-    est = {}
-    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
-    pg.locator("#insta").press_sequentially("@maria.erradaa", delay=30); pg.wait_for_timeout(1500)
-    chk("mostra 'Não achamos' na hora", "Não achamos @maria.erradaa" in pg.inner_text("#ig-achado"), pg.inner_text("#ig-achado"))
-    pg.click("#ok"); pg.wait_for_timeout(400)
-    chk("primeiro toque avisa e não grava", "toque de novo" in pg.inner_text("#erro") and not [a for a in est.get("acoes", []) if a.get("action") == "curriculo_instagram"], pg.inner_text("#erro"))
-    pg.click("#ok"); pg.wait_for_timeout(800)
-    chk("segundo toque segue (o Instagram pode ter falhado)", h2(pg) == "Vaga e horários", h2(pg))
-    chk("sem erro de JavaScript", not erros, erros); ctx.close()
-    print("== Serviço de perfil fora do ar: tela continua como antes ==")
-    est = {"sem_previa": True}   # como na nuvem hoje: o Instagram não entrega a prévia
-    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
-    pg.locator("#insta").press_sequentially("@zezinho", delay=30); pg.wait_for_timeout(1500)
-    chk("mostra o link para abrir o perfil e deixa seguir", pg.locator("#ig-conf").is_visible() and pg.inner_text("#ig-achado").strip() == "", pg.inner_text("#ig-achado"))
-    chk("sem erro de JavaScript", not erros, erros); ctx.close()
-
-    print("== Do Direct dá para voltar e confirmar com um toque ==")
-    est = {}
-    ctx, pg, erros = candidata(b, est); pg.goto(BASE + "curriculo.html"); pg.wait_for_selector("#insta", timeout=15000)
-    pg.fill("#insta", "@maria"); pg.click("#ig-direct"); pg.wait_for_selector("#ig-voltar", timeout=10000)
-    pg.click("#ig-voltar"); pg.wait_for_selector("#insta", timeout=5000)
-    chk("voltou para a tela do @ com o que tinha digitado", pg.input_value("#insta") == "@maria", pg.input_value("#insta"))
+    chk("link do perfil gravado como @maria_ok", ult.get("instagram") == "@maria_ok", ult)
     chk("sem erro de JavaScript", not erros, erros); ctx.close()
 
     print("== RH: selo do Instagram no card ==")
@@ -141,7 +89,7 @@ with sync_playwright() as p:
     pg.route("**/*", hh); pg.goto(BASE + "curriculos.html"); pg.wait_for_selector(".item", timeout=15000)
     pg.wait_for_timeout(1200)
     tx = [pg.locator(".item", has_text=n).locator(".topo").inner_text() for n in ("Ana Confirmada", "Bia Digitou", "Cris Direct", "Dani Outra")]
-    chk("confirmada pela candidata 'IG ✓'; só digitado 'IG ?'", "IG ✓" in tx[0] and "Direct" not in tx[0] and "IG ?" in tx[1], tx)
+    chk("sem conferência não há selo (nem 'IG ✓' nem 'IG ?')", "IG" not in tx[0] and "IG" not in tx[1], tx)
     chk("código do Direct que bate com a conta: 'IG ✓ Direct'", "IG ✓ Direct" in tx[2], tx[2])
     chk("código do Direct de outra conta: 'IG ?'", "IG ?" in tx[3] and "Direct" not in tx[3], tx[3])
     pg.locator(".item", has_text="Ana Confirmada").locator(".topo").click(); pg.wait_for_timeout(300)

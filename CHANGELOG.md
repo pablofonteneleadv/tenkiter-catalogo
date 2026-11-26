@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.96.7 — Instagram do currículo: só escrever o @
+
+- **Pedido do Pablo (26/11):** as candidatas não entendiam abrir o próprio perfil para conferir, o código no Direct nem a prévia do perfil. A tela volta a ser só o campo do @ (obrigatório) com **Continuar** e "Não tenho Instagram", sem nenhuma validação nem consulta ao Instagram. Link colado ainda vira @ e espaços são tirados.
+- O servidor do RH (3.37+) exige a marca de Instagram confirmado; o Continuar manda `euConfirmo`, então não precisa publicar Apps Script novo.
+- Currículos (RH): sem os selos "IG ✓"/"IG ?"; fica só o "IG ✓ Direct" de quem confirmou pelo Direct antes.
+
 ## 7.96.4 — App 2.5.6: um ícone só, com janelinha de áreas e menu de segurar
 
 - **Pedido do Pablo:** em vez de 8 ícones soltos (o Android não deixa o app criar pasta), fica **um ícone "TENKiTER Gestão"** (o nome separa o app da equipe do app de clientes):
