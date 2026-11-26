@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.96.7 — Aviso da senha legível no modo escuro; teste da Esteira sem falso alarme
+
+- O aviso "Faltam N caracteres" da senha (7.92.0) usava o laranja de texto do tema claro; no Treinamento em modo escuro o contraste ficava baixo (axe). Agora usa a cor de destaque de cada tema (`--accent-txt`/`--good-text`, com o laranja de sempre nas outras telas). `conta.js?v=7.96.7`.
+- `tests/esteira_retomada_fotos_ui.py` contava a medida anônima de velocidade (`/esteira/medida`) como escrita de dado da Esteira; agora a trata como telemetria, como já faz `esteira_primeiro_item_ui.py`. As duas falhas apareceram no portão do Deploy da #519.
+
 ## 7.96.6 — Feeds e mapa do site aceitam parâmetro; conferência do deploy sem falso alarme
 
 - As rotas do `tenkiter-og` para `/feed.csv`, `/feed.xml` e `/sitemap.xml` não casavam com endereço com parâmetro (`?t=`, `?utm=`): davam 404. Agora têm `*` no fim e também valem no `www`.

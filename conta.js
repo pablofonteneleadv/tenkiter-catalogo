@@ -67,7 +67,7 @@
     }
     if (!document.getElementById('tkc-senha-css')) {
       var st = document.createElement('style'); st.id = 'tkc-senha-css';
-      st.textContent = '.tkc-senha-dica{font-size:.82rem;color:var(--laranja-txt);margin:4px 0 8px}.tkc-senha-dica.tkc-senha-ok{color:#0f6a40}';
+      st.textContent = '.tkc-senha-dica{font-size:.82rem;color:var(--accent-txt,var(--laranja-txt));margin:4px 0 8px}.tkc-senha-dica.tkc-senha-ok{color:var(--good-text,#0f6a40)}';
       document.head.appendChild(st);
     }
     input.insertAdjacentElement('afterend', dica);
