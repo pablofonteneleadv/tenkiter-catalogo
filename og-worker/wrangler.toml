@@ -15,6 +15,15 @@ compatibility_date = "2025-01-01"
 # Mantém o endereço público tenkiter-og.<conta>.workers.dev (usado pelas rotas
 # Rewrite do Render: /sitemap.xml, /feed.xml e /feed.csv).
 workers_dev = true
+# 26/11/2026: o site saiu do Render (que repassava estes caminhos para cá). Agora o domínio está na Cloudflare e estas
+# rotas, mais específicas que "tenkitermodas.com.br/*" do tenkiter-site, mandam os links de peça, o mapa e os feeds direto para cá.
+routes = [
+  { pattern = "tenkitermodas.com.br/p/*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "www.tenkitermodas.com.br/p/*", zone_name = "tenkitermodas.com.br" },
+  { pattern = "tenkitermodas.com.br/sitemap.xml", zone_name = "tenkitermodas.com.br" },
+  { pattern = "tenkitermodas.com.br/feed.csv", zone_name = "tenkitermodas.com.br" },
+  { pattern = "tenkitermodas.com.br/feed.xml", zone_name = "tenkitermodas.com.br" },
+]
 
 # Cache de borda da lista de peças (FE-01, v3.10 do worker.js): serve /lista.json do KV
 # em ~30 ms e revalida em segundo plano. Sem este binding o Worker cai no caminho antigo
