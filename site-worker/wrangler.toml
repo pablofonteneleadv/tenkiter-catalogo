@@ -18,4 +18,5 @@ binding = "ASSETS"
 not_found_handling = "404-page"
 # Páginas continuam em .html (o app confere /admin.html); sem redirecionar para endereço sem extensão.
 html_handling = "none"
-run_worker_first = ["/"]
+# "/" entrega o index.html; os nomes sem .html voltam para a página .html (ver site-worker/index.js).
+run_worker_first = ["/", "/admin", "/admin/", "/curriculo", "/curriculo/", "/curriculos", "/curriculos/", "/esteira", "/esteira/", "/exclusao-dados", "/exclusao-dados/", "/fotos-ia", "/fotos-ia/", "/index", "/index/", "/manual", "/manual/", "/privacidade", "/privacidade/", "/treinamento-cadastro-simulacao", "/treinamento-cadastro-simulacao/", "/treinamentos", "/treinamentos/", "/verificar", "/verificar/"]

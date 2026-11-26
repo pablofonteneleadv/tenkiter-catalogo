@@ -1,5 +1,9 @@
 # Changelog
 
+## 7.96.10 — Endereços sem .html voltam para a página certa
+
+- **Relato do Pablo (26/11):** no app, "Atualizar" (versão nova do site) abria "Não achamos essa página". Entre 25 e 26/11 o site redirecionava `/admin.html` para `/admin`; o app guardou esse endereço, e desde a 7.96.8 (páginas só em `.html`) ele não existe mais. Agora `/admin`, `/curriculo` e as demais páginas sem `.html` (e com `/` no fim) levam (301) para a página `.html`, mantendo os parâmetros. A publicação confere `/admin?app=mensagens` → `/admin.html?app=mensagens`.
+
 ## 7.96.8 — 📎 das Mensagens no app volta a funcionar (páginas .html sem redirecionar)
 
 - **Relato do Pablo (26/11):** o 📎 não abria nada no app. Causa: desde a troca para a Cloudflare, `/admin.html` era redirecionado para `/admin`, e o app só confia na página `/admin.html` (recusava o seletor de arquivos; a entrega da conversa ao tocar na notificação também dependia disso). Agora `html_handling = "none"`: todas as páginas abrem em `.html`, como no Render. A raiz `/` passa por um script mínimo (`site-worker/index.js`, só para `/`) que entrega o `index.html` com os cabeçalhos de segurança. Sem APK novo.
