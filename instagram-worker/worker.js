@@ -4263,6 +4263,29 @@ async function mobileTables_(env) {
   await env.DB.prepare('CREATE TABLE IF NOT EXISTS msg_mobile (subscription TEXT PRIMARY KEY, dono TEXT NOT NULL, atualizado TEXT NOT NULL)').run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_push_outbox (mensagem INTEGER PRIMARY KEY, conversa INTEGER NOT NULL, canal TEXT NOT NULL, chave TEXT NOT NULL, criado TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pendente', tentativas INTEGER NOT NULL DEFAULT 0)").run();
 }
+/** 7.96.14 (fase 0 do app 2.6): quanto cada área leva para abrir em cada aparelho. Anônimo: sem WhatsApp, sem sessão e sem nome;
+ * "aparelho" é um código aleatório criado no próprio celular só para comparar os aparelhos da loja. Só números e rótulos de listas fixas. */
+export const APP_AREAS_ = ['mensagens', 'gestao', 'esteira', 'postagens', 'treinamento', 'rh', 'curriculos', 'principal'];
+export async function appMedida_(env, req, J) {
+  const texto = await req.text();
+  if (texto.length > 1024) return J({ ok: false, erro: 'Medida grande demais.' }, 413);
+  let d; try { d = JSON.parse(texto); } catch (e) { d = null; }
+  const um = (v, lista) => lista.includes(v) ? v : null, ms = (v) => Number.isInteger(v) && v >= 0 && v <= 300000 ? v : null;
+  const area = um(d?.area, APP_AREAS_), via = um(d?.via, ['app', 'navegador']), tipo = um(d?.tipo, ['frio', 'recarga', 'volta']);
+  const html = ms(d?.html_ms), dom = ms(d?.dom_ms), load = ms(d?.load_ms), pronto = d?.pronto_ms == null ? 0 : ms(d.pronto_ms);
+  if (!area || !via || !tipo || html == null || dom == null || load == null || pronto == null || !(dom > 0)) return J({ ok: false, erro: 'Medida inválida.' }, 400);
+  const versao = (v) => /^[0-9][0-9A-Za-z._-]{0,15}$/.test(String(v || '')) ? String(v) : '';
+  const rede = um(d.rede, ['slow-2g', '2g', '3g', '4g', '']) ?? '', cpu = Number.isInteger(d.cpu) && d.cpu >= 0 && d.cpu <= 128 ? d.cpu : 0;
+  const mem = [0, 0.25, 0.5, 1, 2, 4, 8].includes(d.mem) ? d.mem : 0, aparelho = /^[a-z0-9]{6,16}$/.test(String(d.aparelho || '')) ? String(d.aparelho) : '';
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS app_medida (id INTEGER PRIMARY KEY AUTOINCREMENT, em TEXT NOT NULL, dia TEXT NOT NULL, area TEXT NOT NULL, via TEXT NOT NULL, tipo TEXT NOT NULL, html_ms INTEGER NOT NULL, dom_ms INTEGER NOT NULL, load_ms INTEGER NOT NULL, pronto_ms INTEGER NOT NULL DEFAULT 0, app_v TEXT NOT NULL DEFAULT '', site_v TEXT NOT NULL DEFAULT '', rede TEXT NOT NULL DEFAULT '', cpu INTEGER NOT NULL DEFAULT 0, mem REAL NOT NULL DEFAULT 0, aparelho TEXT NOT NULL DEFAULT '')").run();
+  const agora = new Date(), dia = agora.toISOString().slice(0, 10);
+  const hoje = await env.DB.prepare('SELECT COUNT(*) n FROM app_medida WHERE dia=?').bind(dia).first();
+  if (Number(hoje?.n) >= 5000) return J({ ok: true, ignorada: true });   // trava de volume: medida nunca vira custo
+  await env.DB.prepare('INSERT INTO app_medida (em, dia, area, via, tipo, html_ms, dom_ms, load_ms, pronto_ms, app_v, site_v, rede, cpu, mem, aparelho) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(agora.toISOString(), dia, area, via, tipo, html, dom, load, pronto, versao(d.app_v), versao(d.site_v), rede, cpu, mem, aparelho).run();
+  if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM app_medida WHERE dia < ?').bind(new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10)).run();
+  return J({ ok: true });
+}
 export async function registrarMobile_(env, req) {
   await mobileTables_(env);
   const d=await req.json().catch(()=>({})), id=String(d.subscription||'');
@@ -6981,6 +7004,7 @@ export default {
     const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req, medirEsteira, ctx)) : await permissoes(env, req, undefined, ctx);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
+    if (url.pathname === '/app/medida' && req.method === 'POST') { try { return await appMedida_(env, req, J); } catch (e) { return J({ ok: false, erro: 'Medida não gravada.' }, 500); } }   // 7.96.14
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
     if (url.pathname.startsWith('/esteira/')) { try { return await esteiraComando_(env,req,url,J,perms,ctx,medirEsteira); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500, classeFalhaHTTP_(e?.message)); } }   // v7.41.0
     const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0 || url.pathname.indexOf('/fotoia') === 0;

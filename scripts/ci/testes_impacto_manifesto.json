@@ -433,6 +433,15 @@
     "tests/worker_sessao_cache.js": [
       "esteira"
     ],
+    "tests/worker_app_medida.js": [
+      "mensagens",
+      "infra"
+    ],
+    "tests/medida_abertura_ui.py": [
+      "mensagens",
+      "esteira",
+      "infra"
+    ],
     "tests/workers_timeouts.js": [
       "infra"
     ],
