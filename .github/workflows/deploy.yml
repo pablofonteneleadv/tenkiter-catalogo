@@ -85,6 +85,8 @@ jobs:
           # O app só confia em /admin.html (📎 e notificação): a página tem de abrir assim, sem redirecionar para /admin.
           code=$(curl -s -o /dev/null -w "%{http_code}" "$base/admin.html?app=mensagens"); [ "$code" = "200" ] || { echo "::error::/admin.html respondeu $code (deve ser 200, sem redirecionar)"; exit 1; }
           code=$(curl -s -o /dev/null -w "%{http_code}" "$base/"); [ "$code" = "200" ] || { echo "::error::a página inicial respondeu $code"; exit 1; }
+          # Endereço sem .html guardado no app/favoritos volta para a página .html (senão "Não achamos essa página").
+          loc=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "$base/admin?app=mensagens"); case "$loc" in 301*"/admin.html?app=mensagens") ;; *) echo "::error::/admin não voltou para /admin.html ($loc)"; exit 1;; esac
           echo "Cabeçalhos e arquivos internos conferidos."
 
   # 26/11/2026 (pedido do Pablo): o Render foi retirado. O site sai do job site_cloudflare; aqui ficam as provas públicas.

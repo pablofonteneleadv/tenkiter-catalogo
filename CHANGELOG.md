@@ -1,5 +1,9 @@
 # Changelog
 
+## 7.96.10 — Endereços sem .html voltam para a página certa
+
+- **Relato do Pablo (26/11):** no app, "Atualizar" (versão nova do site) abria "Não achamos essa página". Entre 25 e 26/11 o site redirecionava `/admin.html` para `/admin`; o app guardou esse endereço, e desde a 7.96.8 (páginas só em `.html`) ele não existe mais. Agora `/admin`, `/curriculo` e as demais páginas sem `.html` (e com `/` no fim) levam (301) para a página `.html`, mantendo os parâmetros. A publicação confere `/admin?app=mensagens` → `/admin.html?app=mensagens`.
+
 ## 7.96.9 — Espiar da notificação abre a conversa
 
 - **Relato do Pablo (26/11):** no app 2.5.6, tocar em **Espiar** na notificação abria a lista de Mensagens, não a conversa. Com o app recém-aberto, os direitos de acesso ainda chegavam do servidor quando o pedido da notificação era entregue; a abertura era recusada e o pedido se perdia. Agora o pedido fica guardado e é tentado de novo (por até 20 s) até a conversa abrir, espiando ou não. Vale também para "Abrir conversa". Sem APK novo: a correção está no site.
