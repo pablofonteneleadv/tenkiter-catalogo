@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.96.14 — Medida do tempo de abertura de cada área (fase 0 do app 2.6)
+
+- Preparação da reforma do app (troca de pessoa com PIN, painel inteligente, voltar para onde estava): antes de mexer na velocidade, medir. Novo `medida-abertura.js` nas páginas da equipe (Gestão, Mensagens, Postagens, Esteira, Treinamento/RH, Currículos e Principal): depois de abrir, manda ao servidor das Mensagens (`POST /app/medida`) só números — área, app ou navegador, abertura nova/recarga/volta, tempos de carregamento, versões e um código aleatório do aparelho (para comparar os 3 celulares da loja). Sem WhatsApp, sessão ou nome; só com a equipe logada (cliente no catálogo não manda nada); listas fixas e limites no servidor; apagadas depois de 45 dias; trava de 5.000 por dia.
+- Testes novos: `tests/worker_app_medida.js` (14) e `tests/medida_abertura_ui.py` (19). Sem mudança visível.
+
 ## 7.96.13 — Envio de fotos da Esteira volta sozinho quando a internet volta
 
 - **Relato do Pablo (26/11):** os envios de fotos da Talita para a caixa ficaram parados em "Sem conexão" (20 e 17 fotos) até alguém tocar em "Tentar de novo". O servidor de fotos estava normal (outras pessoas enviaram no mesmo dia); o envio de foto era o único ponto da Esteira em que a falha de rede não era marcada como de rede, então a fila tratava como erro definitivo.
