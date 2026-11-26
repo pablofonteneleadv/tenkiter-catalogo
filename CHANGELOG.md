@@ -1,5 +1,10 @@
 # Changelog
 
+## 7.96.6 — Espiar da notificação abre a conversa
+
+- **Relato do Pablo (26/11):** no app 2.5.6, tocar em **Espiar** na notificação abria a lista de Mensagens, não a conversa. Com o app recém-aberto, os direitos de acesso ainda chegavam do servidor quando o pedido da notificação era entregue; a abertura era recusada e o pedido se perdia. Agora o pedido fica guardado e é tentado de novo (por até 20 s) até a conversa abrir, espiando ou não. Vale também para "Abrir conversa". Sem APK novo: a correção está no site.
+- Teste novo `tests/app_notificacao_espiar_abre.py` (falhava antes, passa agora) com acesso lento e rápido, Espiar e Abrir.
+
 ## 7.96.4 — App 2.5.6: um ícone só, com janelinha de áreas e menu de segurar
 
 - **Pedido do Pablo:** em vez de 8 ícones soltos (o Android não deixa o app criar pasta), fica **um ícone "TENKiTER Gestão"** (o nome separa o app da equipe do app de clientes):
