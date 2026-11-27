@@ -8,7 +8,7 @@ class ApiFailure(val data:JSONObject,val code:Int):Exception(data.optString("err
 class AccessRevoked:Exception("Entre novamente para continuar.")
 open class NativeApi {
     open fun call(path:String,a:NativeAuth,body:JSONObject?=null,method:String?=null):JSONObject {
-        require(path.startsWith("/msg/"))
+        require(path.startsWith("/msg/") || path.startsWith("/app/") || path.startsWith("/esteira/menu"))   // 2.6.0: PIN da conta e contadores
         val j=request(BuildConfig.WORKER_URL+path,body,mapOf("X-TK-Whats" to a.owner,"X-TK-Sessao" to a.session),false,method)
         return j
     }

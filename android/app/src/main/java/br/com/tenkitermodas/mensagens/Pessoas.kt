@@ -9,7 +9,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKeyFactory
@@ -18,33 +17,34 @@ import javax.crypto.spec.PBEKeySpec
 
 /**
  * 2.6.0 — Troca de pessoa no celular da loja (proposta app 2.6, decisões do Pablo de 26/11/2026).
- * Até 4 pessoas por celular. Cada uma entra com a senha UMA vez e cria um PIN de 4 dígitos; depois, trocar é escolher
- * a pessoa e digitar o PIN. O PIN só destrava a sessão que já está guardada neste celular (conferido só aqui, sem Apps Script);
- * o servidor continua conferindo a sessão em todo pedido. Só o Admin total (gerir_acessos) remove alguém do celular.
+ * Quantas pessoas precisar por celular (3, 5, 8…). Cada uma entra com a senha UMA vez no celular; o PIN de 4 dígitos é UM
+ * por pessoa e fica na conta dela (servidor das Mensagens, /app/pin): criou num celular, nos outros não pede de novo.
+ * O celular guarda uma cópia do hash para conferir na hora (sem esperar a rede) e manda cada tentativa para o registro
+ * de segurança; a cada 3 erros seguidos o servidor alerta o Admin total no WhatsApp. Sem trava: pode continuar tentando.
+ * O PIN só destrava a sessão já guardada neste celular; o servidor confere a sessão em todo pedido. Só o Admin total remove alguém.
  * Bloqueio por tempo parado: desligado por padrão (15 ou 30 min, escolha do Admin total).
  *
  * "Gerenciado" = existe ao menos uma pessoa na lista. Sem ninguém na lista o app se comporta exatamente como o 2.5.
  */
-data class Pessoa(val owner: String, val session: String, val nome: String, val perms: List<String>, val sal: String = "", val pin: String = "", val desde: Long = 0L) {
+data class Pessoa(val owner: String, val session: String, val nome: String, val perms: List<String>, val sal: String = "", val pin: String = "", val desde: Long = 0L, val iter: Int = 6000) {
     val temPin get() = pin.isNotBlank()
     val primeiroNome get() = nome.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotBlank() } ?: "Pessoa"
     val iniciais get(): String { val p = nome.trim().split(Regex("\\s+")).filter { it.isNotBlank() }; return if (p.isEmpty()) "?" else (p.first().take(1) + (if (p.size > 1) p.last().take(1) else "")).uppercase() }
     fun pode(vararg chaves: String) = chaves.any { it in perms }
     val adminTotal get() = "gerir_acessos" in perms
-    fun json(): JSONObject = JSONObject().put("owner", owner).put("session", session).put("nome", nome).put("perms", JSONArray(perms)).put("sal", sal).put("pin", pin).put("desde", desde)
+    fun json(): JSONObject = JSONObject().put("owner", owner).put("session", session).put("nome", nome).put("perms", JSONArray(perms)).put("sal", sal).put("pin", pin).put("desde", desde).put("iter", iter)
+    val auth get() = NativeAuth(owner, session, nome)
     companion object {
         fun ler(j: JSONObject) = Pessoa(j.getString("owner"), j.optString("session"), j.optString("nome"),
             j.optJSONArray("perms")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } } ?: emptyList(),
-            j.optString("sal"), j.optString("pin"), j.optLong("desde"))
+            j.optString("sal"), j.optString("pin"), j.optLong("desde"), j.optInt("iter", 6000).coerceIn(1000, 200000))
     }
 }
 
 object Pessoas {
-    const val MAX = 4
     const val MUDOU = "br.com.tenkitermodas.mensagens.PESSOA_MUDOU"
     val BLOQUEIOS = listOf(0, 15, 30)
     private const val ALIAS = "tk-pessoas"
-    private const val ITERACOES = 6000   // PIN curto: o hash lento só atrasa adivinhação; a trava de tentativas faz o resto
 
     @Volatile private var cache: JSONObject? = null
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences("pessoas-celular", Context.MODE_PRIVATE)
@@ -113,12 +113,13 @@ object Pessoas {
             val muda = atual != w && (atual.isBlank() || l[i].session != session)
             if (atual.isNotBlank() && atual != w && !muda) return false
             val p = l[i]; l[i] = p.copy(session = session, nome = nome?.takeIf { it.isNotBlank() } ?: p.nome, perms = perms ?: p.perms)
-            gravarLista(c, l, if (muda) w else null); if (muda) { destravar(c); avisar(c) }; return true
+            gravarLista(c, l, if (muda) w else null); if (muda) { destravar(c); avisar(c); buscarPin(c, w) }; return true
         }
-        if (l.size >= MAX) return false
         l.add(Pessoa(w, session, nome.orEmpty(), perms ?: emptyList(), desde = System.currentTimeMillis()))
-        gravarLista(c, l, w); destravar(c); avisar(c); return true
+        gravarLista(c, l, w); destravar(c); avisar(c); buscarPin(c, w); return true
     }
+    /** Pessoa entrou com a senha neste celular: se ela já tem PIN na conta (criado em outro celular), não pede outro. */
+    private fun buscarPin(c: Context, w: String) { val app = c.applicationContext; if (chaveTeste == null) Thread { sincronizarPins(app, w) }.start() }
 
     /** Ponte do site: {"w","s","nome","perms"} (conta.js). */
     fun vistaDoSite(c: Context, dados: String?): Boolean = runCatching {
@@ -134,32 +135,53 @@ object Pessoas {
     }
 
     fun pinValido(pin: String) = pin.length == 4 && pin.all { it.isDigit() }
-    private fun hash(pin: String, sal: String): String {
+    /** Mesmo cálculo do servidor (PBKDF2-SHA256, 256 bits, Base64): o celular confere na hora, sem rede. */
+    internal fun hashPara(pin: String, sal: String, iter: Int): String {
         val f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        return Base64.encodeToString(f.generateSecret(PBEKeySpec(pin.toCharArray(), Base64.decode(sal, Base64.NO_WRAP), ITERACOES, 256)).encoded, Base64.NO_WRAP)
+        return Base64.encodeToString(f.generateSecret(PBEKeySpec(pin.toCharArray(), Base64.decode(sal, Base64.NO_WRAP), iter, 256)).encoded, Base64.NO_WRAP)
     }
 
-    @Synchronized fun criarPin(c: Context, owner: String, pin: String): Boolean {
-        if (!pinValido(pin)) return false
-        val l = lista(c).toMutableList(); val i = l.indexOfFirst { it.owner == owner }; if (i < 0) return false
-        val sal = ByteArray(16).also { SecureRandom().nextBytes(it) }.let { Base64.encodeToString(it, Base64.NO_WRAP) }
-        l[i] = l[i].copy(sal = sal, pin = hash(pin, sal)); gravarLista(c, l); zerarErros(c, owner); return true
+    /** Guarda a cópia do PIN que veio da conta (servidor). Hash vazio = a pessoa ainda não criou. */
+    @Synchronized fun guardarPin(c: Context, owner: String, sal: String, hash: String, iter: Int) {
+        val l = lista(c).toMutableList(); val i = l.indexOfFirst { it.owner == owner }; if (i < 0) return
+        if (l[i].sal == sal && l[i].pin == hash && l[i].iter == iter) return
+        l[i] = l[i].copy(sal = sal, pin = hash, iter = iter.coerceIn(1000, 200000)); gravarLista(c, l)
     }
 
-    /** Trava de tentativas: 5 erros seguidos = 30 s de espera (dobra a cada nova série, até 15 min). */
-    fun esperaRestante(c: Context, owner: String): Long { val ate = prefs(c).getLong("trava_$owner", 0L); return maxOf(0L, ate - System.currentTimeMillis()) }
-    private fun zerarErros(c: Context, owner: String) { prefs(c).edit().remove("erros_$owner").remove("trava_$owner").remove("series_$owner").apply() }
+    /** Cria/troca o PIN NA CONTA (vale em todo celular). Rede: chamar fora da tela principal. Devolve o erro em português ou null. */
+    fun criarPinNaConta(c: Context, owner: String, pin: String): String? {
+        if (!pinValido(pin)) return "O PIN tem 4 números."
+        val p = lista(c).firstOrNull { it.owner == owner } ?: return "Pessoa não encontrada neste celular."
+        return runCatching {
+            val j = NativeApi().call("/app/pin", p.auth, JSONObject().put("pin", pin).put("aparelho", aparelho(c)).put("modelo", modelo()))
+            if (!j.optBoolean("ok")) return j.optString("erro").ifBlank { "Não consegui salvar o PIN agora. Tente de novo." }
+            guardarPin(c, owner, j.getString("sal"), j.getString("hash"), j.optInt("iter", 6000)); null
+        }.getOrElse { if (it is AccessRevoked) "A sessão desta pessoa venceu. Entre com a senha de novo." else "Sem internet para salvar o PIN. Tente de novo quando a conexão voltar." }
+    }
 
+    /** Traz da conta o PIN de cada pessoa deste celular (criado ou trocado em outro celular). Rede: fora da tela principal. */
+    fun sincronizarPins(c: Context, so: String? = null) {
+        lista(c).filter { so == null || it.owner == so }.forEach { p ->
+            runCatching {
+                val j = NativeApi().call("/app/pin", p.auth, null, "GET")
+                if (j.optBoolean("ok")) { if (j.optBoolean("temPin")) guardarPin(c, p.owner, j.getString("sal"), j.getString("hash"), j.optInt("iter", 6000)) else guardarPin(c, p.owner, "", "", 6000) }
+            }
+        }
+    }
+
+    fun aparelho(c: Context): String { val pr = prefs(c); pr.getString("aparelho", null)?.let { return it }; val n = java.util.UUID.randomUUID().toString().replace("-", "").take(10); pr.edit().putString("aparelho", n).apply(); return n }
+    fun modelo(): String = (android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL).trim().take(60)
+
+    /** Confere na hora com a cópia do PIN. Sem trava (pedido do Pablo): cada tentativa vai para o registro de segurança e
+     * o servidor avisa o Admin total a cada 3 erros seguidos. */
     @Synchronized fun conferirPin(c: Context, owner: String, pin: String): Boolean {
-        if (esperaRestante(c, owner) > 0) return false
         val p = lista(c).firstOrNull { it.owner == owner } ?: return false
         if (!p.temPin || !pinValido(pin)) return false
-        val ok = MessageDigest.isEqual(hash(pin, p.sal).toByteArray(), p.pin.toByteArray())
-        if (ok) { zerarErros(c, owner); return true }
-        val pr = prefs(c); val erros = pr.getInt("erros_$owner", 0) + 1
-        if (erros >= 5) { val series = pr.getInt("series_$owner", 0) + 1; val ms = minOf(15 * 60_000L, 30_000L shl (series - 1)); pr.edit().putInt("erros_$owner", 0).putInt("series_$owner", series).putLong("trava_$owner", System.currentTimeMillis() + ms).apply() }
-        else pr.edit().putInt("erros_$owner", erros).apply()
-        return false
+        val ok = MessageDigest.isEqual(hashPara(pin, p.sal, p.iter).toByteArray(), p.pin.toByteArray())
+        val quem = ativa(c)?.takeIf { it.owner != owner }?.nome.orEmpty()
+        val corpo = JSONObject().put("certo", ok).put("aparelho", aparelho(c)).put("modelo", modelo()).put("quemUsava", quem).put("nome", p.nome)
+        Thread { runCatching { NativeApi().call("/app/pin/tentativa", p.auth, corpo) } }.start()
+        return ok
     }
 
     /** Passa o celular para esta pessoa (o PIN já foi conferido). */
@@ -174,7 +196,7 @@ object Pessoas {
     /** Só o Admin total que está usando o celular remove alguém (nunca a si mesmo). */
     @Synchronized fun remover(c: Context, owner: String): Boolean {
         val quem = ativa(c) ?: return false; if (!quem.adminTotal || quem.owner == owner) return false
-        val l = lista(c).filter { it.owner != owner }; gravarLista(c, l); zerarErros(c, owner); avisar(c); return true
+        val l = lista(c).filter { it.owner != owner }; gravarLista(c, l); avisar(c); return true
     }
 
     fun bloqueioMin(c: Context) = estado(c).optInt("bloqueio", 0)
