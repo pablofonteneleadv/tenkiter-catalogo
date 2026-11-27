@@ -345,7 +345,8 @@
     var cab = el('div', { 'class': 'tkc-cab' }); cab.appendChild(el('span', { 'class': 'tkc-av', 'aria-hidden': 'true', text: iniciais(n) || '👤' })); cab.appendChild(quem);
     var trocar = el('button', { type: 'button', 'class': 'tk-btn-sec tkc-acao', id: 'tkc-trocar', text: 'Trocar de conta' });
     var sair = el('button', { type: 'button', 'class': 'tk-btn-perigo tkc-acao', id: 'tkc-sair', text: 'Sair' });
-    trocar.addEventListener('click', function () { if (window.confirm('Trocar de conta? Você sai desta conta em todas as telas deste aparelho (Gestão, Esteira, Mensagens…) e entra com outra.')) sairTopo(); });
+    if (trocaNoApp()) { trocar.textContent = 'Trocar de pessoa'; trocar.addEventListener('click', function () { fecharMenuTopo(); try { TKAndroid.trocarPessoa(); } catch (e) { /* segue */ } }); }
+    else trocar.addEventListener('click', function () { if (window.confirm('Trocar de conta? Você sai desta conta em todas as telas deste aparelho (Gestão, Esteira, Mensagens…) e entra com outra.')) sairTopo(); });
     sair.addEventListener('click', function () { if (window.confirm('Sair da conta? Você sai em todas as telas deste aparelho (Gestão, Esteira, Mensagens…).')) sairTopo(); });
     jan.appendChild(fechar); jan.appendChild(cab); jan.appendChild(el('p', { 'class': 'tkc-dica', text: 'A conta vale para todas as telas deste aparelho.' })); jan.appendChild(trocar); jan.appendChild(sair);
     document.body.appendChild(fundo); document.body.appendChild(jan); topoJan = jan;
@@ -385,7 +386,23 @@
     window.addEventListener('pageshow', function (e) { if (e && e.persisted) conferirOutraTela(); });
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montarTopo); else setTimeout(montarTopo, 0);
   } catch (e) { /* navegador sem eventos: segue sem o botão */ }
-  function nomeTopo(n) { nomeDado = String(n || '').trim().slice(0, 80); montarTopo(); }
+  function nomeTopo(n) { nomeDado = String(n || '').trim().slice(0, 80); montarTopo(); contarAoApp(); }
+  /* App 2.6: conta ao app quem está entrado (nome e direitos), para a lista "Quem vai usar?" e o painel do ícone.
+   * O app guarda a pessoa (até 4 por celular) e pede o PIN de 4 dígitos para trocar depois. */
+  var contadoAoApp = '';
+  function contarAoApp() {
+    try {
+      var ap = window.TKAndroid; if (!ap || typeof ap.pessoaVista !== 'function') return;
+      var s = sessaoTopo(); if (!s) return;
+      var u = null; try { u = window.TKUsuarioCache && TKUsuarioCache.ler(); } catch (e) { u = null; }
+      var perms = u && Array.isArray(u.permissoes) ? u.permissoes : null;
+      if (!perms) { try { var c = JSON.parse(localStorage.getItem('tm_nav_perms') || 'null'); if (c && c.w === s.whatsapp && Array.isArray(c.p)) perms = c.p; } catch (e) { /* segue */ } }
+      var dados = JSON.stringify({ w: String(s.whatsapp), s: String(s.sessao), nome: nomeTopoAtual(), perms: perms });
+      if (dados === contadoAoApp) return; contadoAoApp = dados; ap.pessoaVista(dados);
+    } catch (e) { /* app sem a ponte: segue */ }
+  }
+  try { setTimeout(contarAoApp, 0); setTimeout(contarAoApp, 4000); window.addEventListener('tk:sessao', function () { setTimeout(contarAoApp, 0); }); } catch (e) { /* segue */ }
+  function trocaNoApp() { try { return !!(window.TKAndroid && typeof TKAndroid.trocarPessoa === 'function'); } catch (e) { return false; } }
 
   window.TKConta = { SENHA_MIN: SENHA_MIN, senhaOk: senhaOk, ligarSenha: ligarSenha, ligarCpf: ligarCpf, cpfMask: cpfMask, cpfValido: cpfValido, emailValido: emailValido, nascMask: nascMask, nascValida: nascValida, abrirRecuperar: abrirRecuperar, avisoContaExiste: avisoContaExiste, precisaCpf: precisaCpf, faixaCpf: faixaCpf,
     nomeTopo: nomeTopo, atualizarTopo: montarTopo, sair: sairTopo };

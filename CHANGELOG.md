@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.97.0 — Troca de pessoa no celular com PIN (fase 1 do app 2.6, com o app 2.6.0)
+
+- **Proposta app 2.6 aprovada pelo Pablo (26/11):** os celulares rodam entre as funcionárias e as mensagens saíam com o nome da colega. Decisões dele: PIN de 4 dígitos criado por cada uma; bloqueio por tempo parado desligado por padrão (15 ou 30 min, escolha do Admin total); só o Admin total remove alguém do celular; PIN conferido só no celular (sem Apps Script).
+- **App 2.6.0:** até 4 pessoas por celular. Cada uma entra com a senha uma vez e cria o PIN; depois, "Trocar" no painel do ícone (ou no menu das Mensagens, ou no botão da conta no topo do site) → toca no nome → PIN. Ao completar o 4º dígito já troca. Nome de quem está usando e desde quando no topo do painel; o painel mostra só as áreas que a pessoa pode usar. Mensagens e avisos passam para a pessoa nova (quem não tem acesso às Mensagens deixa de receber os avisos da colega). 5 PINs errados = espera de 30 s (dobra até 15 min). Sair deixa de usar, mas a pessoa continua na lista com o PIN. O app passa a aceitar `/admin`, `/esteira` e `www.` como o mesmo site.
+- **Site (`common.js`, primeiro script de toda tela):** quando o app diz que a pessoa mudou, o que é da anterior (rascunhos, preferências, permissões guardadas) vai para um pacote só dela e sai da tela; o pacote de quem está usando volta. O que é do aparelho fica; caches grandes são apagados e voltam sozinhos. Navegador comum e app antigo: nada muda. Inventário das chaves guardadas no aparelho feito antes (pessoa × aparelho).
+- `conta.js`: conta ao app quem entrou (nome e direitos) e, no app, "Trocar de conta" vira "Trocar de pessoa".
+- Testes novos: `tests/app_troca_pessoa_ui.py` (15) e `PessoasTest.kt` (9).
+
 ## 7.96.15 — 20 fotos por produto em todo o site
 
 - **Relato do Pablo (26/11):** na Esteira, "Colocar fotos num produto" dizia "Tem 8 fotos; cabem mais 0", embora o limite já tivesse sido aumentado. O servidor do catálogo já aceita 20 fotos desde a 4.31 (conferido no ar: `catalogo-4.31`), mas a PR #451, que levava o mesmo limite às telas, ficou em conflito e nunca entrou. Esta versão refaz a #451 sobre a main atual.

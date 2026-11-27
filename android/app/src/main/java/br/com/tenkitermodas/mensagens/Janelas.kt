@@ -62,7 +62,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
         /** Só https do próprio site. */
         fun doSite(endereco: String?): Boolean = runCatching {
             val u = java.net.URI(endereco ?: return false)
-            u.scheme == "https" && u.host == "tenkitermodas.com.br"
+            u.scheme == "https" && (u.host == "tenkitermodas.com.br" || u.host == "www.tenkitermodas.com.br")
         }.getOrDefault(false)
 
         private fun parametro(query: String?, nome: String): String? =
@@ -72,7 +72,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
         fun paraUrl(endereco: String?): Modulo? {
             if (!doSite(endereco)) return null
             val u = runCatching { java.net.URI(endereco) }.getOrNull() ?: return null
-            val p = u.rawPath ?: ""
+            val p = (u.rawPath ?: "").trimEnd('/').let { if (it.isNotEmpty() && !it.endsWith(".html") && it.count { ch -> ch == '/' } == 1) "$it.html" else it }   // 2.6.0: /admin = /admin.html
             return when (p) {
                 "/admin.html" -> when {
                     parametro(u.rawQuery, "app") == "mensagens" -> MENSAGENS
@@ -80,7 +80,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
                     else -> GESTAO
                 }
                 "/esteira.html" -> ESTEIRA
-                "", "/", "/index.html" -> PRINCIPAL
+                "", "/", "/index.html", "/index" -> PRINCIPAL
                 "/treinamentos.html" -> if (parametro(u.rawQuery, "painel") == "rh") RH else TREINAMENTO
                 "/curriculos.html" -> CURRICULOS
                 else -> null
@@ -106,11 +106,36 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
 /** Sai da conta no app inteiro: Mensagens (sessão nativa e avisos). As janelas do site percebem sozinhas (conta.js). */
 object ContaApp {
     fun sair(c: Context) {
+        Pessoas.ninguem(c)   // 2.6.0: a pessoa continua na lista do celular (com o PIN); só deixa de estar usando
         val repo = NativeRepository.get(c.applicationContext)
         val a = repo.store.auth() ?: return
         val inscricao = runCatching { com.onesignal.OneSignal.User.pushSubscription.id }.getOrDefault("")
         repo.logout()
         if (inscricao.isNotBlank()) CoroutineScope(Dispatchers.IO).launch { runCatching { NativeApi().removeSubscription(a, inscricao) } }
+    }
+}
+
+/**
+ * 2.6.0 — Depois de trocar de pessoa: as Mensagens (sessão nativa e avisos) passam para quem está usando.
+ * Quem não tem acesso às Mensagens fica sem a sessão nativa (o celular deixa de receber os avisos da colega).
+ * As janelas do site recarregam sozinhas (Pessoas.MUDOU) e o site troca os dados guardados (common.js).
+ */
+fun ContaApp.aplicarPessoa(c: Context) {
+    val app = c.applicationContext; val repo = NativeRepository.get(app)
+    val p = Pessoas.ativa(app); val a = repo.store.auth()
+    if (p != null && a?.owner == p.owner) return
+    if (a != null) {
+        val inscricao = runCatching { com.onesignal.OneSignal.User.pushSubscription.id }.getOrDefault("")
+        repo.logout()
+        if (inscricao.isNotBlank()) CoroutineScope(Dispatchers.IO).launch { runCatching { NativeApi().removeSubscription(a, inscricao) } }
+    }
+    if (p == null || !Pessoas.podeArea(p, Modulo.MENSAGENS)) return
+    CoroutineScope(Dispatchers.IO).launch {
+        runCatching {
+            repo.importSession(NativeAuth(p.owner, p.session, p.nome))
+            runCatching { com.onesignal.OneSignal.User.pushSubscription.optIn() }
+            BackgroundSync.periodic(app); repo.sync()
+        }
     }
 }
 
@@ -136,6 +161,16 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
     private var pedidoMidia: PermissionRequest? = null
     private val handler = Handler(Looper.getMainLooper())
     private val pararGiro = Runnable { if (::puxar.isInitialized) puxar.isRefreshing = false }
+    /** 2.6.0: trocou a pessoa do celular — esta janela recarrega (o site troca os dados guardados ao abrir). Nunca no meio de uma gravação. */
+    private var trocaPendente = false
+    private val aoTrocarPessoa = object : android.content.BroadcastReceiver() { override fun onReceive(c: Context, i: Intent) { trocaPendente = true; aplicarTroca(0) } }
+    private fun aplicarTroca(tentativa: Int) {
+        if (!trocaPendente || !::web.isInitialized) return
+        web.evaluateJavascript("(function(){try{return !!(window.TKOcupado&&TKOcupado.pendentes()>0)}catch(e){return false}})()") { r ->
+            if (r == "true" && tentativa < 20) { handler.postDelayed({ aplicarTroca(tentativa + 1) }, 1000); return@evaluateJavascript }
+            trocaPendente = false; web.alpha = 0f; web.loadUrl(Modulo.paraUrl(web.url)?.takeIf { it == modulo }?.let { web.url } ?: modulo.url)
+        }
+    }
 
     private inner class Ponte {
         @JavascriptInterface fun abrirModulo(endereco: String?): Boolean {
@@ -146,6 +181,9 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
         @JavascriptInterface fun sairConta() { handler.post { if (Modulo.doSite(web.url)) ContaApp.sair(this@JanelaActivity) } }
         @JavascriptInterface fun podeAtualizar(v: Boolean) { podePuxar = v }
         @JavascriptInterface fun versao(): String = BuildConfig.VERSION_NAME
+        @JavascriptInterface fun pessoaAtiva(): String = runCatching { Pessoas.paraSite(this@JanelaActivity) }.getOrDefault("")
+        @JavascriptInterface fun pessoaVista(dados: String?) { handler.post { if (Modulo.doSite(web.url)) Pessoas.vistaDoSite(this@JanelaActivity, dados) } }
+        @JavascriptInterface fun trocarPessoa() { handler.post { if (Modulo.doSite(web.url)) PessoasActivity.abrir(this@JanelaActivity) } }
         @JavascriptInterface fun atualizar() { handler.post { runCatching { startActivity(Intent(this@JanelaActivity, MainActivity::class.java).setAction(MainActivity.ACAO_ATUALIZAR).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }
     }
 
@@ -171,6 +209,7 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
         }
         raiz.addView(puxar, FrameLayout.LayoutParams(-1, -1))
         setContentView(raiz)
+        runCatching { androidx.core.content.ContextCompat.registerReceiver(this, aoTrocarPessoa, android.content.IntentFilter(Pessoas.MUDOU), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED) }
         if (state == null || web.restoreState(state) == null) web.loadUrl(enderecoDe(intent) ?: modulo.url)
     }
 
@@ -213,11 +252,11 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
             }
             override fun onPageStarted(v: WebView, url: String, icon: android.graphics.Bitmap?) { chooser?.onReceiveValue(null); chooser = null; podePuxar = true }
             override fun onPageFinished(v: WebView, url: String) {
-                handler.removeCallbacks(pararGiro); puxar.isRefreshing = false
+                handler.removeCallbacks(pararGiro); puxar.isRefreshing = false; v.alpha = 1f
                 if (Modulo.doSite(url)) v.evaluateJavascript(SCRIPT_PUXAR, null)
             }
             override fun onReceivedError(v: WebView, r: WebResourceRequest, e: WebResourceError) {
-                if (r.isForMainFrame) { puxar.isRefreshing = false; Toast.makeText(this@JanelaActivity, "Sem conexão. Verifique a internet e arraste a tela para baixo para tentar de novo.", Toast.LENGTH_LONG).show() }
+                if (r.isForMainFrame) { puxar.isRefreshing = false; v.alpha = 1f; Toast.makeText(this@JanelaActivity, "Sem conexão. Verifique a internet e arraste a tela para baixo para tentar de novo.", Toast.LENGTH_LONG).show() }
             }
         }
         w.webChromeClient = object : WebChromeClient() {
@@ -273,11 +312,12 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
 
     override fun onResume() {
         super.onResume(); JanelasVisiveis.quantas++
+        if (Pessoas.precisaDesbloquear(this)) PessoasActivity.abrir(this, PessoasActivity.DESBLOQUEAR)
         web.onResume(); web.resumeTimers()   // o tempo das páginas é do app inteiro: volta a correr
     }
-    override fun onPause() { JanelasVisiveis.quantas = maxOf(0, JanelasVisiveis.quantas - 1); web.onPause(); super.onPause() }
+    override fun onPause() { JanelasVisiveis.quantas = maxOf(0, JanelasVisiveis.quantas - 1); if (!Pessoas.travado(this)) Pessoas.marcarUso(this); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { web.saveState(out); super.onSaveInstanceState(out) }
-    override fun onDestroy() { chooser?.onReceiveValue(null); pedidoMidia?.deny(); (web.parent as? ViewGroup)?.removeView(web); web.destroy(); super.onDestroy() }
+    override fun onDestroy() { runCatching { unregisterReceiver(aoTrocarPessoa) }; chooser?.onReceiveValue(null); pedidoMidia?.deny(); (web.parent as? ViewGroup)?.removeView(web); web.destroy(); super.onDestroy() }
 
     @Deprecated("Legacy back API")
     override fun onBackPressed() { if (web.canGoBack()) web.goBack() else moveTaskToBack(true) }

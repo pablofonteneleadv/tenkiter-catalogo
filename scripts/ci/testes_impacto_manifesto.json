@@ -442,6 +442,13 @@
       "esteira",
       "infra"
     ],
+    "tests/app_troca_pessoa_ui.py": [
+      "mensagens",
+      "esteira",
+      "treinamentos",
+      "catalogo",
+      "infra"
+    ],
     "tests/workers_timeouts.js": [
       "infra"
     ],
