@@ -1,5 +1,9 @@
 # Changelog
 
+## 7.98.1 — Contador das Postagens no painel (app 2.6.3)
+
+- Painel do ícone: Postagens mostra quantas postagens estão com erro esperando alguém agir (mesma contagem que a fila das Postagens já usa). Currículos continua sem número: a lista vem do Apps Script e um contador exigiria publicar uma versão nova dele.
+
 ## 7.98.0 — Voltar para onde estava e contadores no painel (fases 2 e 3 do app 2.6, com o app 2.6.2)
 
 - **App 2.6.2:** quando uma área abre outra (Esteira → cadastro na Gestão, Mensagens → produto, Postagens → produto, barra do site), a janela nova mostra no topo "← Voltar para …"; tocar nela ou no Voltar do Android leva de volta, e a outra janela reabre exatamente como estava (conversa aberta, rascunho guardado).
