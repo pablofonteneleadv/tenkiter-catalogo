@@ -48,6 +48,10 @@ object WebKeeper {
         @JavascriptInterface fun abrirModulo(endereco:String?):Boolean{val m=Modulo.paraUrl(endereco)?:return false;if(m==Modulo.MENSAGENS)return false;val c=context?.applicationContext?:return false;handler.post{Modulo.abrir(c,m,endereco)};return true}
         @JavascriptInterface fun sairConta(){handler.post{val c=context?.applicationContext?:return@post;if(ReceivedFiles.trusted(web?.url))ContaApp.sair(c)}}
         @JavascriptInterface fun podeAtualizar(v:Boolean){podePuxar=v}
+        /** 2.6.0: troca de pessoa no celular (ver Pessoas.kt e common.js). */
+        @JavascriptInterface fun pessoaAtiva():String=runCatching{val c=context?.applicationContext?:return "";Pessoas.paraSite(c)}.getOrDefault("")
+        @JavascriptInterface fun pessoaVista(dados:String?){handler.post{val c=context?.applicationContext?:return@post;if(ReceivedFiles.trusted(web?.url))Pessoas.vistaDoSite(c,dados)}}
+        @JavascriptInterface fun trocarPessoa(){handler.post{val c=context?.applicationContext?:return@post;if(ReceivedFiles.trusted(web?.url))PessoasActivity.abrir(c)}}
         /** Clipe do Mensageiro: o próximo seletor de fotos/vídeos (em até 5 s) abre a gaveta nativa estilo WhatsApp. */
         @JavascriptInterface fun gavetaAnexo(opcoes:String?):Boolean{AttachRequest.set(android.os.SystemClock.elapsedRealtime(),(opcoes?:"{}").take(1000));return true}
     }
@@ -65,6 +69,7 @@ object WebKeeper {
             runCatching{
                 val c=MutableContextWrapper(app.applicationContext);val w=WebView(c);configure(w)
                 w.webViewClient=object:WebViewClient(){override fun onPageFinished(v:WebView,url:String){
+                    if(Pessoas.gerenciado(app)){handler.removeCallbacks(pause);handler.postDelayed(pause,45000);return}   // 2.6.0: quem está usando é o app que diz (common.js)
                     val json=JSONObject().put("whatsapp",auth.owner).put("sessao",auth.session).toString()
                     v.evaluateJavascript("(function(){if(localStorage.getItem('tm_session'))return;localStorage.setItem('tm_session',${JSONObject.quote(json)});location.reload()})()",null)
                     handler.removeCallbacks(pause);handler.postDelayed(pause,45000)

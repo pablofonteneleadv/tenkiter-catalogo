@@ -42,6 +42,8 @@
         <activity android:name=".JanelaTreinamento" android:exported="true" android:label="Treinamento" android:icon="@drawable/ic_janela_treinamento" android:launchMode="singleTask" android:taskAffinity="${applicationId}.treinamento" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
             <!-- 2.5.5: sem ícone próprio; abre pelo ícone TENKiTER (toque ou segurar) -->
         </activity>
+        <!-- 2.6.0: "Quem vai usar?" e o PIN de 4 dígitos (troca de pessoa no celular da loja). -->
+        <activity android:name=".PessoasActivity" android:exported="false" android:theme="@style/AppTheme" android:excludeFromRecents="true" android:screenOrientation="portrait" android:windowSoftInputMode="stateAlwaysHidden"/>
         <!-- 2.5.5 (pedido do Pablo): um ícone só. Toque = janelinha de áreas; segurar = menu do Android. -->
         <activity android:name=".AtalhosActivity" android:exported="true" android:label="${appLabel}" android:icon="@drawable/ic_launcher" android:theme="@style/AtalhosTheme" android:taskAffinity="${applicationId}.atalhos" android:excludeFromRecents="true" android:noHistory="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>

@@ -4286,6 +4286,82 @@ export async function appMedida_(env, req, J) {
   if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM app_medida WHERE dia < ?').bind(new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10)).run();
   return J({ ok: true });
 }
+/* App 2.6 — PIN da pessoa (pedido do Pablo, 26/11/2026): UM PIN por usuário, guardado na conta (aqui, no D1), valendo em
+ * todo celular. Criou num celular e entrou com a senha em outro: não pede PIN novo. O app guarda uma cópia do hash para
+ * conferir na hora (sem esperar a rede). Só a própria pessoa (sessão dela) cria, troca ou lê o próprio hash.
+ * Cada tentativa (certa ou errada) fica no registro app_pin_log. A cada 3 erros seguidos, alerta sigiloso no WhatsApp das
+ * contas Admin total que já usaram o app (não aparece nas Mensagens). Sem trava: a pessoa pode continuar tentando. */
+export const PIN_ITER_ = 6000, PIN_ALERTA_A_CADA_ = 3, PIN_MARCA_ = '🔒 Alerta de segurança TENKiTER';
+async function pinTabelas_(env) {
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS app_pin (whats TEXT PRIMARY KEY, sal TEXT NOT NULL, hash TEXT NOT NULL, iter INTEGER NOT NULL, em TEXT NOT NULL, erros INTEGER NOT NULL DEFAULT 0)').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS app_pin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, em TEXT NOT NULL, whats TEXT NOT NULL, evento TEXT NOT NULL, aparelho TEXT NOT NULL DEFAULT \'\', modelo TEXT NOT NULL DEFAULT \'\', quem_usava TEXT NOT NULL DEFAULT \'\', seguidos INTEGER NOT NULL DEFAULT 0, alerta TEXT NOT NULL DEFAULT \'\')').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS app_admin_alerta (whats TEXT PRIMARY KEY, nome TEXT NOT NULL DEFAULT \'\', em TEXT NOT NULL)').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS app_pin_silencio (ext TEXT PRIMARY KEY, em TEXT NOT NULL)').run();
+}
+async function pinHash_(pin, salB64, iter) {
+  const sal = Uint8Array.from(atob(salB64), (c) => c.charCodeAt(0));
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: sal, iterations: iter }, k, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+const pinTexto_ = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);
+/** Mensagem que a loja envia por alerta: o webhook reconhece e não grava nas Mensagens. */
+export function pinEhAlerta_(m) { return !!m && m.direcao === 'saida' && String(m.texto || '').startsWith(PIN_MARCA_); }
+async function pinAlertar_(env, texto) {
+  const admins = ((await env.DB.prepare('SELECT whats FROM app_admin_alerta ORDER BY em DESC LIMIT 5').all()).results || []).map((x) => x.whats);
+  if (!admins.length) return 'sem_admin';
+  const res = [];
+  for (const w of admins) {
+    let enviado = null;
+    for (const canal of ['whatsapp2', 'whatsapp1']) {
+      const r = await enviarWaflyGenerico_(env, { canal, contato: '55' + w.replace(/^55(?=\d{10,11}$)/, '') }, '/send-text', { message: texto }, 15000).catch(() => null);
+      if (r && r.ok) { enviado = canal; if (r.extId) await env.DB.prepare('INSERT OR IGNORE INTO app_pin_silencio (ext, em) VALUES (?, ?)').bind(r.extId, new Date().toISOString()).run(); break; }
+    }
+    res.push(enviado ? 'ok' : 'falhou');
+  }
+  return res.join(',');
+}
+export async function appPin_(env, req, url, J, perms) {
+  await pinTabelas_(env);
+  const eu = soDigitos(req.headers.get('X-TK-Whats'), 20).replace(/^55(?=\d{10,11}$)/, '');
+  if (!/^\d{10,11}$/.test(eu)) return J({ ok: false, erro: 'Sessão inválida.' }, 401);
+  const agora = new Date().toISOString();
+  if (perms.includes('gerir_acessos')) await env.DB.prepare('INSERT INTO app_admin_alerta (whats, nome, em) VALUES (?, ?, ?) ON CONFLICT(whats) DO UPDATE SET nome=excluded.nome, em=excluded.em').bind(eu, pinTexto_(perms.msgNome, 80), agora).run();
+  if (url.pathname === '/app/pin' && req.method === 'GET') {
+    const l = await env.DB.prepare('SELECT sal, hash, iter FROM app_pin WHERE whats=?').bind(eu).first();
+    return J(l ? { ok: true, temPin: true, sal: l.sal, hash: l.hash, iter: l.iter } : { ok: true, temPin: false });
+  }
+  let d = {}; try { d = JSON.parse((await req.text()).slice(0, 2000)); } catch (e) { d = {}; }
+  const aparelho = pinTexto_(d.aparelho, 40), modelo = pinTexto_(d.modelo, 60), quem = pinTexto_(d.quemUsava, 80);
+  if (url.pathname === '/app/pin' && req.method === 'POST') {
+    const pin = String(d.pin || '');
+    if (!/^\d{4}$/.test(pin)) return J({ ok: false, erro: 'O PIN tem 4 números.' }, 400);
+    const sal = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16)))), hash = await pinHash_(pin, sal, PIN_ITER_);
+    await env.DB.prepare('INSERT INTO app_pin (whats, sal, hash, iter, em, erros) VALUES (?, ?, ?, ?, ?, 0) ON CONFLICT(whats) DO UPDATE SET sal=excluded.sal, hash=excluded.hash, iter=excluded.iter, em=excluded.em, erros=0').bind(eu, sal, hash, PIN_ITER_, agora).run();
+    await env.DB.prepare('INSERT INTO app_pin_log (em, whats, evento, aparelho, modelo) VALUES (?, ?, ?, ?, ?)').bind(agora, eu, 'pin_criado', aparelho, modelo).run();
+    return J({ ok: true, sal, hash, iter: PIN_ITER_ });
+  }
+  if (url.pathname === '/app/pin/tentativa' && req.method === 'POST') {
+    const certo = d.certo === true;
+    let seguidos = 0, alerta = '';
+    if (certo) await env.DB.prepare('UPDATE app_pin SET erros=0 WHERE whats=?').bind(eu).run();
+    else {
+      await env.DB.prepare('UPDATE app_pin SET erros=erros+1 WHERE whats=?').bind(eu).run();
+      seguidos = Number((await env.DB.prepare('SELECT erros FROM app_pin WHERE whats=?').bind(eu).first())?.erros) || 0;
+      if (seguidos > 0 && seguidos % PIN_ALERTA_A_CADA_ === 0) {
+        const hora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' });
+        const nome = pinTexto_(d.nome, 80) || pinTexto_(perms.msgNome, 80) || 'Funcionária';
+        const texto = PIN_MARCA_ + '\n\n' + seguidos + ' PINs errados seguidos para entrar como *' + nome + '* (WhatsApp final ' + eu.slice(-4) + ').\n'
+          + 'Quando: ' + hora + '\nCelular: ' + (modelo || 'não informado') + (aparelho ? ' (código ' + aparelho + ')' : '') + '\n'
+          + 'Quem estava usando o celular: ' + (quem || 'ninguém') + '\n\nO app deixa continuar tentando; tudo fica no registro de segurança.';
+        alerta = await pinAlertar_(env, texto).catch(() => 'falhou');
+      }
+    }
+    await env.DB.prepare('INSERT INTO app_pin_log (em, whats, evento, aparelho, modelo, quem_usava, seguidos, alerta) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(agora, eu, certo ? 'pin_certo' : 'pin_errado', aparelho, modelo, quem, seguidos, alerta).run();
+    return J({ ok: true, seguidos, alerta: !!alerta });
+  }
+  return J({ ok: false, erro: 'Rota do PIN inválida.' }, 404);
+}
 export async function registrarMobile_(env, req) {
   await mobileTables_(env);
   const d=await req.json().catch(()=>({})), id=String(d.subscription||'');
@@ -4393,6 +4469,7 @@ async function rotaWebhookMensagens_(env, req, url, ctx) {
     }
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
+    if (pinEhAlerta_(m)) return ok(200, { ok: true, ignorado: 'alerta sigiloso' });   // app 2.6: alerta de PIN errado não aparece nas Mensagens
     const campos=o=>Object.keys(o||{}).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,40);
     const diagnostico={em:agora(),campos:campos(b),tipo:m.tipo,ctx:m.ctxTipo,isStatusReply:b.isStatusReply===true,temRef:!!b.referenceMessageId,temStatusReply:!!b.statusReply,interno:campos(b[({imagem:'image','vídeo':'video','áudio':'audio',documento:'document',figurinha:'sticker',texto:'text'})[m.tipo]])};
     return ok(200,await aceitarEntrada_(env,ctx,'mensagens',canal,{mensagens:[m],diagnostico}));
@@ -7004,6 +7081,7 @@ export default {
     const perms = temposEsteira ? await medirEsteira('sessao', () => permissoes(env, req, medirEsteira, ctx)) : await permissoes(env, req, undefined, ctx);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
+    if (url.pathname === '/app/pin' || url.pathname === '/app/pin/tentativa') { try { return await appPin_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui falar com o servidor do PIN agora. Tente de novo.' }, 500); } }   // app 2.6
     if (url.pathname === '/app/medida' && req.method === 'POST') { try { return await appMedida_(env, req, J); } catch (e) { return J({ ok: false, erro: 'Medida não gravada.' }, 500); } }   // 7.96.14
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
     if (url.pathname.startsWith('/esteira/')) { try { return await esteiraComando_(env,req,url,J,perms,ctx,medirEsteira); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500, classeFalhaHTTP_(e?.message)); } }   // v7.41.0

@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.97.0 — Troca de pessoa no celular com PIN (fase 1 do app 2.6, com o app 2.6.1)
+
+- **Proposta app 2.6 aprovada pelo Pablo (26/11):** os celulares rodam entre as funcionárias e as mensagens saíam com o nome da colega. Decisões dele: PIN de 4 dígitos; bloqueio por tempo parado desligado por padrão (15 ou 30 min, escolha do Admin total); só o Admin total remove alguém do celular. Ajuste do Pablo no mesmo dia: **sem limite de pessoas por celular**, **um PIN por pessoa guardado na conta** (vale em todos os celulares) e **sem trava** por erros, com alerta.
+- **App 2.6.1:** quantas pessoas precisar por celular. Cada uma entra com a senha uma vez naquele celular; se já criou o PIN em outro celular, não pede de novo. Trocar: "Trocar" no painel do ícone (ou no menu das Mensagens, ou no botão da conta no topo do site) → toca no nome → PIN; ao completar o 4º dígito já troca (o celular confere na hora com a cópia do PIN da conta). Nome de quem está usando e desde quando no topo do painel; só as áreas que a pessoa pode usar. Mensagens e avisos passam para a pessoa nova. Sair deixa de usar, mas a pessoa continua na lista. O app aceita `/admin`, `/esteira` e `www.` como o mesmo site.
+- **PIN na conta (servidor das Mensagens, sem Apps Script):** `/app/pin` guarda só o hash (PBKDF2) por WhatsApp; só a própria pessoa cria, troca ou lê o próprio. Toda tentativa (certa ou errada) vai para o registro de segurança `app_pin_log` (celular, modelo, quem estava usando). A cada 3 erros seguidos, alerta sigiloso no WhatsApp das contas Admin total que usam o app, enviado pela loja e ignorado pelas Mensagens (não aparece no app). Sem trava: pode continuar tentando.
+- **Site (`common.js`, primeiro script de toda tela):** quando o app diz que a pessoa mudou, o que é da anterior (rascunhos, preferências, permissões guardadas) vai para um pacote só dela e sai da tela; o pacote de quem está usando volta. O que é do aparelho fica; caches grandes são apagados e voltam sozinhos. Navegador comum e app antigo: nada muda.
+- `conta.js`: conta ao app quem entrou (nome e direitos) e, no app, "Trocar de conta" vira "Trocar de pessoa".
+- Testes novos: `tests/app_troca_pessoa_ui.py` (15), `tests/worker_app_pin.js` (16) e `PessoasTest.kt`.
+
 ## 7.96.15 — 20 fotos por produto em todo o site
 
 - **Relato do Pablo (26/11):** na Esteira, "Colocar fotos num produto" dizia "Tem 8 fotos; cabem mais 0", embora o limite já tivesse sido aumentado. O servidor do catálogo já aceita 20 fotos desde a 4.31 (conferido no ar: `catalogo-4.31`), mas a PR #451, que levava o mesmo limite às telas, ficou em conflito e nunca entrou. Esta versão refaz a #451 sobre a main atual.
