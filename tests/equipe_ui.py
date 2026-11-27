@@ -13,7 +13,8 @@ def chk(n, c, e=''):
 SESSION = "localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999990001',sessao:'tk3.x'}));"
 
 def estado_novo(publica):
-    return {'publica': publica, 'lidos': set(), 'msgs': {'geral': [{'id': 1, 'minha': False, 'autor': 'Iara', 'texto': 'Bom dia, equipe!', 'em': '2026-11-27T12:00:00Z'}], 'gestao': []}, 'chamadas': [], 'coms': [
+    return {'publica': publica, 'lidos': set(), 'tarefas': [{'id': 1, 'titulo': 'Conferir o caixa da manhã', 'detalhe': '', 'para': 'Todas', 'minha': True, 'prazo': '', 'repete': 'diaria', 'criador': 'Karla', 'feita': None, 'atrasada': False},
+        {'id': 2, 'titulo': 'Fotografar a chegada da Rose', 'detalhe': '12 peças', 'para': 'Pablo', 'minha': True, 'prazo': '2026-11-26', 'repete': '', 'criador': 'Karla', 'feita': None, 'atrasada': True}], 'msgs': {'geral': [{'id': 1, 'minha': False, 'autor': 'Iara', 'texto': 'Bom dia, equipe!', 'em': '2026-11-27T12:00:00Z'}], 'gestao': []}, 'chamadas': [], 'coms': [
         {'id': 7, 'autor': 'Karla', 'titulo': 'Novo horário de sábado', 'texto': 'A loja abre às 8h.', 'importante': True, 'em': '2026-11-27T12:10:00Z', 'lidos': 1, 'total': 4},
         {'id': 6, 'autor': 'Pablo', 'titulo': 'Fotos dos vestidos novos', 'texto': 'Fotografar no manequim.', 'importante': False, 'em': '2026-11-26T15:00:00Z', 'lidos': 3, 'total': 4}]}
 
@@ -27,7 +28,16 @@ def instalar(ctx, st):
             coms = [dict(c, lido=(c['id'] in st['lidos'])) for c in st['coms']]
             salas = ([{'id': 'gestao', 'tipo': 'grupo', 'nome': 'Gestão', 'ultima': None, 'naoLidas': 0}] if st['publica'] else []) + [{'id': 'geral', 'tipo': 'grupo', 'nome': 'Geral (toda a equipe)', 'ultima': {'autor': 'Iara', 'texto': 'Bom dia, equipe!', 'em': '2026-11-27T12:00:00Z'}, 'naoLidas': 1}]
             return J({'ok': True, 'eu': {'whats': '88999990001', 'nome': 'Pablo', 'admin': st['publica'], 'publica': st['publica'], 'gestao': st['publica']}, 'comunicados': coms, 'salas': salas,
-                      'pessoas': [{'whats': '88999990002', 'nome': 'Iara'}, {'whats': '88999990003', 'nome': 'Karla'}], 'config': {'publicadores': ['88999990003'], 'gestao': []} if st['publica'] else None})
+                      'pessoas': [{'whats': '88999990002', 'nome': 'Iara'}, {'whats': '88999990003', 'nome': 'Karla'}]})
+        if p == '/equipe/tarefas': return J({'ok': True, 'tarefas': st['tarefas'], 'hoje': '2026-11-27'})
+        if p == '/equipe/tarefa':
+            st['tarefas'].insert(0, {'id': 3, 'titulo': corpo['titulo'], 'detalhe': corpo.get('detalhe', ''), 'para': 'Todas' if corpo['para'] == 'todos' else 'Iara', 'minha': corpo['para'] == 'todos', 'prazo': corpo.get('prazo', ''), 'repete': corpo.get('repete', ''), 'criador': 'Pablo', 'feita': None, 'atrasada': False}); return J({'ok': True, 'id': 3})
+        if p == '/equipe/tarefa/feita':
+            for t in st['tarefas']:
+                if t['id'] == corpo['tarefa']: t['feita'] = None if corpo.get('desfazer') else {'por': 'Pablo', 'em': '2026-11-27T13:20:00Z'}
+            return J({'ok': True})
+        if p == '/equipe/tarefa/apagar': st['tarefas'] = [t for t in st['tarefas'] if t['id'] != corpo['tarefa']]; return J({'ok': True})
+        if p == '/equipe/comunicado/apagar': st['coms'] = [c for c in st['coms'] if c['id'] != corpo['comunicado']]; return J({'ok': True})
         if p == '/equipe/lido': st['lidos'].add(corpo['comunicado']); [c.__setitem__('lidos', c['lidos'] + 1) for c in st['coms'] if c['id'] == corpo['comunicado']]; return J({'ok': True})
         if p == '/equipe/comunicado':
             if not st['publica']: return J({'ok': False, 'erro': 'Só quem publica.'}, 403)
@@ -53,7 +63,8 @@ with sync_playwright() as pw:
         ctx.add_init_script(SESSION); st = estado_novo(True); instalar(ctx, st)
         pg = ctx.new_page(); erros = []; pg.on('pageerror', lambda e: erros.append(str(e)))
         pg.goto(BASE + 'equipe.html'); pg.wait_for_selector('[data-comunicado="7"]')
-        chk(f'{w}: abas Comunicados e Conversas (padrão tk-abas), com contagem', pg.locator('.tk-abas [role=tab]').count() == 2 and 'Comunicados · 2' in pg.inner_text('#eq-aba-comunicados') and 'Conversas · 1' in pg.inner_text('#eq-aba-conversas'))
+        pg.wait_for_function("document.querySelector('#eq-aba-tarefas') && document.querySelector('#eq-aba-tarefas').textContent.includes('·')")
+        chk(f'{w}: abas Comunicados, Conversas e Tarefas (padrão tk-abas), com contagem', pg.locator('.tk-abas [role=tab]').count() == 3 and 'Comunicados · 2' in pg.inner_text('#eq-aba-comunicados') and 'Conversas · 1' in pg.inner_text('#eq-aba-conversas') and 'Tarefas · 2' in pg.inner_text('#eq-aba-tarefas'), pg.inner_text('.tk-abas'))
         primeiro = pg.locator('article.card').first
         chk(f'{w}: comunicado importante e não lido vem primeiro, com 📌 e "Li e entendi"', '📌 Novo horário de sábado' in primeiro.inner_text() and primeiro.locator('button.tk-btn-prim', has_text='Li e entendi').count() == 1)
         primeiro.locator('button', has_text='Li e entendi').click(); pg.wait_for_selector('[data-comunicado="7"] .lido')
@@ -65,7 +76,19 @@ with sync_playwright() as pw:
         pg.fill('input[name=titulo]', 'Reunião amanhã'); pg.fill('textarea[name=texto]', 'Às 8h, antes de abrir.'); pg.check('input[name=importante]')
         pg.locator('button', has_text='Publicar para a equipe').click(); pg.wait_for_selector('[data-comunicado="8"]')
         chk(f'{w}: publicar comunicado importante', any(c[1] == '/equipe/comunicado' and c[2]['importante'] is True and c[2]['titulo'] == 'Reunião amanhã' for c in st['chamadas']))
-        chk(f'{w}: Admin total vê "Quem publica e quem está na Gestão"', pg.locator('summary', has_text='Quem publica').count() == 1)
+        chk(f'{w}: a tela não tem mais a lista "Quem publica" (vem das permissões)', pg.locator('summary', has_text='Quem publica').count() == 0)
+        pg.on('dialog', lambda d: d.accept())
+        pg.locator('[data-comunicado="6"] button', has_text='Excluir').click(); pg.wait_for_selector('[data-comunicado="6"]', state='detached')
+        chk(f'{w}: gestão apaga comunicado (com confirmação)', any(c[1] == '/equipe/comunicado/apagar' for c in st['chamadas']))
+        pg.click('#eq-aba-tarefas'); pg.wait_for_selector('[data-tarefa="2"]')
+        chk(f'{w}: Tarefas: a atrasada vem primeiro, com prazo e "atrasada"', pg.locator('article.tarefa').first.get_attribute('data-tarefa') == '2' and 'atrasada' in pg.inner_text('[data-tarefa="2"]') and 'prazo 26/11/2026' in pg.inner_text('[data-tarefa="2"]'))
+        pg.locator('[data-tarefa="1"] input[type=checkbox]').check(); pg.wait_for_function("document.querySelector('[data-tarefa=\"1\"]').textContent.includes('feita por')")
+        chk(f'{w}: marcar tarefa como feita mostra quem fez', 'feita por Pablo' in pg.inner_text('[data-tarefa="1"]'))
+        pg.locator('summary', has_text='Nova tarefa').click(); pg.fill('input[name=titulo]', 'Arrumar a vitrine'); pg.select_option('select[name=repete]', 'semanal')
+        pg.locator('button', has_text='Criar tarefa').click(); pg.wait_for_selector('[data-tarefa="3"]')
+        chk(f'{w}: gestão cria tarefa semanal para todas', any(c[1] == '/equipe/tarefa' and c[2]['repete'] == 'semanal' and c[2]['para'] == 'todos' for c in st['chamadas']))
+        if w == 390: pg.screenshot(path=os.path.join(AQUI, 'saida', 'equipe_tarefas_390.png'), full_page=True)
+        pg.click('#eq-aba-comunicados'); pg.wait_for_selector('[data-comunicado="7"]')
         if w == 390: pg.screenshot(path=os.path.join(AQUI, 'saida', 'equipe_comunicados_390.png'), full_page=True) if os.makedirs(os.path.join(AQUI, 'saida'), exist_ok=True) is None else None
         pg.click('#eq-aba-conversas'); pg.wait_for_selector('.sala[data-sala=geral]')
         chk(f'{w}: Conversas: grupos Gestão e Geral em destaque, com não lidas', pg.locator('.sala[data-sala=gestao]').count() == 1 and '1' in pg.inner_text('.sala[data-sala=geral] .tk-selo'))
@@ -87,7 +110,9 @@ with sync_playwright() as pw:
     print('== Funcionária (não publica) ==')
     ctx = b.new_context(viewport={'width': 390, 'height': 844}, service_workers='block'); ctx.add_init_script(SESSION); st = estado_novo(False); instalar(ctx, st)
     pg = ctx.new_page(); pg.goto(BASE + 'equipe.html'); pg.wait_for_selector('[data-comunicado="7"]')
-    chk('funcionária não vê "Novo comunicado", "Quem leu" nem a configuração', pg.locator('summary', has_text='Novo comunicado').count() == 0 and pg.locator('button', has_text='Quem leu').count() == 0 and pg.locator('summary', has_text='Quem publica').count() == 0)
+    chk('funcionária não vê "Novo comunicado", "Quem leu" nem "Excluir"', pg.locator('summary', has_text='Novo comunicado').count() == 0 and pg.locator('button', has_text='Quem leu').count() == 0 and pg.locator('button', has_text='Excluir').count() == 0)
+    pg.click('#eq-aba-tarefas'); pg.wait_for_selector('[data-tarefa="1"]')
+    chk('funcionária não vê "Nova tarefa" nem "Excluir" nas tarefas', pg.locator('summary', has_text='Nova tarefa').count() == 0 and pg.locator('button', has_text='Excluir').count() == 0)
     pg.click('#eq-aba-conversas'); pg.wait_for_selector('.sala[data-sala=geral]')
     chk('funcionária vê o Geral e não vê a Gestão', pg.locator('.sala[data-sala=gestao]').count() == 0)
     ctx.close()

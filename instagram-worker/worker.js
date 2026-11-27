@@ -4374,6 +4374,8 @@ const eqFone_ = (v) => String(v || '').replace(/\D/g, '').replace(/^55(?=\d{10,1
 async function eqTabelas_(env) {
   await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_pessoa (whats TEXT PRIMARY KEY, nome TEXT NOT NULL DEFAULT '', visto TEXT NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_tarefa (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT NOT NULL, detalhe TEXT NOT NULL DEFAULT '', para TEXT NOT NULL DEFAULT 'todos', prazo TEXT NOT NULL DEFAULT '', repete TEXT NOT NULL DEFAULT '', criador TEXT NOT NULL, criador_nome TEXT NOT NULL DEFAULT '', em TEXT NOT NULL, apagada INTEGER NOT NULL DEFAULT 0)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_tarefa_feita (tarefa INTEGER NOT NULL, dia TEXT NOT NULL, whats TEXT NOT NULL, nome TEXT NOT NULL DEFAULT '', em TEXT NOT NULL, PRIMARY KEY (tarefa, dia))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_comunicado (id INTEGER PRIMARY KEY AUTOINCREMENT, autor TEXT NOT NULL, autor_nome TEXT NOT NULL DEFAULT '', titulo TEXT NOT NULL, texto TEXT NOT NULL DEFAULT '', importante INTEGER NOT NULL DEFAULT 0, em TEXT NOT NULL, apagado INTEGER NOT NULL DEFAULT 0)"),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS eq_leitura (comunicado INTEGER NOT NULL, whats TEXT NOT NULL, em TEXT NOT NULL, PRIMARY KEY (comunicado, whats))'),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_msg (id INTEGER PRIMARY KEY AUTOINCREMENT, sala TEXT NOT NULL, autor TEXT NOT NULL, autor_nome TEXT NOT NULL DEFAULT '', texto TEXT NOT NULL, em TEXT NOT NULL)"),
@@ -4383,11 +4385,18 @@ async function eqTabelas_(env) {
 }
 async function eqLista_(env, chave) { try { const v = JSON.parse((await cfgGet(env, chave)) || '[]'); return Array.isArray(v) ? v.map(eqFone_).filter((x) => x.length >= 10) : []; } catch (e) { return []; } }
 /** Quem sou eu na Equipe: nome, se é Admin total, se publica e se está no grupo Gestão. */
+/** Gestão da Equipe = permissão "equipe_gestao" (RH → Acessos) ou, até ela existir no Apps Script, os perfis
+ * Admin total, Admin e Responsável RH (decisão do Pablo, 27/11/2026). Gestão publica comunicados, cria tarefas,
+ * apaga comunicado e está no grupo Gestão. Nada de lista paralela na tela: tudo vem das permissões. */
+export const EQ_PERFIS_GESTAO_ = ['admin total', 'admin', 'responsavel rh'];
+const eqNorm_ = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+export function eqEhGestao_(perms) {
+  if (perms.includes('gerir_acessos') || perms.includes('equipe_gestao')) return true;
+  return (perms.msgPerfis || []).some((p) => EQ_PERFIS_GESTAO_.includes(eqNorm_(typeof p === 'string' ? p : p && p.nome)));
+}
 async function eqEu_(env, req, perms) {
-  const whats = eqFone_(req.headers.get('X-TK-Whats'));
-  const admin = perms.includes('gerir_acessos'), publicadores = await eqLista_(env, 'eq_publicadores'), gestao = await eqLista_(env, 'eq_gestao');
-  const publica = admin || publicadores.includes(whats);
-  return { whats, nome: eqLimpo_(perms.msgNome, 80), admin, publica, gestao: admin || publica || gestao.includes(whats) };
+  const whats = eqFone_(req.headers.get('X-TK-Whats')), gestao = eqEhGestao_(perms);
+  return { whats, nome: eqLimpo_(perms.msgNome, 80), admin: perms.includes('gerir_acessos'), publica: gestao, gestao };
 }
 function eqSalaOk_(eu, sala) {
   if (sala === 'geral') return true;
@@ -4402,7 +4411,7 @@ async function eqPessoas_(env) {
 }
 async function eqMembros_(env, sala) {
   if (sala === 'geral') return (await eqPessoas_(env)).map((p) => p.whats);
-  if (sala === 'gestao') return [...new Set([...(await eqLista_(env, 'eq_publicadores')), ...(await eqLista_(env, 'eq_gestao')), ...(await eqAdmins_(env))])];
+  if (sala === 'gestao') return ((await env.DB.prepare('SELECT whats FROM eq_pessoa WHERE gestao=1').all()).results || []).map((x) => x.whats);
   const m = /^p:(\d+):(\d+)$/.exec(sala); return m ? [m[1], m[2]] : [];
 }
 async function eqAdmins_(env) { try { return ((await env.DB.prepare('SELECT whats FROM app_admin_alerta').all()).results || []).map((x) => eqFone_(x.whats)); } catch (e) { return []; } }
@@ -4425,11 +4434,16 @@ export async function eqAvisar_(env, para, titulo, texto, dados, importante) {
 export async function rotasEquipe_(env, req, url, J, perms, ctx) {
   if (!EQ_CHAVES_.some((k) => perms.includes(k))) return J({ ok: false, erro: 'A área Equipe é só para a equipe da loja.' }, 403);
   await eqTabelas_(env);
+  try { await env.DB.prepare('ALTER TABLE eq_pessoa ADD COLUMN gestao INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   const eu = await eqEu_(env, req, perms), p = url.pathname, agoraIso = agora();
   if (!/^\d{10,11}$/.test(eu.whats)) return J({ ok: false, erro: 'Sessão inválida.' }, 401);
-  await env.DB.prepare('INSERT INTO eq_pessoa (whats, nome, visto) VALUES (?, ?, ?) ON CONFLICT(whats) DO UPDATE SET nome=CASE WHEN excluded.nome<>\'\' THEN excluded.nome ELSE eq_pessoa.nome END, visto=excluded.visto').bind(eu.whats, eu.nome, agoraIso).run();
+  await env.DB.prepare('INSERT INTO eq_pessoa (whats, nome, visto, gestao) VALUES (?, ?, ?, ?) ON CONFLICT(whats) DO UPDATE SET nome=CASE WHEN excluded.nome<>\'\' THEN excluded.nome ELSE eq_pessoa.nome END, visto=excluded.visto, gestao=excluded.gestao').bind(eu.whats, eu.nome, agoraIso, eu.gestao ? 1 : 0).run();
   let b = {}; if (req.method === 'POST') { try { b = JSON.parse((await req.text()).slice(0, 12000)); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   const depois = (fn) => { if (ctx && ctx.waitUntil) ctx.waitUntil(fn().catch(() => {})); };
+  const hojeF = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+  const diaDe_ = (t) => t.repete === 'diaria' ? hojeF : t.repete === 'semanal' ? (() => { const d = new Date(hojeF + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return 'sem-' + d.toISOString().slice(0, 10); })() : 'unica';
+  const minhaT_ = (t) => t.para === 'todos' || t.para === eu.whats;
+
   const nomeDe_ = async (w) => (await env.DB.prepare('SELECT nome FROM eq_pessoa WHERE whats=?').bind(w).first())?.nome || 'Final ' + w.slice(-4);
 
   if (p === '/equipe/inicio' && req.method === 'GET') {
@@ -4448,14 +4462,19 @@ export async function rotasEquipe_(env, req, url, J, perms, ctx) {
       salas.push({ id, tipo: id.startsWith('p:') ? 'privada' : 'grupo', nome, ultima: ult ? { autor: ult.autor_nome, texto: ult.texto.slice(0, 120), em: ult.em } : null, naoLidas: nao });
     }
     return J({ ok: true, eu: { whats: eu.whats, nome: eu.nome, admin: eu.admin, publica: eu.publica, gestao: eu.gestao }, comunicados: com, salas, pessoas: pessoas.filter((x) => x.whats !== eu.whats),
-      config: eu.admin ? { publicadores: await eqLista_(env, 'eq_publicadores'), gestao: await eqLista_(env, 'eq_gestao') } : undefined });
+    });
   }
   if (p === '/equipe/contagem' && req.method === 'GET') {
     const naoLidos = Number((await env.DB.prepare('SELECT COUNT(*) n FROM eq_comunicado c WHERE apagado=0 AND autor<>? AND NOT EXISTS (SELECT 1 FROM eq_leitura l WHERE l.comunicado=c.id AND l.whats=?)').bind(eu.whats, eu.whats).first())?.n) || 0;
     let msgs = 0;
     for (const id of ['gestao', 'geral']) if (eqSalaOk_(eu, id)) { const lido = Number((await env.DB.prepare('SELECT ultimo FROM eq_lido WHERE sala=? AND whats=?').bind(id, eu.whats).first())?.ultimo) || 0; msgs += Number((await env.DB.prepare('SELECT COUNT(*) n FROM eq_msg WHERE sala=? AND id>? AND autor<>?').bind(id, lido, eu.whats).first())?.n) || 0; }
     msgs += Number((await env.DB.prepare("SELECT COUNT(*) n FROM eq_msg m WHERE (m.sala LIKE ? OR m.sala LIKE ?) AND m.autor<>? AND m.id > COALESCE((SELECT ultimo FROM eq_lido l WHERE l.sala=m.sala AND l.whats=?),0)").bind('p:' + eu.whats + ':%', 'p:%:' + eu.whats, eu.whats, eu.whats).first())?.n) || 0;
-    return J({ ok: true, comunicados: naoLidos, mensagens: msgs, total: naoLidos + msgs });
+    let tarefas = 0;
+    for (const t of ((await env.DB.prepare("SELECT id, repete, prazo FROM eq_tarefa WHERE apagada=0 AND (para='todos' OR para=?)").bind(eu.whats).all()).results || [])) {
+      if (t.prazo && t.prazo > hojeF) continue;
+      if (!(await env.DB.prepare('SELECT 1 FROM eq_tarefa_feita WHERE tarefa=? AND dia=?').bind(t.id, diaDe_(t)).first())) tarefas++;
+    }
+    return J({ ok: true, comunicados: naoLidos, mensagens: msgs, tarefas, total: naoLidos + msgs + tarefas });
   }
   if (p === '/equipe/comunicado' && req.method === 'POST') {
     if (!eu.publica) return J({ ok: false, erro: 'Só quem publica comunicados (Admin total e quem ele escolher) pode publicar.' }, 403);
@@ -4513,12 +4532,48 @@ export async function rotasEquipe_(env, req, url, J, perms, ctx) {
     depois(async () => eqAvisar_(env, (await eqMembros_(env, sala)).filter((w) => w !== eu.whats), titulo, (sala.startsWith('p:') ? '' : (eu.nome || 'Alguém') + ': ') + texto.slice(0, 180), { sala }, false));
     return J({ ok: true, id, sala, em: agoraIso });
   }
-  if (p === '/equipe/config' && req.method === 'POST') {
-    if (!eu.admin) return J({ ok: false, erro: 'Só o Admin total muda quem publica e quem está na Gestão.' }, 403);
-    const lista = (v) => [...new Set((Array.isArray(v) ? v : []).map(eqFone_).filter((x) => x.length >= 10))].slice(0, 30);
-    await cfgSet(env, 'eq_publicadores', JSON.stringify(lista(b.publicadores)));
-    await cfgSet(env, 'eq_gestao', JSON.stringify(lista(b.gestao)));
+  if (p === '/equipe/config') return J({ ok: false, erro: 'Quem faz a gestão da Equipe agora vem das permissões (RH → Acessos).' }, 410);
+  if (p === '/equipe/comunicado/apagar' && req.method === 'POST') {
+    if (!eu.gestao) return J({ ok: false, erro: 'Só a gestão apaga comunicados.' }, 403);
+    const r2 = await env.DB.prepare('UPDATE eq_comunicado SET apagado=1 WHERE id=? AND apagado=0').bind(Number(b.comunicado) || 0).run();
+    return r2.meta?.changes ? J({ ok: true }) : J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
+  }
+  /* ---------- Tarefas (gerais ou de uma pessoa; diárias, semanais ou únicas) ---------- */
+  if (p === '/equipe/tarefas' && req.method === 'GET') {
+    const ts = ((await env.DB.prepare('SELECT * FROM eq_tarefa WHERE apagada=0 ORDER BY id DESC LIMIT 200').all()).results || []).filter((t) => eu.gestao || minhaT_(t));
+    const out = [];
+    for (const t of ts) {
+      const f = await env.DB.prepare('SELECT whats, nome, em FROM eq_tarefa_feita WHERE tarefa=? AND dia=?').bind(t.id, diaDe_(t)).first();
+      if (t.repete === '' && f && Date.now() - Date.parse(f.em) > 7 * 864e5) continue;   // única feita há mais de 7 dias sai da lista
+      const para = t.para === 'todos' ? 'Todas' : (await env.DB.prepare('SELECT nome FROM eq_pessoa WHERE whats=?').bind(t.para).first())?.nome || 'Final ' + t.para.slice(-4);
+      out.push({ id: t.id, titulo: t.titulo, detalhe: t.detalhe, para, minha: minhaT_(t), prazo: t.prazo, repete: t.repete, criador: t.criador_nome || 'Gestão',
+        feita: f ? { por: f.nome || 'Final ' + f.whats.slice(-4), em: f.em } : null, atrasada: !f && !!t.prazo && t.prazo < hojeF });
+    }
+    return J({ ok: true, tarefas: out, hoje: hojeF });
+  }
+  if (p === '/equipe/tarefa' && req.method === 'POST') {
+    if (!eu.gestao) return J({ ok: false, erro: 'Só a gestão cria tarefas.' }, 403);
+    const titulo = eqLimpo_(b.titulo, EQ_TITULO_MAX_); if (!titulo) return J({ ok: false, erro: 'Escreva a tarefa.' }, 400);
+    const para = b.para === 'todos' || !b.para ? 'todos' : eqFone_(b.para);
+    if (para !== 'todos' && !(await env.DB.prepare('SELECT 1 FROM eq_pessoa WHERE whats=?').bind(para).first())) return J({ ok: false, erro: 'Essa pessoa não está na equipe.' }, 400);
+    const prazo = /^\d{4}-\d{2}-\d{2}$/.test(String(b.prazo || '')) ? String(b.prazo) : '', repete = ['diaria', 'semanal'].includes(b.repete) ? b.repete : '';
+    const r3 = await env.DB.prepare('INSERT INTO eq_tarefa (titulo, detalhe, para, prazo, repete, criador, criador_nome, em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(titulo, eqLimpo_(b.detalhe, EQ_TEXTO_MAX_), para, prazo, repete, eu.whats, eu.nome, agoraIso).run();
+    const alvos = para === 'todos' ? (await eqPessoas_(env)).map((x) => x.whats) : [para];
+    depois(async () => eqAvisar_(env, alvos.filter((w) => w !== eu.whats), 'Nova tarefa' + (para === 'todos' ? ' para todas' : ' para você'), titulo + (prazo ? ' · prazo ' + prazo.split('-').reverse().slice(0, 2).join('/') : ''), { tarefa: String(r3.meta?.last_row_id) }, false));
+    return J({ ok: true, id: r3.meta?.last_row_id });
+  }
+  if (p === '/equipe/tarefa/feita' && req.method === 'POST') {
+    const t = await env.DB.prepare('SELECT * FROM eq_tarefa WHERE id=? AND apagada=0').bind(Number(b.tarefa) || 0).first();
+    if (!t) return J({ ok: false, erro: 'Tarefa não encontrada.' }, 404);
+    if (!minhaT_(t) && !eu.gestao) return J({ ok: false, erro: 'Esta tarefa é de outra pessoa.' }, 403);
+    if (b.desfazer) { await env.DB.prepare('DELETE FROM eq_tarefa_feita WHERE tarefa=? AND dia=?').bind(t.id, diaDe_(t)).run(); return J({ ok: true }); }
+    await env.DB.prepare('INSERT OR IGNORE INTO eq_tarefa_feita (tarefa, dia, whats, nome, em) VALUES (?, ?, ?, ?, ?)').bind(t.id, diaDe_(t), eu.whats, eu.nome, agoraIso).run();
     return J({ ok: true });
+  }
+  if (p === '/equipe/tarefa/apagar' && req.method === 'POST') {
+    if (!eu.gestao) return J({ ok: false, erro: 'Só a gestão apaga tarefas.' }, 403);
+    const r4 = await env.DB.prepare('UPDATE eq_tarefa SET apagada=1 WHERE id=? AND apagada=0').bind(Number(b.tarefa) || 0).run();
+    return r4.meta?.changes ? J({ ok: true }) : J({ ok: false, erro: 'Tarefa não encontrada.' }, 404);
   }
   return J({ ok: false, erro: 'Rota da Equipe inválida.' }, 404);
 }
