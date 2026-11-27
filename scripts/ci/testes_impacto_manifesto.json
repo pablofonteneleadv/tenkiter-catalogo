@@ -442,15 +442,13 @@
       "esteira",
       "infra"
     ],
-<<<<<<< HEAD
     "tests/app_voltar_conversa_ui.py": [
       "catalogo",
       "mensagens"
-=======
+    ],
     "tests/worker_app_pin.js": [
       "mensagens",
       "infra"
->>>>>>> ia/app26-troca-pessoa-20261126
     ],
     "tests/app_troca_pessoa_ui.py": [
       "mensagens",
