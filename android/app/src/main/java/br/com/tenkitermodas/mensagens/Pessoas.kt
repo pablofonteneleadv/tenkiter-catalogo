@@ -226,6 +226,7 @@ object Pessoas {
             Modulo.GESTAO, Modulo.POSTAGENS -> p.pode("catalogo_admin")
             Modulo.RH -> p.pode("equipe_relatorio", "gerir_manuais", "gerir_acessos")
             Modulo.CURRICULOS -> p.pode("dados_pessoais", "gerir_acessos")
+            Modulo.EQUIPE -> p.pode("gerir_acessos", "catalogo_admin", "catalogo_cadastrar", "esteira", "equipe_relatorio", "gerir_manuais", "dados_pessoais")
             else -> true
         }
     }

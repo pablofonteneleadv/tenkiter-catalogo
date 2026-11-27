@@ -1,5 +1,13 @@
 # Changelog
 
+## 8.0.0 — Área Equipe: comunicados com "Li e entendi", grupos Gestão e Geral e conversa interna (com o app 2.6.4)
+
+- **Pedido do Pablo (27/11):** tirar o trabalho do celular pessoal das funcionárias; toda comunicação de trabalho pelo app, no celular da loja. Decisões dele: construir no nosso app, sem ferramenta externa; publicam comunicados Pablo e Karla (depois a encarregada); as funcionárias conversam entre si e o gestor fala no individual, mas o foco é a conversa de equipe, com os grupos **Gestão** e **Geral**.
+- Nova tela `equipe.html` (ícone "Equipe" no painel do app): **Comunicados** (importante fica no topo; "Li e entendi" de cada pessoa; quem publica vê "Lido por X de Y", "Quem leu" e "Lembrar quem falta"; o Admin total escolhe quem publica e quem está na Gestão) e **Conversas** (Gestão, Geral e privadas entre a equipe; privada ninguém de fora lê, nem o Admin total).
+- Servidor (Worker das Mensagens, D1): rotas `/equipe/*`, só para contas da equipe. Avisos no celular da loja de quem está usando, também para quem não usa as Mensagens (`/app/aparelho`); fora do horário (21h–7h) só o comunicado importante toca.
+- App 2.6.4: área Equipe no painel com contador (comunicados sem ler + conversas novas), toque no aviso abre a conversa ou os comunicados.
+- Testes novos: `tests/worker_equipe.js` (30) e `tests/equipe_ui.py` (33, 390 e 1440 px).
+
 ## 7.99.0 — Exportar só os grupos (sem o Grupo Clientes) e filtros quando passa de 20 mil
 
 - **Relato do Pablo (27/11):** ao exportar para analisar os grupos da gestão, o aviso dizia "Havia mais: use o filtro por datas", mas a tela usada não tinha filtro; e não dava para tirar o Grupo Clientes.

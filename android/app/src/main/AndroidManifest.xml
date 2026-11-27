@@ -33,6 +33,9 @@
         <activity android:name=".JanelaPostagens" android:exported="true" android:label="Postagens" android:icon="@drawable/ic_janela_postagens" android:launchMode="singleTask" android:taskAffinity="${applicationId}.postagens" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
             <!-- 2.5.5: sem ícone próprio; abre pelo ícone TENKiTER (toque ou segurar) -->
         </activity>
+        <activity android:name=".JanelaEquipe" android:exported="true" android:label="Equipe" android:icon="@drawable/ic_janela_equipe" android:launchMode="singleTask" android:taskAffinity="${applicationId}.equipe" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+            <!-- 2.6.4: área Equipe (comunicação interna); abre pelo ícone TENKiTER -->
+        </activity>
         <activity android:name=".JanelaRh" android:exported="true" android:label="RH" android:icon="@drawable/ic_janela_rh" android:launchMode="singleTask" android:taskAffinity="${applicationId}.rh" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
             <!-- 2.5.5: sem ícone próprio; abre pelo ícone TENKiTER (toque ou segurar) -->
         </activity>

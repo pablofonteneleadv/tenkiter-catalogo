@@ -40,7 +40,8 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
     POSTAGENS("postagens", "Postagens", "/admin.html?abrir=postagens"),
     RH("rh", "RH", "/treinamentos.html?painel=rh"),
     CURRICULOS("curriculos", "Currículos", "/curriculos.html"),
-    TREINAMENTO("treinamento", "Treinamento", "/treinamentos.html");   // 2.5.4: manual/dúvidas da equipe (pedido do Pablo)
+    TREINAMENTO("treinamento", "Treinamento", "/treinamentos.html"),   // 2.5.4: manual/dúvidas da equipe (pedido do Pablo)
+    EQUIPE("equipe", "Equipe", "/equipe.html");   // 2.6.4: comunicados, grupos Gestão/Geral e conversa interna (27/11/2026)
 
     val url: String get() = SITE + caminho
     val classe: Class<out Activity>
@@ -53,6 +54,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
             RH -> JanelaRh::class.java
             CURRICULOS -> JanelaCurriculos::class.java
             TREINAMENTO -> JanelaTreinamento::class.java
+            EQUIPE -> JanelaEquipe::class.java
         }
 
     companion object {
@@ -86,6 +88,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
                 "", "/", "/index.html", "/index" -> PRINCIPAL
                 "/treinamentos.html" -> if (parametro(u.rawQuery, "painel") == "rh") RH else TREINAMENTO
                 "/curriculos.html" -> CURRICULOS
+                "/equipe.html" -> EQUIPE
                 else -> null
             }
         }
@@ -173,12 +176,24 @@ fun ContaApp.aplicarPessoa(c: Context) {
         repo.logout()
         if (inscricao.isNotBlank()) CoroutineScope(Dispatchers.IO).launch { runCatching { NativeApi().removeSubscription(a, inscricao) } }
     }
+    if (p != null) ligarAvisosEquipe(app, p.auth)
     if (p == null || !Pessoas.podeArea(p, Modulo.MENSAGENS)) return
     CoroutineScope(Dispatchers.IO).launch {
         runCatching {
             repo.importSession(NativeAuth(p.owner, p.session, p.nome))
             runCatching { com.onesignal.OneSignal.User.pushSubscription.optIn() }
             BackgroundSync.periodic(app); repo.sync()
+        }
+    }
+}
+
+/** 2.6.4: este celular recebe os avisos da Equipe de quem está usando (também quem não usa as Mensagens). */
+fun ligarAvisosEquipe(c: Context, a: NativeAuth) {
+    CoroutineScope(Dispatchers.IO).launch {
+        runCatching {
+            runCatching { com.onesignal.OneSignal.User.pushSubscription.optIn() }
+            var id = ""; repeat(10) { if (id.isBlank()) { id = runCatching { com.onesignal.OneSignal.User.pushSubscription.id }.getOrDefault(""); if (id.isBlank()) kotlinx.coroutines.delay(1000) } }
+            if (id.isNotBlank()) NativeApi().call("/app/aparelho", a, JSONObject().put("subscription", id))
         }
     }
 }
@@ -437,3 +452,4 @@ class JanelaPostagens : JanelaActivity(Modulo.POSTAGENS)
 class JanelaRh : JanelaActivity(Modulo.RH)
 class JanelaCurriculos : JanelaActivity(Modulo.CURRICULOS)
 class JanelaTreinamento : JanelaActivity(Modulo.TREINAMENTO)
+class JanelaEquipe : JanelaActivity(Modulo.EQUIPE)

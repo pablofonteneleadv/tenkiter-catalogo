@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="robots" content="noindex">
+<title>Equipe — TENKiTER Modas</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="preconnect" href="https://tenkiter-ig.distkrpconfeccoes.workers.dev" crossorigin>
+<style>
+  :root { --preto:#0d0d0d; --cinza:#F5F1E8; --branco:#fff; --verde:#198754; --borda:#ddd; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--cinza); color:var(--preto); line-height:1.4; padding-bottom:70px; }
+  header { background:var(--preto); border-bottom:2px solid var(--laranja); color:var(--laranja); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:8px; position:relative; }
+  header h1 { margin:0; font-size:1.25rem; }
+  main { max-width:760px; margin:0 auto; padding:12px; }
+  .eq-abas { margin-bottom:12px; } html body .eq-abas.tk-abas > button { flex:1 1 0; }
+  .card { background:var(--branco); border-radius:12px; padding:12px 14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .card.imp { border-left:5px solid var(--laranja); }
+  .card h3 { margin:0 0 4px; font-size:1rem; overflow-wrap:anywhere; }
+  .meta { font-size:.8rem; color:#5b5b5b; }
+  .txt { white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0 8px; }
+  .lido { color:var(--verde); font-weight:700; font-size:.85rem; }
+  .barra { height:6px; background:#eee; border-radius:3px; margin:6px 0; } .barra i { display:block; height:6px; border-radius:3px; background:var(--verde); }
+  .linha { display:flex; gap:8px; flex-wrap:wrap; } .linha > * { flex:1 1 140px; }
+  .sala { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:var(--branco); border:0; border-radius:12px; padding:12px 14px; margin-bottom:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); min-height:56px; cursor:pointer; font:inherit; color:inherit; }
+  .sala .av { flex:0 0 40px; height:40px; border-radius:50%; background:#eee5d3; display:inline-flex; align-items:center; justify-content:center; font-weight:800; }
+  .sala.grupo .av { background:var(--preto); color:var(--laranja); }
+  .sala .c { flex:1; min-width:0; } .sala b { display:block; } .sala small { display:block; color:#5b5b5b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat { display:flex; flex-direction:column; gap:6px; padding:4px 0 8px; }
+  .bal { max-width:82%; background:var(--branco); border-radius:12px; padding:8px 10px; box-shadow:0 1px 3px rgba(0,0,0,.08); align-self:flex-start; }
+  .bal.minha { align-self:flex-end; background:#fff1df; }
+  .bal .quem { font-size:.75rem; font-weight:700; color:var(--laranja-txt); } .bal .h { font-size:.7rem; color:#777; text-align:right; }
+  .bal .t { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .escrever { position:sticky; bottom:70px; display:flex; gap:8px; background:var(--cinza); padding:8px 0; }
+  .escrever textarea, .card textarea, .card input { font:inherit; }
+  .escrever textarea { flex:1; min-height:44px; max-height:140px; resize:vertical; }
+  .topo-sala { display:flex; align-items:center; gap:8px; margin-bottom:8px; } .topo-sala h2 { margin:0; font-size:1.05rem; flex:1; }
+  .lista-pessoas label { display:flex; align-items:center; gap:8px; min-height:44px; }
+  .vazio { color:#5b5b5b; text-align:center; padding:18px 8px; }
+  details summary { cursor:pointer; min-height:44px; display:flex; align-items:center; font-weight:700; }
+  html.embed header, html.embed .nav-inferior { display:none; }
+</style>
+<link rel="stylesheet" href="janelas.css?v=7.65.0">
+<link rel="stylesheet" href="tk-padrao.css?v=7.87.0">
+</head>
+<body class="pg-equipe">
+<header><h1>Equipe</h1><span data-tk-conta-slot></span></header>
+<main id="app" aria-live="polite"></main>
+
+<script src="avisos.js?v=7.66.0"></script>
+<script src="common.js?v=7.97.0"></script>
+<script src="padrao-dados.js?v=7.57.0"></script>
+<script>
+/* Área "Equipe" (27/11/2026, pedido do Pablo): comunicação interna no app, no celular da loja — comunicados com "Li e entendi",
+ * grupos Gestão e Geral e conversas privadas. Sem ferramenta externa: servidor das Mensagens (Worker) + avisos do app.
+ * Regra "Sem troca ao carregar": pinta na hora com o último estado guardado desta pessoa e só troca se mudou. */
+(function () {
+  'use strict';
+  const app = document.getElementById('app');
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const botao = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; if (fn) b.addEventListener('click', fn); return b; };
+  const hora = (iso) => { try { const d = new Date(iso), hoje = new Date(); const h = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }); return d.toDateString() === hoje.toDateString() ? h : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Fortaleza' }) + ' ' + h; } catch (e) { return ''; } };
+  const iniciais = (n) => { const p = String(n || '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() : '?'; };
+  let estado = null, aba = 'comunicados', salaAberta = null, salaMsgs = [], timerSala = 0, timerLista = 0;
+
+  async function api(caminho, metodo, corpo) {
+    const s = typeof getSessao === 'function' ? getSessao() : null;
+    if (!s) return { ok: false, semSessao: true, erro: 'Entre na sua conta para ver a Equipe.' };
+    try {
+      const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo || 'GET', headers: Object.assign({ 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, corpo ? { 'Content-Type': 'application/json' } : {}), body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined });
+      const j = await r.json().catch(() => null);
+      if (!j) return { ok: false, erro: 'A Equipe não respondeu agora. Tente de novo.' };
+      if (r.status === 401) j.semSessao = true;
+      return j;
+    } catch (e) { return { ok: false, semRede: true, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
+  }
+  const chave = () => { const s = typeof getSessao === 'function' ? getSessao() : null; return s ? 'tk_equipe_v1:' + s.whatsapp : ''; };
+  const guardado = () => { try { return JSON.parse(localStorage.getItem(chave()) || 'null'); } catch (e) { return null; } };
+  const guardar = (j) => { try { localStorage.setItem(chave(), JSON.stringify(j)); } catch (e) { /* sem espaço: segue */ } };
+
+  async function carregar() {
+    const j = await api('/equipe/inicio');
+    if (!j.ok) { if (!estado) pintarErro(j); else if (!j.semRede) TKAviso.erro(j.erro || 'A Equipe não respondeu agora.'); return; }
+    const mudou = JSON.stringify(j) !== JSON.stringify(estado);
+    estado = j; guardar(j);
+    if (mudou && !salaAberta) pintar();
+  }
+  function pintarErro(j) {
+    app.replaceChildren();
+    const c = el('div', 'card'); c.appendChild(el('p', '', j.erro || 'A Equipe não respondeu agora.'));
+    if (j.semSessao) c.appendChild(botao('Entrar na minha conta', 'tk-btn-prim', () => { location.href = 'admin.html'; }));
+    else c.appendChild(botao('Tentar de novo', 'tk-btn-sec', carregar));
+    app.appendChild(c);
+  }
+
+  function pintar() {
+    if (!estado) return;
+    app.replaceChildren();
+    const naoLidos = estado.comunicados.filter((c) => !c.lido).length, msgs = estado.salas.reduce((s, x) => s + x.naoLidas, 0);
+    const abas = el('div', 'eq-abas tk-abas'); abas.setAttribute('role', 'tablist'); abas.setAttribute('aria-label', 'Equipe');
+    [['comunicados', 'Comunicados' + (naoLidos ? ' · ' + naoLidos : '')], ['conversas', 'Conversas' + (msgs ? ' · ' + msgs : '')]].forEach(([id, t]) => {
+      const b = botao(t, '', () => { aba = id; pintar(); }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(aba === id)); b.id = 'eq-aba-' + id; abas.appendChild(b);
+    });
+    app.appendChild(abas);
+    if (aba === 'comunicados') pintarComunicados(); else pintarConversas();
+  }
+
+  /* ---------- Comunicados ---------- */
+  function pintarComunicados() {
+    if (estado.eu.publica) app.appendChild(formComunicado());
+    const lista = estado.comunicados.slice().sort((a, b) => (a.lido - b.lido) || (b.importante - a.importante) || (b.id - a.id));
+    if (!lista.length) app.appendChild(el('p', 'vazio', 'Nenhum comunicado ainda.'));
+    lista.forEach((c) => {
+      const k = el('article', 'card' + (c.importante ? ' imp' : '')); k.dataset.comunicado = c.id;
+      k.appendChild(el('h3', '', (c.importante ? '📌 ' : '') + c.titulo));
+      k.appendChild(el('div', 'meta', c.autor + ' · ' + hora(c.em)));
+      if (c.texto) k.appendChild(el('div', 'txt', c.texto));
+      if (!c.lido) k.appendChild(botao('Li e entendi', c.importante ? 'tk-btn-prim' : 'tk-btn-sec', async (ev) => {
+        ev.target.disabled = true; const r = await api('/equipe/lido', 'POST', { comunicado: c.id });
+        if (!r.ok) { ev.target.disabled = false; TKAviso.erro(r.erro || 'Não consegui confirmar agora.'); return; }
+        c.lido = true; c.lidos++; guardar(estado); pintar(); TKAviso.ok('Leitura confirmada.');
+      }));
+      else k.appendChild(el('div', 'lido', '✔ você leu'));
+      if (estado.eu.publica) {
+        k.appendChild(el('div', 'meta', 'Lido por ' + c.lidos + ' de ' + Math.max(c.total - 1, c.lidos)));
+        const bar = el('div', 'barra'), i = el('i'); i.style.width = Math.min(100, Math.round(100 * c.lidos / Math.max(1, c.total - 1))) + '%'; bar.appendChild(i); k.appendChild(bar);
+        const l = el('div', 'linha'), quem = el('div', 'meta');
+        l.appendChild(botao('Quem leu', 'tk-btn-sec', async () => {
+          const r = await api('/equipe/leituras?id=' + c.id); if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui ver agora.'); return; }
+          quem.textContent = 'Leram: ' + (r.leram.map((x) => x.nome).join(', ') || 'ninguém ainda') + ' · Faltam: ' + (r.faltam.map((x) => x.nome).join(', ') || 'ninguém');
+        }));
+        l.appendChild(botao('Lembrar quem falta', 'tk-btn-sec', async () => {
+          const r = await api('/equipe/lembrar', 'POST', { comunicado: c.id }); if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui lembrar agora.'); return; }
+          TKAviso.ok(r.faltam ? 'Lembrete enviado para ' + TKAviso.plural(r.faltam, 'pessoa', 'pessoas') + '.' : 'Todos já leram.');
+        }));
+        k.appendChild(l); k.appendChild(quem);
+      }
+      app.appendChild(k);
+    });
+    if (estado.eu.admin) app.appendChild(formConfig());
+  }
+  function formComunicado() {
+    const d = el('details', 'card'); d.appendChild(el('summary', '', '+ Novo comunicado'));
+    const f = el('form'); f.noValidate = true;
+    const t = el('input', 'tk-campo'); t.name = 'titulo'; t.maxLength = 120; t.placeholder = 'Título'; t.setAttribute('aria-label', 'Título do comunicado');
+    const x = el('textarea', 'tk-campo'); x.name = 'texto'; x.maxLength = 2000; x.rows = 4; x.placeholder = 'Mensagem'; x.setAttribute('aria-label', 'Mensagem do comunicado');
+    const imp = el('label', 'lista-pessoas'); const ci = el('input'); ci.type = 'checkbox'; ci.name = 'importante'; imp.appendChild(ci); imp.appendChild(document.createTextNode(' Importante (avisa mesmo fora do horário e fica no topo)'));
+    const enviar = el('button', 'tk-btn-prim', 'Publicar para a equipe'); enviar.type = 'submit';
+    [t, x, imp, enviar].forEach((n) => { f.appendChild(n); if (n !== enviar) n.style.marginBottom = '8px'; });
+    f.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); if (!t.value.trim()) { TKAviso.aviso('Escreva o título do comunicado.'); t.focus(); return; }
+      enviar.disabled = true; const r = await api('/equipe/comunicado', 'POST', { titulo: t.value, texto: x.value, importante: ci.checked }); enviar.disabled = false;
+      if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui publicar agora.'); return; }
+      TKAviso.ok('Comunicado publicado. A equipe recebe o aviso no celular da loja.'); await carregar(); pintar();
+    });
+    d.appendChild(f); return d;
+  }
+  function formConfig() {
+    const d = el('details', 'card'); d.appendChild(el('summary', '', 'Quem publica e quem está na Gestão'));
+    const cfg = estado.config || { publicadores: [], gestao: [] }, pessoas = estado.pessoas;
+    const bloco = (titulo, lista, nome) => { const w = el('fieldset', 'lista-pessoas'); w.appendChild(el('legend', '', titulo)); if (!pessoas.length) w.appendChild(el('p', 'meta', 'As pessoas aparecem aqui depois de abrirem a Equipe uma vez.')); pessoas.forEach((p) => { const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.name = nome; c.value = p.whats; c.checked = lista.includes(p.whats); l.appendChild(c); l.appendChild(document.createTextNode(' ' + p.nome)); w.appendChild(l); }); return w; };
+    const f = el('form'); f.appendChild(bloco('Publicam comunicados (além do Admin total)', cfg.publicadores, 'pub')); f.appendChild(bloco('Grupo Gestão (além de quem publica)', cfg.gestao, 'ges'));
+    const s = el('button', 'tk-btn-prim', 'Salvar'); s.type = 'submit'; f.appendChild(s);
+    f.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); const marcados = (n) => [...f.querySelectorAll('input[name=' + n + ']:checked')].map((c) => c.value);
+      const r = await api('/equipe/config', 'POST', { publicadores: marcados('pub'), gestao: marcados('ges') });
+      if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui salvar agora.'); return; } TKAviso.ok('Salvo.'); await carregar();
+    });
+    d.appendChild(f); return d;
+  }
+
+  /* ---------- Conversas ---------- */
+  function pintarConversas() {
+    estado.salas.forEach((s) => {
+      const b = el('button', 'sala' + (s.tipo === 'grupo' ? ' grupo' : '')); b.type = 'button'; b.dataset.sala = s.id;
+      b.appendChild(el('span', 'av', s.tipo === 'grupo' ? (s.id === 'gestao' ? 'G' : 'T') : iniciais(s.nome)));
+      const c = el('span', 'c'); c.appendChild(el('b', '', s.nome)); c.appendChild(el('small', '', s.ultima ? (s.tipo === 'grupo' ? s.ultima.autor + ': ' : '') + s.ultima.texto : 'Nenhuma mensagem ainda')); b.appendChild(c);
+      if (s.naoLidas) { const n = el('span', 'tk-selo', String(s.naoLidas)); n.setAttribute('aria-label', TKAviso.plural(s.naoLidas, 'mensagem nova', 'mensagens novas')); b.appendChild(n); }
+      b.addEventListener('click', () => abrirSala({ id: s.id, nome: s.nome }));
+      app.appendChild(b);
+    });
+    if (estado.pessoas.length) {
+      const d = el('details', 'card'); d.appendChild(el('summary', '', '+ Conversa privada'));
+      estado.pessoas.forEach((p) => { const b = botao(p.nome, 'tk-btn-sec', () => abrirSala({ com: p.whats, nome: p.nome })); b.style.margin = '0 6px 6px 0'; d.appendChild(b); });
+      app.appendChild(d);
+    }
+  }
+  async function abrirSala(s) {
+    salaAberta = s; salaMsgs = []; clearTimeout(timerSala);
+    if (window.TKCamadas) TKCamadas.empilhar('eq-sala', fecharSala);
+    app.replaceChildren();
+    const topo = el('div', 'topo-sala'); topo.appendChild(botao('‹ Voltar', 'tk-btn-texto', () => { if (window.TKCamadas && TKCamadas.aberta('eq-sala')) TKCamadas.desempilhar('eq-sala'); else fecharSala(); }));
+    topo.appendChild(el('h2', '', s.nome)); app.appendChild(topo);
+    const chat = el('div', 'chat'); chat.id = 'eq-chat'; app.appendChild(chat);
+    const f = el('form', 'escrever'); const t = el('textarea', 'tk-campo'); t.maxLength = 2000; t.rows = 1; t.placeholder = 'Mensagem'; t.setAttribute('aria-label', 'Mensagem para ' + s.nome);
+    const e = el('button', 'tk-btn-prim', 'Enviar'); e.type = 'submit'; f.appendChild(t); f.appendChild(e); app.appendChild(f);
+    f.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); const texto = t.value.trim(); if (!texto) return; e.disabled = true;
+      const r = await api('/equipe/mensagem', 'POST', Object.assign({ texto }, s.com ? { com: s.com } : { sala: s.id })); e.disabled = false;
+      if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui enviar agora.'); return; }
+      t.value = ''; if (r.sala) { s.id = r.sala; delete s.com; } await atualizarSala(); t.focus();
+    });
+    await atualizarSala();
+  }
+  async function atualizarSala() {
+    clearTimeout(timerSala); const s = salaAberta; if (!s) return;
+    const ult = salaMsgs.length ? salaMsgs[salaMsgs.length - 1].id : 0;
+    const r = await api('/equipe/sala?' + (s.com ? 'com=' + encodeURIComponent(s.com) : 'id=' + encodeURIComponent(s.id)) + '&depois=' + ult);
+    if (salaAberta !== s) return;
+    if (r.ok) {
+      if (r.sala && !s.com) s.id = r.sala;
+      const chat = document.getElementById('eq-chat'); if (!chat) return;
+      if (!salaMsgs.length && !r.mensagens.length) chat.replaceChildren(el('p', 'vazio', 'Nenhuma mensagem ainda. Escreva a primeira.'));
+      if (r.mensagens.length && !salaMsgs.length) chat.replaceChildren();
+      r.mensagens.forEach((m) => {
+        const b = el('div', 'bal' + (m.minha ? ' minha' : '')); if (!m.minha && !String(s.id).startsWith('p:') && !s.com) b.appendChild(el('div', 'quem', m.autor));
+        b.appendChild(el('div', 't', m.texto)); b.appendChild(el('div', 'h', hora(m.em))); chat.appendChild(b);
+      });
+      if (r.mensagens.length) { salaMsgs = salaMsgs.concat(r.mensagens); window.scrollTo(0, document.body.scrollHeight); }
+    } else if (r.semSessao || r.ok === false && !r.semRede) TKAviso.erro(r.erro || 'Não consegui abrir a conversa.');
+    timerSala = setTimeout(atualizarSala, document.hidden ? 20000 : 4000);
+  }
+  function fecharSala() { salaAberta = null; clearTimeout(timerSala); pintar(); carregar(); }
+
+  // primeira pintura: o último estado guardado desta pessoa (se houver); depois o servidor
+  estado = guardado(); if (estado) pintar(); else app.replaceChildren();
+  if (/[?&]aba=conversas/.test(location.search)) aba = 'conversas';
+  carregar();
+  const ciclo = () => { clearTimeout(timerLista); timerLista = setTimeout(async () => { if (!document.hidden && !salaAberta) await carregar(); ciclo(); }, 20000); }; ciclo();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !salaAberta) carregar(); });
+  const ir = /[?&]sala=([^&]+)/.exec(location.search); if (ir) { const id = decodeURIComponent(ir[1]); setTimeout(() => abrirSala({ id, nome: id === 'gestao' ? 'Gestão' : id === 'geral' ? 'Geral (toda a equipe)' : 'Conversa' }), 0); }
+  window.TKEquipe = { recarregar: carregar };
+})();
+</script>
+<script src="icones.js?v=7.17.0"></script>
+<script src="nav.js?v=7.86.0" data-ativo="equipe"></script>
+<script src="a11y.js?v=7.87.0"></script>
+<script src="conta.js?v=7.97.0"></script>
+</body>
+</html>
