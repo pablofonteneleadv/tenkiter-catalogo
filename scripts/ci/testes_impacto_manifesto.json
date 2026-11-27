@@ -456,7 +456,7 @@
     ],
     "tests/equipe_ui.py": [
       "mensagens",
-      "padroes"
+      "infra"
     ],
     "tests/app_troca_pessoa_ui.py": [
       "mensagens",
