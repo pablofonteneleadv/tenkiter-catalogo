@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.99.0 — Exportar só os grupos (sem o Grupo Clientes) e filtros quando passa de 20 mil
+
+- **Relato do Pablo (27/11):** ao exportar para analisar os grupos da gestão, o aviso dizia "Havia mais: use o filtro por datas", mas a tela usada não tinha filtro; e não dava para tirar o Grupo Clientes.
+- "Exportar conversas" (Gestão das Mensagens) ganhou **Conversas: Todas / Só grupos / Só individuais**. Em "Só grupos", aparece a lista dos grupos com quantas mensagens cada um tem; o que tiver "clientes" no nome já vem desmarcado, e o que for desmarcado fica fora do arquivo.
+- Quando o arquivo para em 20 mil mensagens, a tela de exportação abre sozinha com a mesma escolha, pedindo um período menor (De/Até).
+- Servidor: `/msg/exportar` aceita `tipo=grupos|individuais` e `excluir=` (ids); `/msg/exportar/grupos` lista os grupos (mesma permissão de exportar).
+- Testes: `worker_mensagens_conversa.js` (+5) e `mensagens_gestor_ui.py` (só grupos, Grupo Clientes fora).
+
 ## 7.98.1 — Contador das Postagens no painel (app 2.6.3)
 
 - Painel do ícone: Postagens mostra quantas postagens estão com erro esperando alguém agir (mesma contagem que a fila das Postagens já usa). Currículos continua sem número: a lista vem do Apps Script e um contador exigiria publicar uma versão nova dele.
