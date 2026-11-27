@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Instalar FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: bash scripts/ci/garantir_ffmpeg.sh
       - name: Validar encoder e contratos com vídeo real sintético
         run: |
           python3 -m py_compile scripts/wafly/process_queue.py scripts/wafly/transcode.py
