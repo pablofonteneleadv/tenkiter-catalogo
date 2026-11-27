@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Instalar encoder
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: bash scripts/ci/garantir_ffmpeg.sh
       - name: Preparar arquivos solicitados (nunca enviar)
         env:
           VIDEO_HEALTH_ONLY: ${{ inputs.somente_saude && '1' || '0' }}

@@ -153,7 +153,7 @@ jobs:
 
       # Alguns runners vêm sem ffmpeg (reparos_integrados_ui gera vídeo de teste): garante antes de rodar.
       - name: Garantir ffmpeg
-        run: command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+        run: bash scripts/ci/garantir_ffmpeg.sh
 
       # Uma PR de RH não executa 53 scripts de atendimento/postagens/Esteira.
       # O planejador é fail-safe: arquivos desconhecidos e compartilhados => cobertura ampla.
@@ -205,9 +205,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install playwright pillow
+          bash scripts/ci/apt_seguro.sh   # o --with-deps também roda apt-get update
           python -m playwright install --with-deps chromium
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          bash scripts/ci/garantir_ffmpeg.sh
           curl -fsSL https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js -o tests/axe.min.js
 
       - name: Regressões de todos os módulos no horário completo
