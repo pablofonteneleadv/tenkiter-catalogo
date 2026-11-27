@@ -4362,6 +4362,171 @@ export async function appPin_(env, req, url, J, perms) {
   }
   return J({ ok: false, erro: 'Rota do PIN inválida.' }, 404);
 }
+/* ===================== Área "Equipe" (comunicação interna, 27/11/2026) =====================
+ * Pedido do Pablo: tirar o trabalho do celular pessoal; tudo pelo app, no celular da loja (troca de pessoa com PIN).
+ * Comunicados com "Li e entendi" individual (publicam o Admin total e quem ele escolher: Pablo e Karla no início),
+ * grupos fixos "Gestão" e "Geral" e conversas privadas entre a equipe. Sem ferramenta externa: D1 + avisos do app.
+ * Quem é da equipe: qualquer conta com direito de trabalho (não só aluna/cliente). */
+export const EQ_CHAVES_ = ['gerir_acessos', 'catalogo_admin', 'catalogo_cadastrar', 'esteira', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais'];
+const EQ_TEXTO_MAX_ = 2000, EQ_TITULO_MAX_ = 120;
+const eqLimpo_ = (v, n) => String(v == null ? '' : v).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]+/g, ' ').trim().slice(0, n);
+const eqFone_ = (v) => String(v || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 11);
+async function eqTabelas_(env) {
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_pessoa (whats TEXT PRIMARY KEY, nome TEXT NOT NULL DEFAULT '', visto TEXT NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_comunicado (id INTEGER PRIMARY KEY AUTOINCREMENT, autor TEXT NOT NULL, autor_nome TEXT NOT NULL DEFAULT '', titulo TEXT NOT NULL, texto TEXT NOT NULL DEFAULT '', importante INTEGER NOT NULL DEFAULT 0, em TEXT NOT NULL, apagado INTEGER NOT NULL DEFAULT 0)"),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS eq_leitura (comunicado INTEGER NOT NULL, whats TEXT NOT NULL, em TEXT NOT NULL, PRIMARY KEY (comunicado, whats))'),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_msg (id INTEGER PRIMARY KEY AUTOINCREMENT, sala TEXT NOT NULL, autor TEXT NOT NULL, autor_nome TEXT NOT NULL DEFAULT '', texto TEXT NOT NULL, em TEXT NOT NULL)"),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS eq_msg_sala ON eq_msg (sala, id)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS eq_lido (sala TEXT NOT NULL, whats TEXT NOT NULL, ultimo INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (sala, whats))'),
+  ]);
+}
+async function eqLista_(env, chave) { try { const v = JSON.parse((await cfgGet(env, chave)) || '[]'); return Array.isArray(v) ? v.map(eqFone_).filter((x) => x.length >= 10) : []; } catch (e) { return []; } }
+/** Quem sou eu na Equipe: nome, se é Admin total, se publica e se está no grupo Gestão. */
+async function eqEu_(env, req, perms) {
+  const whats = eqFone_(req.headers.get('X-TK-Whats'));
+  const admin = perms.includes('gerir_acessos'), publicadores = await eqLista_(env, 'eq_publicadores'), gestao = await eqLista_(env, 'eq_gestao');
+  const publica = admin || publicadores.includes(whats);
+  return { whats, nome: eqLimpo_(perms.msgNome, 80), admin, publica, gestao: admin || publica || gestao.includes(whats) };
+}
+function eqSalaOk_(eu, sala) {
+  if (sala === 'geral') return true;
+  if (sala === 'gestao') return eu.gestao;
+  const m = /^p:(\d{10,11}):(\d{10,11})$/.exec(sala);
+  return !!m && m[1] < m[2] && (m[1] === eu.whats || m[2] === eu.whats);
+}
+const eqPrivada_ = (a, b) => 'p:' + (a < b ? a + ':' + b : b + ':' + a);
+async function eqPessoas_(env) {
+  const desde = new Date(Date.now() - 60 * 864e5).toISOString();
+  return ((await env.DB.prepare('SELECT whats, nome FROM eq_pessoa WHERE visto>=? ORDER BY nome').bind(desde).all()).results || []).map((p) => ({ whats: p.whats, nome: p.nome || 'Final ' + p.whats.slice(-4) }));
+}
+async function eqMembros_(env, sala) {
+  if (sala === 'geral') return (await eqPessoas_(env)).map((p) => p.whats);
+  if (sala === 'gestao') return [...new Set([...(await eqLista_(env, 'eq_publicadores')), ...(await eqLista_(env, 'eq_gestao')), ...(await eqAdmins_(env))])];
+  const m = /^p:(\d+):(\d+)$/.exec(sala); return m ? [m[1], m[2]] : [];
+}
+async function eqAdmins_(env) { try { return ((await env.DB.prepare('SELECT whats FROM app_admin_alerta').all()).results || []).map((x) => eqFone_(x.whats)); } catch (e) { return []; } }
+/** Fora do horário (21h–7h de Fortaleza) só o comunicado importante toca. */
+function eqHorarioQuieto_(d = new Date()) { const h = (d.getUTCHours() + 21) % 24; return h >= 21 || h < 7; }
+export async function eqAvisar_(env, para, titulo, texto, dados, importante) {
+  const alvos = [...new Set(para.map(eqFone_).filter(Boolean))];
+  if (!alvos.length) return 0;
+  if (!importante && eqHorarioQuieto_()) return 0;
+  const key = await mobilePushKey_(env); if (!key) return 0;
+  await mobileTables_(env);
+  const subs = ((await env.DB.prepare('SELECT subscription FROM msg_mobile WHERE dono IN (' + alvos.map(() => '?').join(',') + ') ORDER BY atualizado DESC LIMIT 60').bind(...alvos).all()).results || []).map((x) => x.subscription);
+  if (!subs.length) return 0;
+  try {
+    const r = await fetch('https://api.onesignal.com/notifications', { method: 'POST', signal: AbortSignal.timeout(10000), headers: { 'Content-Type': 'application/json', 'Authorization': 'Key ' + key },
+      body: JSON.stringify({ app_id: '535f6b0d-c866-43c2-b241-43bd7ab62fae', target_channel: 'push', include_subscription_ids: subs, headings: { en: titulo, pt: titulo }, contents: { en: texto, pt: texto }, priority: 10, small_icon: 'ic_stat_message', android_visibility: 0, data: Object.assign({ area: 'equipe' }, dados || {}), collapse_id: dados && dados.sala ? 'equipe-' + dados.sala : undefined, ttl: 86400 }) });
+    return r.ok ? subs.length : 0;
+  } catch (e) { return 0; }
+}
+export async function rotasEquipe_(env, req, url, J, perms, ctx) {
+  if (!EQ_CHAVES_.some((k) => perms.includes(k))) return J({ ok: false, erro: 'A área Equipe é só para a equipe da loja.' }, 403);
+  await eqTabelas_(env);
+  const eu = await eqEu_(env, req, perms), p = url.pathname, agoraIso = agora();
+  if (!/^\d{10,11}$/.test(eu.whats)) return J({ ok: false, erro: 'Sessão inválida.' }, 401);
+  await env.DB.prepare('INSERT INTO eq_pessoa (whats, nome, visto) VALUES (?, ?, ?) ON CONFLICT(whats) DO UPDATE SET nome=CASE WHEN excluded.nome<>\'\' THEN excluded.nome ELSE eq_pessoa.nome END, visto=excluded.visto').bind(eu.whats, eu.nome, agoraIso).run();
+  let b = {}; if (req.method === 'POST') { try { b = JSON.parse((await req.text()).slice(0, 12000)); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
+  const depois = (fn) => { if (ctx && ctx.waitUntil) ctx.waitUntil(fn().catch(() => {})); };
+  const nomeDe_ = async (w) => (await env.DB.prepare('SELECT nome FROM eq_pessoa WHERE whats=?').bind(w).first())?.nome || 'Final ' + w.slice(-4);
+
+  if (p === '/equipe/inicio' && req.method === 'GET') {
+    const pessoas = await eqPessoas_(env), total = pessoas.length;
+    const com = ((await env.DB.prepare('SELECT c.*, (SELECT em FROM eq_leitura l WHERE l.comunicado=c.id AND l.whats=?) AS lido_em, (SELECT COUNT(*) FROM eq_leitura l WHERE l.comunicado=c.id) AS lidos FROM eq_comunicado c WHERE apagado=0 ORDER BY id DESC LIMIT 50').bind(eu.whats).all()).results || [])
+      .map((c) => ({ id: c.id, autor: c.autor_nome || 'Gestão', titulo: c.titulo, texto: c.texto, importante: !!c.importante, em: c.em, lido: !!c.lido_em || c.autor === eu.whats, lidos: Number(c.lidos) || 0, total }));
+    const minhas = ((await env.DB.prepare("SELECT DISTINCT sala FROM eq_msg WHERE sala LIKE 'p:%' AND (sala LIKE ? OR sala LIKE ?)").bind('p:' + eu.whats + ':%', 'p:%:' + eu.whats).all()).results || []).map((x) => x.sala);
+    const salas = [];
+    for (const id of ['gestao', 'geral', ...minhas]) {
+      if (!eqSalaOk_(eu, id)) continue;
+      const ult = await env.DB.prepare('SELECT id, autor_nome, texto, em FROM eq_msg WHERE sala=? ORDER BY id DESC LIMIT 1').bind(id).first();
+      const lido = Number((await env.DB.prepare('SELECT ultimo FROM eq_lido WHERE sala=? AND whats=?').bind(id, eu.whats).first())?.ultimo) || 0;
+      const nao = Number((await env.DB.prepare('SELECT COUNT(*) n FROM eq_msg WHERE sala=? AND id>? AND autor<>?').bind(id, lido, eu.whats).first())?.n) || 0;
+      let nome = id === 'gestao' ? 'Gestão' : id === 'geral' ? 'Geral (toda a equipe)' : '';
+      if (!nome) { const m = /^p:(\d+):(\d+)$/.exec(id), outro = m[1] === eu.whats ? m[2] : m[1]; nome = await nomeDe_(outro); }
+      salas.push({ id, tipo: id.startsWith('p:') ? 'privada' : 'grupo', nome, ultima: ult ? { autor: ult.autor_nome, texto: ult.texto.slice(0, 120), em: ult.em } : null, naoLidas: nao });
+    }
+    return J({ ok: true, eu: { whats: eu.whats, nome: eu.nome, admin: eu.admin, publica: eu.publica, gestao: eu.gestao }, comunicados: com, salas, pessoas: pessoas.filter((x) => x.whats !== eu.whats),
+      config: eu.admin ? { publicadores: await eqLista_(env, 'eq_publicadores'), gestao: await eqLista_(env, 'eq_gestao') } : undefined });
+  }
+  if (p === '/equipe/contagem' && req.method === 'GET') {
+    const naoLidos = Number((await env.DB.prepare('SELECT COUNT(*) n FROM eq_comunicado c WHERE apagado=0 AND autor<>? AND NOT EXISTS (SELECT 1 FROM eq_leitura l WHERE l.comunicado=c.id AND l.whats=?)').bind(eu.whats, eu.whats).first())?.n) || 0;
+    let msgs = 0;
+    for (const id of ['gestao', 'geral']) if (eqSalaOk_(eu, id)) { const lido = Number((await env.DB.prepare('SELECT ultimo FROM eq_lido WHERE sala=? AND whats=?').bind(id, eu.whats).first())?.ultimo) || 0; msgs += Number((await env.DB.prepare('SELECT COUNT(*) n FROM eq_msg WHERE sala=? AND id>? AND autor<>?').bind(id, lido, eu.whats).first())?.n) || 0; }
+    msgs += Number((await env.DB.prepare("SELECT COUNT(*) n FROM eq_msg m WHERE (m.sala LIKE ? OR m.sala LIKE ?) AND m.autor<>? AND m.id > COALESCE((SELECT ultimo FROM eq_lido l WHERE l.sala=m.sala AND l.whats=?),0)").bind('p:' + eu.whats + ':%', 'p:%:' + eu.whats, eu.whats, eu.whats).first())?.n) || 0;
+    return J({ ok: true, comunicados: naoLidos, mensagens: msgs, total: naoLidos + msgs });
+  }
+  if (p === '/equipe/comunicado' && req.method === 'POST') {
+    if (!eu.publica) return J({ ok: false, erro: 'Só quem publica comunicados (Admin total e quem ele escolher) pode publicar.' }, 403);
+    const titulo = eqLimpo_(b.titulo, EQ_TITULO_MAX_), texto = eqLimpo_(b.texto, EQ_TEXTO_MAX_);
+    if (!titulo) return J({ ok: false, erro: 'Escreva o título do comunicado.' }, 400);
+    const r = await env.DB.prepare('INSERT INTO eq_comunicado (autor, autor_nome, titulo, texto, importante, em) VALUES (?, ?, ?, ?, ?, ?)').bind(eu.whats, eu.nome, titulo, texto, b.importante ? 1 : 0, agoraIso).run();
+    const id = r.meta?.last_row_id;
+    depois(async () => eqAvisar_(env, (await eqPessoas_(env)).map((x) => x.whats).filter((w) => w !== eu.whats), (b.importante ? '📌 ' : '') + 'Comunicado: ' + titulo, texto.slice(0, 160) || 'Toque para ler e confirmar.', { comunicado: String(id) }, !!b.importante));
+    return J({ ok: true, id });
+  }
+  if (p === '/equipe/lido' && req.method === 'POST') {
+    const id = Number(b.comunicado) || 0;
+    if (!(await env.DB.prepare('SELECT 1 FROM eq_comunicado WHERE id=? AND apagado=0').bind(id).first())) return J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
+    await env.DB.prepare('INSERT OR IGNORE INTO eq_leitura (comunicado, whats, em) VALUES (?, ?, ?)').bind(id, eu.whats, agoraIso).run();
+    return J({ ok: true });
+  }
+  if (p === '/equipe/leituras' && req.method === 'GET') {
+    if (!eu.publica) return J({ ok: false, erro: 'Só quem publica comunicados vê quem leu.' }, 403);
+    const id = Number(url.searchParams.get('id')) || 0;
+    const c = await env.DB.prepare('SELECT autor FROM eq_comunicado WHERE id=?').bind(id).first(); if (!c) return J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
+    const lidas = new Map(((await env.DB.prepare('SELECT whats, em FROM eq_leitura WHERE comunicado=?').bind(id).all()).results || []).map((x) => [x.whats, x.em]));
+    const lista = (await eqPessoas_(env)).filter((x) => x.whats !== c.autor).map((x) => ({ nome: x.nome, leu: lidas.has(x.whats), em: lidas.get(x.whats) || null }));
+    return J({ ok: true, leram: lista.filter((x) => x.leu), faltam: lista.filter((x) => !x.leu) });
+  }
+  if (p === '/equipe/lembrar' && req.method === 'POST') {
+    if (!eu.publica) return J({ ok: false, erro: 'Só quem publica comunicados pode lembrar.' }, 403);
+    const id = Number(b.comunicado) || 0, c = await env.DB.prepare('SELECT autor, titulo FROM eq_comunicado WHERE id=? AND apagado=0').bind(id).first();
+    if (!c) return J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
+    const leram = new Set(((await env.DB.prepare('SELECT whats FROM eq_leitura WHERE comunicado=?').bind(id).all()).results || []).map((x) => x.whats));
+    const faltam = (await eqPessoas_(env)).map((x) => x.whats).filter((w) => w !== c.autor && !leram.has(w));
+    const n = await eqAvisar_(env, faltam, '📌 Falta você confirmar: ' + c.titulo, 'Toque para ler e confirmar.', { comunicado: String(id) }, true);
+    return J({ ok: true, faltam: faltam.length, avisados: n });
+  }
+  if (p === '/equipe/sala' && req.method === 'GET') {
+    let sala = String(url.searchParams.get('id') || ''), com = eqFone_(url.searchParams.get('com'));
+    if (com) sala = eqPrivada_(eu.whats, com);
+    if (!eqSalaOk_(eu, sala)) return J({ ok: false, erro: 'Você não participa desta conversa.' }, 403);
+    const desde = Number(url.searchParams.get('depois')) || 0;
+    const msgs = ((await env.DB.prepare(desde ? 'SELECT id, autor, autor_nome, texto, em FROM eq_msg WHERE sala=? AND id>? ORDER BY id LIMIT 200' : 'SELECT * FROM (SELECT id, autor, autor_nome, texto, em FROM eq_msg WHERE sala=? AND id>? ORDER BY id DESC LIMIT 150) ORDER BY id').bind(sala, desde).all()).results || [])
+      .map((m) => ({ id: m.id, minha: m.autor === eu.whats, autor: m.autor_nome || 'Final ' + m.autor.slice(-4), texto: m.texto, em: m.em }));
+    const ult = msgs.length ? msgs[msgs.length - 1].id : 0;
+    if (ult) await env.DB.prepare('INSERT INTO eq_lido (sala, whats, ultimo) VALUES (?, ?, ?) ON CONFLICT(sala, whats) DO UPDATE SET ultimo=MAX(eq_lido.ultimo, excluded.ultimo)').bind(sala, eu.whats, ult).run();
+    return J({ ok: true, sala, mensagens: msgs });
+  }
+  if (p === '/equipe/mensagem' && req.method === 'POST') {
+    let sala = String(b.sala || ''); const com = eqFone_(b.com);
+    if (com && (com === eu.whats || !(await env.DB.prepare('SELECT 1 FROM eq_pessoa WHERE whats=?').bind(com).first()))) return J({ ok: false, erro: 'Essa pessoa não está na equipe.' }, 403);
+    if (com) sala = eqPrivada_(eu.whats, com);
+    if (!eqSalaOk_(eu, sala)) return J({ ok: false, erro: 'Você não participa desta conversa.' }, 403);
+    const texto = eqLimpo_(b.texto, EQ_TEXTO_MAX_); if (!texto) return J({ ok: false, erro: 'Escreva a mensagem.' }, 400);
+    const r = await env.DB.prepare('INSERT INTO eq_msg (sala, autor, autor_nome, texto, em) VALUES (?, ?, ?, ?, ?)').bind(sala, eu.whats, eu.nome, texto, agoraIso).run();
+    const id = r.meta?.last_row_id;
+    await env.DB.prepare('INSERT INTO eq_lido (sala, whats, ultimo) VALUES (?, ?, ?) ON CONFLICT(sala, whats) DO UPDATE SET ultimo=MAX(eq_lido.ultimo, excluded.ultimo)').bind(sala, eu.whats, id).run();
+    const titulo = sala === 'gestao' ? 'Gestão' : sala === 'geral' ? 'Geral' : (eu.nome || 'Equipe');
+    depois(async () => eqAvisar_(env, (await eqMembros_(env, sala)).filter((w) => w !== eu.whats), titulo, (sala.startsWith('p:') ? '' : (eu.nome || 'Alguém') + ': ') + texto.slice(0, 180), { sala }, false));
+    return J({ ok: true, id, sala, em: agoraIso });
+  }
+  if (p === '/equipe/config' && req.method === 'POST') {
+    if (!eu.admin) return J({ ok: false, erro: 'Só o Admin total muda quem publica e quem está na Gestão.' }, 403);
+    const lista = (v) => [...new Set((Array.isArray(v) ? v : []).map(eqFone_).filter((x) => x.length >= 10))].slice(0, 30);
+    await cfgSet(env, 'eq_publicadores', JSON.stringify(lista(b.publicadores)));
+    await cfgSet(env, 'eq_gestao', JSON.stringify(lista(b.gestao)));
+    return J({ ok: true });
+  }
+  return J({ ok: false, erro: 'Rota da Equipe inválida.' }, 404);
+}
+/** Aparelho do app para os avisos da Equipe: qualquer pessoa da equipe (não só quem usa as Mensagens). */
+export async function eqAparelho_(env, req, perms) {
+  if (!EQ_CHAVES_.some((k) => perms.includes(k))) return { ok: false, erro: 'Só a equipe recebe avisos da Equipe.' };
+  return registrarMobile_(env, req);
+}
 export async function registrarMobile_(env, req) {
   await mobileTables_(env);
   const d=await req.json().catch(()=>({})), id=String(d.subscription||'');
@@ -7087,6 +7252,8 @@ export default {
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     if (url.pathname === '/app/pin' || url.pathname === '/app/pin/tentativa') { try { return await appPin_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui falar com o servidor do PIN agora. Tente de novo.' }, 500); } }   // app 2.6
+    if (url.pathname.startsWith('/equipe/')) { try { return await rotasEquipe_(env, req, url, J, perms, ctx); } catch (e) { return J({ ok: false, erro: 'A Equipe não respondeu agora. Tente de novo.' }, 500); } }   // área Equipe (27/11/2026)
+    if (url.pathname === '/app/aparelho' && req.method === 'POST') { try { return J(await eqAparelho_(env, req, perms)); } catch (e) { return J({ ok: false, erro: 'Não consegui ligar os avisos agora.' }, 500); } }
     if (url.pathname === '/app/medida' && req.method === 'POST') { try { return await appMedida_(env, req, J); } catch (e) { return J({ ok: false, erro: 'Medida não gravada.' }, 500); } }   // 7.96.14
     if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
     if (url.pathname.startsWith('/esteira/')) { try { return await esteiraComando_(env,req,url,J,perms,ctx,medirEsteira); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500, classeFalhaHTTP_(e?.message)); } }   // v7.41.0

@@ -450,6 +450,14 @@
       "mensagens",
       "infra"
     ],
+    "tests/worker_equipe.js": [
+      "mensagens",
+      "infra"
+    ],
+    "tests/equipe_ui.py": [
+      "mensagens",
+      "padroes"
+    ],
     "tests/app_troca_pessoa_ui.py": [
       "mensagens",
       "esteira",

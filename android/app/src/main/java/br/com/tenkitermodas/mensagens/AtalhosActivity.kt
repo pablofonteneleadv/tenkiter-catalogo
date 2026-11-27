@@ -22,6 +22,7 @@ class AtalhosActivity : Activity() {
     private data class Area(val modulo: Modulo, val icone: Int)
     private val areas = listOf(
         Area(Modulo.MENSAGENS, R.drawable.ic_launcher),
+        Area(Modulo.EQUIPE, R.drawable.ic_janela_equipe),
         Area(Modulo.GESTAO, R.drawable.ic_janela_gestao),
         Area(Modulo.ESTEIRA, R.drawable.ic_janela_esteira),
         Area(Modulo.POSTAGENS, R.drawable.ic_janela_postagens),
@@ -99,6 +100,8 @@ class AtalhosActivity : Activity() {
         caixa.addView(grade)
         setContentView(caixa)
         Contadores.publicarAtalhos(this)
+        // 2.6.4: liga os avisos da Equipe para quem está usando (uma vez por dia por pessoa; também quem não usa as Mensagens)
+        ativa?.let { pa -> val pr = getSharedPreferences("contadores", MODE_PRIVATE); val hoje = java.time.LocalDate.now().toString(); if (pr.getString("eq_aviso_" + pa.owner, "") != hoje) { pr.edit().putString("eq_aviso_" + pa.owner, hoje).apply(); ligarAvisosEquipe(applicationContext, pa.auth) } }
         Thread {
             val novos = runCatching { Contadores.atualizar(this) }.getOrNull() ?: return@Thread
             runOnUiThread { if (!isFinishing) selos.keys.forEach { m -> if ((novos[m] ?: 0) != (guardados[m] ?: 0)) pintarSelo(m, novos[m] ?: 0) } }

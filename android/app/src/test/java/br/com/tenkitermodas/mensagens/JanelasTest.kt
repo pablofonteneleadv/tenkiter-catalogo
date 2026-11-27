@@ -16,6 +16,7 @@ class JanelasTest {
         assertEquals(Modulo.PRINCIPAL, Modulo.paraUrl("$s/index.html?abrir=busca"))
         assertEquals(Modulo.RH, Modulo.paraUrl("$s/treinamentos.html?painel=rh"))
         assertEquals(Modulo.CURRICULOS, Modulo.paraUrl("$s/curriculos.html"))
+        assertEquals(Modulo.EQUIPE, Modulo.paraUrl("$s/equipe.html?aba=conversas&sala=geral"))   // 2.6.4: área Equipe
     }
     @Test fun paginaAuxiliarFicaNaJanelaAtual() {
         assertNull(Modulo.paraUrl("$s/curriculo.html"))

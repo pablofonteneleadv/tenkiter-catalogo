@@ -43,6 +43,10 @@ object Contadores {
                 if (falta + pedidos > 0) out[Modulo.ESTEIRA] = falta + pedidos
             }
         }
+        if (auth != null && Pessoas.podeArea(p, Modulo.EQUIPE)) runCatching {   // 2.6.4: comunicados sem ler + conversas novas
+            val n = NativeApi().call("/equipe/contagem", auth, null, "GET").optInt("total")
+            if (n > 0) out[Modulo.EQUIPE] = n
+        }
         if (auth != null && p?.pode("catalogo_admin") != false) runCatching {
             val erros = NativeApi().call("/posts?limite=1", auth, null, "GET").optJSONObject("contagens")?.optInt("erro") ?: 0
             if (erros > 0) out[Modulo.POSTAGENS] = erros
@@ -61,12 +65,12 @@ object Contadores {
 
     private val icones = mapOf(Modulo.MENSAGENS to R.drawable.ic_launcher, Modulo.GESTAO to R.drawable.ic_janela_gestao, Modulo.ESTEIRA to R.drawable.ic_janela_esteira,
         Modulo.POSTAGENS to R.drawable.ic_janela_postagens, Modulo.TREINAMENTO to R.drawable.ic_janela_treinamento, Modulo.RH to R.drawable.ic_janela_rh,
-        Modulo.CURRICULOS to R.drawable.ic_janela_curriculos, Modulo.PRINCIPAL to R.drawable.ic_janela_principal)
+        Modulo.CURRICULOS to R.drawable.ic_janela_curriculos, Modulo.PRINCIPAL to R.drawable.ic_janela_principal, Modulo.EQUIPE to R.drawable.ic_janela_equipe)
 
     /** Segurar o ícone: as áreas que a pessoa pode usar, as mais usadas por ela primeiro (no máximo 4). */
     fun publicarAtalhos(c: Context) = runCatching {
         val p = Pessoas.ativa(c); val dono = p?.owner ?: ""
-        val ordem = listOf(Modulo.MENSAGENS, Modulo.ESTEIRA, Modulo.GESTAO, Modulo.POSTAGENS, Modulo.TREINAMENTO, Modulo.PRINCIPAL, Modulo.RH, Modulo.CURRICULOS)
+        val ordem = listOf(Modulo.MENSAGENS, Modulo.EQUIPE, Modulo.ESTEIRA, Modulo.GESTAO, Modulo.POSTAGENS, Modulo.TREINAMENTO, Modulo.PRINCIPAL, Modulo.RH, Modulo.CURRICULOS)
         val areas = ordem.filter { Pessoas.podeArea(p, it) }
             .sortedByDescending { usoPrefs(c).getInt("u_" + dono + "_" + it.id, 0) }
             .take(minOf(4, ShortcutManagerCompat.getMaxShortcutCountPerActivity(c).coerceAtLeast(1)))
