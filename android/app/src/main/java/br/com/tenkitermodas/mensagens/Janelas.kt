@@ -58,6 +58,9 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
     companion object {
         const val SITE = "https://tenkitermodas.com.br"
         const val EXTRA_URL = "br.com.tenkitermodas.mensagens.URL"
+        const val EXTRA_ORIGEM = "br.com.tenkitermodas.mensagens.ORIGEM"
+        const val EXTRA_ORIGEM_ROTULO = "br.com.tenkitermodas.mensagens.ORIGEM_ROTULO"
+        const val EXTRA_ORIGEM_CONVERSA = "br.com.tenkitermodas.mensagens.ORIGEM_CONVERSA"
 
         /** Só https do próprio site. */
         fun doSite(endereco: String?): Boolean = runCatching {
@@ -95,12 +98,53 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
         }
 
         /** Abre a janela da área (ou traz para a frente, como estava). */
-        fun abrir(c: Context, m: Modulo, endereco: String? = null) {
+        fun abrir(c: Context, m: Modulo, endereco: String? = null, origem: Origem? = null) {
+            Contadores.usou(c, m)   // fase 3: as áreas mais usadas pela pessoa aparecem primeiro ao segurar o ícone
             val i = Intent(c, m.classe).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (m != MENSAGENS && pedeCarga(m, endereco)) i.putExtra(EXTRA_URL, endereco)
+            // 2.6.0 (fase 2): quem abriu fica guardado; a janela nova mostra "Voltar para ..." e o Voltar do Android leva de volta.
+            if (origem != null && origem.modulo != m && m != MENSAGENS) i.putExtra(EXTRA_ORIGEM, origem.modulo.id).putExtra(EXTRA_ORIGEM_ROTULO, origem.rotulo.take(80)).putExtra(EXTRA_ORIGEM_CONVERSA, origem.conversa)
             runCatching { c.startActivity(i) }
         }
     }
+}
+
+/** De onde a pessoa veio (fase 2 do app 2.6): a área, o texto da tarja e, se veio de uma conversa, qual. */
+data class Origem(val modulo: Modulo, val rotulo: String, val conversa: Long = 0L) {
+    companion object {
+        fun ler(i: Intent?): Origem? {
+            val id = i?.getStringExtra(Modulo.EXTRA_ORIGEM) ?: return null
+            val m = Modulo.values().firstOrNull { it.id == id } ?: return null
+            return Origem(m, i.getStringExtra(Modulo.EXTRA_ORIGEM_ROTULO)?.takeIf { it.isNotBlank() } ?: m.rotulo, i.getLongExtra(Modulo.EXTRA_ORIGEM_CONVERSA, 0L))
+        }
+        /** Volta para quem abriu: a outra janela vem para a frente como estava (conversa aberta, rascunho guardado). */
+        fun voltar(c: Context, o: Origem) {
+            if (o.modulo == Modulo.MENSAGENS) {
+                val i = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (o.conversa > 0) i.putExtra(MainActivity.EXTRA_CONVERSA, o.conversa)
+                runCatching { c.startActivity(i) }
+            } else Modulo.abrir(c, o.modulo)
+        }
+    }
+}
+
+/** Última coisa que a pessoa estava fazendo (para o "Continuar" do painel). Por pessoa; sem pessoas salvas, do aparelho. */
+object Ultima {
+    private val prefixo = Regex("^\\s*TENKiTER\\s*[^A-Za-z0-9]*\\s*", RegexOption.IGNORE_CASE)
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences("ultima-area", Context.MODE_PRIVATE)
+    private fun chave(c: Context) = "u_" + (Pessoas.ativa(c)?.owner ?: "")
+    fun guardar(c: Context, m: Modulo, url: String?, titulo: String?) {
+        if (url != null && !Modulo.doSite(url)) return
+        val t = (titulo ?: "").replace(prefixo, "").trim().take(60)
+        runCatching { prefs(c).edit().putString(chave(c), JSONObject().put("m", m.id).put("u", url ?: "").put("t", t).put("em", System.currentTimeMillis()).toString()).apply() }
+    }
+    /** (área, endereço, texto) da última atividade nas últimas 12 h. */
+    fun ler(c: Context): Triple<Modulo, String, String>? = runCatching {
+        val j = JSONObject(prefs(c).getString(chave(c), null) ?: return null)
+        if (System.currentTimeMillis() - j.optLong("em") > 12 * 3600_000L) return null
+        val m = Modulo.values().firstOrNull { it.id == j.optString("m") } ?: return null
+        Triple(m, j.optString("u"), j.optString("t"))
+    }.getOrNull()
 }
 
 /** Sai da conta no app inteiro: Mensagens (sessão nativa e avisos). As janelas do site percebem sozinhas (conta.js). */
@@ -161,6 +205,9 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
     private var pedidoMidia: PermissionRequest? = null
     private val handler = Handler(Looper.getMainLooper())
     private val pararGiro = Runnable { if (::puxar.isInitialized) puxar.isRefreshing = false }
+    private var origem: Origem? = null
+    private var urlDaOrigem: String? = null
+    private lateinit var tarja: android.widget.TextView
     /** 2.6.0: trocou a pessoa do celular — esta janela recarrega (o site troca os dados guardados ao abrir). Nunca no meio de uma gravação. */
     private var trocaPendente = false
     private val aoTrocarPessoa = object : android.content.BroadcastReceiver() { override fun onReceive(c: Context, i: Intent) { trocaPendente = true; aplicarTroca(0) } }
@@ -175,7 +222,7 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
     private inner class Ponte {
         @JavascriptInterface fun abrirModulo(endereco: String?): Boolean {
             val m = Modulo.paraUrl(endereco) ?: return false
-            handler.post { if (m == modulo) web.loadUrl(endereco!!) else Modulo.abrir(this@JanelaActivity, m, endereco) }
+            handler.post { if (m == modulo) web.loadUrl(endereco!!) else Modulo.abrir(this@JanelaActivity, m, endereco, minhaOrigem()) }
             return true
         }
         @JavascriptInterface fun sairConta() { handler.post { if (Modulo.doSite(web.url)) ContaApp.sair(this@JanelaActivity) } }
@@ -183,6 +230,17 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
         @JavascriptInterface fun versao(): String = BuildConfig.VERSION_NAME
         @JavascriptInterface fun pessoaAtiva(): String = runCatching { Pessoas.paraSite(this@JanelaActivity) }.getOrDefault("")
         @JavascriptInterface fun pessoaVista(dados: String?) { handler.post { if (Modulo.doSite(web.url)) Pessoas.vistaDoSite(this@JanelaActivity, dados) } }
+        /** Fase 2: se esta janela foi aberta a partir de uma conversa, {"conversa":id,"nome":"..."}; senão "". */
+        @JavascriptInterface fun origemConversa(): String = origem?.takeIf { it.modulo == Modulo.MENSAGENS && it.conversa > 0 }?.let { JSONObject().put("conversa", it.conversa).put("nome", it.rotulo.removePrefix("a conversa com ")).toString() } ?: ""
+        /** Fase 2: "Mandar este produto para esta cliente": volta para a conversa com o produto já escolhido no envio. */
+        @JavascriptInterface fun mandarProduto(id: String?) {
+            val pid = id?.takeIf { it.matches(Regex("^[A-Za-z0-9_-]{1,90}$")) } ?: return
+            handler.post {
+                val o = origem?.takeIf { it.modulo == Modulo.MENSAGENS && it.conversa > 0 } ?: return@post
+                if (!Modulo.doSite(web.url)) return@post
+                runCatching { startActivity(Intent(this@JanelaActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(MainActivity.EXTRA_CONVERSA, o.conversa).putExtra(MainActivity.EXTRA_PRODUTO, pid)) }
+            }
+        }
         @JavascriptInterface fun trocarPessoa() { handler.post { if (Modulo.doSite(web.url)) PessoasActivity.abrir(this@JanelaActivity) } }
         @JavascriptInterface fun atualizar() { handler.post { runCatching { startActivity(Intent(this@JanelaActivity, MainActivity::class.java).setAction(MainActivity.ACAO_ATUALIZAR).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }
     }
@@ -207,16 +265,41 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
             setOnChildScrollUpCallback { _, _ -> web.scrollY > 0 || !podePuxar }
             setOnRefreshListener { recarregar() }
         }
-        raiz.addView(puxar, FrameLayout.LayoutParams(-1, -1))
+        val dp = resources.displayMetrics.density
+        tarja = android.widget.TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 15f; typeface = android.graphics.Typeface.DEFAULT_BOLD; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            setBackgroundColor(Color.parseColor("#10100E")); gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((14 * dp).toInt(), 0, (14 * dp).toInt(), 0); minHeight = (44 * dp).toInt(); visibility = android.view.View.GONE
+            isClickable = true; isFocusable = true; setOnClickListener { voltarOrigem() }
+        }
+        val coluna = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+        coluna.addView(tarja, android.widget.LinearLayout.LayoutParams(-1, (44 * dp).toInt()))
+        coluna.addView(puxar, android.widget.LinearLayout.LayoutParams(-1, 0, 1f))
+        raiz.addView(coluna, FrameLayout.LayoutParams(-1, -1))
         setContentView(raiz)
+        lerOrigem(intent)
         runCatching { androidx.core.content.ContextCompat.registerReceiver(this, aoTrocarPessoa, android.content.IntentFilter(Pessoas.MUDOU), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED) }
         if (state == null || web.restoreState(state) == null) web.loadUrl(enderecoDe(intent) ?: modulo.url)
+    }
+
+    /** Esta janela como origem de quem ela abrir. */
+    private fun minhaOrigem() = Origem(modulo, modulo.rotulo)
+    private fun lerOrigem(i: Intent?) {
+        val o = Origem.ler(i) ?: return
+        origem = o; urlDaOrigem = enderecoDe(i)
+        tarja.text = "← Voltar para " + o.rotulo; tarja.contentDescription = "Voltar para " + o.rotulo; tarja.visibility = android.view.View.VISIBLE
+    }
+    private fun voltarOrigem() {
+        val o = origem ?: return
+        origem = null; urlDaOrigem = null; tarja.visibility = android.view.View.GONE
+        Origem.voltar(this, o)
     }
 
     private fun enderecoDe(i: Intent?): String? = i?.getStringExtra(Modulo.EXTRA_URL)?.takeIf { Modulo.doSite(it) && Modulo.paraUrl(it) == modulo }
 
     override fun onNewIntent(i: Intent) {
         super.onNewIntent(i); setIntent(i)
+        if (Origem.ler(i) != null) lerOrigem(i) else if (enderecoDe(i) != null) { origem = null; urlDaOrigem = null; tarja.visibility = android.view.View.GONE }
         val u = enderecoDe(i) ?: return   // sem endereço: só volta para a frente, do jeito que estava
         // 2.5.3: a página já aberta trata o endereço sem recarregar quando sabe (ex.: Gestão abre o cadastro com as fotos da
         // caixa na hora, em vez de baixar a Gestão inteira de novo a cada produto). Se não souber, carrega como antes.
@@ -245,7 +328,7 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
                 if (Modulo.doSite(u)) {
                     val m = Modulo.paraUrl(u)
                     if (m == null || m == modulo) return false
-                    Modulo.abrir(this@JanelaActivity, m, u); return true
+                    Modulo.abrir(this@JanelaActivity, m, u, minhaOrigem()); return true
                 }
                 if (r.hasGesture()) externo(u)
                 return true
@@ -285,7 +368,7 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
                 filho.webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(f: WebView, r: WebResourceRequest): Boolean {
                         val u = r.url.toString()
-                        if (Modulo.doSite(u)) { val m = Modulo.paraUrl(u); if (m == null || m == modulo) web.loadUrl(u) else Modulo.abrir(this@JanelaActivity, m, u) } else externo(u)
+                        if (Modulo.doSite(u)) { val m = Modulo.paraUrl(u); if (m == null || m == modulo) web.loadUrl(u) else Modulo.abrir(this@JanelaActivity, m, u, minhaOrigem()) } else externo(u)
                         f.destroy(); return true
                     }
                 }
@@ -315,12 +398,16 @@ open class JanelaActivity(private val modulo: Modulo) : Activity() {
         if (Pessoas.precisaDesbloquear(this)) PessoasActivity.abrir(this, PessoasActivity.DESBLOQUEAR)
         web.onResume(); web.resumeTimers()   // o tempo das páginas é do app inteiro: volta a correr
     }
-    override fun onPause() { JanelasVisiveis.quantas = maxOf(0, JanelasVisiveis.quantas - 1); if (!Pessoas.travado(this)) Pessoas.marcarUso(this); web.onPause(); super.onPause() }
+    override fun onPause() { JanelasVisiveis.quantas = maxOf(0, JanelasVisiveis.quantas - 1); if (!Pessoas.travado(this)) Pessoas.marcarUso(this); Ultima.guardar(this, modulo, web.url, web.title); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { web.saveState(out); super.onSaveInstanceState(out) }
     override fun onDestroy() { runCatching { unregisterReceiver(aoTrocarPessoa) }; chooser?.onReceiveValue(null); pedidoMidia?.deny(); (web.parent as? ViewGroup)?.removeView(web); web.destroy(); super.onDestroy() }
 
     @Deprecated("Legacy back API")
-    override fun onBackPressed() { if (web.canGoBack()) web.goBack() else moveTaskToBack(true) }
+    override fun onBackPressed() {
+        // Fase 2: aberta por outra área e ainda na tela que veio de lá: o Voltar leva de volta (a outra janela reabre como estava).
+        if (origem != null && (!web.canGoBack() || web.url == urlDaOrigem)) { voltarOrigem(); return }
+        if (web.canGoBack()) web.goBack() else moveTaskToBack(true)
+    }
 
     @Deprecated("Activity result API")
     override fun onActivityResult(code: Int, result: Int, data: Intent?) {

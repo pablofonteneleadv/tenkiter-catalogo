@@ -24,6 +24,14 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
         override fun create():AlertDialog=super.create().also{dialogs.removeAll{d->!d.isShowing};dialogs.add(it)}
         override fun show():AlertDialog=create().also{it.show()}
     }
+    /** 2.6.0 (fase 2): "Mandar este produto para esta cliente" vindo da Gestão: o texto do produto entra na mensagem; a pessoa confere e envia. */
+    fun produtoNaMensagem(id:Long,produto:String){
+        work({repo.catalog()}){catalog->
+            val p=catalog.firstOrNull{it.optString("ID")==produto}
+            if(p==null){toast("Não encontrei este produto no catálogo.");return@work}
+            if(current()==id&&canSend()){insert(productDraft(p));toast("Produto colocado na mensagem. Confira e envie.")}else toast("Abra a conversa para responder.")
+        }
+    }
     fun close(){mediaThumbs.evictAll();productSelection.clear();productConversation=0;thumbs.evictAll();stopRecording(false);stopPlayback();dialogs.toList().forEach{it.dismiss()};dialogs.clear();pickedConversation=0}
     private fun dp(n:Int)=(n*activity.resources.displayMetrics.density).toInt()
     private var pickedConversation=0L;private var attachmentBusy=false
@@ -121,7 +129,9 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
                         val row=ProductRow(activity,label).apply{orientation=LinearLayout.VERTICAL;setPadding(0,0,0,dp(12));addView(label,LinearLayout.LayoutParams(-1,-2))}
                         val actions=LinearLayout(activity)
                         actions.addView(button("Colocar na mensagem"){if(current()==id&&canSend()){insert(productDraft(p));selected.clear();productDialog.dismiss()}else toast("Abra a conversa para responder.")},LinearLayout.LayoutParams(0,dp(48),1.4f))
-                        actions.addView(button("Copiar link"){(activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Produto TENKiTER",productLink(p)));toast("Link copiado.")},LinearLayout.LayoutParams(0,dp(48),1f));row.addView(actions)
+                        actions.addView(button("Copiar link"){(activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Produto TENKiTER",productLink(p)));toast("Link copiado.")},LinearLayout.LayoutParams(0,dp(48),1f))
+                        // 2.6.0 (fase 2): abre o produto na Gestão; lá, "Voltar para a conversa" e "Mandar este produto" trazem de volta para cá.
+                        actions.addView(button("Na Gestão"){val nome=repo.store.conversation(id)?.optString("nome")?.takeIf{it.isNotBlank()}?:"a cliente";productDialog.dismiss();Modulo.abrir(activity,Modulo.GESTAO,Modulo.SITE+"/admin.html?editar="+Uri.encode(p.optString("ID")),Origem(Modulo.MENSAGENS,"a conversa com "+nome,id))},LinearLayout.LayoutParams(0,dp(48),1f));row.addView(actions)
                         label.setOnClickListener{val key=p.optString("ID");if(selected.containsKey(key))selected.remove(key)else if(selected.size<60)selected[key]=p;list.setItemChecked(position,selected.containsKey(key));label.isChecked=selected.containsKey(key)}
                         return row
                     }

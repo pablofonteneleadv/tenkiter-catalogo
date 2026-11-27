@@ -442,6 +442,10 @@
       "esteira",
       "infra"
     ],
+    "tests/app_voltar_conversa_ui.py": [
+      "catalogo",
+      "mensagens"
+    ],
     "tests/worker_app_pin.js": [
       "mensagens",
       "infra"

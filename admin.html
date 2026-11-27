@@ -3725,9 +3725,25 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
     abrirCadastro_();
     if (window.tkFamiliaForm) window.tkFamiliaForm(p);   // v7.44.0: família de tamanhos do produto (admin-familias.js)
+    mandarParaConversa_(p);
+  }
+  /* v7.98.0 (app 2.6, fase 2): Gestão aberta a partir de uma conversa no app ("Na Gestão" na lista de produtos das Mensagens):
+   * botão "Mandar este produto para <cliente>" volta para a conversa com o produto já na mensagem (a pessoa confere e envia).
+   * Fora do app, ou sem conversa de origem, o botão não existe. */
+  function mandarParaConversa_(p) {
+    var b = document.getElementById('btn-mandar-conversa'), info = null;
+    try { var r = window.TKAndroid && typeof TKAndroid.origemConversa === 'function' ? String(TKAndroid.origemConversa() || '') : ''; info = r ? JSON.parse(r) : null; } catch (e) { info = null; }
+    if (!info || !p) { if (b) b.hidden = true; return; }
+    if (!b) {
+      b = document.createElement('button'); b.type = 'button'; b.id = 'btn-mandar-conversa'; b.className = 'tk-btn-sec';
+      b.style.cssText = 'width:100%;margin:0 0 12px';
+      var f = document.getElementById('form-produto'); f.parentNode.insertBefore(b, f);
+    }
+    b.hidden = false; b.textContent = 'Mandar este produto para ' + String(info.nome || 'a cliente').slice(0, 60) + ' ↗';
+    b.onclick = function () { try { TKAndroid.mandarProduto(String(p.ID)); } catch (e) { TKAviso.erro('Não consegui voltar para a conversa. Abra as Mensagens e use "Produtos".'); } };
   }
 
-  document.getElementById('form-produto').addEventListener('reset', () => { const ac = document.getElementById('aviso-copiado'); if (ac) ac.hidden = true; });
+  document.getElementById('form-produto').addEventListener('reset', () => { const ac = document.getElementById('aviso-copiado'); if (ac) ac.hidden = true; const bm = document.getElementById('btn-mandar-conversa'); if (bm) bm.hidden = true; });
   function cancelarDuplicacao() {
     modoFormulario = 'novo';
     window.__rascunhoAtual = null;   // v3.6: rascunho do Instagram que estava sendo aceito
