@@ -1,5 +1,13 @@
 # Changelog
 
+## 8.1.0 — Equipe: gestão pelas permissões e Tarefas
+
+- **Pedido do Pablo (27/11):** "Quem publica e quem está na Gestão" sai da tela e passa a vir das permissões. **Admin total, Admin e Responsável RH são gestão**: publicam comunicados (normais e importantes), criam e apagam tarefas, apagam comunicados e estão no grupo Gestão.
+- Permissão nova **"Gestão da Equipe"** (`equipe_gestao`, grupo Equipe em RH → Acessos) nos backends Catálogo 4.32 e RH 3.40 (no Cofre, publicação manual do Pablo): vem marcada nesses três perfis e pode ser dada ou tirada de qualquer pessoa (ex.: a encarregada). Até a publicação, o servidor da Equipe já reconhece os três perfis pelo nome.
+- **Tarefas** (aba nova): gerais ou de uma pessoa, uma vez / todo dia / toda semana, prazo opcional; atrasada fica em destaque; quem faz marca e aparece "feita por"; dá para desfazer. Só a gestão cria e apaga. Contador do painel do app soma as tarefas de hoje.
+- Gestão apaga comunicado (com confirmação). A rota antiga de configuração responde 410 explicando que agora é pelas permissões.
+- Testes: `tests/worker_equipe.js` (41) e `tests/equipe_ui.py` (42).
+
 ## 8.0.0 — Área Equipe: comunicados com "Li e entendi", grupos Gestão e Geral e conversa interna (com o app 2.6.4)
 
 - **Pedido do Pablo (27/11):** tirar o trabalho do celular pessoal das funcionárias; toda comunicação de trabalho pelo app, no celular da loja. Decisões dele: construir no nosso app, sem ferramenta externa; publicam comunicados Pablo e Karla (depois a encarregada); as funcionárias conversam entre si e o gestor fala no individual, mas o foco é a conversa de equipe, com os grupos **Gestão** e **Geral**.

@@ -17,6 +17,7 @@
   header h1 { margin:0; font-size:1.25rem; }
   main { max-width:760px; margin:0 auto; padding:12px; }
   .eq-abas { margin-bottom:12px; } html body .eq-abas.tk-abas > button { flex:1 1 0; }
+  @media (max-width:430px) { html body .eq-abas.tk-abas > button { font-size:.85rem; padding-left:4px; padding-right:4px; min-width:0; } }
   .card { background:var(--branco); border-radius:12px; padding:12px 14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
   .card.imp { border-left:5px solid var(--laranja); }
   .card h3 { margin:0 0 4px; font-size:1rem; overflow-wrap:anywhere; }
@@ -55,7 +56,8 @@
 <script src="padrao-dados.js?v=7.57.0"></script>
 <script>
 /* Área "Equipe" (27/11/2026, pedido do Pablo): comunicação interna no app, no celular da loja — comunicados com "Li e entendi",
- * grupos Gestão e Geral e conversas privadas. Sem ferramenta externa: servidor das Mensagens (Worker) + avisos do app.
+ * grupos Gestão e Geral, conversas privadas e tarefas. Quem faz a gestão (publica, cria tarefa, apaga, grupo Gestão) vem das
+ * permissões: "Gestão da Equipe" no RH → Acessos, ou os perfis Admin total, Admin e Responsável RH. Sem ferramenta externa: servidor das Mensagens (Worker) + avisos do app.
  * Regra "Sem troca ao carregar": pinta na hora com o último estado guardado desta pessoa e só troca se mudou. */
 (function () {
   'use strict';
@@ -64,7 +66,7 @@
   const botao = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; if (fn) b.addEventListener('click', fn); return b; };
   const hora = (iso) => { try { const d = new Date(iso), hoje = new Date(); const h = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }); return d.toDateString() === hoje.toDateString() ? h : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Fortaleza' }) + ' ' + h; } catch (e) { return ''; } };
   const iniciais = (n) => { const p = String(n || '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() : '?'; };
-  let estado = null, aba = 'comunicados', salaAberta = null, salaMsgs = [], timerSala = 0, timerLista = 0;
+  let estado = null, aba = 'comunicados', salaAberta = null, salaMsgs = [], timerSala = 0, timerLista = 0, tarefas = null;
 
   async function api(caminho, metodo, corpo) {
     const s = typeof getSessao === 'function' ? getSessao() : null;
@@ -101,11 +103,12 @@
     app.replaceChildren();
     const naoLidos = estado.comunicados.filter((c) => !c.lido).length, msgs = estado.salas.reduce((s, x) => s + x.naoLidas, 0);
     const abas = el('div', 'eq-abas tk-abas'); abas.setAttribute('role', 'tablist'); abas.setAttribute('aria-label', 'Equipe');
-    [['comunicados', 'Comunicados' + (naoLidos ? ' · ' + naoLidos : '')], ['conversas', 'Conversas' + (msgs ? ' · ' + msgs : '')]].forEach(([id, t]) => {
+    const pend = (tarefas || []).filter((t) => t.minha && !t.feita).length;
+    [['comunicados', 'Comunicados' + (naoLidos ? ' · ' + naoLidos : '')], ['conversas', 'Conversas' + (msgs ? ' · ' + msgs : '')], ['tarefas', 'Tarefas' + (pend ? ' · ' + pend : '')]].forEach(([id, t]) => {
       const b = botao(t, '', () => { aba = id; pintar(); }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(aba === id)); b.id = 'eq-aba-' + id; abas.appendChild(b);
     });
     app.appendChild(abas);
-    if (aba === 'comunicados') pintarComunicados(); else pintarConversas();
+    if (aba === 'comunicados') pintarComunicados(); else if (aba === 'tarefas') pintarTarefas(); else pintarConversas();
   }
 
   /* ---------- Comunicados ---------- */
@@ -136,11 +139,15 @@
           const r = await api('/equipe/lembrar', 'POST', { comunicado: c.id }); if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui lembrar agora.'); return; }
           TKAviso.ok(r.faltam ? 'Lembrete enviado para ' + TKAviso.plural(r.faltam, 'pessoa', 'pessoas') + '.' : 'Todos já leram.');
         }));
+        l.appendChild(botao('Excluir', 'tk-btn-texto', async () => {
+          if (!confirm('Excluir o comunicado "' + c.titulo + '"? Ele sai da tela de todas.')) return;
+          const r = await api('/equipe/comunicado/apagar', 'POST', { comunicado: c.id }); if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui excluir agora.'); return; }
+          TKAviso.ok('Comunicado excluído.'); await carregar(); pintar();
+        }));
         k.appendChild(l); k.appendChild(quem);
       }
       app.appendChild(k);
     });
-    if (estado.eu.admin) app.appendChild(formConfig());
   }
   function formComunicado() {
     const d = el('details', 'card'); d.appendChild(el('summary', '', '+ Novo comunicado'));
@@ -158,16 +165,60 @@
     });
     d.appendChild(f); return d;
   }
-  function formConfig() {
-    const d = el('details', 'card'); d.appendChild(el('summary', '', 'Quem publica e quem está na Gestão'));
-    const cfg = estado.config || { publicadores: [], gestao: [] }, pessoas = estado.pessoas;
-    const bloco = (titulo, lista, nome) => { const w = el('fieldset', 'lista-pessoas'); w.appendChild(el('legend', '', titulo)); if (!pessoas.length) w.appendChild(el('p', 'meta', 'As pessoas aparecem aqui depois de abrirem a Equipe uma vez.')); pessoas.forEach((p) => { const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.name = nome; c.value = p.whats; c.checked = lista.includes(p.whats); l.appendChild(c); l.appendChild(document.createTextNode(' ' + p.nome)); w.appendChild(l); }); return w; };
-    const f = el('form'); f.appendChild(bloco('Publicam comunicados (além do Admin total)', cfg.publicadores, 'pub')); f.appendChild(bloco('Grupo Gestão (além de quem publica)', cfg.gestao, 'ges'));
-    const s = el('button', 'tk-btn-prim', 'Salvar'); s.type = 'submit'; f.appendChild(s);
+  /* ---------- Tarefas (gerais ou de uma pessoa; a gestão cria e apaga) ---------- */
+  const chaveT = () => chave() ? chave() + ':tarefas' : '';
+  async function carregarTarefas() {
+    const r = await api('/equipe/tarefas'); if (!r.ok) { if (!tarefas) TKAviso.erro(r.erro || 'Não consegui carregar as tarefas.'); return; }
+    const mudou = JSON.stringify(r.tarefas) !== JSON.stringify(tarefas); tarefas = r.tarefas;
+    try { localStorage.setItem(chaveT(), JSON.stringify(tarefas)); } catch (e) { /* segue */ }
+    if (mudou && !salaAberta) pintar();
+  }
+  function pintarTarefas() {
+    if (estado.eu.gestao) app.appendChild(formTarefa());
+    if (!tarefas) { carregarTarefas(); return; }
+    const lista = tarefas.slice().sort((a, b) => (!!a.feita - !!b.feita) || (b.atrasada - a.atrasada) || (b.minha - a.minha) || (b.id - a.id));
+    if (!lista.length) app.appendChild(el('p', 'vazio', 'Nenhuma tarefa por enquanto.'));
+    lista.forEach((t) => {
+      const k = el('article', 'card tarefa' + (t.atrasada ? ' imp' : '')); k.dataset.tarefa = t.id;
+      const lb = el('label', 'lista-pessoas'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!t.feita; cb.disabled = !t.minha && !estado.eu.gestao;
+      cb.setAttribute('aria-label', (t.feita ? 'Desmarcar: ' : 'Marcar como feita: ') + t.titulo);
+      cb.addEventListener('change', async () => {
+        cb.disabled = true; const r = await api('/equipe/tarefa/feita', 'POST', { tarefa: t.id, desfazer: !cb.checked }); cb.disabled = false;
+        if (!r.ok) { cb.checked = !cb.checked; TKAviso.erro(r.erro || 'Não consegui marcar agora.'); return; }
+        await carregarTarefas();
+      });
+      lb.appendChild(cb); const tx = el('span'); tx.appendChild(el('b', '', t.titulo)); lb.appendChild(tx); k.appendChild(lb);
+      const info = [t.para === 'Todas' ? 'Para todas' : 'Para ' + t.para, t.repete === 'diaria' ? 'todo dia' : t.repete === 'semanal' ? 'toda semana' : '', t.prazo ? 'prazo ' + t.prazo.split('-').reverse().join('/') : ''].filter(Boolean).join(' · ');
+      k.appendChild(el('div', 'meta', info));
+      if (t.detalhe) k.appendChild(el('div', 'txt', t.detalhe));
+      if (t.feita) k.appendChild(el('div', 'lido', '✔ feita por ' + t.feita.por + ' · ' + hora(t.feita.em)));
+      else if (t.atrasada) k.appendChild(el('div', 'meta', '⚠ atrasada'));
+      if (estado.eu.gestao) k.appendChild(botao('Excluir', 'tk-btn-texto', async () => {
+        if (!confirm('Excluir a tarefa "' + t.titulo + '"? Ela sai da lista de todas.')) return;
+        const r = await api('/equipe/tarefa/apagar', 'POST', { tarefa: t.id }); if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui excluir agora.'); return; }
+        TKAviso.ok('Tarefa excluída.'); await carregarTarefas();
+      }));
+      app.appendChild(k);
+    });
+  }
+  function formTarefa() {
+    const d = el('details', 'card'); d.appendChild(el('summary', '', '+ Nova tarefa'));
+    const f = el('form'); f.noValidate = true;
+    const t = el('input', 'tk-campo'); t.name = 'titulo'; t.maxLength = 120; t.placeholder = 'O que fazer'; t.setAttribute('aria-label', 'Tarefa');
+    const x = el('textarea', 'tk-campo'); x.name = 'detalhe'; x.maxLength = 2000; x.rows = 2; x.placeholder = 'Detalhes (opcional)'; x.setAttribute('aria-label', 'Detalhes da tarefa');
+    const para = el('select', 'tk-campo'); para.name = 'para'; para.setAttribute('aria-label', 'Para quem');
+    [['todos', 'Para todas'], ...estado.pessoas.map((p) => [p.whats, 'Para ' + p.nome])].forEach(([v, n]) => { const o = el('option', '', n); o.value = v; para.appendChild(o); });
+    const rep = el('select', 'tk-campo'); rep.name = 'repete'; rep.setAttribute('aria-label', 'Repetir');
+    [['', 'Uma vez'], ['diaria', 'Todo dia'], ['semanal', 'Toda semana']].forEach(([v, n]) => { const o = el('option', '', n); o.value = v; rep.appendChild(o); });
+    const prazo = el('input', 'tk-campo'); prazo.type = 'date'; prazo.name = 'prazo'; prazo.setAttribute('aria-label', 'Prazo (opcional)');
+    const linha = el('div', 'linha'); [para, rep, prazo].forEach((n) => linha.appendChild(n));
+    const enviar = el('button', 'tk-btn-prim', 'Criar tarefa'); enviar.type = 'submit';
+    [t, x, linha, enviar].forEach((n) => { f.appendChild(n); if (n !== enviar) n.style.marginBottom = '8px'; });
     f.addEventListener('submit', async (ev) => {
-      ev.preventDefault(); const marcados = (n) => [...f.querySelectorAll('input[name=' + n + ']:checked')].map((c) => c.value);
-      const r = await api('/equipe/config', 'POST', { publicadores: marcados('pub'), gestao: marcados('ges') });
-      if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui salvar agora.'); return; } TKAviso.ok('Salvo.'); await carregar();
+      ev.preventDefault(); if (!t.value.trim()) { TKAviso.aviso('Escreva a tarefa.'); t.focus(); return; }
+      enviar.disabled = true; const r = await api('/equipe/tarefa', 'POST', { titulo: t.value, detalhe: x.value, para: para.value, repete: rep.value, prazo: prazo.value }); enviar.disabled = false;
+      if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui criar agora.'); return; }
+      TKAviso.ok('Tarefa criada. Quem vai fazer recebe o aviso no celular da loja.'); t.value = ''; x.value = ''; await carregarTarefas();
     });
     d.appendChild(f); return d;
   }
@@ -226,10 +277,11 @@
   function fecharSala() { salaAberta = null; clearTimeout(timerSala); pintar(); carregar(); }
 
   // primeira pintura: o último estado guardado desta pessoa (se houver); depois o servidor
+  if (/[?&]aba=conversas/.test(location.search)) aba = 'conversas'; else if (/[?&]aba=tarefas/.test(location.search)) aba = 'tarefas';
+  try { tarefas = JSON.parse(localStorage.getItem(chaveT()) || 'null'); } catch (e) { tarefas = null; }
   estado = guardado(); if (estado) pintar(); else app.replaceChildren();
-  if (/[?&]aba=conversas/.test(location.search)) aba = 'conversas';
-  carregar();
-  const ciclo = () => { clearTimeout(timerLista); timerLista = setTimeout(async () => { if (!document.hidden && !salaAberta) await carregar(); ciclo(); }, 20000); }; ciclo();
+  carregar(); carregarTarefas();
+  const ciclo = () => { clearTimeout(timerLista); timerLista = setTimeout(async () => { if (!document.hidden && !salaAberta) { await carregar(); await carregarTarefas(); } ciclo(); }, 20000); }; ciclo();
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !salaAberta) carregar(); });
   const ir = /[?&]sala=([^&]+)/.exec(location.search); if (ir) { const id = decodeURIComponent(ir[1]); setTimeout(() => abrirSala({ id, nome: id === 'gestao' ? 'Gestão' : id === 'geral' ? 'Geral (toda a equipe)' : 'Conversa' }), 0); }
   window.TKEquipe = { recarregar: carregar };
