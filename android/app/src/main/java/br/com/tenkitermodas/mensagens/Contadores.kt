@@ -10,7 +10,8 @@ import org.json.JSONObject
 /**
  * 2.6.1 (fase 3 do app 2.6) — o que espera pela pessoa em cada área, no painel do ícone.
  * Mensagens: conversas não lidas guardadas neste celular (sem consulta). Esteira: o que falta fazer hoje + pedidos a conferir
- * (o mesmo resumo que a Esteira já usa, /esteira/menu?resumo=1). Postagens e Currículos ainda não têm número confirmado (proposta).
+ * (o mesmo resumo que a Esteira já usa, /esteira/menu?resumo=1). Postagens (2.6.3): postagens com erro esperando alguém agir
+ * (contagem que a fila das Postagens já devolve, /posts). Currículos: fica sem número (a lista vem do Apps Script).
  * Regra "Sem troca ao carregar": o painel pinta na hora com o último número guardado (por pessoa) e só troca se mudou.
  */
 object Contadores {
@@ -41,6 +42,10 @@ object Contadores {
                 val pedidos = if (ped == null) 0 else ped.optInt("conferir") + ped.optInt("aprovar") + ped.optInt("aplicar")
                 if (falta + pedidos > 0) out[Modulo.ESTEIRA] = falta + pedidos
             }
+        }
+        if (auth != null && p?.pode("catalogo_admin") != false) runCatching {
+            val erros = NativeApi().call("/posts?limite=1", auth, null, "GET").optJSONObject("contagens")?.optInt("erro") ?: 0
+            if (erros > 0) out[Modulo.POSTAGENS] = erros
         }
         val j = JSONObject(); out.forEach { (m, n) -> j.put(m.id, n) }
         runCatching { prefs(c).edit().putString(chave(c), j.toString()).apply() }
