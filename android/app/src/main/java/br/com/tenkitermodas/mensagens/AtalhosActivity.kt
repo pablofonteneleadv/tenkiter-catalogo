@@ -55,6 +55,16 @@ class AtalhosActivity : Activity() {
             text = "TENKiTER Gestão"; setTextColor(Color.parseColor("#E67E22")); textSize = 18f; typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(6), 0, 0, dp(10))
         }) else caixa.addView(quemUsa(ativa))
+        // Fase 2: "Continuar" leva para a última coisa que a pessoa estava fazendo (nas últimas 12 h).
+        Ultima.ler(this)?.takeIf { Pessoas.podeArea(ativa, it.first) }?.let { (m, url, titulo) ->
+            caixa.addView(TextView(this).apply {
+                text = "↩ Continuar: " + m.rotulo + (if (titulo.isNotBlank() && !titulo.equals(m.rotulo, true)) " · " + titulo else "")
+                setTextColor(Color.WHITE); textSize = 15f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), 0, dp(14), 0); minHeight = dp(48); isClickable = true; isFocusable = true
+                background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(Color.parseColor("#2B2A27")) }
+                setOnClickListener { Modulo.abrir(this@AtalhosActivity, m, url.ifBlank { null }); finish(); overridePendingTransition(0, 0) }
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(12) })
+        }
         val grade = GridLayout(this).apply { columnCount = 4 }
         areas.filter { Pessoas.podeArea(ativa, it.modulo) }.forEach { a ->
             val item = LinearLayout(this).apply {

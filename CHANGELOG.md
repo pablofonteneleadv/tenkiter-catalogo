@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.98.0 — Voltar para onde estava (fase 2 do app 2.6, com o app 2.6.1)
+
+- **App 2.6.1:** quando uma área abre outra (Esteira → cadastro na Gestão, Mensagens → produto, Postagens → produto, barra do site), a janela nova mostra no topo "← Voltar para …"; tocar nela ou no Voltar do Android leva de volta, e a outra janela reabre exatamente como estava (conversa aberta, rascunho guardado).
+- **Mensagens → Gestão → conversa:** na lista de produtos da conversa, "Na Gestão" abre o produto na Gestão; lá, "Mandar este produto para <cliente>" volta para a conversa com o texto do produto já na mensagem (a pessoa confere e envia).
+- **Painel do ícone:** "↩ Continuar: …" leva para a última coisa que a pessoa estava fazendo (por pessoa, nas últimas 12 h), só se ela pode usar aquela área.
+- Teste novo `tests/app_voltar_conversa_ui.py` (13).
+
 ## 7.97.0 — Troca de pessoa no celular com PIN (fase 1 do app 2.6, com o app 2.6.0)
 
 - **Proposta app 2.6 aprovada pelo Pablo (26/11):** os celulares rodam entre as funcionárias e as mensagens saíam com o nome da colega. Decisões dele: PIN de 4 dígitos criado por cada uma; bloqueio por tempo parado desligado por padrão (15 ou 30 min, escolha do Admin total); só o Admin total remove alguém do celular; PIN conferido só no celular (sem Apps Script).

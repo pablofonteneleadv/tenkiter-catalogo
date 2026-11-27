@@ -45,7 +45,7 @@ object WebKeeper {
         @JavascriptInterface fun telaMensagensVisivel()=attached&&remoteVisible
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
         /** App com janelas (2.5.0): a barra do site abre a janela de cada área; Mensagens continua nesta tela. */
-        @JavascriptInterface fun abrirModulo(endereco:String?):Boolean{val m=Modulo.paraUrl(endereco)?:return false;if(m==Modulo.MENSAGENS)return false;val c=context?.applicationContext?:return false;handler.post{Modulo.abrir(c,m,endereco)};return true}
+        @JavascriptInterface fun abrirModulo(endereco:String?):Boolean{val m=Modulo.paraUrl(endereco)?:return false;if(m==Modulo.MENSAGENS)return false;val c=context?.applicationContext?:return false;handler.post{Modulo.abrir(c,m,endereco,Origem(Modulo.MENSAGENS,"Mensagens"))};return true}
         @JavascriptInterface fun sairConta(){handler.post{val c=context?.applicationContext?:return@post;if(ReceivedFiles.trusted(web?.url))ContaApp.sair(c)}}
         @JavascriptInterface fun podeAtualizar(v:Boolean){podePuxar=v}
         /** 2.6.0: troca de pessoa no celular (ver Pessoas.kt e common.js). */

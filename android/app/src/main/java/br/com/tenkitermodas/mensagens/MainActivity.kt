@@ -24,7 +24,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import org.json.JSONObject
 
 class MainActivity:Activity(),InboxView.Events {
-    companion object{const val ACAO_ATUALIZAR="br.com.tenkitermodas.mensagens.ATUALIZAR";const val EXTRA_CONVERSA="br.com.tenkitermodas.mensagens.CONVERSA";const val EXTRA_ESPIAR="br.com.tenkitermodas.mensagens.ESPIAR"}
+    companion object{const val ACAO_ATUALIZAR="br.com.tenkitermodas.mensagens.ATUALIZAR";const val EXTRA_CONVERSA="br.com.tenkitermodas.mensagens.CONVERSA";const val EXTRA_ESPIAR="br.com.tenkitermodas.mensagens.ESPIAR";const val EXTRA_PRODUTO="br.com.tenkitermodas.mensagens.PRODUTO"}
     private var forcarSessaoWeb=false;private var puxar:SwipeRefreshLayout?=null
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
     private lateinit var repo:NativeRepository
@@ -166,6 +166,8 @@ class MainActivity:Activity(),InboxView.Events {
         }
     }
     override fun discard(key:String){scope.launch{withContext(Dispatchers.IO){repo.discard(key)};render()}}
+    /** 2.6.0 (fase 2): esta tela como origem (a conversa aberta, se houver) para a tarja "Voltar para ..." da outra janela. */
+    private fun origemAqui():Origem{val nome=if(conversation>0&&::repo.isInitialized)repo.store.conversation(conversation)?.optString("nome")?.takeIf{it.isNotBlank()}else null;return if(nome!=null)Origem(Modulo.MENSAGENS,"a conversa com "+nome,conversation)else Origem(Modulo.MENSAGENS,"Mensagens")}
     override fun update(){updater.check()}
     override fun menu(anchor:View){
         PopupMenu(this,anchor).apply{
@@ -206,7 +208,7 @@ class MainActivity:Activity(),InboxView.Events {
         WebKeeper.configure(w)
         CookieManager.getInstance().setAcceptThirdPartyCookies(w,false)
         w.webViewClient=object:WebViewClient(){
-            override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{if(!r.isForMainFrame)return false;val u=r.url.toString();if(trusted(u))return false;val m=Modulo.paraUrl(u);if(m!=null&&m!=Modulo.MENSAGENS){Modulo.abrir(this@MainActivity,m,u);return true};if(r.hasGesture())external(u);return true}
+            override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{if(!r.isForMainFrame)return false;val u=r.url.toString();if(trusted(u))return false;val m=Modulo.paraUrl(u);if(m!=null&&m!=Modulo.MENSAGENS){Modulo.abrir(this@MainActivity,m,u,origemAqui());return true};if(r.hasGesture())external(u);return true}
             override fun onPageStarted(v:WebView,url:String,icon:android.graphics.Bitmap?){webAudio.cancel();AttachRequest.clear();chooser?.onReceiveValue(null);chooser=null}
             override fun onPageFinished(v:WebView,url:String){puxar?.isRefreshing=false;if(trusted(url)){v.evaluateJavascript(SCRIPT_PUXAR,null);deliverWeb()}}
             override fun onReceivedError(v:WebView,r:WebResourceRequest,e:WebResourceError){if(r.isForMainFrame){Toast.makeText(this@MainActivity,"Sem conexão. Tentando abrir as mensagens de novo…",Toast.LENGTH_LONG).show();handler.postDelayed({web?.reload()},6000)}}
@@ -257,12 +259,14 @@ class MainActivity:Activity(),InboxView.Events {
     private fun showNative(){nativeVisible=true;WebKeeper.remoteVisible=false;web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     private fun closeNativePresence(){if(!::repo.isInitialized)return;val generation=repo.store.generation;val sequence=repo.nextPresenceSequence();scope.launch(Dispatchers.IO){runCatching{repo.presence(0,"oculto",false,sequence){repo.store.generation==generation}}}}
-    override fun onNewIntent(i:Intent){super.onNewIntent(i);setIntent(i);if(i.action==ACAO_ATUALIZAR&&::updater.isInitialized)updater.check();val c=i.getLongExtra(EXTRA_CONVERSA,0L);if(c>0&&::inbox.isInitialized&&c!=conversation){peeking=i.getBooleanExtra(EXTRA_ESPIAR,false);conversation=c;openGeneration++;if(setup==null)full(conversation);sync()}}
+    override fun onNewIntent(i:Intent){super.onNewIntent(i);setIntent(i);if(i.action==ACAO_ATUALIZAR&&::updater.isInitialized)updater.check();val c=i.getLongExtra(EXTRA_CONVERSA,0L);if(c>0&&::inbox.isInitialized&&c!=conversation){peeking=i.getBooleanExtra(EXTRA_ESPIAR,false);conversation=c;openGeneration++;if(setup==null)full(conversation);sync()}
+        // 2.6.0 (fase 2): voltou da Gestão com "Mandar este produto para esta cliente"
+        val produto=i.getStringExtra(EXTRA_PRODUTO);if(c>0&&!produto.isNullOrBlank()&&::tools.isInitialized){peeking=false;handler.postDelayed({if(conversation==c)tools.produtoNaMensagem(c,produto)},900)}}
     override fun onResume(){super.onResume();activityVisible=true
         if(Pessoas.precisaDesbloquear(this))PessoasActivity.abrir(this,PessoasActivity.DESBLOQUEAR)
         else if(Pessoas.gerenciado(this)&&::repo.isInitialized&&Pessoas.ativa(this)?.owner!=repo.store.auth()?.owner)ContaApp.aplicarPessoa(this)
         web?.resumeTimers();WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
-    override fun onPause(){if(!Pessoas.travado(this))Pessoas.marcarUso(this);if(nativeVisible)closeNativePresence();activityVisible=false;WebKeeper.detach();web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
+    override fun onPause(){if(!Pessoas.travado(this))Pessoas.marcarUso(this);runCatching{Ultima.guardar(this,Modulo.MENSAGENS,null,origemAqui().rotulo.replaceFirstChar{it.uppercase()})};if(nativeVisible)closeNativePresence();activityVisible=false;WebKeeper.detach();web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
     override fun onDestroy(){handler.removeCallbacks(ticker);webAudio.cancel();WebKeeper.actions=null;WebKeeper.download=null;runCatching{unregisterReceiver(changes)};runCatching{unregisterReceiver(pessoaMudou)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){

@@ -442,6 +442,10 @@
       "esteira",
       "infra"
     ],
+    "tests/app_voltar_conversa_ui.py": [
+      "catalogo",
+      "mensagens"
+    ],
     "tests/app_troca_pessoa_ui.py": [
       "mensagens",
       "esteira",
