@@ -220,6 +220,7 @@ class PessoasActivity : Activity() {
 
     private fun aviso(t: String) { android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_LONG).show() }
     private fun fechar() {
+        Contadores.publicarAtalhos(this)
         if (intent.getBooleanExtra(VOLTA_PAINEL, false) && Pessoas.ativa(this) != null) runCatching { startActivity(Intent(this, AtalhosActivity::class.java)) }
         finish(); overridePendingTransition(0, 0)
     }

@@ -99,6 +99,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
 
         /** Abre a janela da área (ou traz para a frente, como estava). */
         fun abrir(c: Context, m: Modulo, endereco: String? = null, origem: Origem? = null) {
+            Contadores.usou(c, m)   // fase 3: as áreas mais usadas pela pessoa aparecem primeiro ao segurar o ícone
             val i = Intent(c, m.classe).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (m != MENSAGENS && pedeCarga(m, endereco)) i.putExtra(EXTRA_URL, endereco)
             // 2.6.0 (fase 2): quem abriu fica guardado; a janela nova mostra "Voltar para ..." e o Voltar do Android leva de volta.

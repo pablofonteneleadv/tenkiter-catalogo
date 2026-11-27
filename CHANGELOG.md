@@ -1,11 +1,13 @@
 # Changelog
 
-## 7.98.0 — Voltar para onde estava (fase 2 do app 2.6, com o app 2.6.1)
+## 7.98.0 — Voltar para onde estava e contadores no painel (fases 2 e 3 do app 2.6, com o app 2.6.1)
 
 - **App 2.6.1:** quando uma área abre outra (Esteira → cadastro na Gestão, Mensagens → produto, Postagens → produto, barra do site), a janela nova mostra no topo "← Voltar para …"; tocar nela ou no Voltar do Android leva de volta, e a outra janela reabre exatamente como estava (conversa aberta, rascunho guardado).
 - **Mensagens → Gestão → conversa:** na lista de produtos da conversa, "Na Gestão" abre o produto na Gestão; lá, "Mandar este produto para <cliente>" volta para a conversa com o texto do produto já na mensagem (a pessoa confere e envia).
 - **Painel do ícone:** "↩ Continuar: …" leva para a última coisa que a pessoa estava fazendo (por pessoa, nas últimas 12 h), só se ela pode usar aquela área.
-- Teste novo `tests/app_voltar_conversa_ui.py` (13).
+- **Contadores no painel (fase 3):** cada área mostra o que espera pela pessoa: Mensagens = conversas não lidas guardadas no celular; Esteira = o que falta hoje + pedidos a conferir (mesmo resumo que a Esteira já usa). O número aparece na hora com o último guardado e só muda se mudou. Postagens e Currículos ficam sem número até confirmar de onde ele vem (a proposta já previa essa confirmação).
+- **Segurar o ícone:** mostra as áreas que a pessoa pode usar, as mais usadas por ela primeiro (até 4), com os mesmos nomes de antes.
+- Testes novos: `tests/app_voltar_conversa_ui.py` (13) e `VoltarTest.kt` (2).
 
 ## 7.97.0 — Troca de pessoa no celular com PIN (fase 1 do app 2.6, com o app 2.6.0)
 

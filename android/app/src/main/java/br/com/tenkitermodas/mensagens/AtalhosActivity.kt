@@ -66,6 +66,7 @@ class AtalhosActivity : Activity() {
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(12) })
         }
         val grade = GridLayout(this).apply { columnCount = 4 }
+        val guardados = Contadores.guardados(this)
         areas.filter { Pessoas.podeArea(ativa, it.modulo) }.forEach { a ->
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
@@ -75,10 +76,19 @@ class AtalhosActivity : Activity() {
                 if (fundo.resourceId != 0) foreground = context.getDrawable(fundo.resourceId)
                 setOnClickListener { Modulo.abrir(this@AtalhosActivity, a.modulo); finish(); overridePendingTransition(0, 0) }
             }
-            item.addView(ImageView(this).apply {
+            // Fase 3: o número do que espera pela pessoa nesta área (último guardado na hora; atualiza só se mudou).
+            val icone = android.widget.FrameLayout(this)
+            icone.addView(ImageView(this).apply {
                 setImageResource(a.icone); scaleType = ImageView.ScaleType.CENTER_CROP
                 clipToOutline = true; background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(Color.parseColor("#10100E")) }
-            }, LinearLayout.LayoutParams(dp(56), dp(56)))
+            }, android.widget.FrameLayout.LayoutParams(dp(56), dp(56)))
+            val selo = TextView(this).apply {
+                setTextColor(Color.WHITE); textSize = 11f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER; minWidth = dp(20); setPadding(dp(5), 0, dp(5), 0)
+                background = GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(Color.parseColor("#C62828")); setStroke(dp(2), Color.parseColor("#10100E")) }
+            }
+            icone.addView(selo, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(20)).apply { gravity = Gravity.END or Gravity.TOP })
+            selos[a.modulo] = selo to item; pintarSelo(a.modulo, guardados[a.modulo] ?: 0)
+            item.addView(icone, LinearLayout.LayoutParams(dp(62), dp(62)))
             item.addView(TextView(this).apply {
                 text = a.modulo.rotulo; setTextColor(Color.WHITE); textSize = 12f; gravity = Gravity.CENTER; maxLines = 1
                 setPadding(0, dp(6), 0, 0)
@@ -87,6 +97,18 @@ class AtalhosActivity : Activity() {
         }
         caixa.addView(grade)
         setContentView(caixa)
+        Contadores.publicarAtalhos(this)
+        Thread {
+            val novos = runCatching { Contadores.atualizar(this) }.getOrNull() ?: return@Thread
+            runOnUiThread { if (!isFinishing) selos.keys.forEach { m -> if ((novos[m] ?: 0) != (guardados[m] ?: 0)) pintarSelo(m, novos[m] ?: 0) } }
+        }.start()
+    }
+
+    private val selos = mutableMapOf<Modulo, Pair<TextView, LinearLayout>>()
+    private fun pintarSelo(m: Modulo, n: Int) {
+        val (selo, item) = selos[m] ?: return
+        selo.text = if (n > 99) "99+" else n.toString(); selo.visibility = if (n > 0) android.view.View.VISIBLE else android.view.View.GONE
+        item.contentDescription = m.rotulo + if (n > 0) ", $n esperando" else ""
     }
 
     /** Faixa de quem está usando: inicial, nome, desde quando e o botão Trocar (2 toques + PIN). */
