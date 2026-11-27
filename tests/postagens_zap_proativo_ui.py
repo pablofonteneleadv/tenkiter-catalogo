@@ -85,15 +85,19 @@ with tempfile.TemporaryDirectory() as temp:
         if nome.endswith('.mp4'): return route.fulfill(body=VIDEO, content_type='video/mp4')
         return route.fulfill(status=404, body='')
 
+    # Relógio fixo às 15:00 de Fortaleza: o "Próximo livre" segue a janela de postagem do dia; rodando de madrugada a mídia
+    # ia para a manhã seguinte, virava a última e o ▼ ficava (corretamente) desligado — o teste falhava só pelo horário.
+    FIXO = datetime.now(timezone.utc).replace(hour=18, minute=0, second=0, microsecond=0)
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-sandbox'])
         for largura, altura in [(390, 844), (1440, 900)]:
             print('== %d px ==' % largura, flush=True)
             ctx = browser.new_context(viewport={'width': largura, 'height': altura}, device_scale_factor=1, timezone_id='America/Fortaleza')
+            ctx.clock.set_fixed_time(FIXO)
             ctx.add_init_script(SESSION); ctx.add_init_script('window.TK_POSTAGENS_POLL_MS=60000;')
             st = install(ctx, perms=PERMS_ALL, versao='7.48.3')
             ctx.route('**/m/202611/**', r2)
-            g = st['ig']; g['regras'] = True; g['posts'] = posts(datetime.now(timezone.utc))
+            g = st['ig']; g['regras'] = True; g['posts'] = posts(FIXO)
             consultas, reposts = [], []
 
             def consultar(route):
@@ -103,7 +107,7 @@ with tempfile.TemporaryDirectory() as temp:
 
             def repostar(route):
                 q = json.loads(route.request.post_data); reposts.append(q)
-                route.fulfill(json={'ok': True, 'id': 900 + len(reposts), 'quando': iso(datetime.now(timezone.utc) + timedelta(minutes=65)), 'canal': 'whatsapp'})
+                route.fulfill(json={'ok': True, 'id': 900 + len(reposts), 'quando': iso(FIXO + timedelta(minutes=65)), 'canal': 'whatsapp'})
             ctx.route('**/post/repostar', repostar)
             dialogos = []
             ctx.on('dialog', lambda d: (dialogos.append(d.message), d.accept()))
