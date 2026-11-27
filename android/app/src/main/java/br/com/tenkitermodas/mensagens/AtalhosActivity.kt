@@ -40,7 +40,8 @@ class AtalhosActivity : Activity() {
             val ativa = Pessoas.ativa(this)
             if (ativa == null) { PessoasActivity.abrir(this, voltaPainel = true); finish(); return }
             if (Pessoas.precisaDesbloquear(this)) { PessoasActivity.abrir(this, PessoasActivity.DESBLOQUEAR, voltaPainel = true); finish(); return }
-            if (!ativa.temPin) PessoasActivity.abrir(this, PessoasActivity.CRIAR)
+            // Sem PIN guardado aqui: primeiro confere na conta (pode ter criado em outro celular); só pede para criar se não tiver.
+            if (!ativa.temPin) { val app = applicationContext; Thread { Pessoas.sincronizarPins(app, ativa.owner); if (Pessoas.ativa(app)?.temPin == false) PessoasActivity.abrir(app, PessoasActivity.CRIAR) }.start() }
         }
         setFinishOnTouchOutside(true)
         window.setGravity(Gravity.BOTTOM)

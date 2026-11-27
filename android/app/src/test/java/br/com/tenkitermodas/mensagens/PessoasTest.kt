@@ -12,7 +12,8 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import javax.crypto.KeyGenerator
 
-/** 2.6.0 — troca de pessoa no celular: lista de até 4, PIN de 4 dígitos, só o Admin total remove, bloqueio desligado por padrão. */
+/** 2.6.0 — troca de pessoa no celular: quantas pessoas precisar, um PIN de 4 dígitos por pessoa (da conta), sem trava,
+ * só o Admin total remove, bloqueio desligado por padrão. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
 class PessoasTest {
@@ -37,12 +38,15 @@ class PessoasTest {
         assertEquals(lara, JSONObject(Pessoas.paraSite(c)).getString("w"))
     }
 
+    /** O PIN vem da conta (servidor): aqui simula o que /app/pin devolve. */
+    private fun pinDaConta(owner: String, pin: String) { val sal = "c2FsLWRlLXRlc3RlLTEyMw=="; Pessoas.guardarPin(c, owner, sal, Pessoas.hashPara(pin, sal, 6000), 6000) }
+
     @Test fun pinDeQuatroDigitosTrocaAPessoa() {
-        Pessoas.vista(c, lara, "tok-lara", "Lara", listOf("catalogo_admin")); assertTrue(Pessoas.criarPin(c, lara, "2580"))
+        Pessoas.vista(c, lara, "tok-lara", "Lara", listOf("catalogo_admin")); pinDaConta(lara, "2580")
         Pessoas.ninguem(c); assertEquals("", JSONObject(Pessoas.paraSite(c)).getString("w"))
-        Pessoas.vista(c, talita, "tok-talita", "Talita", listOf("catalogo_admin")); assertTrue(Pessoas.criarPin(c, talita, "1397"))
-        assertEquals(talita, Pessoas.ativa(c)!!.owner)
-        assertFalse(Pessoas.criarPin(c, lara, "12345")); assertFalse(Pessoas.criarPin(c, lara, "12a4"))
+        Pessoas.vista(c, talita, "tok-talita", "Talita", listOf("catalogo_admin")); pinDaConta(talita, "1397")
+        assertEquals(talita, Pessoas.ativa(c)!!.owner); assertTrue(Pessoas.ativa(c)!!.temPin)
+        assertFalse(Pessoas.pinValido("12345")); assertFalse(Pessoas.pinValido("12a4"))
         assertFalse(Pessoas.conferirPin(c, lara, "1397"))
         assertTrue(Pessoas.conferirPin(c, lara, "2580")); assertTrue(Pessoas.trocarPara(c, lara))
         val site = JSONObject(Pessoas.paraSite(c)); assertEquals(lara, site.getString("w")); assertEquals("tok-lara", site.getString("s"))
@@ -57,16 +61,21 @@ class PessoasTest {
         assertEquals(lara, Pessoas.ativa(c)!!.owner)
     }
 
-    @Test fun ateQuatroPessoas() {
-        (1..4).forEach { assertTrue(Pessoas.vista(c, "8899999000$it", "t$it", "P$it", null)); Pessoas.ninguem(c) }
-        assertFalse(Pessoas.vista(c, "88999990009", "t9", "Quinta", null)); assertEquals(4, Pessoas.lista(c).size)
+    @Test fun quantasPessoasPrecisar() {
+        (1..8).forEach { assertTrue(Pessoas.vista(c, "889999900" + (10 + it), "t$it", "P$it", null)); Pessoas.ninguem(c) }
+        assertEquals(8, Pessoas.lista(c).size)
     }
 
-    @Test fun tentativasErradasTravamPorUmTempo() {
-        Pessoas.vista(c, lara, "tok", "Lara", null); Pessoas.criarPin(c, lara, "2580")
-        repeat(5) { assertFalse(Pessoas.conferirPin(c, lara, "0000")) }
-        assertTrue(Pessoas.esperaRestante(c, lara) > 0)
-        assertFalse(Pessoas.conferirPin(c, lara, "2580"))   // nem o certo passa durante a espera
+    @Test fun semTravaDepoisDeErrar() {
+        Pessoas.vista(c, lara, "tok", "Lara", null); pinDaConta(lara, "2580")
+        repeat(7) { assertFalse(Pessoas.conferirPin(c, lara, "0000")) }
+        assertTrue(Pessoas.conferirPin(c, lara, "2580"))   // continua podendo tentar; cada tentativa vai para o registro do servidor
+    }
+
+    @Test fun pinDaContaValeEmOutroCelularSemCriarOutro() {
+        Pessoas.vista(c, lara, "tok", "Lara", null); assertFalse(Pessoas.ativa(c)!!.temPin)
+        pinDaConta(lara, "2580"); assertTrue(Pessoas.ativa(c)!!.temPin)   // veio da conta: não pede para criar
+        Pessoas.guardarPin(c, lara, "", "", 6000); assertFalse(Pessoas.ativa(c)!!.temPin)   // a conta diz que não tem: pede
     }
 
     @Test fun soOAdminTotalRemoveEMudaOBloqueio() {

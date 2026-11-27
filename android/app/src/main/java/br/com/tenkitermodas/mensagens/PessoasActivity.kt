@@ -64,16 +64,19 @@ class PessoasActivity : Activity() {
     }
 
     // ---------- lista de pessoas ----------
+    private var sincronizou = false
+    private var naLista = false
     private fun telaLista() {
-        raiz.removeAllViews()
+        // PIN criado ou trocado em outro celular: traz da conta (uma vez por abertura) e redesenha se mudou.
+        if (!sincronizou) { sincronizou = true; val antes = Pessoas.lista(this); Thread { Pessoas.sincronizarPins(this); runOnUiThread { if (!isFinishing && naLista && Pessoas.lista(this) != antes) telaLista() } }.start() }
+        raiz.removeAllViews(); naLista = true
         raiz.addView(texto("Quem vai usar?", 24f, Color.WHITE, true))
         val lista = Pessoas.lista(this); val ativa = Pessoas.ativa(this)
         raiz.addView(texto(if (lista.isEmpty()) "Entre com a sua senha uma vez neste celular. Depois é só tocar no seu nome e digitar o PIN." else "Toque no seu nome e digite o seu PIN de 4 dígitos.", 14f, Color.parseColor("#CCCCCC")).apply { setPadding(0, dp(6), 0, dp(18)) })
         val grade = GridLayout(this).apply { columnCount = 2 }
         lista.forEach { p -> grade.addView(cartaoPessoa(p, p.owner == ativa?.owner), celula()) }
-        if (lista.size < Pessoas.MAX) grade.addView(cartaoOutra(), celula())
+        grade.addView(cartaoOutra(), celula())
         raiz.addView(grade)
-        if (lista.size >= Pessoas.MAX) raiz.addView(texto("Este celular já tem 4 pessoas. Para entrar outra, o Admin total remove alguém segurando o nome.", 13f, Color.parseColor("#CCCCCC")).apply { setPadding(0, dp(12), 0, 0) })
         val livre = !Pessoas.travado(this)
         if (livre && ativa != null && ativa.temPin) raiz.addView(botao("Mudar o meu PIN") { telaCriar(ativa) }.apply { layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(18) } })
         if (livre && ativa?.adminTotal == true) raiz.addView(blocoBloqueio())
@@ -153,19 +156,16 @@ class PessoasActivity : Activity() {
 
     // ---------- teclado do PIN ----------
     private fun telaPin(p: Pessoa, desbloquear: Boolean = false) {
-        raiz.removeAllViews()
+        raiz.removeAllViews(); naLista = false
         raiz.addView(avatar(p.iniciais, true), LinearLayout.LayoutParams(dp(72), dp(72)).apply { gravity = Gravity.CENTER_HORIZONTAL })
         raiz.addView(texto(if (desbloquear) "PIN de " + p.primeiroNome + " para continuar" else "PIN de " + p.primeiroNome, 20f, Color.WHITE, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) })
         val msg = texto("", 14f, Color.parseColor("#FFB4A0")).apply { gravity = Gravity.CENTER; minHeight = dp(22) }
         teclado(4, msg) { pin, limpar ->
-            val espera = Pessoas.esperaRestante(this, p.owner)
-            if (espera > 0) { msg.text = "Muitas tentativas. Espere " + ((espera + 999) / 1000) + " s."; limpar(); return@teclado }
             if (Pessoas.conferirPin(this, p.owner, pin)) {
                 if (!desbloquear) { Pessoas.trocarPara(this, p.owner); ContaApp.aplicarPessoa(this) } else Pessoas.destravar(this)
                 fechar()
             } else {
-                val e2 = Pessoas.esperaRestante(this, p.owner)
-                msg.text = if (e2 > 0) "Muitas tentativas. Espere " + ((e2 + 999) / 1000) + " s." else "PIN errado. Tente de novo."
+                msg.text = "PIN errado. Tente de novo."
                 raiz.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); limpar()
             }
         }
@@ -174,9 +174,9 @@ class PessoasActivity : Activity() {
     }
 
     private fun telaCriar(p: Pessoa) {
-        raiz.removeAllViews()
+        raiz.removeAllViews(); naLista = false
         raiz.addView(texto("Crie o seu PIN, " + p.primeiroNome, 22f, Color.WHITE, true))
-        raiz.addView(texto("4 números que só você sabe. Com ele você troca de pessoa neste celular em 2 toques.", 14f, Color.parseColor("#CCCCCC")).apply { setPadding(0, dp(6), 0, dp(14)) })
+        raiz.addView(texto("4 números que só você sabe. Fica na sua conta: vale em todos os celulares da loja.", 14f, Color.parseColor("#CCCCCC")).apply { setPadding(0, dp(6), 0, dp(14)) })
         val msg = texto("", 14f, Color.parseColor("#FFB4A0")).apply { gravity = Gravity.CENTER; minHeight = dp(22) }
         var primeiro = ""
         val titulo = texto("Digite o PIN", 17f, laranja, true).apply { gravity = Gravity.CENTER }
@@ -186,7 +186,13 @@ class PessoasActivity : Activity() {
                 if (pin.toSet().size == 1 || pin == "1234" || pin == "4321") { msg.text = "Escolha um PIN menos óbvio."; limpar(); return@teclado }
                 primeiro = pin; titulo.text = "Repita o PIN"; msg.text = ""; limpar()
             } else if (pin != primeiro) { primeiro = ""; titulo.text = "Digite o PIN"; msg.text = "Os dois não bateram. Comece de novo."; limpar() }
-            else { if (Pessoas.criarPin(this, p.owner, pin)) { Pessoas.marcarUso(this); fechar() } else { msg.text = "Não consegui salvar. Tente de novo."; limpar() } }
+            else {
+                msg.text = "Salvando o PIN na sua conta…"; limpar()
+                Thread {
+                    val erro = Pessoas.criarPinNaConta(this, p.owner, pin)
+                    runOnUiThread { if (isFinishing) return@runOnUiThread; if (erro == null) { Pessoas.marcarUso(this); fechar() } else { msg.text = erro; primeiro = ""; titulo.text = "Digite o PIN" } }
+                }.start()
+            }
         }
         raiz.addView(msg)
         raiz.addView(botao("Agora não") { fechar() }.apply { layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) } })
