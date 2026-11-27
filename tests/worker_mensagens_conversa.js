@@ -265,6 +265,17 @@ function d1() {
   chk('filtro por dia', (await bruto('canal=whatsapp1&formato=csv&de=2020-01-01&ate=2020-01-02')).t.split('\r\n').length === 2);
   chk('canal inválido na exportação: 400', (await A('GET', '/msg/exportar?canal=xx')).r.status === 400);
   chk('exportar exige Admin total (sem sessão: 401)', (await w.fetch(ped('GET', '/msg/exportar?formato=csv', ''), env, {})).status === 401);
+  // 7.99.0 (pedido do Pablo): exportar só os grupos da gestão, tirando o Grupo Clientes
+  const lg = (await A('GET', '/msg/exportar/grupos')).j;
+  const gCli = (lg.grupos || []).find((g) => g.nome === 'Clientes TK');
+  chk('lista os grupos para escolher (nome, canal e quantas mensagens)', lg.ok && gCli && gCli.canal === 'WhatsApp 1' && gCli.mensagens >= 1, lg);
+  const soG = await bruto('formato=txt&tipo=grupos');
+  chk('só grupos: traz o grupo e nenhuma conversa individual', soG.t.includes('Clientes TK (grupo)') && !soG.t.includes('=== WhatsApp 1 · Maria') && /grupos/.test(soG.r.headers.get('Content-Disposition')), soG.t.slice(0, 400));
+  const semCli = await bruto('formato=txt&tipo=grupos&excluir=' + gCli.id + ',abc,-3');
+  chk('tirar o Grupo Clientes: ele fica fora do arquivo (ids estranhos ignorados)', semCli.r.status === 200 && !semCli.t.includes('Clientes TK'), semCli.t.slice(0, 300));
+  const soI = await bruto('formato=txt&tipo=individuais');
+  chk('só individuais: nenhum grupo', soI.t.includes('=== WhatsApp 1 · Maria') && !soI.t.includes('(grupo)'));
+  chk('lista de grupos exige login (401)', (await w.fetch(ped('GET', '/msg/exportar/grupos', ''), env, {})).status === 401);
 
   // ---- métricas ----
   const met = (await A('GET', '/msg/metricas?canal=whatsapp1&dias=90')).j;

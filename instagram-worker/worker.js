@@ -445,7 +445,7 @@ function msgRecurso_(p, req, url) {
   if (p === '/msg/presenca'||p==='/msg/disponibilidade'||p==='/msg/relacionamento') return 'acessar';
   if (/^\/msg\/funil/.test(p)) return 'funil';
   if (p === '/msg/metricas') return 'metricas';
-  if (p === '/msg/exportar') return 'exportar';
+  if (p === '/msg/exportar' || p === '/msg/exportar/grupos') return 'exportar';
   if (['/msg/resumo','/msg/conversas','/msg/mensagens','/msg/novidades','/msg/lida','/msg/contagem','/msg/stories','/msg/mobile/subscription','/msg/config','/msg/tempo-real/ticket'].includes(p)) return 'acessar';
   return 'configuracoes';
 }
@@ -5946,6 +5946,11 @@ async function exportarMensagens_(env, q) {
   const onde = [], args = [];
   const conversa = Number(q.conversa) || 0, canal = String(q.canal || '');
   if (conversa) { onde.push('c.id=?'); args.push(conversa); } else if (canal) { if (!MSG_CANAIS.includes(canal)) return { erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }; onde.push('c.canal=?'); args.push(canal); }
+  // 7.99.0 (pedido do Pablo): só grupos ou só individuais, e tirar grupos escolhidos (ex.: Grupo Clientes) para analisar os grupos da gestão.
+  if (!conversa && q.tipo === 'grupos') onde.push('c.grupo=1'); else if (!conversa && q.tipo === 'individuais') onde.push('c.grupo=0');
+  const ids_ = (v) => [...new Set(String(v || '').split(',').map(Number).filter((n) => Number.isSafeInteger(n) && n > 0))].slice(0, 80);
+  const tirar = conversa ? [] : ids_(q.excluir);
+  if (tirar.length) { onde.push('c.id NOT IN (' + tirar.map(() => '?').join(',') + ')'); args.push(...tirar); }
   const dia = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '';
   if (dia(q.de)) { onde.push('m.enviada_em>=?'); args.push(dia(q.de) + 'T03:00:00.000Z'); }
   if (dia(q.ate)) { onde.push('m.enviada_em<?'); args.push(new Date(Date.parse(dia(q.ate) + 'T03:00:00.000Z') + 86400000).toISOString()); }
@@ -5956,7 +5961,7 @@ async function exportarMensagens_(env, q) {
   const autorDe_ = (m) => (m.grupo && (m.autor_nome || m.autor_fone)) ? (m.autor_nome || '+' + m.autor_fone) : '';
   comDemora_(linhas);
   const formato = ['csv', 'txt', 'json'].includes(q.formato) ? q.formato : 'csv', hoje = fusoLocal_(agora()).slice(0, 10).replace(/-/g, '');
-  const escopo = conversa ? 'conversa-' + conversa : (canal || 'todos-os-canais');
+  const escopo = conversa ? 'conversa-' + conversa : (canal || 'todos-os-canais') + (q.tipo === 'grupos' ? '-grupos' : q.tipo === 'individuais' ? '-individuais' : '');
   const nome = 'tenkiter-mensagens-' + escopo + '-' + hoje + '.' + formato;
   let corpo, tipo;
   if (formato === 'csv') {
@@ -7750,8 +7755,12 @@ export default {
         let diag = null; try { diag = JSON.parse((await cfgGet(env, 'msg_auto_diag')) || 'null'); } catch (e) { diag = null; }
         return J({ ok: true, auto: auto, agora: horarioLoja_(Date.now(), auto.feriados, auto.expediente), ultimo: diag });
       }
+      if (p === '/msg/exportar/grupos' && req.method === 'GET') {   // 7.99.0: lista para escolher quais grupos entram na exportação
+        const g = await env.DB.prepare('SELECT c.id, c.canal, ' + MSG_NOME_SQL_.replace(/msg_conversa/g, 'c') + ' AS nome, c.contato, (SELECT COUNT(*) FROM msg_mensagem m WHERE m.conversa_id=c.id) AS mensagens FROM msg_conversa c WHERE c.grupo=1 ORDER BY mensagens DESC LIMIT 200').all();
+        return J({ ok: true, grupos: (g.results || []).map((x) => ({ id: x.id, canal: MSG_NOME_CANAL_[x.canal] || x.canal, nome: String(x.nome || x.contato || 'Grupo').slice(0, 80), mensagens: Number(x.mensagens) || 0 })) });
+      }
       if (p === '/msg/exportar' && req.method === 'GET') {
-        const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';
+        const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate', 'tipo', 'excluir']) q[k] = url.searchParams.get(k) || '';
         const x = await exportarMensagens_(env, q);
         if (x.erro) return J({ ok: false, erro: x.erro }, 400);
         const h2 = new Headers(h); h2.set('Content-Type', x.tipo); h2.set('Cache-Control', 'no-store'); h2.set('Content-Disposition', 'attachment; filename="' + x.nome + '"'); h2.set('X-TK-Total', String(x.total)); h2.set('X-TK-Cortado', x.cortado ? '1' : '0'); h2.set('Access-Control-Expose-Headers', 'Content-Disposition, X-TK-Total, X-TK-Cortado');
