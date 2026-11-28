@@ -16,7 +16,7 @@
  let deliverTimer=0,deliverUntil=0;
  function deliverConversation(){if(!notificationConversation)return;if(!deliverUntil)deliverUntil=Date.now()+20000;if(window.TKMensagensApp&&abriu){const id=notificationConversation;if(window.TKMensagensApp.abrirConversa(id,notificationPeek)){if(notificationConversation===id)notificationConversation=0;deliverUntil=0;return;}}if(Date.now()>deliverUntil){notificationConversation=0;deliverUntil=0;return;}if(!deliverTimer)deliverTimer=setTimeout(()=>{deliverTimer=0;deliverConversation();},300);}
  window.addEventListener('tk:mensagens-lista',()=>{if(deliverUntil)return;notificationConversation=0;notificationGeneration++;try{if(window.TKAndroid&&typeof TKAndroid.lista==='function')TKAndroid.lista();}catch(_){}});
- let last='',lastAt=0,subscription='',previous=null,abriu=false;
+ let last='',lastAt=0,subscription='',previous=null,abriu=false,acessoConsultadoEm=0;
  const status=document.createElement('p');status.id='mobile-push-status';status.setAttribute('role','status');
  const css=document.createElement('style');css.textContent='.tk-app-mensagens header,.tk-app-mensagens .nav-inferior,.tk-app-mensagens .tk-nav,.tk-app-mensagens .tk-app-views,.tk-app-mensagens main{display:none!important}.tk-app-mensagens body{padding:0!important}.tk-app-mensagens #overlay-mensagens{padding:0!important;background:var(--cinza);align-items:stretch}.tk-app-mensagens .sheet-mensagens{width:100%!important;height:var(--ms-h,100dvh)!important;max-height:var(--ms-h,100dvh)!important;max-width:none!important;border-radius:0!important;margin:0!important}.tk-app-mensagens #ms-fechar{display:none}.tk-app-nativo .sheet-mensagens{--ms-safe-bottom:0px}.tk-app-mensagens #mobile-push-status{position:fixed;bottom:0;left:0;right:0;z-index:var(--z-sobre-tudo,2000);padding:8px 12px;margin:0;background:#fff4d9;color:#664200;font:12px/1.4 Inter,Arial,sans-serif}.tk-app-mensagens #mobile-push-status:empty{display:none}.tk-app-mensagens body:has(#mobile-push-status:not(:empty)) .sheet-mensagens{height:calc(var(--ms-h,100dvh) - var(--mobile-notice-h,48px))!important;max-height:calc(var(--ms-h,100dvh) - var(--mobile-notice-h,48px))!important}';document.head.appendChild(css);document.body.appendChild(status);new ResizeObserver(()=>document.documentElement.style.setProperty('--mobile-notice-h',status.offsetHeight+'px')).observe(status);
  async function register(id,allowed){
@@ -34,5 +34,19 @@
   if(window.TKCamadas&&TKCamadas.total()>1){history.back();return true;}return false;
  };
 
- window.addEventListener('tk:mensagens-acessos',open);window.addEventListener('tk:sessao',open);const timer=setInterval(open,400);window.addEventListener('pagehide',()=>clearInterval(timer));open();
+ function conferirTela(){
+   if(window.TKMensagensAcessos&&!TKMensagensAcessos.pode('acessar')){
+     if(TKMensagensAcessos.conferido&&!TKMensagensAcessos.conferido()){
+       if(Date.now()-acessoConsultadoEm>=2000){acessoConsultadoEm=Date.now();TKMensagensAcessos.atualizar();}
+       return;
+     }
+     abriu=false;notificationConversation=0;clearTimeout(deliverTimer);deliverTimer=0;
+     const conteudo=document.getElementById('ms-app');if(conteudo)conteudo.hidden=true;
+     status.textContent='Sua conta não tem acesso ao módulo Mensagens. Entre com uma conta autorizada.';
+     if(Date.now()-acessoConsultadoEm<60000)return;
+     acessoConsultadoEm=Date.now();
+   }else if(status.textContent.startsWith('Sua conta não tem acesso'))status.textContent='';
+   open();
+ }
+ window.addEventListener('tk:mensagens-acessos',conferirTela);window.addEventListener('tk:sessao',()=>{acessoConsultadoEm=0;conferirTela();});const timer=setInterval(conferirTela,400);window.addEventListener('pagehide',()=>clearInterval(timer));conferirTela();
 })();

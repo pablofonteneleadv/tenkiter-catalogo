@@ -712,6 +712,11 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     if not v: return route.fulfill(status=404,json={"ok":False,"erro":"Essa chave ainda não está guardada no servidor."})
                     return route.fulfill(json={"ok":True,"nome":bw["nome"],"valor":v})
             if path.startswith("/msg/"):
+                if path == "/msg/acesso":
+                    chaves = ('acessar','responder','produtos','arquivos','contatos','etiquetas','notas','agenda','respostas','funil','excluir_solicitacao','metricas','exportar','configuracoes')
+                    direitos = {k: ('gerir_acessos' in perms or 'msg_' + k in perms) for k in chaves}
+                    if not direitos['acessar']: direitos = {k: False for k in chaves}
+                    return route.fulfill(json={'ok': True, 'permitido': direitos['acessar'], 'direitos': direitos})
                 import mock_msg
                 _m=g.setdefault("msg",mock_msg.novo_estado())
                 try: _b=json.loads(route.request.post_data or "{}") if ("octet-stream" not in (h.get("content-type") or "") and route.request.post_data) else {}

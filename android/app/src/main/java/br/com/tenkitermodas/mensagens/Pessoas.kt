@@ -26,18 +26,18 @@ import javax.crypto.spec.PBEKeySpec
  *
  * "Gerenciado" = existe ao menos uma pessoa na lista. Sem ninguém na lista o app se comporta exatamente como o 2.5.
  */
-data class Pessoa(val owner: String, val session: String, val nome: String, val perms: List<String>, val sal: String = "", val pin: String = "", val desde: Long = 0L, val iter: Int = 6000) {
+data class Pessoa(val owner: String, val session: String, val nome: String, val perms: List<String>, val sal: String = "", val pin: String = "", val desde: Long = 0L, val iter: Int = 6000, val mensagens: Boolean? = null) {
     val temPin get() = pin.isNotBlank()
     val primeiroNome get() = nome.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotBlank() } ?: "Pessoa"
     val iniciais get(): String { val p = nome.trim().split(Regex("\\s+")).filter { it.isNotBlank() }; return if (p.isEmpty()) "?" else (p.first().take(1) + (if (p.size > 1) p.last().take(1) else "")).uppercase() }
     fun pode(vararg chaves: String) = chaves.any { it in perms }
     val adminTotal get() = "gerir_acessos" in perms
-    fun json(): JSONObject = JSONObject().put("owner", owner).put("session", session).put("nome", nome).put("perms", JSONArray(perms)).put("sal", sal).put("pin", pin).put("desde", desde).put("iter", iter)
+    fun json(): JSONObject = JSONObject().put("owner", owner).put("session", session).put("nome", nome).put("perms", JSONArray(perms)).put("sal", sal).put("pin", pin).put("desde", desde).put("iter", iter).put("mensagens", mensagens ?: JSONObject.NULL)
     val auth get() = NativeAuth(owner, session, nome)
     companion object {
         fun ler(j: JSONObject) = Pessoa(j.getString("owner"), j.optString("session"), j.optString("nome"),
             j.optJSONArray("perms")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } } ?: emptyList(),
-            j.optString("sal"), j.optString("pin"), j.optLong("desde"), j.optInt("iter", 6000).coerceIn(1000, 200000))
+            j.optString("sal"), j.optString("pin"), j.optLong("desde"), j.optInt("iter", 6000).coerceIn(1000, 200000), if (j.has("mensagens") && !j.isNull("mensagens")) j.optBoolean("mensagens") else null)
     }
 }
 
@@ -112,7 +112,7 @@ object Pessoas {
             // Janela antiga com o token já guardado nunca troca a pessoa de volta.
             val muda = atual != w && (atual.isBlank() || l[i].session != session)
             if (atual.isNotBlank() && atual != w && !muda) return false
-            val p = l[i]; l[i] = p.copy(session = session, nome = nome?.takeIf { it.isNotBlank() } ?: p.nome, perms = perms ?: p.perms)
+            val p = l[i]; l[i] = p.copy(session = session, nome = nome?.takeIf { it.isNotBlank() } ?: p.nome, perms = perms ?: p.perms, mensagens = if (p.session == session) p.mensagens else null)
             gravarLista(c, l, if (muda) w else null); if (muda) { destravar(c); avisar(c); buscarPin(c, w) }; return true
         }
         l.add(Pessoa(w, session, nome.orEmpty(), perms ?: emptyList(), desde = System.currentTimeMillis()))
@@ -218,11 +218,25 @@ object Pessoas {
         return false
     }
 
-    /** Áreas que esta pessoa pode usar (mesma regra da barra do site, nav.js). Sem direitos conhecidos: mostra tudo. */
+    /** Resultado do Worker, vinculado à sessão consultada; resposta atrasada não altera outra sessão. */
+    @Synchronized fun guardarAcessoMensagens(c: Context, a: NativeAuth, permitido: Boolean): Boolean {
+        val l = lista(c).toMutableList(); val i = l.indexOfFirst { it.owner == a.owner && it.session == a.session }
+        if (i < 0 || l[i].mensagens == permitido) return false
+        l[i] = l[i].copy(mensagens = permitido); gravarLista(c, l); avisar(c); return true
+    }
+
+    @Synchronized fun renovarSessaoMensagens(c: Context, anterior: NativeAuth, nova: NativeAuth) {
+        if (anterior.session == nova.session) return
+        val l = lista(c).toMutableList(); val i = l.indexOfFirst { it.owner == anterior.owner && it.session == anterior.session }
+        if (i < 0) return
+        l[i] = l[i].copy(session = nova.session, mensagens = null); gravarLista(c, l)
+    }
+
+    /** Áreas gerais preservam o comportamento anterior; Mensagens usa seu direito específico. */
     fun podeArea(p: Pessoa?, m: Modulo): Boolean {
+        if (m == Modulo.MENSAGENS) return p == null || p.adminTotal || p.mensagens == true
         if (p == null || p.perms.isEmpty()) return true
         return when (m) {
-            Modulo.MENSAGENS -> p.pode("catalogo_admin", "gerir_acessos")
             Modulo.GESTAO, Modulo.POSTAGENS -> p.pode("catalogo_admin")
             Modulo.RH -> p.pode("equipe_relatorio", "gerir_manuais", "gerir_acessos")
             Modulo.CURRICULOS -> p.pode("dados_pessoais", "gerir_acessos")

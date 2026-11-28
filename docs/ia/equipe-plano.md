@@ -1,6 +1,11 @@
 # Área "Equipe" — plano completo até a conclusão (fonte para qualquer IA que der seguimento)
 
-Atualizado em 27/11/2026. Dono das decisões: Pablo (proprietário). **Não invente escopo**: faça só o que está aqui, na ordem. Mudou algo? Pergunte ao Pablo e registre aqui antes de implementar.
+Atualizado em 27/11/2026. Dono das decisões: Pablo (proprietário). Preserve as decisões e siga este roteiro. O pedido atual prevalece sobre o histórico; melhorias coerentes com o pedido são conduzidas autonomamente conforme as regras globais. Não iniciar ideias desconexas nem pedir novamente autorização já concedida.
+
+## Continuidade após a PR 533
+- PR 533 mesclada: `b8772696188b110a183ece92df98e5cca9341010`; site 8.1.0 e Deploy 46051131339 conferidos em 27/11/2026. `/equipe/inicio` sem sessão devolve 401; `equipe.html` devolve 200.
+- Pedido posterior de Pablo: priorizar dúvidas da equipe junto dos comunicados. Esta fase 4B vem antes das fases 5/6; foto/áudio e foto de prova continuam no roteiro, não foram descartados nem entregues por esta revisão.
+- Implementação da fase 4B em andamento; não considerar publicada sem atualizar este checkpoint com PR, CI e deploy.
 
 ## 1. Objetivo do negócio (por que existe)
 Tirar o trabalho do **celular pessoal** das funcionárias. Toda comunicação de trabalho acontece **no app TENKiTER, no celular da loja**, com a pessoa certa logada pela troca de pessoa com PIN (app 2.6, ver `CHANGELOG.md` 7.97.0). Hoje os recados e os grupos de gestão do WhatsApp se perdem.
@@ -48,6 +53,18 @@ Tirar o trabalho do **celular pessoal** das funcionárias. Toda comunicação de
 
 ## 5. Próximas fases (fazer nesta ordem, uma PR por fase)
 Regras para todas: branch `ia/equipe-<assunto>-<AAAAMMDD>`; testes antes/depois (base `origin/main` × candidata, diferença zero de falhas nos vizinhos); `python scripts/ci/check_padroes.py`; skill `tenkiter-estetica-humana` (390 e 1440, toque ≥ 44 px, sem rolagem lateral); CHANGELOG + VERSION; mudança de APK sobe `versionCode`/`versionName` em `android/app/build.gradle` (nunca reaproveitar versão: o `scripts/android/release.py` recusa fonte diferente com a mesma tag); merge só com CI verde; conferir o deploy (`/version.json`).
+
+### Fase 4B — Dúvidas prioritárias e confirmação de entendimento (pedido de 27/11)
+- A própria funcionária registra a dúvida junto dos Comunicados. Por padrão toda a equipe vê; marcando **Sigilo**, somente a autora e a gestão veem. Isso é aplicado no servidor, não apenas escondido na tela.
+- Gestão vê primeiro as dúvidas aguardando resposta e escolhe **privado** (gestor que atende + autora) ou **Geral**. Dúvida sigilosa só segue no privado. O encaminhamento oferece **Ir para a conversa**, com contexto e retorno à dúvida; não força navegação nem impede outras tarefas do app.
+- A gestão registra um resumo da orientação. Em dúvida pública, esse resumo é público, mas a conversa privada continua somente dos participantes. Avisar o gestor antes de registrar o resumo; nunca copiar automaticamente mensagens privadas.
+- Estados: nova → em conversa → respondida → resolvida. Só a autora confirma que entendeu; pode dizer que ainda tem dúvida e reabrir. A gestão não assina nem confirma em nome da funcionária.
+- Depois de resolvida, a gestão decide se prepara um comunicado. O texto é revisado antes de publicar. Origem sigilosa não preenche automaticamente texto, resposta ou nomes; exige revisão explícita para publicação de orientação geral sem detalhes privados.
+- No comunicado, oferecer **Entendi e não tenho dúvidas** e **Tenho uma dúvida**. Registrar pessoa autenticada, data e declaração explícita; abrir ou ler não é assinar. Leituras antigas permanecem históricas, sem conversão automática em confirmação.
+- Pergunta vinculada deixa o entendimento pendente; assinatura anterior fica no histórico como revogada, sem apagar a auditoria. Não permitir nova confirmação enquanto houver dúvida aberta. Depois de esclarecida, pedir confirmação explícita do comunicado.
+- A confirmação registra o que a pessoa declarou; não prova por si só que aprendeu. Perguntas recorrentes orientam treinamento, sem ranking de constrangimento nem suposição de incapacidade.
+- Aceite: fluxo completo autora/gestão/colega; sigilo por rota direta/lista/contador/push; encaminhamento e retorno; reabertura; assinatura não automática; retry sem duplicação; rascunho/foco preservados durante atualização; celular e desktop; nenhum aviso real em teste.
+- Correções relacionadas da revisão: preservar rascunhos em atualizações, respeitar silêncio para lembrete comum e reconhecer `equipe_gestao` no acesso completo. Revisar separadamente a paginação de tarefas (limite global antes do filtro pode ocultar pendência).
 
 ### Fase 5 — Foto e áudio nas conversas e comunicados
 - Reusar o envio de mídia que já existe no projeto (servidor de mídia `tenkiter-midia` / anexos das Mensagens): **não** criar outro armazenamento nem serviço externo. Investigar como as Mensagens fazem upload (`/msg/anexo` no Worker e `NativeTools`/`admin-mensagens.js`) e reaproveitar a mesma rota ou uma rota irmã sob `/equipe/anexo` com a mesma checagem de equipe.

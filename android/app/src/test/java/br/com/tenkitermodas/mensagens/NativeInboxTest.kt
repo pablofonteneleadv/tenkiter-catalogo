@@ -137,6 +137,37 @@ class NativeInboxTest {
         val f=File(activity.cacheDir,"fake.apk");f.writeText("not-an-apk")
         try{AppUpdater(activity,kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)).verify(f,AppUpdater.Release.parse(JSONObject(good.toString()).put("bytes",f.length())));fail("APK falso aceito") }catch(_:IllegalArgumentException){}
     }
+    @Test fun deniedMessagesAccessClearsCachedClientsEvenWithCatalogPermission() {
+        val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(c,SecretKeySpec(ByteArray(32){9},"AES"));val a=NativeAuth("88999990000","session","Equipe catálogo 1")
+        store.saveAuth(a);store.putConversation(a,conv());store.putMessages(a,1,org.json.JSONArray().put(msg()))
+        val paths=mutableListOf<String>()
+        val api=object:NativeApi(){
+            override fun account(body:JSONObject)=JSONObject().put("ok",true).put("usuario",JSONObject().put("permissoes",org.json.JSONArray().put("catalogo_admin")))
+            override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
+                paths.add(path);assertEquals("/msg/acesso",path)
+                return JSONObject().put("ok",true).put("permitido",false)
+            }
+        }
+        val repo=NativeRepository(c,store,api)
+        assertFalse(repo.canReadLocal(a)) // an old credential cannot reveal clients before authorization
+        assertFalse(repo.sync());assertEquals(listOf("/msg/acesso"),paths)
+        assertNull(store.auth());assertTrue(store.conversations().isEmpty());assertTrue(store.messages(1).isEmpty())
+        assertFalse(repo.canReadLocal(a));store.close()
+    }
+    @Test fun catalogLoginCannotImportMessagesWhenWorkerDenies() {
+        val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(c,SecretKeySpec(ByteArray(32){8},"AES"));val a=NativeAuth("88999990000","session","Equipe catálogo 1")
+        val api=object:NativeApi(){
+            override fun account(body:JSONObject)=JSONObject().put("ok",true).put("usuario",JSONObject().put("permissoes",org.json.JSONArray().put("catalogo_admin")))
+            override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
+                assertEquals("/msg/acesso",path);return JSONObject().put("ok",true).put("permitido",false)
+            }
+        }
+        val repo=NativeRepository(c,store,api)
+        try{repo.importSession(a);fail("Imported a forbidden session")}catch(_:AccessRevoked){}
+        assertNull(store.auth());assertTrue(store.conversations().isEmpty());store.close()
+    }
     @Test fun syncWritesLocalBankAndRejectsLateResponseAfterLogout(){
         val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
         val store=NativeStore(c,SecretKeySpec(ByteArray(32){9},"AES"));val a=NativeAuth("88999990000","old-session","Pablo");store.saveAuth(a)
@@ -144,6 +175,7 @@ class NativeInboxTest {
         val api=object:NativeApi(){
             override fun account(body:JSONObject)=JSONObject().put("ok",true).put("sessao","fresh-session").put("usuario",JSONObject().put("whatsapp",a.owner).put("name","Pablo").put("permissoes",org.json.JSONArray().put("gerir_acessos")))
             override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
+                if(path=="/msg/acesso")return JSONObject().put("ok",true).put("permitido",true)
                 assertEquals("fresh-session",a.session)
                 if(path.startsWith("/msg/conversas"))return JSONObject().put("ok",true).put("conversas",org.json.JSONArray().put(conv()))
                 if(path.startsWith("/msg/mensagens")){
@@ -166,6 +198,7 @@ class NativeInboxTest {
         val api=object:NativeApi(){
             override fun account(body:JSONObject)=JSONObject().put("ok",true).put("usuario",JSONObject().put("permissoes",org.json.JSONArray().put("gerir_acessos")))
             override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
+                if(path=="/msg/acesso")return JSONObject().put("ok",true).put("permitido",true)
                 if(path=="/msg/enviar"){
                     keys.add(body!!.getString("idLocal"))
                     if(fail)throw ApiFailure(JSONObject().put("erro","Tente mais tarde."),409)
@@ -299,6 +332,7 @@ class NativeInboxTest {
         val api=object:NativeApi(){
             override fun account(body:JSONObject):JSONObject{accounts++;return JSONObject().put("ok",true).put("usuario",JSONObject().put("permissoes",org.json.JSONArray().put("gerir_acessos")))}
             override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{
+                if(path=="/msg/acesso")return JSONObject().put("ok",true).put("permitido",true)
                 if(path.startsWith("/msg/conversas")){
                     lists++;val ids=when{!path.contains("antesId")->(51L..100L).reversed();path.contains("antesId=51")->(1L..50L).reversed();else->emptyList()}
                     return JSONObject().put("ok",true).put("cursor",if(lists==1)"2026-10-27T01:00:01Z"else"2026-10-27T01:00:09Z").put("conversas",org.json.JSONArray(ids.map{conv(it)}))

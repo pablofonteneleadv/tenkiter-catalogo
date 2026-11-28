@@ -47,6 +47,23 @@
   const APP_RECENTES = new URLSearchParams(location.search).get('app') === 'mensagens';
   const CACHE_RECENTES = 'tk_msg_recentes_v1';
   let cacheConversa = false, cacheBloqueado = false;
+  let acessoRetirado_ = false;
+  function conferirAcessoVisivel_(forcar) {
+    const permitido = forcar !== true && podeGerir(), app = $('ms-app');
+    if (permitido) { acessoRetirado_ = false; cacheBloqueado = false; if (app) app.hidden = false; return; }
+    if (app) app.hidden = true;
+    if (acessoRetirado_) return;
+    acessoRetirado_ = true; cacheBloqueado = true; epocaConta_++; seqLista++; abrindo++;
+    clearTimeout(timerLive); clearTimeout(timerBusca); clearTimeout(timerAgenda_);
+    limparRecentes_(); lista = []; msgs = []; aberta = null; resumo = null; contagens = null; cacheConversa = false;
+    elMsgs.clear(); elConvs.clear(); pendentes.clear();
+    for (const k of Object.keys(rascunhos)) delete rascunhos[k];
+    for (const id of ['ms-lista', 'ms-conversa', 'ms-extra']) if ($(id)) $(id).replaceChildren();
+    document.querySelectorAll('#overlay-mensagens video,#overlay-mensagens audio').forEach(m=>{m.pause();m.removeAttribute('src');m.load();});
+    fecharLuz_(); limparBlobs_(); limparAnexo_(true); pararAoVivo(); fecharGaveta_(); fecharMenu();
+  }
+  window.addEventListener('tk:mensagens-acessos', conferirAcessoVisivel_);
+  window.addEventListener('tk:mensagens-sair', conferirAcessoVisivel_);
   function limparRecentes_() { try { localStorage.removeItem(CACHE_RECENTES); } catch (_) {} if (typeof limparRecentesWeb_ === 'function') limparRecentesWeb_(); }
   window.addEventListener('tk:mensagens-sair', limparRecentes_);
   let donoMemo_ = {};
@@ -115,9 +132,12 @@
   /* ---------- utilidades ---------- */
   const contaSessao_ = s => s ? normalizarWhats(s.whatsapp) : '';
   let contaAtual_ = contaSessao_(typeof getSessao==='function'&&getSessao()), epocaConta_ = 0;
+  let tokenAtual_ = (typeof getSessao==='function'&&getSessao())?.sessao || '';
   function conferirContaAtual_(){
     const nova=contaSessao_(getSessao());
-    if(nova!==contaAtual_){
+    const token=getSessao()?.sessao || '';
+    if(nova!==contaAtual_ || token!==tokenAtual_){
+      tokenAtual_=token; acessoRetirado_=false; conferirAcessoVisivel_(true);
       contaAtual_=nova;epocaConta_++;filaAtendimento_='esperando';escopoAtendimento_='todos';cfgLeitura=null;acompanhamento_=null;agendaAnexo_=null;agendaPedido_=null;agendaPainelFiltros_={busca:'',status:'pendentes',canal:'todos',tipo:'todos',minhas:false,de:'',ate:''};fecharGaveta_();atualizarIdentidade_();pintarRegistros_();
       if(APP_RECENTES){limparRecentes_();cacheBloqueado=true;lista=[];msgs=[];mostrarLista_();const ul=$('ms-lista');if(ul)ul.textContent='';const extra=$('ms-extra');if(extra)extra.textContent='Atualizando acesso…';}
     }
@@ -142,20 +162,20 @@
       const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo, headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined, signal: sinal });
       const dados = await r.json();
       const mesmaSessao=()=>{conferirContaAtual_();return epoca===epocaConta_&&contaSessao_(getSessao())===conta;};
-      if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
+      if(!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra de novo as mensagens.'};
       if (APP_RECENTES && !repetiu && (r.status===401||r.status===403)) {
         let atual=getSessao();
         if(r.status===401 && atual && atual.sessao===s.sessao){await renovarAcesso_(s,epoca);atual=getSessao();}
         if(!mesmaSessao())return {ok:false,erro:'Entre na sua conta para continuar.'};
         if(atual && atual.sessao!==s.sessao)return worker_(caminho,metodo,corpo,true,sinal);
       }
-      if (APP_RECENTES && (r.status===401 || (r.status===403 && /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) {
-        cacheBloqueado=true;limparRecentes_(); lista=[];msgs=[];aberta=null;cacheConversa=false;
-        if($('ms-lista')) pintarLista(); if($('ms-conversa')) $('ms-conversa').textContent='';
+      if (r.status===401 || (r.status===403 && (dados.ferramenta==='acessar' || /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) {
+        if (window.TKMensagensAcessos?.invalidar) TKMensagensAcessos.invalidar();
+        conferirAcessoVisivel_();
       }
       if (!APP_RECENTES && (r.status===401 || (r.status===403 && /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) limparRecentes_();
       if (dados.ok && (!metodo || metodo==='GET')) await recentes_(caminho,dados);
-      if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
+      if(!mesmaSessao() || !podeGerir())return {ok:false,erro:'Seu acesso a Mensagens mudou. Entre com uma conta autorizada.'};
       return dados;
     } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
   }
@@ -2045,6 +2065,7 @@
   /* ---------- conversa ---------- */
   /* ---- mídia: baixada com a sessão (nunca por link público) e guardada só enquanto a conversa está aberta ---- */
   function midiaBlob_(id, story, post) {
+    const epocaMidia = epocaConta_;
     const k = post ? 'p' + post + '-' + id : id + (story ? '|c' : '');
     if (blobs.has(k)) return blobs.get(k);
     const sess = (typeof getSessao === 'function' && getSessao()) || null;
@@ -2052,7 +2073,9 @@
       if (!sess) throw new Error('sem sessão');
       const r = await fetch(INSTAGRAM_URL + '/msg/midia?' + (post ? 'post=' + encodeURIComponent(post) + '&n=' + encodeURIComponent(id) : 'id=' + encodeURIComponent(id) + (story ? '&ctx=1' : '')), { headers: { 'X-TK-Whats': sess.whatsapp, 'X-TK-Sessao': sess.sessao } });
       if (!r.ok) { let e = null; try { e = await r.json(); } catch (x) { /* corpo vazio */ } throw new Error((e && e.erro) || 'Não foi possível carregar.'); }
-      return URL.createObjectURL(await r.blob());
+      const blob = await r.blob();
+      if (epocaMidia !== epocaConta_ || !podeGerir() || acessoRetirado_) throw new Error('Seu acesso a Mensagens mudou.');
+      return URL.createObjectURL(blob);
     })();
     p.catch(() => { blobs.delete(k); });
     blobs.set(k, p); return p;
@@ -2089,6 +2112,7 @@
     x.focus();
   }
   function abrirLuz_(tipo, url) {
+    if (!podeGerir() || acessoRetirado_) return;
     removerLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet) return;
     const l = el('div', 'ms-luz'); l.id = 'ms-luz'; l.setAttribute('role', 'dialog'); l.setAttribute('aria-label', tipo === 'video' ? 'Vídeo' : 'Imagem ampliada');
     let m; if (tipo === 'video') { m = el('video'); m.controls = true; m.autoplay = true; m.playsInline = true; } else { m = el('img'); m.alt = 'Imagem ampliada'; }
@@ -2097,6 +2121,7 @@
   }
   /* Quando o contexto exato não veio, mostrar candidatos sem afirmar que são o status respondido. */
   async function abrirStories_(m) {
+    if (!podeGerir() || acessoRetirado_) return;
     removerLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet || !aberta) return;
     const l = el('div', 'ms-luz ms-stories'); l.id = 'ms-luz'; l.setAttribute('role', 'dialog'); l.setAttribute('aria-label', 'Stories no ar');
     const caixa = el('div', 'ms-st-caixa'); caixa.appendChild(el('b', '', 'Stories no ar antes desta mensagem'));
@@ -4196,6 +4221,7 @@
     desenharAbas(); desenharFiltros(); desenharEstado(); selarBotao(); if(listaEmCurso) await listaEmCurso;else await carregarLista(true);
   }
   async function abrir() {
+    if (!podeGerir()) { conferirAcessoVisivel_(); return; }
     montar(); abrirComHistorico_('overlay-mensagens');
     escopoAtendimento_='todos';vista = 'lista'; $('ms-app').dataset.vista = 'lista'; ajustarViewport();
     $('ms-extra').textContent = 'Carregando…';
@@ -4209,7 +4235,7 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { const o = $('overlay-mensagens'); if (o && o.classList.contains('aberto')) { espera = ESPERA_MS; agendar(300); } else sondarSelo(); } });
   (function init() {
     const botao_ = $('btn-abrir-mensagens'); if (!botao_) return;
-    botao_.hidden = false;
+    botao_.hidden = !podeGerir();
     botao_.addEventListener('click', () => { if (!podeGerir()) { TKAviso.aviso('Sua conta não tem acesso a Mensagens.'); return; } abrir(); });
     timerSelo = setTimeout(sondarSelo, 4000);
     const obs = new MutationObserver(() => { const o = $('overlay-mensagens'); if (o && !o.classList.contains('aberto')) { pararAoVivo(); fecharMenu(); } });

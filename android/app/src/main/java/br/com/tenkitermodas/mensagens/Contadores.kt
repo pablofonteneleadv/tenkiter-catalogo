@@ -28,7 +28,7 @@ object Contadores {
         val out = mutableMapOf<Modulo, Int>()
         val repo = NativeRepository.get(c); val nativa = repo.store.auth()
         val p = Pessoas.ativa(c)
-        if (nativa != null && (p == null || p.owner == nativa.owner)) {
+        if (nativa != null && repo.canReadLocal(nativa) && (p == null || p.owner == nativa.owner)) {
             val naoLidas = runCatching { repo.store.conversations().count { it.optInt("nao_lidas") > 0 } }.getOrDefault(0)
             if (naoLidas > 0) out[Modulo.MENSAGENS] = naoLidas
         }

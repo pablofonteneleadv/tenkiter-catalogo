@@ -39,9 +39,18 @@
   .escrever textarea, .card textarea, .card input { font:inherit; }
   .escrever textarea { flex:1; min-height:44px; max-height:140px; resize:vertical; }
   .topo-sala { display:flex; align-items:center; gap:8px; margin-bottom:8px; } .topo-sala h2 { margin:0; font-size:1.05rem; flex:1; }
-  .lista-pessoas label { display:flex; align-items:center; gap:8px; min-height:44px; }
+  .lista-pessoas label, label.lista-pessoas { display:flex; align-items:center; gap:8px; min-height:44px; }
   .vazio { color:#5b5b5b; text-align:center; padding:18px 8px; }
   details summary { cursor:pointer; min-height:44px; display:flex; align-items:center; font-weight:700; }
+  .eq-secao { margin:12px 0 8px; font-size:1rem; }
+  .eq-duvidas { margin-bottom:16px; }
+  .eq-duvida { border-bottom:1px solid var(--borda); padding:12px 0; }
+  .eq-duvida h3 { margin:0; font-size:1rem; }
+  .eq-duvida .linha { margin-top:8px; }
+  .eq-duvida textarea { width:100%; }
+  .eq-check { display:flex; align-items:center; gap:8px; min-height:44px; }
+  .eq-check input { flex:none; }
+  form[data-eq-form] > .tk-campo { width:100%; margin-bottom:8px; }
   html.embed header, html.embed .nav-inferior { display:none; }
 </style>
 <link rel="stylesheet" href="janelas.css?v=7.65.0">
@@ -67,6 +76,25 @@
   const hora = (iso) => { try { const d = new Date(iso), hoje = new Date(); const h = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }); return d.toDateString() === hoje.toDateString() ? h : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Fortaleza' }) + ' ' + h; } catch (e) { return ''; } };
   const iniciais = (n) => { const p = String(n || '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() : '?'; };
   let estado = null, aba = 'comunicados', salaAberta = null, salaMsgs = [], timerSala = 0, timerLista = 0, tarefas = null;
+  let duvidas = null, erroDuvidas = '', origemComunicado = null;
+  const rascunhos = new Map(), abertos = new Map(); // Só em memória: nunca guardar dúvidas, sigilo ou rascunhos no aparelho.
+  const novaOperacao = () => crypto.randomUUID();
+  function memorizarFormularios() {
+    app.querySelectorAll('form[data-eq-form]').forEach((f) => {
+      const dados = {}; f.querySelectorAll('[name]').forEach((c) => { dados[c.name] = c.type === 'checkbox' ? c.checked : c.value; });
+      rascunhos.set(f.dataset.eqForm, { dados, opId: f.dataset.opId || '' });
+    });
+    app.querySelectorAll('details[data-eq-details]').forEach((d) => abertos.set(d.dataset.eqDetails, d.open));
+  }
+  function restaurarFormularios() {
+    app.querySelectorAll('form[data-eq-form]').forEach((f) => {
+      const salvo = rascunhos.get(f.dataset.eqForm); if (!salvo) return;
+      f.querySelectorAll('[name]').forEach((c) => { if (!(c.name in salvo.dados)) return; if (c.type === 'checkbox') c.checked = salvo.dados[c.name]; else c.value = salvo.dados[c.name]; });
+      if (salvo.opId) f.dataset.opId = salvo.opId;
+    });
+    app.querySelectorAll('details[data-eq-details]').forEach((d) => { if (abertos.has(d.dataset.eqDetails)) d.open = abertos.get(d.dataset.eqDetails); });
+  }
+  function concluirFormulario(f) { rascunhos.delete(f.dataset.eqForm); f.removeAttribute('data-eq-form'); }
 
   async function api(caminho, metodo, corpo) {
     const s = typeof getSessao === 'function' ? getSessao() : null;
@@ -74,8 +102,11 @@
     try {
       const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo || 'GET', headers: Object.assign({ 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, corpo ? { 'Content-Type': 'application/json' } : {}), body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined });
       const j = await r.json().catch(() => null);
+      const atual = typeof getSessao === 'function' ? getSessao() : null;
+      if (!atual || atual.whatsapp !== s.whatsapp || atual.sessao !== s.sessao) return { ok: false, semSessao: true, erro: 'Entre na sua conta para ver a Equipe.' };
       if (!j) return { ok: false, erro: 'A Equipe não respondeu agora. Tente de novo.' };
       if (r.status === 401) j.semSessao = true;
+      if (r.status === 403) j.semPermissao = true;
       return j;
     } catch (e) { return { ok: false, semRede: true, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
   }
@@ -85,8 +116,9 @@
 
   async function carregar() {
     const j = await api('/equipe/inicio');
-    if (!j.ok) { if (!estado) pintarErro(j); else if (!j.semRede) TKAviso.erro(j.erro || 'A Equipe não respondeu agora.'); return; }
+    if (!j.ok) { if (j.semSessao || j.semPermissao) { limparPrivado(); pintarErro(j); } else if (!estado) pintarErro(j); else if (!j.semRede) TKAviso.erro(j.erro || 'A Equipe não respondeu agora.'); return; }
     const mudou = JSON.stringify(j) !== JSON.stringify(estado);
+    if (estado && (estado.eu.whats !== j.eu.whats || estado.eu.gestao !== j.eu.gestao)) { duvidas = null; rascunhos.clear(); abertos.clear(); origemComunicado = null; app.querySelectorAll('form[data-eq-form]').forEach((f) => f.removeAttribute('data-eq-form')); }
     estado = j; guardar(j);
     if (mudou && !salaAberta) pintar();
   }
@@ -100,8 +132,11 @@
 
   function pintar() {
     if (!estado) return;
+    if (app.querySelector('form button[type=submit]:disabled')) return;
+    const ativo = document.activeElement, foco = ativo && ativo.closest('form[data-eq-form]') ? { form: ativo.closest('form').dataset.eqForm, nome: ativo.name, inicio: ativo.selectionStart, fim: ativo.selectionEnd } : null;
+    const rolagem = window.scrollY; memorizarFormularios();
     app.replaceChildren();
-    const naoLidos = estado.comunicados.filter((c) => !c.lido).length, msgs = estado.salas.reduce((s, x) => s + x.naoLidas, 0);
+    const naoLidos = estado.comunicados.filter((c) => !c.confirmado).length, msgs = estado.salas.reduce((s, x) => s + x.naoLidas, 0);
     const abas = el('div', 'eq-abas tk-abas'); abas.setAttribute('role', 'tablist'); abas.setAttribute('aria-label', 'Equipe');
     const pend = (tarefas || []).filter((t) => t.minha && !t.feita).length;
     [['comunicados', 'Comunicados' + (naoLidos ? ' · ' + naoLidos : '')], ['conversas', 'Conversas' + (msgs ? ' · ' + msgs : '')], ['tarefas', 'Tarefas' + (pend ? ' · ' + pend : '')]].forEach(([id, t]) => {
@@ -109,35 +144,46 @@
     });
     app.appendChild(abas);
     if (aba === 'comunicados') pintarComunicados(); else if (aba === 'tarefas') pintarTarefas(); else pintarConversas();
+    restaurarFormularios();
+    if (foco) { const f = [...app.querySelectorAll('form[data-eq-form]')].find((e) => e.dataset.eqForm === foco.form), c = f && f.elements.namedItem(foco.nome); if (c) { c.focus({ preventScroll: true }); if (typeof c.setSelectionRange === 'function' && foco.inicio != null) { try { c.setSelectionRange(foco.inicio, foco.fim); } catch (e) { /* campo sem seleção */ } } window.scrollTo(0, rolagem); } }
   }
 
   /* ---------- Comunicados ---------- */
   function pintarComunicados() {
+    pintarDuvidas();
+    app.appendChild(el('h2', 'eq-secao', 'Comunicados'));
     if (estado.eu.publica) app.appendChild(formComunicado());
-    const lista = estado.comunicados.slice().sort((a, b) => (a.lido - b.lido) || (b.importante - a.importante) || (b.id - a.id));
+    const lista = estado.comunicados.slice().sort((a, b) => (!!a.confirmado - !!b.confirmado) || (b.importante - a.importante) || (b.id - a.id));
     if (!lista.length) app.appendChild(el('p', 'vazio', 'Nenhum comunicado ainda.'));
     lista.forEach((c) => {
       const k = el('article', 'card' + (c.importante ? ' imp' : '')); k.dataset.comunicado = c.id;
       k.appendChild(el('h3', '', (c.importante ? '📌 ' : '') + c.titulo));
       k.appendChild(el('div', 'meta', c.autor + ' · ' + hora(c.em)));
       if (c.texto) k.appendChild(el('div', 'txt', c.texto));
-      if (!c.lido) k.appendChild(botao('Li e entendi', c.importante ? 'tk-btn-prim' : 'tk-btn-sec', async (ev) => {
-        ev.target.disabled = true; const r = await api('/equipe/lido', 'POST', { comunicado: c.id });
+      if (!c.confirmado && !c.duvidaPendente) k.appendChild(botao('Entendi e não tenho dúvidas', c.importante ? 'tk-btn-prim' : 'tk-btn-sec', async (ev) => {
+        ev.target.disabled = true; const r = await api('/equipe/lido', 'POST', { comunicado: c.id, entendimento: true });
         if (!r.ok) { ev.target.disabled = false; TKAviso.erro(r.erro || 'Não consegui confirmar agora.'); return; }
-        c.lido = true; c.lidos++; guardar(estado); pintar(); TKAviso.ok('Leitura confirmada.');
+        c.confirmado = true; c.assinaturas = (c.assinaturas || 0) + 1; guardar(estado); pintar(); TKAviso.ok('Seu entendimento foi confirmado.');
       }));
-      else k.appendChild(el('div', 'lido', '✔ você leu'));
+      else if (c.confirmado) k.appendChild(el('div', 'lido', '✔ Você confirmou que entendeu e não tem dúvidas.'));
+      else k.appendChild(el('div', 'meta', 'Sua dúvida está pendente. Confirme o entendimento depois de esclarecer.'));
+      if (c.lido && !c.confirmado && !c.duvidaPendente) k.appendChild(el('div', 'meta', 'Leitura anterior registrada. Falta confirmar o entendimento.'));
+      k.appendChild(formDuvida(c));
       if (estado.eu.publica) {
-        k.appendChild(el('div', 'meta', 'Lido por ' + c.lidos + ' de ' + Math.max(c.total - 1, c.lidos)));
-        const bar = el('div', 'barra'), i = el('i'); i.style.width = Math.min(100, Math.round(100 * c.lidos / Math.max(1, c.total - 1))) + '%'; bar.appendChild(i); k.appendChild(bar);
+        const assinaturas = c.assinaturas || 0;
+        k.appendChild(el('div', 'meta', 'Entendimento confirmado por ' + assinaturas + ' de ' + Math.max(c.total - 1, assinaturas)));
+        const bar = el('div', 'barra'), i = el('i'); i.style.width = Math.min(100, Math.round(100 * assinaturas / Math.max(1, c.total - 1))) + '%'; bar.appendChild(i); k.appendChild(bar);
         const l = el('div', 'linha'), quem = el('div', 'meta');
-        l.appendChild(botao('Quem leu', 'tk-btn-sec', async () => {
+        l.appendChild(botao('Quem confirmou', 'tk-btn-sec', async () => {
           const r = await api('/equipe/leituras?id=' + c.id); if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui ver agora.'); return; }
-          quem.textContent = 'Leram: ' + (r.leram.map((x) => x.nome).join(', ') || 'ninguém ainda') + ' · Faltam: ' + (r.faltam.map((x) => x.nome).join(', ') || 'ninguém');
+          quem.replaceChildren();
+          (r.confirmaram || []).forEach((a) => quem.appendChild(el('p', '', a.nome + ' · ' + hora(a.em) + ' · ' + a.declaracao)));
+          quem.appendChild(el('p', '', 'Faltam: ' + ((r.faltam || []).map((x) => x.nome).join(', ') || 'ninguém')));
+          if ((r.duvidas || []).length) quem.appendChild(el('p', '', 'Há dúvidas pendentes. Veja a seção Dúvidas.'));
         }));
         l.appendChild(botao('Lembrar quem falta', 'tk-btn-sec', async () => {
           const r = await api('/equipe/lembrar', 'POST', { comunicado: c.id }); if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui lembrar agora.'); return; }
-          TKAviso.ok(r.faltam ? 'Lembrete enviado para ' + TKAviso.plural(r.faltam, 'pessoa', 'pessoas') + '.' : 'Todos já leram.');
+          TKAviso.ok(r.faltam ? (r.avisados ? 'Lembrete enviado.' : 'Confirmações pendentes; nenhum aviso enviado agora.') : 'Todos já confirmaram o entendimento.');
         }));
         l.appendChild(botao('Excluir', 'tk-btn-texto', async () => {
           if (!confirm('Excluir o comunicado "' + c.titulo + '"? Ele sai da tela de todas.')) return;
@@ -150,20 +196,128 @@
     });
   }
   function formComunicado() {
-    const d = el('details', 'card'); d.appendChild(el('summary', '', '+ Novo comunicado'));
-    const f = el('form'); f.noValidate = true;
+    const d = el('details', 'card'); d.dataset.eqDetails = 'comunicado'; d.appendChild(el('summary', '', '+ Novo comunicado'));
+    const f = el('form'); f.noValidate = true; f.dataset.eqForm = 'comunicado';
     const t = el('input', 'tk-campo'); t.name = 'titulo'; t.maxLength = 120; t.placeholder = 'Título'; t.setAttribute('aria-label', 'Título do comunicado');
     const x = el('textarea', 'tk-campo'); x.name = 'texto'; x.maxLength = 2000; x.rows = 4; x.placeholder = 'Mensagem'; x.setAttribute('aria-label', 'Mensagem do comunicado');
     const imp = el('label', 'lista-pessoas'); const ci = el('input'); ci.type = 'checkbox'; ci.name = 'importante'; imp.appendChild(ci); imp.appendChild(document.createTextNode(' Importante (avisa mesmo fora do horário e fica no topo)'));
     const enviar = el('button', 'tk-btn-prim', 'Publicar para a equipe'); enviar.type = 'submit';
+    if (origemComunicado) {
+      d.open = true;
+      f.appendChild(el('p', 'meta', origemComunicado.sigilo ? 'A dúvida é sigilosa. Escreva uma orientação geral, sem nomes nem detalhes que identifiquem a pessoa.' : 'Revise a orientação antes de publicar para toda a equipe.'));
+      if (!origemComunicado.sigilo) x.value = origemComunicado.resposta || '';
+    }
     [t, x, imp, enviar].forEach((n) => { f.appendChild(n); if (n !== enviar) n.style.marginBottom = '8px'; });
     f.addEventListener('submit', async (ev) => {
       ev.preventDefault(); if (!t.value.trim()) { TKAviso.aviso('Escreva o título do comunicado.'); t.focus(); return; }
-      enviar.disabled = true; const r = await api('/equipe/comunicado', 'POST', { titulo: t.value, texto: x.value, importante: ci.checked }); enviar.disabled = false;
+      if (enviar.disabled) return;
+      if (origemComunicado && origemComunicado.sigilo && !confirm('Publicar esta orientação para toda a equipe? Confira se o texto não identifica quem fez a pergunta nem revela detalhes sigilosos.')) return;
+      enviar.disabled = true; const corpo = { titulo: t.value, texto: x.value, importante: ci.checked }; if (origemComunicado) corpo.origemDuvida = origemComunicado.id;
+      const r = await api('/equipe/comunicado', 'POST', corpo); enviar.disabled = false;
       if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui publicar agora.'); return; }
+      concluirFormulario(f); origemComunicado = null; abertos.delete('comunicado');
       TKAviso.ok('Comunicado publicado. A equipe recebe o aviso no celular da loja.'); await carregar(); pintar();
     });
     d.appendChild(f); return d;
+  }
+  /* ---------- Dúvidas: prioridade de resposta, sem assinatura presumida ---------- */
+  function limparPrivado() {
+    duvidas = null; estado = null; tarefas = null; origemComunicado = null; salaAberta = null; salaMsgs = [];
+    rascunhos.clear(); abertos.clear(); clearTimeout(timerSala); clearTimeout(timerLista); app.replaceChildren();
+  }
+  window.TKContaLimpar = limparPrivado;
+  async function carregarDuvidas() {
+    const pessoa = chave(), r = await api('/equipe/duvidas');
+    if (pessoa !== chave()) { limparPrivado(); return; }
+    if (!r.ok) {
+      if (r.semSessao || r.semPermissao) { limparPrivado(); pintarErro(r); return; }
+      erroDuvidas = r.erro || 'Não consegui carregar as dúvidas.';
+      if (!salaAberta) pintar(); return;
+    }
+    const mudou = JSON.stringify(r.duvidas) !== JSON.stringify(duvidas) || !!erroDuvidas;
+    duvidas = r.duvidas || []; erroDuvidas = '';
+    if (mudou && !salaAberta) pintar();
+  }
+  async function atualizarEquipe() { await carregar(); if (estado) { await carregarTarefas(); await carregarDuvidas(); } }
+  async function acaoDuvida(caminho, d, extra, bot) {
+    if (bot && bot.disabled) return false;
+    if (bot) bot.disabled = true;
+    const r = await api('/equipe/duvida/' + caminho, 'POST', Object.assign({ duvida: d.id }, extra || {}));
+    if (bot) bot.disabled = false;
+    if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui atualizar a dúvida.'); return false; }
+    await atualizarEquipe(); return true;
+  }
+  function formDuvida(comunicado) {
+    const id = 'duvida-' + (comunicado ? comunicado.id : 'nova'), d = el('details'); d.dataset.eqDetails = id;
+    d.appendChild(el('summary', '', comunicado ? 'Tenho uma dúvida' : '+ Tenho uma dúvida'));
+    const f = el('form'); f.dataset.eqForm = id; f.dataset.opId = novaOperacao();
+    const t = el('textarea', 'tk-campo'); t.name = 'pergunta'; t.rows = 2; t.maxLength = 2000; t.placeholder = 'O que você precisa entender?'; t.setAttribute('aria-label', comunicado ? 'Sua dúvida sobre ' + comunicado.titulo : 'Sua dúvida');
+    const sigilo = el('label', 'eq-check'), cb = el('input'); cb.type = 'checkbox'; cb.name = 'sigilo'; sigilo.appendChild(cb); sigilo.appendChild(document.createTextNode('Sigilo: só você e a gestão'));
+    const ajuda = el('p', 'meta', 'Perguntar ajuda a fazer certo. Sem sigilo, toda a equipe vê sua dúvida.');
+    const enviar = el('button', 'tk-btn-prim', 'Enviar dúvida'); enviar.type = 'submit';
+    [t, sigilo, ajuda, enviar].forEach((n) => f.appendChild(n));
+    f.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); if (enviar.disabled) return;
+      if (!t.value.trim()) { TKAviso.aviso('Conte o que você precisa entender.'); t.focus(); return; }
+      enviar.disabled = true;
+      const r = await api('/equipe/duvida', 'POST', { texto: t.value, sigilo: cb.checked, comunicado: comunicado ? comunicado.id : undefined, opId: f.dataset.opId });
+      enviar.disabled = false;
+      if (!r.ok) { TKAviso.erro(r.erro || 'Não consegui enviar a dúvida. Seu texto continua aqui.'); return; }
+      concluirFormulario(f); d.open = false; abertos.delete(id);
+      TKAviso.ok('Dúvida enviada. A gestão vai indicar onde conversar.'); await atualizarEquipe();
+    });
+    d.appendChild(f); return d;
+  }
+  function podeAbrirDuvida(d) {
+    if (!d.sala || d.podeConversar === false) return false;
+    if (d.sala === 'geral') return !d.sigilo;
+    return d.sala.startsWith('p:') && d.sala.split(':').slice(1).includes(String(estado.eu.whats));
+  }
+  function pintarDuvidas() {
+    const secao = el('section', 'eq-duvidas'); secao.setAttribute('aria-label', 'Dúvidas da equipe');
+    const pendentes = (duvidas || []).filter((d) => d.estado !== 'resolvida').length;
+    secao.appendChild(el('h2', 'eq-secao', 'Dúvidas' + (pendentes ? ' · ' + pendentes + ' pendentes' : '')));
+    secao.appendChild(formDuvida());
+    if (erroDuvidas) { secao.appendChild(el('p', 'meta', erroDuvidas)); secao.appendChild(botao('Tentar de novo', 'tk-btn-sec', carregarDuvidas)); }
+    if (duvidas !== null && !duvidas.length) secao.appendChild(el('p', 'meta', 'Nenhuma dúvida por enquanto. Pode perguntar aqui.'));
+    const ordem = { nova: 0, em_conversa: 1, respondida: 2, resolvida: 3 };
+    (duvidas || []).slice().sort((a, b) => (ordem[a.estado] - ordem[b.estado]) || (a.id - b.id)).forEach((d) => {
+      const k = el('article', 'eq-duvida'); k.dataset.duvida = d.id;
+      const situacao = { nova: 'Aguardando a gestão', em_conversa: 'Em conversa', respondida: 'Aguardando confirmar entendimento', resolvida: 'Entendimento confirmado' }[d.estado] || 'Aguardando a gestão';
+      k.appendChild(el('h3', '', d.autor_nome + (d.sigilo ? ' · Sigilo' : '')));
+      k.appendChild(el('div', 'meta', situacao + ' · ' + hora(d.em)));
+      if (d.comunicado) { const c = estado.comunicados.find((x) => x.id === d.comunicado); k.appendChild(el('div', 'meta', c ? 'Sobre: ' + c.titulo : 'Dúvida sobre um comunicado')); }
+      k.appendChild(el('div', 'txt', d.texto));
+      if (d.resposta) { k.appendChild(el('b', '', 'Orientação da gestão')); k.appendChild(el('div', 'txt', d.resposta)); }
+      const acoes = el('div', 'linha');
+      if (podeAbrirDuvida(d)) acoes.appendChild(botao('Ir para conversa', 'tk-btn-prim', () => abrirSala({ id: d.sala, nome: d.sala === 'geral' ? 'Geral (toda a equipe)' : 'Conversa com ' + (d.minha ? d.gestor_nome || 'a gestão' : d.autor_nome), duvida: d })));
+      else if (d.estado === 'em_conversa') k.appendChild(el('p', 'meta', 'A gestão está conversando com a pessoa.'));
+      if (estado.eu.gestao && ['nova', 'em_conversa'].includes(d.estado)) {
+        if (!d.minha) acoes.appendChild(botao('Resolver no privado', 'tk-btn-sec', (ev) => acaoDuvida('encaminhar', d, { canal: 'privado' }, ev.currentTarget)));
+        if (!d.sigilo) acoes.appendChild(botao('Resolver no Geral', 'tk-btn-sec', (ev) => acaoDuvida('encaminhar', d, { canal: 'geral' }, ev.currentTarget)));
+      }
+      if (d.minha && d.estado === 'respondida') {
+        acoes.appendChild(botao('Agora entendi', 'tk-btn-prim', (ev) => acaoDuvida('entendi', d, {}, ev.currentTarget)));
+        acoes.appendChild(botao('Ainda tenho dúvida', 'tk-btn-sec', (ev) => acaoDuvida('reabrir', d, {}, ev.currentTarget)));
+      } else if (d.minha && d.estado === 'resolvida') acoes.appendChild(botao('Ainda tenho dúvida', 'tk-btn-sec', (ev) => acaoDuvida('reabrir', d, {}, ev.currentTarget)));
+      if (estado.eu.gestao && d.estado === 'resolvida') acoes.appendChild(botao('Preparar comunicado', 'tk-btn-sec', () => {
+        memorizarFormularios(); origemComunicado = d; rascunhos.delete('comunicado'); abertos.set('comunicado', true);
+        const antigo = app.querySelector('form[data-eq-form="comunicado"]'); if (antigo) { antigo.removeAttribute('data-eq-form'); antigo.closest('details').open = true; }
+        pintar(); const campo = app.querySelector('form[data-eq-form="comunicado"] input'); if (campo) { campo.scrollIntoView({ block: 'center' }); campo.focus(); }
+      }));
+      k.appendChild(acoes);
+      if (estado.eu.gestao && d.estado === 'em_conversa') {
+        const det = el('details'); det.dataset.eqDetails = 'resposta-' + d.id; det.appendChild(el('summary', '', 'Registrar orientação'));
+        const f = el('form'); f.dataset.eqForm = 'resposta-' + d.id;
+        const t = el('textarea', 'tk-campo'); t.name = 'resposta'; t.rows = 2; t.maxLength = 2000; t.setAttribute('aria-label', 'Orientação para a dúvida de ' + d.autor_nome);
+        const b = el('button', 'tk-btn-prim', 'Enviar orientação'); b.type = 'submit';
+        f.appendChild(el('p', 'meta', d.sigilo ? 'Só a pessoa e a gestão verão esta orientação.' : 'Toda a equipe verá esta orientação. Não copie informações privadas da conversa.'));
+        f.appendChild(t); f.appendChild(b); det.appendChild(f); k.appendChild(det);
+        f.addEventListener('submit', async (ev) => { ev.preventDefault(); if (!t.value.trim()) { TKAviso.aviso('Escreva a orientação.'); t.focus(); return; } if (await acaoDuvida('responder', d, { resposta: t.value }, b)) { rascunhos.delete(f.dataset.eqForm); TKAviso.ok('Orientação enviada. Falta a pessoa confirmar que entendeu.'); } });
+      }
+      secao.appendChild(k);
+    });
+    app.appendChild(secao);
   }
   /* ---------- Tarefas (gerais ou de uma pessoa; a gestão cria e apaga) ---------- */
   const chaveT = () => chave() ? chave() + ':tarefas' : '';
@@ -202,8 +356,8 @@
     });
   }
   function formTarefa() {
-    const d = el('details', 'card'); d.appendChild(el('summary', '', '+ Nova tarefa'));
-    const f = el('form'); f.noValidate = true;
+    const d = el('details', 'card'); d.dataset.eqDetails = 'tarefa'; d.appendChild(el('summary', '', '+ Nova tarefa'));
+    const f = el('form'); f.noValidate = true; f.dataset.eqForm = 'tarefa';
     const t = el('input', 'tk-campo'); t.name = 'titulo'; t.maxLength = 120; t.placeholder = 'O que fazer'; t.setAttribute('aria-label', 'Tarefa');
     const x = el('textarea', 'tk-campo'); x.name = 'detalhe'; x.maxLength = 2000; x.rows = 2; x.placeholder = 'Detalhes (opcional)'; x.setAttribute('aria-label', 'Detalhes da tarefa');
     const para = el('select', 'tk-campo'); para.name = 'para'; para.setAttribute('aria-label', 'Para quem');
@@ -240,11 +394,16 @@
     }
   }
   async function abrirSala(s) {
+    memorizarFormularios();
     salaAberta = s; salaMsgs = []; clearTimeout(timerSala);
     if (window.TKCamadas) TKCamadas.empilhar('eq-sala', fecharSala);
     app.replaceChildren();
     const topo = el('div', 'topo-sala'); topo.appendChild(botao('‹ Voltar', 'tk-btn-texto', () => { if (window.TKCamadas && TKCamadas.aberta('eq-sala')) TKCamadas.desempilhar('eq-sala'); else fecharSala(); }));
     topo.appendChild(el('h2', '', s.nome)); app.appendChild(topo);
+    if (s.duvida) {
+      const contexto = el('details'); contexto.open = true; contexto.appendChild(el('summary', '', 'Dúvida de ' + s.duvida.autor_nome + (s.duvida.sigilo ? ' · Sigilo' : '')));
+      contexto.appendChild(el('div', 'txt', s.duvida.texto)); app.appendChild(contexto);
+    }
     const chat = el('div', 'chat'); chat.id = 'eq-chat'; app.appendChild(chat);
     const f = el('form', 'escrever'); const t = el('textarea', 'tk-campo'); t.maxLength = 2000; t.rows = 1; t.placeholder = 'Mensagem'; t.setAttribute('aria-label', 'Mensagem para ' + s.nome);
     const e = el('button', 'tk-btn-prim', 'Enviar'); e.type = 'submit'; f.appendChild(t); f.appendChild(e); app.appendChild(f);
@@ -255,6 +414,7 @@
       t.value = ''; if (r.sala) { s.id = r.sala; delete s.com; } await atualizarSala(); t.focus();
     });
     await atualizarSala();
+    if (s.duvida && salaAberta === s) t.focus({ preventScroll: true });
   }
   async function atualizarSala() {
     clearTimeout(timerSala); const s = salaAberta; if (!s) return;
@@ -271,24 +431,25 @@
         b.appendChild(el('div', 't', m.texto)); b.appendChild(el('div', 'h', hora(m.em))); chat.appendChild(b);
       });
       if (r.mensagens.length) { salaMsgs = salaMsgs.concat(r.mensagens); window.scrollTo(0, document.body.scrollHeight); }
-    } else if (r.semSessao || r.ok === false && !r.semRede) TKAviso.erro(r.erro || 'Não consegui abrir a conversa.');
+    } else if (r.semSessao || r.semPermissao) { limparPrivado(); pintarErro(r); return; }
+    else if (r.ok === false && !r.semRede) TKAviso.erro(r.erro || 'Não consegui abrir a conversa.');
     timerSala = setTimeout(atualizarSala, document.hidden ? 20000 : 4000);
   }
-  function fecharSala() { salaAberta = null; clearTimeout(timerSala); pintar(); carregar(); }
+  function fecharSala() { const d = salaAberta && salaAberta.duvida; salaAberta = null; clearTimeout(timerSala); pintar(); atualizarEquipe(); if (d) { const item = app.querySelector('[data-duvida="' + d.id + '"]'); if (item) item.scrollIntoView({ block: 'center' }); } }
 
   // primeira pintura: o último estado guardado desta pessoa (se houver); depois o servidor
   if (/[?&]aba=conversas/.test(location.search)) aba = 'conversas'; else if (/[?&]aba=tarefas/.test(location.search)) aba = 'tarefas';
   try { tarefas = JSON.parse(localStorage.getItem(chaveT()) || 'null'); } catch (e) { tarefas = null; }
   estado = guardado(); if (estado) pintar(); else app.replaceChildren();
-  carregar(); carregarTarefas();
-  const ciclo = () => { clearTimeout(timerLista); timerLista = setTimeout(async () => { if (!document.hidden && !salaAberta) { await carregar(); await carregarTarefas(); } ciclo(); }, 20000); }; ciclo();
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && !salaAberta) carregar(); });
+  atualizarEquipe();
+  const ciclo = () => { clearTimeout(timerLista); timerLista = setTimeout(async () => { if (!document.hidden && !salaAberta) await atualizarEquipe(); ciclo(); }, 20000); }; ciclo();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !salaAberta) atualizarEquipe(); });
   const ir = /[?&]sala=([^&]+)/.exec(location.search); if (ir) { const id = decodeURIComponent(ir[1]); setTimeout(() => abrirSala({ id, nome: id === 'gestao' ? 'Gestão' : id === 'geral' ? 'Geral (toda a equipe)' : 'Conversa' }), 0); }
-  window.TKEquipe = { recarregar: carregar };
+  window.TKEquipe = { recarregar: atualizarEquipe };
 })();
 </script>
 <script src="icones.js?v=7.17.0"></script>
-<script src="nav.js?v=7.86.0" data-ativo="equipe"></script>
+<script src="nav.js?v=8.2.0" data-ativo="equipe"></script>
 <script src="a11y.js?v=7.87.0"></script>
 <script src="conta.js?v=7.97.0"></script>
 </body>

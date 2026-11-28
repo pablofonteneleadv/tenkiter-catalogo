@@ -90,9 +90,25 @@ class PessoasTest {
 
     @Test fun painelMostraSoAsAreasPermitidas() {
         val equipe = Pessoa(lara, "t", "Lara", listOf("catalogo_admin"))
-        assertTrue(Pessoas.podeArea(equipe, Modulo.GESTAO)); assertTrue(Pessoas.podeArea(equipe, Modulo.MENSAGENS))
+        assertTrue(Pessoas.podeArea(equipe, Modulo.GESTAO)); assertFalse(Pessoas.podeArea(equipe, Modulo.MENSAGENS))
+        assertTrue(Pessoas.podeArea(equipe.copy(mensagens = true), Modulo.MENSAGENS))
+        assertFalse(Pessoas.podeArea(equipe.copy(mensagens = false), Modulo.MENSAGENS))
+        assertFalse(Pessoas.podeArea(equipe.copy(perms = emptyList()), Modulo.MENSAGENS))
+        assertTrue(Pessoas.podeArea(equipe.copy(perms = listOf("gerir_acessos")), Modulo.MENSAGENS))
         assertFalse(Pessoas.podeArea(equipe, Modulo.RH)); assertFalse(Pessoas.podeArea(equipe, Modulo.CURRICULOS))
         assertTrue(Pessoas.podeArea(equipe, Modulo.ESTEIRA)); assertTrue(Pessoas.podeArea(Pessoa(lara, "t", "Lara", emptyList()), Modulo.RH))
+    }
+
+    @Test fun direitoMensagensPertenceASessaoConsultada() {
+        Pessoas.vista(c, lara, "sessao-1", "Lara", listOf("catalogo_admin"))
+        val a = Pessoas.ativa(c)!!.auth
+        assertTrue(Pessoas.guardarAcessoMensagens(c, a, true))
+        assertTrue(Pessoas.podeArea(Pessoas.ativa(c), Modulo.MENSAGENS))
+        Pessoas.vista(c, lara, "sessao-2", "Lara", listOf("catalogo_admin"))
+        assertFalse(Pessoas.podeArea(Pessoas.ativa(c), Modulo.MENSAGENS))
+        assertFalse(Pessoas.guardarAcessoMensagens(c, a, true))
+        assertFalse(Pessoas.podeArea(Pessoas.ativa(c), Modulo.MENSAGENS))
+        assertEquals(false, Pessoa.ler(Pessoas.ativa(c)!!.copy(mensagens = false).json()).mensagens)
     }
 
     @Test fun enderecosVariadosAbremNaJanelaCerta() {

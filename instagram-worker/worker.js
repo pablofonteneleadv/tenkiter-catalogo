@@ -405,11 +405,11 @@ async function msgRegras_(env) { const raw = await cfgGet(env,'msg_acessos_v1');
 function msgDireitos_(perms, whats, regras) {
   const admin = perms.includes('gerir_acessos');
   const perfis = (perms.msgPerfis || []).map(msgPerfil_);
-  const cat1 = perfis.includes('equipecatalogo1') || (!perfis.filter(Boolean).length && perms.includes('catalogo_admin') && perms.includes('painel_simples'));
   const pessoa = (regras.pessoas || {})[msgTelefone_(whats)] || {};
   const direitos = {};
   for (const k of Object.keys(MSG_FERRAMENTAS_)) {
-    let v = cat1 && !['funil','excluir_solicitacao','metricas','exportar','configuracoes'].includes(k);
+    // Trabalhar no catálogo não concede acesso às conversas de clientes.
+    let v = perms.includes('msg_' + k);
     const definidos = perfis.map(n => (regras.perfis || {})[n]).filter(r => r && typeof r[k] === 'boolean');
     if (definidos.length) v = definidos.some(r => r[k]);
     if (perms.acessosConfiguraveis) {
@@ -4367,8 +4367,9 @@ export async function appPin_(env, req, url, J, perms) {
  * Comunicados com "Li e entendi" individual (publicam o Admin total e quem ele escolher: Pablo e Karla no início),
  * grupos fixos "Gestão" e "Geral" e conversas privadas entre a equipe. Sem ferramenta externa: D1 + avisos do app.
  * Quem é da equipe: qualquer conta com direito de trabalho (não só aluna/cliente). */
-export const EQ_CHAVES_ = ['gerir_acessos', 'catalogo_admin', 'catalogo_cadastrar', 'esteira', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais'];
+export const EQ_CHAVES_ = ['gerir_acessos', 'equipe_gestao', 'catalogo_admin', 'catalogo_cadastrar', 'esteira', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais'];
 const EQ_TEXTO_MAX_ = 2000, EQ_TITULO_MAX_ = 120;
+const EQ_DECLARACAO_ = 'Entendi e não tenho dúvidas sobre este comunicado.';
 const eqLimpo_ = (v, n) => String(v == null ? '' : v).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]+/g, ' ').trim().slice(0, n);
 const eqFone_ = (v) => String(v || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 11);
 async function eqTabelas_(env) {
@@ -4381,6 +4382,12 @@ async function eqTabelas_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_msg (id INTEGER PRIMARY KEY AUTOINCREMENT, sala TEXT NOT NULL, autor TEXT NOT NULL, autor_nome TEXT NOT NULL DEFAULT '', texto TEXT NOT NULL, em TEXT NOT NULL)"),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS eq_msg_sala ON eq_msg (sala, id)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS eq_lido (sala TEXT NOT NULL, whats TEXT NOT NULL, ultimo INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (sala, whats))'),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_duvida (id INTEGER PRIMARY KEY AUTOINCREMENT, autor TEXT NOT NULL, autor_nome TEXT NOT NULL DEFAULT '', texto TEXT NOT NULL, sigilo INTEGER NOT NULL DEFAULT 0, comunicado INTEGER, estado TEXT NOT NULL DEFAULT 'nova', sala TEXT NOT NULL DEFAULT '', gestor TEXT NOT NULL DEFAULT '', gestor_nome TEXT NOT NULL DEFAULT '', resposta TEXT NOT NULL DEFAULT '', em TEXT NOT NULL, atualizada TEXT NOT NULL, revisao INTEGER NOT NULL DEFAULT 0, op_id TEXT NOT NULL, UNIQUE (autor, op_id))"),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS eq_duvida_comunicado ON eq_duvida (comunicado, autor, estado)'),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_duvida_evento (id INTEGER PRIMARY KEY AUTOINCREMENT, duvida INTEGER NOT NULL, ator TEXT NOT NULL, acao TEXT NOT NULL, conteudo TEXT NOT NULL DEFAULT '', em TEXT NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS eq_assinatura (id INTEGER PRIMARY KEY AUTOINCREMENT, comunicado INTEGER NOT NULL, whats TEXT NOT NULL, nome TEXT NOT NULL, declaracao TEXT NOT NULL, em TEXT NOT NULL, revogada_em TEXT NOT NULL DEFAULT '')"),
+    env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS eq_assinatura_vigente ON eq_assinatura (comunicado, whats) WHERE revogada_em=''"),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS eq_comunicado_origem (comunicado INTEGER PRIMARY KEY, duvida INTEGER NOT NULL)'),
   ]);
 }
 async function eqLista_(env, chave) { try { const v = JSON.parse((await cfgGet(env, chave)) || '[]'); return Array.isArray(v) ? v.map(eqFone_).filter((x) => x.length >= 10) : []; } catch (e) { return []; } }
@@ -4445,11 +4452,92 @@ export async function rotasEquipe_(env, req, url, J, perms, ctx) {
   const minhaT_ = (t) => t.para === 'todos' || t.para === eu.whats;
 
   const nomeDe_ = async (w) => (await env.DB.prepare('SELECT nome FROM eq_pessoa WHERE whats=?').bind(w).first())?.nome || 'Final ' + w.slice(-4);
+  const duvidaVisivel_ = (d) => !!d && (!d.sigilo || eu.gestao || d.autor === eu.whats);
+  const duvidaSaida_ = (d) => ({ id: d.id, autor: d.autor, autor_nome: d.autor_nome, texto: d.texto, sigilo: !!d.sigilo, comunicado: d.comunicado,
+    estado: d.estado, sala: d.sala && eqSalaOk_(eu, d.sala) ? d.sala : '', podeConversar: !!d.sala && eqSalaOk_(eu, d.sala),
+    gestor_nome: d.gestor_nome, resposta: d.resposta, em: d.em, atualizada: d.atualizada, minha: d.autor === eu.whats });
+  const avisarDuvida_ = (alvos, id) => depois(() => eqAvisar_(env, alvos.filter((w) => w !== eu.whats), 'Equipe: dúvida para acompanhar', 'Abra a Equipe para acompanhar a dúvida.', { duvida: String(id) }, false));
+
+  if (p === '/equipe/duvidas' && req.method === 'GET') {
+    // ACL no SQL antes de ordenar/paginar: nem metadados de sigilo chegam a terceiros.
+    const lista = (await env.DB.prepare("SELECT * FROM eq_duvida WHERE sigilo=0 OR autor=? OR ?=1 ORDER BY CASE estado WHEN 'nova' THEN 0 WHEN 'em_conversa' THEN 1 WHEN 'respondida' THEN 2 ELSE 3 END, em, id LIMIT 200").bind(eu.whats, eu.gestao ? 1 : 0).all()).results || [];
+    return J({ ok: true, duvidas: lista.map(duvidaSaida_) });
+  }
+  if (p === '/equipe/duvida' && req.method === 'POST') {
+    const texto = eqLimpo_(b.texto, EQ_TEXTO_MAX_), op = String(b.opId || ''), comunicado = Number(b.comunicado) || null;
+    if (!texto) return J({ ok: false, erro: 'Escreva sua dúvida.' }, 400);
+    if (!/^[a-zA-Z0-9_-]{8,100}$/.test(op)) return J({ ok: false, erro: 'Não consegui identificar o envio. Tente de novo.' }, 400);
+    if (comunicado && !(await env.DB.prepare('SELECT 1 FROM eq_comunicado WHERE id=? AND apagado=0').bind(comunicado).first())) return J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
+    const anterior = await env.DB.prepare('SELECT * FROM eq_duvida WHERE autor=? AND op_id=?').bind(eu.whats, op).first();
+    if (anterior) {
+      if (anterior.texto !== texto || !!anterior.sigilo !== (b.sigilo === true) || anterior.comunicado !== comunicado) return J({ ok: false, erro: 'Este envio já foi usado para outra dúvida. Atualize a tela e tente de novo.' }, 409);
+      return J({ ok: true, id: anterior.id, estado: anterior.estado });
+    }
+    // D1 executa o lote atomicamente. Só a operação ainda ausente invalida a assinatura;
+    // uma concorrente com o mesmo opId não altera outro comunicado nem confirmação posterior.
+    const gravacoes = [];
+    if (comunicado) gravacoes.push(
+      env.DB.prepare("UPDATE eq_assinatura SET revogada_em=? WHERE comunicado=? AND whats=? AND revogada_em='' AND NOT EXISTS (SELECT 1 FROM eq_duvida WHERE autor=? AND op_id=?)").bind(agoraIso, comunicado, eu.whats, eu.whats, op),
+      env.DB.prepare('DELETE FROM eq_leitura WHERE comunicado=? AND whats=? AND NOT EXISTS (SELECT 1 FROM eq_duvida WHERE autor=? AND op_id=?)').bind(comunicado, eu.whats, eu.whats, op),
+    );
+    gravacoes.push(env.DB.prepare("INSERT OR IGNORE INTO eq_duvida (autor, autor_nome, texto, sigilo, comunicado, em, atualizada, op_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(eu.whats, eu.nome, texto, b.sigilo === true ? 1 : 0, comunicado, agoraIso, agoraIso, op));
+    const gravado = await env.DB.batch(gravacoes);
+    const d = await env.DB.prepare('SELECT * FROM eq_duvida WHERE autor=? AND op_id=?').bind(eu.whats, op).first();
+    if (d.texto !== texto || !!d.sigilo !== (b.sigilo === true) || d.comunicado !== comunicado) return J({ ok: false, erro: 'Este envio já foi usado para outra dúvida. Atualize a tela e tente de novo.' }, 409);
+    if (gravado[gravado.length - 1].meta?.changes) avisarDuvida_(await eqMembros_(env, 'gestao'), d.id);
+    return J({ ok: true, id: d.id, estado: d.estado });
+  }
+  if (p.startsWith('/equipe/duvida/') && req.method === 'POST') {
+    const d = await env.DB.prepare('SELECT * FROM eq_duvida WHERE id=?').bind(Number(b.duvida) || 0).first();
+    if (!duvidaVisivel_(d)) return J({ ok: false, erro: 'Dúvida não encontrada.' }, 404);
+    let estado, sala = d.sala, resposta = d.resposta, gestor = d.gestor, gestorNome = d.gestor_nome;
+    if (p === '/equipe/duvida/encaminhar') {
+      if (!eu.gestao) return J({ ok: false, erro: 'Só a gestão escolhe a conversa.' }, 403);
+      if (!['privado', 'geral'].includes(b.canal)) return J({ ok: false, erro: 'Escolha privado ou grupo Geral.' }, 400);
+      if (b.canal === 'geral' && d.sigilo) return J({ ok: false, erro: 'Uma dúvida em sigilo só pode ser tratada no privado.' }, 403);
+      if (b.canal === 'privado' && d.autor === eu.whats) return J({ ok: false, erro: 'Outra pessoa da gestão precisa atender sua dúvida no privado.' }, 400);
+      if (!['nova', 'em_conversa'].includes(d.estado)) return J({ ok: false, erro: 'Esta dúvida já foi respondida. A pessoa pode reabrir se ainda precisar.' }, 409);
+      estado = 'em_conversa'; sala = b.canal === 'geral' ? 'geral' : eqPrivada_(eu.whats, d.autor); gestor = eu.whats; gestorNome = eu.nome;
+      if (d.estado === estado && d.sala === sala && d.gestor === gestor) return J({ ok: true, id: d.id, sala, estado });
+    } else if (p === '/equipe/duvida/responder') {
+      if (!eu.gestao) return J({ ok: false, erro: 'Só a gestão registra a orientação.' }, 403);
+      if (d.estado !== 'em_conversa') return J({ ok: false, erro: 'Escolha a conversa e esclareça a dúvida antes de registrar a orientação.' }, 409);
+      if (d.gestor !== eu.whats) return J({ ok: false, erro: 'Assuma a conversa antes de registrar a orientação.' }, 403);
+      resposta = eqLimpo_(b.resposta, EQ_TEXTO_MAX_);
+      if (!resposta) return J({ ok: false, erro: 'Escreva a orientação que foi explicada.' }, 400);
+      estado = 'respondida';
+    } else if (p === '/equipe/duvida/entendi') {
+      if (d.autor !== eu.whats) return J({ ok: false, erro: 'Só quem perguntou pode confirmar que entendeu.' }, 403);
+      if (d.estado === 'resolvida') return J({ ok: true, id: d.id, sala, estado: d.estado });
+      if (d.estado !== 'respondida') return J({ ok: false, erro: 'Aguarde a orientação da gestão antes de confirmar.' }, 409);
+      estado = 'resolvida';
+    } else if (p === '/equipe/duvida/reabrir') {
+      if (d.autor !== eu.whats) return J({ ok: false, erro: 'Só quem perguntou pode reabrir esta dúvida.' }, 403);
+      if (d.estado === 'nova') return J({ ok: true, id: d.id, sala, estado: d.estado });
+      estado = 'nova'; sala = ''; gestor = ''; gestorNome = '';
+    } else return J({ ok: false, erro: 'Rota da Equipe inválida.' }, 404);
+    // Histórico e transição juntos; o predicado evita sobrescrever uma mudança concorrente.
+    const comando = p.slice('/equipe/duvida/'.length);
+    const gravacoes = [
+      env.DB.prepare('INSERT INTO eq_duvida_evento (duvida, ator, acao, conteudo, em) SELECT id, ?, ?, ?, ? FROM eq_duvida WHERE id=? AND estado=? AND revisao=?').bind(eu.whats, comando, comando === 'responder' ? resposta : sala, agoraIso, d.id, d.estado, d.revisao),
+    ];
+    // Os efeitos usam o mesmo predicado da transição, antes dela dentro da transação:
+    // se outra requisição ganhou, nenhuma leitura/assinatura ou histórico é modificado.
+    if (estado === 'nova' && d.comunicado) gravacoes.push(
+      env.DB.prepare("UPDATE eq_assinatura SET revogada_em=? WHERE comunicado=? AND whats=? AND revogada_em='' AND EXISTS (SELECT 1 FROM eq_duvida WHERE id=? AND estado=? AND revisao=?)").bind(agoraIso, d.comunicado, d.autor, d.id, d.estado, d.revisao),
+      env.DB.prepare('DELETE FROM eq_leitura WHERE comunicado=? AND whats=? AND EXISTS (SELECT 1 FROM eq_duvida WHERE id=? AND estado=? AND revisao=?)').bind(d.comunicado, d.autor, d.id, d.estado, d.revisao),
+    );
+    gravacoes.push(env.DB.prepare('UPDATE eq_duvida SET estado=?, sala=?, gestor=?, gestor_nome=?, resposta=?, atualizada=?, revisao=revisao+1 WHERE id=? AND estado=? AND revisao=?').bind(estado, sala, gestor, gestorNome, resposta, agoraIso, d.id, d.estado, d.revisao));
+    const gravado = await env.DB.batch(gravacoes);
+    if (!gravado[gravado.length - 1].meta?.changes) return J({ ok: false, erro: 'A dúvida mudou. Atualize a tela e tente de novo.' }, 409);
+    avisarDuvida_(estado === 'nova' || estado === 'resolvida' ? await eqMembros_(env, 'gestao') : [d.autor], d.id);
+    return J({ ok: true, id: d.id, sala: sala && eqSalaOk_(eu, sala) ? sala : '', estado });
+  }
 
   if (p === '/equipe/inicio' && req.method === 'GET') {
     const pessoas = await eqPessoas_(env), total = pessoas.length;
-    const com = ((await env.DB.prepare('SELECT c.*, (SELECT em FROM eq_leitura l WHERE l.comunicado=c.id AND l.whats=?) AS lido_em, (SELECT COUNT(*) FROM eq_leitura l WHERE l.comunicado=c.id) AS lidos FROM eq_comunicado c WHERE apagado=0 ORDER BY id DESC LIMIT 50').bind(eu.whats).all()).results || [])
-      .map((c) => ({ id: c.id, autor: c.autor_nome || 'Gestão', titulo: c.titulo, texto: c.texto, importante: !!c.importante, em: c.em, lido: !!c.lido_em || c.autor === eu.whats, lidos: Number(c.lidos) || 0, total }));
+    const com = ((await env.DB.prepare("SELECT c.*, (SELECT em FROM eq_leitura l WHERE l.comunicado=c.id AND l.whats=?) AS lido_em, (SELECT COUNT(*) FROM eq_leitura l WHERE l.comunicado=c.id) AS lidos, EXISTS (SELECT 1 FROM eq_assinatura a WHERE a.comunicado=c.id AND a.whats=? AND a.revogada_em='') AS confirmado, (SELECT COUNT(*) FROM eq_assinatura a WHERE a.comunicado=c.id AND a.revogada_em='') AS assinaturas, EXISTS (SELECT 1 FROM eq_duvida d WHERE d.comunicado=c.id AND d.autor=? AND d.estado<>'resolvida') AS duvida_pendente FROM eq_comunicado c WHERE apagado=0 ORDER BY id DESC LIMIT 50").bind(eu.whats, eu.whats, eu.whats).all()).results || [])
+      .map((c) => ({ id: c.id, autor: c.autor_nome || 'Gestão', titulo: c.titulo, texto: c.texto, importante: !!c.importante, em: c.em, lido: !!c.lido_em || c.autor === eu.whats, lidos: Number(c.lidos) || 0, total, confirmado: !!c.confirmado, duvidaPendente: !!c.duvida_pendente, assinaturas: Number(c.assinaturas) || 0 }));
     const minhas = ((await env.DB.prepare("SELECT DISTINCT sala FROM eq_msg WHERE sala LIKE 'p:%' AND (sala LIKE ? OR sala LIKE ?)").bind('p:' + eu.whats + ':%', 'p:%:' + eu.whats).all()).results || []).map((x) => x.sala);
     const salas = [];
     for (const id of ['gestao', 'geral', ...minhas]) {
@@ -4465,7 +4553,7 @@ export async function rotasEquipe_(env, req, url, J, perms, ctx) {
     });
   }
   if (p === '/equipe/contagem' && req.method === 'GET') {
-    const naoLidos = Number((await env.DB.prepare('SELECT COUNT(*) n FROM eq_comunicado c WHERE apagado=0 AND autor<>? AND NOT EXISTS (SELECT 1 FROM eq_leitura l WHERE l.comunicado=c.id AND l.whats=?)').bind(eu.whats, eu.whats).first())?.n) || 0;
+    const naoLidos = Number((await env.DB.prepare("SELECT COUNT(*) n FROM eq_comunicado c WHERE apagado=0 AND autor<>? AND NOT EXISTS (SELECT 1 FROM eq_assinatura a WHERE a.comunicado=c.id AND a.whats=? AND a.revogada_em='')").bind(eu.whats, eu.whats).first())?.n) || 0;
     let msgs = 0;
     for (const id of ['gestao', 'geral']) if (eqSalaOk_(eu, id)) { const lido = Number((await env.DB.prepare('SELECT ultimo FROM eq_lido WHERE sala=? AND whats=?').bind(id, eu.whats).first())?.ultimo) || 0; msgs += Number((await env.DB.prepare('SELECT COUNT(*) n FROM eq_msg WHERE sala=? AND id>? AND autor<>?').bind(id, lido, eu.whats).first())?.n) || 0; }
     msgs += Number((await env.DB.prepare("SELECT COUNT(*) n FROM eq_msg m WHERE (m.sala LIKE ? OR m.sala LIKE ?) AND m.autor<>? AND m.id > COALESCE((SELECT ultimo FROM eq_lido l WHERE l.sala=m.sala AND l.whats=?),0)").bind('p:' + eu.whats + ':%', 'p:%:' + eu.whats, eu.whats, eu.whats).first())?.n) || 0;
@@ -4474,38 +4562,64 @@ export async function rotasEquipe_(env, req, url, J, perms, ctx) {
       if (t.prazo && t.prazo > hojeF) continue;
       if (!(await env.DB.prepare('SELECT 1 FROM eq_tarefa_feita WHERE tarefa=? AND dia=?').bind(t.id, diaDe_(t)).first())) tarefas++;
     }
-    return J({ ok: true, comunicados: naoLidos, mensagens: msgs, tarefas, total: naoLidos + msgs + tarefas });
+    const duvidas = Number((await env.DB.prepare("SELECT COUNT(*) n FROM eq_duvida WHERE (?=1 AND estado IN ('nova','em_conversa')) OR (autor=? AND estado IN ('em_conversa','respondida'))").bind(eu.gestao ? 1 : 0, eu.whats).first())?.n) || 0;
+    return J({ ok: true, comunicados: naoLidos, mensagens: msgs, tarefas, duvidas, total: naoLidos + msgs + tarefas + duvidas });
   }
   if (p === '/equipe/comunicado' && req.method === 'POST') {
     if (!eu.publica) return J({ ok: false, erro: 'Só quem publica comunicados (Admin total e quem ele escolher) pode publicar.' }, 403);
     const titulo = eqLimpo_(b.titulo, EQ_TITULO_MAX_), texto = eqLimpo_(b.texto, EQ_TEXTO_MAX_);
     if (!titulo) return J({ ok: false, erro: 'Escreva o título do comunicado.' }, 400);
-    const r = await env.DB.prepare('INSERT INTO eq_comunicado (autor, autor_nome, titulo, texto, importante, em) VALUES (?, ?, ?, ?, ?, ?)').bind(eu.whats, eu.nome, titulo, texto, b.importante ? 1 : 0, agoraIso).run();
-    const id = r.meta?.last_row_id;
+    const origem = Number(b.origemDuvida) || 0;
+    if (origem && !(await env.DB.prepare("SELECT 1 FROM eq_duvida WHERE id=? AND estado='resolvida'").bind(origem).first())) return J({ ok: false, erro: 'A pessoa precisa confirmar que entendeu antes de transformar a orientação em comunicado.' }, 409);
+    let id;
+    if (origem) {
+      const gravado = await env.DB.batch([
+        env.DB.prepare("INSERT INTO eq_comunicado (autor, autor_nome, titulo, texto, importante, em) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM eq_duvida WHERE id=? AND estado='resolvida') RETURNING id").bind(eu.whats, eu.nome, titulo, texto, b.importante ? 1 : 0, agoraIso, origem),
+        env.DB.prepare('INSERT INTO eq_comunicado_origem (comunicado, duvida) SELECT last_insert_rowid(), ? WHERE changes()>0').bind(origem),
+      ]);
+      id = gravado[0].results?.[0]?.id;
+      if (!id) return J({ ok: false, erro: 'A dúvida foi reaberta. Confira a orientação antes de publicar.' }, 409);
+    } else {
+      const r = await env.DB.prepare('INSERT INTO eq_comunicado (autor, autor_nome, titulo, texto, importante, em) VALUES (?, ?, ?, ?, ?, ?)').bind(eu.whats, eu.nome, titulo, texto, b.importante ? 1 : 0, agoraIso).run();
+      id = r.meta?.last_row_id;
+    }
     depois(async () => eqAvisar_(env, (await eqPessoas_(env)).map((x) => x.whats).filter((w) => w !== eu.whats), (b.importante ? '📌 ' : '') + 'Comunicado: ' + titulo, texto.slice(0, 160) || 'Toque para ler e confirmar.', { comunicado: String(id) }, !!b.importante));
     return J({ ok: true, id });
   }
   if (p === '/equipe/lido' && req.method === 'POST') {
     const id = Number(b.comunicado) || 0;
     if (!(await env.DB.prepare('SELECT 1 FROM eq_comunicado WHERE id=? AND apagado=0').bind(id).first())) return J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
-    await env.DB.prepare('INSERT OR IGNORE INTO eq_leitura (comunicado, whats, em) VALUES (?, ?, ?)').bind(id, eu.whats, agoraIso).run();
-    return J({ ok: true });
+    if (b.entendimento !== true) {
+      // Clientes antigos podem registrar leitura, nunca uma declaração que não foi apresentada.
+      await env.DB.prepare('INSERT OR IGNORE INTO eq_leitura (comunicado, whats, em) VALUES (?, ?, ?)').bind(id, eu.whats, agoraIso).run();
+      return J({ ok: true, confirmado: false });
+    }
+    await env.DB.batch([
+      env.DB.prepare("INSERT OR IGNORE INTO eq_assinatura (comunicado, whats, nome, declaracao, em) SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM eq_comunicado WHERE id=? AND apagado=0) AND NOT EXISTS (SELECT 1 FROM eq_duvida WHERE comunicado=? AND autor=? AND estado<>'resolvida')").bind(id, eu.whats, eu.nome, EQ_DECLARACAO_, agoraIso, id, id, eu.whats),
+      env.DB.prepare("INSERT OR IGNORE INTO eq_leitura (comunicado, whats, em) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM eq_assinatura WHERE comunicado=? AND whats=? AND revogada_em='')").bind(id, eu.whats, agoraIso, id, eu.whats),
+    ]);
+    const assinatura = await env.DB.prepare("SELECT nome, declaracao, em FROM eq_assinatura WHERE comunicado=? AND whats=? AND revogada_em=''").bind(id, eu.whats).first();
+    if (!assinatura) return J({ ok: false, erro: 'Sua dúvida ainda está aberta. Converse com a gestão e confirme que entendeu a orientação primeiro.' }, 409);
+    return J({ ok: true, confirmado: true, assinatura });
   }
   if (p === '/equipe/leituras' && req.method === 'GET') {
     if (!eu.publica) return J({ ok: false, erro: 'Só quem publica comunicados vê quem leu.' }, 403);
     const id = Number(url.searchParams.get('id')) || 0;
     const c = await env.DB.prepare('SELECT autor FROM eq_comunicado WHERE id=?').bind(id).first(); if (!c) return J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
     const lidas = new Map(((await env.DB.prepare('SELECT whats, em FROM eq_leitura WHERE comunicado=?').bind(id).all()).results || []).map((x) => [x.whats, x.em]));
-    const lista = (await eqPessoas_(env)).filter((x) => x.whats !== c.autor).map((x) => ({ nome: x.nome, leu: lidas.has(x.whats), em: lidas.get(x.whats) || null }));
-    return J({ ok: true, leram: lista.filter((x) => x.leu), faltam: lista.filter((x) => !x.leu) });
+    const assinaturas = (await env.DB.prepare("SELECT whats, nome, declaracao, em FROM eq_assinatura WHERE comunicado=? AND revogada_em='' ORDER BY em").bind(id).all()).results || [];
+    const assinaram = new Set(assinaturas.map((x) => x.whats));
+    const lista = (await eqPessoas_(env)).filter((x) => x.whats !== c.autor).map((x) => ({ nome: x.nome, whats: x.whats, leu: lidas.has(x.whats), em: lidas.get(x.whats) || null }));
+    const duvidas = ((await env.DB.prepare("SELECT * FROM eq_duvida WHERE comunicado=? AND estado<>'resolvida' ORDER BY em, id").bind(id).all()).results || []).map(duvidaSaida_);
+    return J({ ok: true, leram: lista.filter((x) => x.leu), confirmaram: assinaturas, faltam: lista.filter((x) => !assinaram.has(x.whats)), duvidas });
   }
   if (p === '/equipe/lembrar' && req.method === 'POST') {
     if (!eu.publica) return J({ ok: false, erro: 'Só quem publica comunicados pode lembrar.' }, 403);
-    const id = Number(b.comunicado) || 0, c = await env.DB.prepare('SELECT autor, titulo FROM eq_comunicado WHERE id=? AND apagado=0').bind(id).first();
+    const id = Number(b.comunicado) || 0, c = await env.DB.prepare('SELECT autor, titulo, importante FROM eq_comunicado WHERE id=? AND apagado=0').bind(id).first();
     if (!c) return J({ ok: false, erro: 'Comunicado não encontrado.' }, 404);
-    const leram = new Set(((await env.DB.prepare('SELECT whats FROM eq_leitura WHERE comunicado=?').bind(id).all()).results || []).map((x) => x.whats));
+    const leram = new Set(((await env.DB.prepare("SELECT whats FROM eq_assinatura WHERE comunicado=? AND revogada_em=''").bind(id).all()).results || []).map((x) => x.whats));
     const faltam = (await eqPessoas_(env)).map((x) => x.whats).filter((w) => w !== c.autor && !leram.has(w));
-    const n = await eqAvisar_(env, faltam, '📌 Falta você confirmar: ' + c.titulo, 'Toque para ler e confirmar.', { comunicado: String(id) }, true);
+    const n = await eqAvisar_(env, faltam, '📌 Falta você confirmar: ' + c.titulo, 'Toque para ler e confirmar.', { comunicado: String(id) }, !!c.importante);
     return J({ ok: true, faltam: faltam.length, avisados: n });
   }
   if (p === '/equipe/sala' && req.method === 'GET') {
