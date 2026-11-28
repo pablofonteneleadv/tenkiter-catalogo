@@ -5,7 +5,7 @@ from mock import SESSION, install, PERMS_ALL
 from playwright.sync_api import sync_playwright
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
 T = {"id": "n", "titulo": "Teste ok ok", "descricao": "", "pagina": "index.html", "tipo": "independente", "status": "publicado", "versao": 1, "preparacao": [], "visao": "admin_total",
-     "etapas": [{"selector": "[data-nav=busca]", "alvoNome": "Buscar", "acao": "click", "regra": "acao", "valor": "", "instrucao": "Toque em Buscar", "observacao": "", "erro": ""}]}
+     "etapas": [{"selector": "[data-nav=selecao]", "alvoNome": "Seleção", "acao": "click", "regra": "acao", "valor": "", "instrucao": "Toque em Seleção", "observacao": "", "erro": ""}]}
 H = 780
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
@@ -26,11 +26,11 @@ with sync_playwright() as p:
         inner = pg.frame(url=lambda u: "tutorial_teste=1" in u)
         if inner: break
         pg.wait_for_timeout(250)
-    inner.wait_for_selector("[data-nav=busca].tk-tut-alvo"); pg.wait_for_timeout(1200)
+    inner.wait_for_selector("[data-nav=selecao].tk-tut-alvo"); pg.wait_for_timeout(1200)
     off = fr.evaluate("document.querySelector('#tt-frame').getBoundingClientRect().top")
-    nav = inner.evaluate("(()=>{const r=document.querySelector('[data-nav=busca]').getBoundingClientRect();return [r.top,r.bottom]})()")
+    nav = inner.evaluate("(()=>{const r=document.querySelector('[data-nav=selecao]').getBoundingClientRect();return [r.top,r.bottom]})()")
     seta = inner.evaluate("(()=>{const e=document.querySelector('.tk-tut-seta');if(!e)return null;const r=e.getBoundingClientRect();return [r.top,r.bottom]})()")
-    assert nav[1] + off <= H + 1, ("barra Buscar fora da área visível", nav, off)
+    assert nav[1] + off <= H + 1, ("barra Seleção fora da área visível", nav, off)
     assert seta and seta[1] + off <= H + 1, ("placa TOQUE AQUI fora", seta, off)
     b.close()
 print("tutorial_teste_area_visivel: OK")
