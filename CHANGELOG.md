@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.2.0 — Equipe: dúvidas prioritárias e entendimento confirmado
+
+- Funcionárias registram dúvidas junto dos comunicados: visíveis à equipe ou, com Sigilo, apenas à autora e gestão. Pendências têm prioridade; gestão encaminha para conversa privada ou Geral, registra orientação e a autora confirma que entendeu ou reabre a dúvida.
+- Comunicados oferecem “Entendi e não tenho dúvidas” e “Tenho uma dúvida”. A confirmação registra identidade, data e declaração explícita, mantém histórico e fica pendente ao surgir nova pergunta. Leituras antigas não viram assinatura automaticamente.
+- Depois da solução, gestão pode preparar comunicado revisado; origem sigilosa não copia automaticamente a conversa. Conversas privadas continuam restritas aos participantes.
+- Atualizações preservam o formulário em edição; lembretes comuns respeitam o silêncio noturno; a permissão Gestão da Equipe passa pelo acesso completo.
+- Mensageiro exige permissão explícita: acesso ao catálogo 1 não libera conversas de clientes. Revogação elimina conteúdo e cache da tela; app Android 2.6.5 confere o acesso antes de mostrar mensagens.
+- Rodapés entre setores removidos; o catálogo conserva os ícones normais do cliente e as funções de produto autorizadas.
+- Fases de foto/áudio e foto de prova permanecem no roteiro, após esta prioridade solicitada pelo proprietário. Nenhum Apps Script novo neste lote.
+
 ## 8.1.0 — Equipe: gestão pelas permissões e Tarefas
 
 - **Pedido do Pablo (27/11):** "Quem publica e quem está na Gestão" sai da tela e passa a vir das permissões. **Admin total, Admin e Responsável RH são gestão**: publicam comunicados (normais e importantes), criam e apagam tarefas, apagam comunicados e estão no grupo Gestão.

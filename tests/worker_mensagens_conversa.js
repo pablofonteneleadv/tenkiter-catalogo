@@ -1449,8 +1449,11 @@ function d1() {
     return originalFetchAcl(u,init);
   };
   const staff=async(m,p,b)=>{const r=await w.fetch(ped(m,p,'tk2.catalogo1',b),env,{});return {r,j:await r.json()};};
-  chk('Equipe catálogo 1 recebe atendimento sem configurações',(await staff('GET','/msg/acesso')).j.direitos.acessar&&!(await staff('GET','/msg/acesso')).j.direitos.configuracoes);
-  chk('Equipe catálogo 1 lista conversas',(await staff('GET','/msg/conversas?canal=todos')).r.status===200);
+  chk('somente Equipe catálogo 1 não concede Mensagens',!(await staff('GET','/msg/acesso')).j.direitos.acessar);
+  chk('catálogo 1 sem delegação não lista conversas nem conteúdo',(await staff('GET','/msg/conversas?canal=todos')).r.status===403&&(await staff('GET','/msg/mensagens?conversa='+nConv)).r.status===403);
+  for(const chave of ['acessar','responder','produtos','arquivos','contatos','etiquetas','notas','agenda','respostas']) await A('POST','/msg/acessos',{tipo:'perfil',alvo:'Equipe catálogo 1',chave,valor:true});
+  chk('gestão pode delegar atendimento explicitamente sem configurações',(await staff('GET','/msg/acesso')).j.direitos.acessar&&!(await staff('GET','/msg/acesso')).j.direitos.configuracoes);
+  chk('delegação explícita libera a lista',(await staff('GET','/msg/conversas?canal=todos')).r.status===200);
   chk('equipe não altera conexões nem administra acessos',(await staff('POST','/msg/zernio/config',{chave:'fake'})).r.status===403&&(await staff('GET','/msg/acessos')).r.status===403);
   let regra=await A('POST','/msg/acessos',{tipo:'pessoa',alvo:'88999990000',chave:'notas',valor:false});
   chk('gestão salva negação individual',regra.j.ok,regra.j);
@@ -1481,7 +1484,7 @@ function d1() {
   // Perfil persistente, autoridade do servidor e blocos completos além da página.
   const fetchPerfil=globalThis.fetch;
   globalThis.fetch=async(u,o)=>String(u).startsWith('https://api.fake')&&JSON.parse(o.body).action==='sessao'
-    ?new Response(JSON.stringify({ok:true,usuario:{nome:new Headers(o.headers).get('ignored')||'IARA ALVES',permissoes:JSON.parse(o.body).sessao==='tk2.perfil-admin'?['gerir_acessos']:['catalogo_admin'],perfis:['Equipe catálogo 1']}}))
+    ?new Response(JSON.stringify({ok:true,usuario:{nome:new Headers(o.headers).get('ignored')||'IARA ALVES',permissoes:JSON.parse(o.body).sessao==='tk2.perfil-admin'?['gerir_acessos']:['catalogo_admin','msg_acessar','msg_responder'],perfis:['Equipe catálogo 1']}}))
     :fetchPerfil(u,o);
   const perfilReq=async(m,path,phone,token,body)=>{const r=await w.fetch(new Request('https://ig.test'+path,{method:m,headers:{'X-TK-Whats':phone,'X-TK-Sessao':token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}),env,{});return {status:r.status,j:await r.json()};};
   await cfg('msg_cfg',JSON.stringify({assinatura:false}));

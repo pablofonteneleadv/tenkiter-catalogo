@@ -102,6 +102,7 @@ enum class Modulo(val id: String, val rotulo: String, val caminho: String) {
 
         /** Abre a janela da área (ou traz para a frente, como estava). */
         fun abrir(c: Context, m: Modulo, endereco: String? = null, origem: Origem? = null) {
+            if (m == MENSAGENS && Pessoas.gerenciado(c) && !Pessoas.podeArea(Pessoas.ativa(c), m)) return
             Contadores.usou(c, m)   // fase 3: as áreas mais usadas pela pessoa aparecem primeiro ao segurar o ícone
             val i = Intent(c, m.classe).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (m != MENSAGENS && pedeCarga(m, endereco)) i.putExtra(EXTRA_URL, endereco)
@@ -170,14 +171,14 @@ object ContaApp {
 fun ContaApp.aplicarPessoa(c: Context) {
     val app = c.applicationContext; val repo = NativeRepository.get(app)
     val p = Pessoas.ativa(app); val a = repo.store.auth()
-    if (p != null && a?.owner == p.owner) return
+    if (p != null && a?.owner == p.owner && Pessoas.podeArea(p, Modulo.MENSAGENS)) return
     if (a != null) {
         val inscricao = runCatching { com.onesignal.OneSignal.User.pushSubscription.id }.getOrDefault("")
-        repo.logout()
+        repo.logout(false)
         if (inscricao.isNotBlank()) CoroutineScope(Dispatchers.IO).launch { runCatching { NativeApi().removeSubscription(a, inscricao) } }
     }
     if (p != null) ligarAvisosEquipe(app, p.auth)
-    if (p == null || !Pessoas.podeArea(p, Modulo.MENSAGENS)) return
+    if (p == null) return
     CoroutineScope(Dispatchers.IO).launch {
         runCatching {
             repo.importSession(NativeAuth(p.owner, p.session, p.nome))

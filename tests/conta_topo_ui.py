@@ -127,11 +127,13 @@ with sync_playwright() as p:
 
     print("== app Android (TKAndroid simulado) ==")
     ctx = novo_ctx(b, 390, 844, extra=ANDROID); pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
-    pg.goto(BASE + "admin.html"); pg.wait_for_selector("nav.tk-nav a[data-nav=curriculos]", timeout=20000)
+    pg.goto(BASE + "admin.html"); pg.wait_for_function("!!window.TenkiterNav")
+    chk("app: setor não tem rodapé para outros módulos", pg.locator("nav.tk-nav").count() == 0)
     antes = pg.url
-    pg.click("nav.tk-nav a[data-nav=curriculos]"); pg.wait_for_timeout(600)
+    pg.evaluate("const a=document.createElement('a');a.href='curriculos.html';a.dataset.nav='curriculos';a.textContent='Abrir currículo relacionado';document.body.appendChild(a);a.click()")
+    pg.wait_for_timeout(600)
     ab = pg.evaluate("window.__abriu || []")
-    chk("barra de baixo no app: abre a janela de Currículos e a Gestão continua aqui", ab and ab[-1].endswith("/curriculos.html") and pg.url == antes and pg.locator("iframe.tk-app-frame:not([hidden])").count() == 0, (ab, pg.url))
+    chk("link funcional no app: abre Currículos e mantém a Gestão", ab and ab[-1].endswith("/curriculos.html") and pg.url == antes and pg.locator("iframe.tk-app-frame:not([hidden])").count() == 0, (ab, pg.url))
     pg.on("dialog", lambda d: d.accept())
     pg.click("#tkc-topo"); pg.click("#tkc-sair"); pg.wait_for_load_state("load"); pg.wait_for_timeout(500)
     chk("Sair no app avisa o app Android (sai também das Mensagens)", pg.evaluate("localStorage.getItem('tm_session')") is None)

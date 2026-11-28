@@ -1,4 +1,4 @@
-"""Navegação unificada: URLs reais, telas mantidas vivas, voltar/avançar e estado por aba."""
+"""Compatibilidade das janelas embutidas: links/eventos, URLs, voltar/avançar e estado. Sem barra entre setores."""
 import os, sys, re
 from playwright.sync_api import sync_playwright, expect
 
@@ -26,7 +26,7 @@ with sync_playwright() as p:
     pg.evaluate("window.__catalogoVivo={valor:17}; window.scrollTo(0,500)")
     scroll0 = pg.evaluate("scrollY")
 
-    pg.click('[data-nav="gestao"]')
+    pg.evaluate("window.postMessage({tipo:'tk-app-navegar',href:'admin.html'},location.origin)")
     expect(pg).to_have_url(re.compile(r"/admin\.html$"))
     expect(pg.locator('.tk-app-frame:not([hidden])')).to_have_count(1)
     fr_admin = pg.frame(url=lambda u: "admin.html" in u and "embed=1" in u)
@@ -36,7 +36,7 @@ with sync_playwright() as p:
     chk("URL individual da Gestão é preservada", pg.url.endswith("/admin.html"), pg.url)
     chk("página embutida não cria uma segunda barra", fr_admin.locator(".tk-nav").count() == 0)
 
-    pg.click('[data-nav="treinamentos"]')
+    pg.evaluate("window.postMessage({tipo:'tk-app-navegar',href:'treinamentos.html'},location.origin)")
     expect(pg).to_have_url(re.compile(r"/treinamentos\.html$"))
     fr_treino = pg.frame(url=lambda u: "treinamentos.html" in u and "embed=1" in u and "painel=rh" not in u)
     fr_treino.wait_for_load_state("domcontentloaded")
@@ -53,7 +53,7 @@ with sync_playwright() as p:
     expect(pg).to_have_url(re.compile(r"/admin\.html$"))
     chk("Avançar restaura a mesma Gestão", fr_admin.evaluate("window.__gestaoViva.valor") == 23)
 
-    pg.click('[data-nav="catalogo"]')
+    pg.evaluate("window.postMessage({tipo:'tk-app-navegar',href:'index.html'},location.origin)")
     expect(pg).to_have_url(re.compile(r"/index\.html$"))
     expect(pg.locator('.tk-app-views')).to_be_hidden()
     pg.wait_for_timeout(100)
@@ -64,14 +64,15 @@ with sync_playwright() as p:
 
     direto = ctx.new_page()
     direto.goto(BASE + "admin.html")
-    direto.wait_for_selector('.tk-nav')
+    direto.wait_for_function('!!window.TenkiterNav')
+    chk('entrada direta sem rodapé de setores', direto.locator('.tk-nav').count() == 0)
     direto.evaluate("window.__entradaDireta=31")
-    direto.click('[data-nav="rh"]')
+    direto.evaluate("window.postMessage({tipo:'tk-app-navegar',href:'treinamentos.html?painel=rh'},location.origin)")
     expect(direto).to_have_url(re.compile(r"/treinamentos\.html\?painel=rh$"))
     fr_rh = direto.frame(url=lambda u: "painel=rh" in u and "embed=1" in u)
     fr_rh.wait_for_load_state("domcontentloaded")
     chk("link direto de RH continua compartilhável", direto.url.endswith("/treinamentos.html?painel=rh"), direto.url)
-    direto.click('[data-nav="gestao"]')
+    direto.evaluate("window.postMessage({tipo:'tk-app-navegar',href:'admin.html'},location.origin)")
     expect(direto).to_have_url(re.compile(r"/admin\.html$"))
     chk("entrada direta em qualquer área também permanece viva", direto.evaluate("window.__entradaDireta") == 31)
     b.close()

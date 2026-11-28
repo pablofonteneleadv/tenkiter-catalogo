@@ -5,7 +5,7 @@ from mock import SESSION, install, PERMS_ALL
 from playwright.sync_api import sync_playwright
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
 T = {"id": "n", "titulo": "Teste ok ok", "descricao": "", "pagina": "index.html", "tipo": "independente", "status": "publicado", "versao": 1, "preparacao": [], "visao": "admin_total",
-     "etapas": [{"selector": "[data-nav=gestao]", "alvoNome": "Gestão", "acao": "click", "regra": "acao", "valor": "", "instrucao": "Toque em Gestão", "observacao": "", "erro": ""}]}
+     "etapas": [{"selector": "[data-nav=busca]", "alvoNome": "Buscar", "acao": "click", "regra": "acao", "valor": "", "instrucao": "Toque em Buscar", "observacao": "", "erro": ""}]}
 H = 780
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
@@ -14,7 +14,7 @@ with sync_playwright() as p:
     ctx.add_init_script("localStorage.setItem('tm_nav_perms',JSON.stringify({w:'88999999999',p:" + str(PERMS_ALL).replace("'", '"') + ",t:Date.now()}));")
     st = install(ctx, perms=PERMS_ALL); st["tutorials"].append(T)
     pg = ctx.new_page(); pg.set_default_timeout(9000)
-    pg.goto(BASE + "index.html"); pg.wait_for_selector(".tk-nav"); pg.click('[data-nav="treinamentos"]')
+    pg.goto(BASE + "index.html"); pg.wait_for_selector(".tk-nav"); pg.evaluate("window.postMessage({tipo:'tk-app-navegar',href:'treinamentos.html'},location.origin)")
     pg.wait_for_selector('.tk-app-views iframe', state='attached'); pg.wait_for_timeout(1500)
     # simula o navegador/ app com a tela embutida MAIS ALTA que a área visível (a barra de baixo ficaria fora)
     pg.add_style_tag(content="body.tk-tutorial-teste .tk-app-views,.tk-app-views{top:0!important;bottom:auto!important;height:%dpx!important}" % (H + 120))
@@ -26,11 +26,11 @@ with sync_playwright() as p:
         inner = pg.frame(url=lambda u: "tutorial_teste=1" in u)
         if inner: break
         pg.wait_for_timeout(250)
-    inner.wait_for_selector("[data-nav=gestao].tk-tut-alvo"); pg.wait_for_timeout(1200)
+    inner.wait_for_selector("[data-nav=busca].tk-tut-alvo"); pg.wait_for_timeout(1200)
     off = fr.evaluate("document.querySelector('#tt-frame').getBoundingClientRect().top")
-    nav = inner.evaluate("(()=>{const r=document.querySelector('[data-nav=gestao]').getBoundingClientRect();return [r.top,r.bottom]})()")
+    nav = inner.evaluate("(()=>{const r=document.querySelector('[data-nav=busca]').getBoundingClientRect();return [r.top,r.bottom]})()")
     seta = inner.evaluate("(()=>{const e=document.querySelector('.tk-tut-seta');if(!e)return null;const r=e.getBoundingClientRect();return [r.top,r.bottom]})()")
-    assert nav[1] + off <= H + 1, ("barra Gestão fora da área visível", nav, off)
+    assert nav[1] + off <= H + 1, ("barra Buscar fora da área visível", nav, off)
     assert seta and seta[1] + off <= H + 1, ("placa TOQUE AQUI fora", seta, off)
     b.close()
 print("tutorial_teste_area_visivel: OK")

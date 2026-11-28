@@ -12,6 +12,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
     private val lock=ReentrantLock()
     private var catalogCache=emptyList<JSONObject>()
     private var cursor="";private var fullAt=0L;private var accountAt=0L
+    @Volatile private var acessoSessao=""
     @Volatile var status="";private set
     companion object {
         const val CHANGED="br.com.tenkitermodas.mensagens.INBOX_CHANGED"
@@ -19,31 +20,49 @@ class NativeRepository internal constructor(private val context:Context,val stor
         fun get(c:Context):NativeRepository=instance?:synchronized(this){instance?:NativeRepository(c.applicationContext).also{instance=it}}
     }
     private fun changed(){context.sendBroadcast(Intent(CHANGED).setPackage(context.packageName))}
-    private fun allowed(j:JSONObject):Boolean {val p=j.optJSONArray("permissoes")?:return false;return (0 until p.length()).any{p.optString(it) in listOf("gerir_acessos","catalogo_admin")}}
+    private fun conferirAcesso(a:NativeAuth) {
+        val permitido=try{api.call("/msg/acesso",a).optBoolean("permitido",false)}catch(e:AccessRevoked){Pessoas.guardarAcessoMensagens(context,a,false);if(store.current(a))logout(false);throw e}
+        Pessoas.guardarAcessoMensagens(context,a,permitido)
+        if(!permitido){if(store.current(a))logout(false);throw AccessRevoked()}
+        acessoSessao=a.owner+":"+a.session
+    }
+    /** Cache antigo só aparece depois da autorização do Worker neste processo e para a pessoa ativa. */
+    fun canReadLocal(a:NativeAuth?):Boolean {
+        if(a==null||acessoSessao!=a.owner+":"+a.session||!store.canReadLocal(a))return false
+        if(!Pessoas.gerenciado(context))return true
+        val p=Pessoas.ativa(context)?:return false
+        return p.owner==a.owner&&p.session==a.session&&Pessoas.podeArea(p,Modulo.MENSAGENS)
+    }
     fun login(identifier:String,password:String){lock.withLock{
         val generation=store.generation
         val j=api.account(JSONObject().put("action","login").put("identificador",identifier.trim()).put("whatsapp",if(identifier.contains('@'))"" else identifier.filter{it.isDigit()}).put("senha",password))
         val user=j.getJSONObject("usuario")
-        if(!allowed(user))throw Exception("Sua conta não tem acesso ao atendimento.")
         val a=NativeAuth(user.getString("whatsapp"),j.getString("sessao"),user.optString("name",user.optString("nome","Atendente")))
+        conferirAcesso(a)
         api.call("/msg/conversas?canal=todos&filtro=",a)
         if(!store.saveIfGeneration(generation,a))throw Exception("O acesso foi cancelado.")
+        Pessoas.vista(context,a.owner,a.session,a.name,user.optJSONArray("permissoes")?.let{p->(0 until p.length()).map{p.optString(it)}})
+        Pessoas.guardarAcessoMensagens(context,a,true)
         status="Atualizando conversas…";changed()
     }}
     fun importSession(a:NativeAuth){lock.withLock{
         val generation=store.generation;val r=api.account(JSONObject().put("action","sessao").put("whatsapp",a.owner).put("sessao",a.session))
-        val user=r.getJSONObject("usuario");if(!allowed(user))throw AccessRevoked()
+        val user=r.getJSONObject("usuario")
         val fresh=NativeAuth(a.owner,r.optString("sessao",a.session),user.optString("name",user.optString("nome",a.name)))
+        conferirAcesso(fresh)
         api.call("/msg/conversas?canal=todos&filtro=",fresh)
         if(!store.saveIfGeneration(generation,fresh))throw Exception("O acesso foi cancelado.")
+        Pessoas.vista(context,fresh.owner,fresh.session,fresh.name,user.optJSONArray("permissoes")?.let{p->(0 until p.length()).map{p.optString(it)}})
+        Pessoas.guardarAcessoMensagens(context,fresh,true)
     }}
-    fun logout(){catalogCache=emptyList();cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
+    fun logout(desativarAvisos:Boolean=true){acessoSessao="";catalogCache=emptyList();cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();if(desativarAvisos)runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
     private fun freshSession():NativeAuth {
         val old=store.auth()?:throw AccessRevoked()
         val j=api.account(JSONObject().put("action","sessao").put("whatsapp",old.owner).put("sessao",old.session))
-        val user=j.getJSONObject("usuario");if(!allowed(user))throw AccessRevoked()
+        val user=j.getJSONObject("usuario")
         val next=NativeAuth(old.owner,j.optString("sessao",old.session),user.optString("name",user.optString("nome",old.name)))
         if(!store.updateAuth(old,next))throw Exception("A conta mudou.")
+        Pessoas.renovarSessaoMensagens(context,old,next)
         return next
     }
     private fun register(a:NativeAuth){
@@ -56,7 +75,8 @@ class NativeRepository internal constructor(private val context:Context,val stor
         if(store.auth()==null)return true
         try{
             status="Sincronizando…";changed()
-            val a=if(System.currentTimeMillis()-accountAt>60000)freshSession().also{accountAt=System.currentTimeMillis()}else store.auth()?:throw AccessRevoked();register(a)
+            val a=if(System.currentTimeMillis()-accountAt>60000)freshSession().also{accountAt=System.currentTimeMillis()}else store.auth()?:throw AccessRevoked()
+            conferirAcesso(a);register(a)
             val old=store.conversations().associateBy{it.optLong("id")}
             var full=cursor.isBlank()||System.currentTimeMillis()-fullAt>300000
             var response=if(full)allConversations(a,"")else api.call("/msg/novidades?desde="+enc(cursor)+"&conversa=$focus",a)
@@ -78,7 +98,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
             targets.distinct().take(8).forEach{id->downloadConversation(a,id)}
             if(!store.current(a))return false
             status="Atualizado às "+java.text.SimpleDateFormat("HH:mm",java.util.Locale("pt","BR")).format(java.util.Date());changed();true
-        }catch(e:AccessRevoked){logout();status="Entre novamente para continuar.";changed();false}
+        }catch(e:AccessRevoked){logout(false);status="Entre novamente para continuar.";changed();false}
         catch(_:Exception){status="Sem conexão · mostrando conversas salvas";changed();false}
     }
     private fun downloadConversation(a:NativeAuth,id:Long){
@@ -116,12 +136,12 @@ class NativeRepository internal constructor(private val context:Context,val stor
             val rows=j.getJSONArray("mensagens");store.putMessages(a,id,rows)
             store.conversation(id)?.let{store.putConversation(a,it.put("local_has_more",j.optBoolean("temMais")))};changed()
             (0 until rows.length()).map{rows.getJSONObject(it)}
-        }catch(e:AccessRevoked){logout();throw e}
+        }catch(e:AccessRevoked){logout(false);throw e}
     }
     fun administration(path:String,body:JSONObject?=null):JSONObject=lock.withLock{
         require(path.substringBefore('?') in setOf("/msg/config","/msg/pessoa","/msg/contexto","/msg/pessoas/google","/msg/conversas","/msg/metricas","/msg/resumo","/msg/diagnostico","/msg/instagram/situacao","/msg/instagram/segredo","/msg/instagram/assinar","/msg/ligar","/msg/pausar","/msg/contatos/situacao","/msg/contatos/config","/msg/contatos/backup","/msg/contatos/relatorio","/msg/contatos/limpeza","/msg/contatos/auto","/msg/stories"))
         val a=store.auth()?:throw AccessRevoked()
-        try{api.call(path,a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+        try{api.call(path,a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout(false);throw e}
     }
     fun refreshPerson(result:JSONObject){lock.withLock{val a=store.auth()?:throw AccessRevoked();val rows=result.optJSONArray("canais")?:return@withLock;for(i in 0 until rows.length())store.putConversation(a,rows.getJSONObject(i));changed()}}
     fun repairContext(id:Long){val stamp=store.stampedAuth();val a=stamp.first?:return;api.call("/msg/contexto",a,JSONObject().put("conversa",id));if(store.generation==stamp.second&&store.auth()?.owner==a.owner)changed()}
@@ -132,7 +152,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
     }
     fun export(query:String):NativeApi.Export=lock.withLock{
         val a=store.auth()?:throw AccessRevoked()
-        try{api.export(a,query).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+        try{api.export(a,query).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout(false);throw e}
     }
     fun discard(key:String){store.removePending(key);changed()}
     /** Sinal de presença apenas com a tela nativa em primeiro plano; não abre nem lê conversas. */
@@ -146,7 +166,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
     }
     fun availability(pausa:Boolean?=null,permitido:()->Boolean={true}):JSONObject=lock.withLock{if(!permitido())throw AccessRevoked();val a=store.auth()?:throw AccessRevoked();api.call("/msg/disponibilidade",a,pausa?.let{JSONObject().put("pausa",it)})}
     fun config(body:JSONObject?=null):JSONObject=lock.withLock{
-        val a=store.auth()?:throw AccessRevoked();try{api.call("/msg/config",a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+        val a=store.auth()?:throw AccessRevoked();try{api.call("/msg/config",a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout(false);throw e}
     }
     fun productPhoto(url:String):ByteArray?=api.publicPhoto(url)
     fun catalog():List<JSONObject> =lock.withLock{
@@ -165,15 +185,15 @@ class NativeRepository internal constructor(private val context:Context,val stor
                 if(action!="reabrir")c.put("nao_lidas",if(action=="nao_lidas")maxOf(1,c.optInt("nao_lidas"))else 0)
                 store.putConversation(a,c)
             }};changed()
-        }catch(e:AccessRevoked){logout();throw e}
+        }catch(e:AccessRevoked){logout(false);throw e}
     }
     fun media(id:Long,context:Boolean=false,post:Long=0):Pair<ByteArray,String> =lock.withLock{
         val a=store.auth()?:throw AccessRevoked()
-        try{api.media(a,id,context,post).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+        try{api.media(a,id,context,post).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout(false);throw e}
     }
     fun attachment(id:Long,bytes:ByteArray,type:String,caption:String,key:String="android-"+UUID.randomUUID()):String=lock.withLock{
         val a=store.auth()?:throw AccessRevoked()
-        val upload=try{api.upload(a,bytes,type)}catch(e:AccessRevoked){logout();throw e}
+        val upload=try{api.upload(a,bytes,type)}catch(e:AccessRevoked){logout(false);throw e}
         if(!store.current(a))throw AccessRevoked()
         reply(id,caption,key,upload.getString("anexo"),type)
     }
@@ -181,7 +201,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
         if(!allowed()||(store.conversation(id)?.optInt("nao_lidas")?:0)<=0)return
         val a=store.auth()?:return
         try{api.call("/msg/lida",a,JSONObject().put("conversa",id).put("celular",true));store.conversation(id)?.let{it.put("nao_lidas",0);store.putConversation(a,it)};changed()}
-        catch(e:AccessRevoked){logout()}
+        catch(e:AccessRevoked){logout(false)}
         catch(_:Exception){}
     }}
     fun reply(id:Long,text:String,key:String="android-"+UUID.randomUUID(),attachment:String="",type:String=""):String {
@@ -202,7 +222,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
             if(m!=null){store.putMessages(a,id,org.json.JSONArray().put(m));store.removePending(key)}
             else store.pending(key,id,pendingText,"Envio sem confirmação. Confira antes de tentar novamente.",a)
             runCatching{downloadConversation(a,id)};changed();key
-        }catch(e:AccessRevoked){logout();throw e}
+        }catch(e:AccessRevoked){logout(false);throw e}
         catch(e:ApiFailure){
             if(store.current(a)){
                 val m=e.data.optJSONObject("mensagem")

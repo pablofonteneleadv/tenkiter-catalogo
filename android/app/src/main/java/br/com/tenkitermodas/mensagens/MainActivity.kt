@@ -77,6 +77,7 @@ class MainActivity:Activity(),InboxView.Events {
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
         WebKeeper.download={id,name->receivedFiles.choose(id,name)}
         WebKeeper.actions={a->if(a=="lista"){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null;webTarget=0;webRequest="";conversation=0;pendingClick=0;peeking=false;openGeneration++}else if(a=="avisos")notificationSettings() else if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
+        if(bloquearSemAcesso())return
         render();if(SetupGate.ok(this))full(conversation)else showSetup()
         if(intent?.action==ACAO_ATUALIZAR)updater.check()
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
@@ -94,10 +95,11 @@ class MainActivity:Activity(),InboxView.Events {
     }
     private fun syncNames(){if(namesChecked)return;namesChecked=true;scope.launch{try{withContext(Dispatchers.IO){repo.googleNames()};sync()}catch(_:Exception){namesChecked=false}}}
     private fun render(){
+        if(bloquearSemAcesso())return
         val seq=++refreshSeq;val id=conversation;val extra=if(historyConversation==id)history else emptyList()
         scope.launch{
             val data=withContext(Dispatchers.IO){
-                val a=repo.store.auth();val canRead=repo.store.canReadLocal(a)
+                val a=repo.store.auth();val canRead=repo.canReadLocal(a)
                 Snapshot(a,canRead,if(canRead)repo.store.conversations()else emptyList(),if(canRead&&id>0)(extra+repo.store.messages(id)).distinctBy{it.optLong("id")}.sortedWith(compareBy<JSONObject>{it.optString("enviada_em")}.thenBy{it.optLong("id")})else emptyList(),if(canRead&&id>0)repo.store.pending(id)else emptyList())
             }
             if(seq!=refreshSeq||id!=conversation)return@launch
@@ -107,6 +109,17 @@ class MainActivity:Activity(),InboxView.Events {
         }
     }
     private data class Snapshot(val a:NativeAuth?,val read:Boolean,val chats:List<JSONObject>,val messages:List<JSONObject>,val pending:List<JSONObject>)
+    private var acessoEncerrado=false
+    private fun bloquearSemAcesso():Boolean {
+        if(acessoEncerrado)return true
+        if(!Pessoas.gerenciado(this))return false
+        val p=Pessoas.ativa(this)
+        if(p!=null&&(p.adminTotal||p.mensagens!=false))return false
+        acessoEncerrado=true;online=false;conversation=0;history=emptyList();historyConversation=0;openGeneration++
+        inbox.reset();inbox.visibility=View.GONE;webPanel?.visibility=View.GONE
+        tools.close();administration.close();repo.logout(false)
+        startActivity(Intent(this,AtalhosActivity::class.java));finish();return true
+    }
     override fun login(identifier:String,password:String){
         if(syncing)return;syncing=true;inbox.loginState(true);inbox.status("Conferindo seu acesso…")
         scope.launch{
@@ -148,7 +161,7 @@ class MainActivity:Activity(),InboxView.Events {
         if(historyBusy||id!=conversation)return;historyBusy=true
         val generation=repo.store.generation;val earlier=if(historyConversation==id)history else emptyList()
         scope.launch{try{val rows=withContext(Dispatchers.IO){val oldest=(earlier+repo.store.messages(id)).minWithOrNull(compareBy<JSONObject>{it.optString("enviada_em")}.thenBy{it.optLong("id")});repo.older(id,oldest)};if(id==conversation&&generation==repo.store.generation){historyConversation=id;history=(rows+history).distinctBy{it.optLong("id")};render()}}
-            catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout();render()}catch(e:Exception){inbox.status(e.message?:"Não foi possível buscar o histórico.")}
+            catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout(false);render()}catch(e:Exception){inbox.status(e.message?:"Não foi possível buscar o histórico.")}
             finally{historyBusy=false}}
     }
     override fun media(id:Long){tools.media(id)}
@@ -161,7 +174,7 @@ class MainActivity:Activity(),InboxView.Events {
             delay(450)
             try{val ids=withContext(Dispatchers.IO){repo.find(query,closed)};if(repo.store.generation==generation){inbox.searchResults(ids);render()}}
             catch(e:CancellationException){throw e}
-            catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout();render()}
+            catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout(false);render()}
             catch(_:Exception){inbox.status("Sem conexão para buscar no servidor · mostrando as conversas salvas")}
         }
     }
@@ -263,6 +276,7 @@ class MainActivity:Activity(),InboxView.Events {
         // 2.6.0 (fase 2): voltou da Gestão com "Mandar este produto para esta cliente"
         val produto=i.getStringExtra(EXTRA_PRODUTO);if(c>0&&!produto.isNullOrBlank()&&::tools.isInitialized){peeking=false;handler.postDelayed({if(conversation==c)tools.produtoNaMensagem(c,produto)},900)}}
     override fun onResume(){super.onResume();activityVisible=true
+        if(bloquearSemAcesso())return
         if(Pessoas.precisaDesbloquear(this))PessoasActivity.abrir(this,PessoasActivity.DESBLOQUEAR)
         else if(Pessoas.gerenciado(this)&&::repo.isInitialized&&Pessoas.ativa(this)?.owner!=repo.store.auth()?.owner)ContaApp.aplicarPessoa(this)
         web?.resumeTimers();WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}

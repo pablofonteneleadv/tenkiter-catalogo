@@ -1,29 +1,11 @@
 /* ====================================================================
- * TENKiTER Modas — nav.js — barra inferior ÚNICA do site inteiro
+ * TENKiTER Modas — nav.js — ações do catálogo e infraestrutura compartilhada
  *
- * Todas as páginas (catálogo, gestão, treinamentos, RH, currículos e
- * candidatura) usam este mesmo arquivo: mesma barra, mesma ordem, mesmo
- * visual, e só aparece o que a pessoa pode acessar.
- *
- *   <script src="nav.js" data-ativo="catalogo"></script>   (no fim do <body>)
- *
- * Quem aparece para quem
- *   Catálogo ........ todos
- *   Gestão .......... catalogo_admin        -> admin.html
- *   Treinamentos .... visitante ou perm "portal" -> treinamentos.html
- *   RH .............. equipe_relatorio / gerir_manuais / gerir_acessos
- *                     -> treinamentos.html?painel=rh (abre o painel do RH direto)
- *   Currículos ...... dados_pessoais / gerir_acessos -> curriculos.html
- *   Trabalhe conosco  só quem NÃO é da equipe -> curriculo.html (candidatura)
- *
- * Permissões: lê o cache local (instantâneo, sem "pisca") e se atualiza
- * sozinha no catálogo (mesmo login do portal) quando a página já carregou
- * common.js. Páginas que sabem as permissões (treinamentos.html) chamam
- * TenkiterNav.setPerms([...]) e TenkiterNav.ativo('rh').
- * Nunca guarda senha: só a lista de permissões.
- *
- * v3.10 (FE-06) — modernização gradual: `var` -> `const`/`let`, callbacks em arrow e optional
- * chaining. Comportamento idêntico: mesmos itens, mesma ordem, mesmos seletores e efeitos.
+ * O catálogo mantém Início, Buscar, Seleção, Favoritos e Atendente para todos.
+ * Demais setores não recebem barra inferior (pedido de 27/11/2026): no APK,
+ * cada módulo é aberto pelo painel de ícones. Links de funções continuam ativos.
+ * TenkiterNav permanece compatível com consumidores existentes e avisos/envios
+ * continuam funcionando. A permissão das ferramentas de produto pertence à tela.
  * ==================================================================== */
 /* TKOcupado — "estou salvando": enquanto houver gravação em andamento, puxar a tela para baixo (recarregar) é bloqueado e fechar/recarregar
  * pede confirmação. Uso: const fim = TKOcupado.inicio('excluindo avaliação'); ... fim();  (fim pode ser chamado mais de uma vez). */
@@ -145,8 +127,11 @@
       '.tk-nav a:active{background:rgba(255,255,255,.06)}' +
       '.tk-nav a:focus-visible{outline:2px solid var(--laranja,#E67E22);outline-offset:-3px}' +
       'body.tk-tem-nav{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}' +
+      'body.tk-sem-nav{padding-bottom:env(safe-area-inset-bottom,0px)}' +
+      'body.tk-sem-nav.pg-equipe .escrever{bottom:env(safe-area-inset-bottom,0px)}' +
       '.tk-app-views{position:fixed;inset:0 0 calc(70px + env(safe-area-inset-bottom,0px)) 0;z-index:var(--z-menu,80);background:#fff}' +
       '.tk-app-frame{display:block;width:100%;height:100%;border:0;background:#fff}' +
+      'body.tk-sem-nav .tk-app-views{bottom:0}' +
       '.tk-app-frame[hidden],.tk-app-views[hidden]{display:none!important}' +
       'body.tk-tutorial-teste .tk-nav{display:none!important}body.tk-tutorial-teste .tk-app-views{bottom:0}' +
       '.tk-app-loading{position:absolute;inset:0;z-index:2;display:grid;place-items:center;background:#fff;color:#5f391f;font:700 1rem/1.4 system-ui,sans-serif}' +
@@ -161,6 +146,16 @@
   const desenhar = () => {
     if (!document.body) return;
     css();
+    // Pedido do proprietário (27/11): cada setor tem janela própria no APK.
+    // A navegação entre setores não ocupa mais o rodapé. No catálogo, todos
+    // recebem as mesmas ações do cliente; permissões de edição são da tela.
+    const catalogo = /(?:^|\/)index\.html$/.test(location.pathname) || /\/$/.test(location.pathname);
+    document.body.classList.toggle('tk-sem-nav', !catalogo);
+    if (!catalogo) {
+      if (nav) { nav.remove(); nav = null; }
+      document.body.classList.remove('tk-tem-nav');
+      return;
+    }
     if (!nav) {
       nav = document.createElement('nav');
       nav.className = 'tk-nav';
@@ -168,7 +163,7 @@
       document.body.appendChild(nav);
       document.body.classList.add('tk-tem-nav');
     }
-    const lista = ehEquipe() ? ITENS.filter(visivel) : ITENS_CLIENTE();
+    const lista = ITENS_CLIENTE();
     const html = lista.map((it) => {
       const atual = it.id === ativoId;
       return '<a href="' + it.href + '"' + (atual ? ' class="tk-ativo" aria-current="page"' : '') + (it.externo ? ' target="_blank" rel="noopener"' : '') + ' data-nav="' + it.id + '">' +
@@ -197,17 +192,8 @@
   };
 
   /** Pré-carrega as outras telas para o toque na barra abrir na hora. */
-  const preCarregar = () => {
-    if (tutorialSimulado) return;
-    const fazer = () => {
-      ITENS.filter(visivel).forEach((it) => {
-        if (it.id === ativoId) return;
-        const a = document.createElement('link'); a.rel = 'prefetch'; a.href = it.href.split('?')[0];
-        document.head.appendChild(a);
-      });
-    };
-    if ('requestIdleCallback' in window) requestIdleCallback(fazer, { timeout: 4000 }); else setTimeout(fazer, 2500);
-  };
+  // Sem atalhos entre setores, não carregar páginas alheias em segundo plano.
+  const preCarregar = () => {};
 
   const itemDaUrl = (url) => {
     const u = new URL(url, location.href);

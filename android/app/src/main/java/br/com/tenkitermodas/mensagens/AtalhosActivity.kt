@@ -53,6 +53,13 @@ class AtalhosActivity : Activity() {
             background = GradientDrawable().apply { setColor(Color.parseColor("#10100E")); cornerRadii = floatArrayOf(dp(22).toFloat(), dp(22).toFloat(), dp(22).toFloat(), dp(22).toFloat(), 0f, 0f, 0f, 0f) }
         }
         val ativa = Pessoas.ativa(this)
+        ativa?.let { pessoa -> Thread {
+            val permitido = try { NativeApi().call("/msg/acesso", pessoa.auth).optBoolean("permitido", false) }
+                catch (_: AccessRevoked) { false } catch (_: Exception) { return@Thread }
+            val mudou = Pessoas.guardarAcessoMensagens(applicationContext, pessoa.auth, permitido)
+            if (!permitido && NativeRepository.get(applicationContext).store.auth()?.owner == pessoa.owner) NativeRepository.get(applicationContext).logout(false)
+            if (mudou) runOnUiThread { if (!isFinishing && Pessoas.ativa(this)?.owner == pessoa.owner) recreate() }
+        }.start() }
         if (ativa == null) caixa.addView(TextView(this).apply {
             text = "TENKiTER Gestão"; setTextColor(Color.parseColor("#E67E22")); textSize = 18f; typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(6), 0, 0, dp(10))
